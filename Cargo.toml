@@ -1,0 +1,23 @@
+[package]
+name = "ape-dts"
+version = "0.1.0"
+edition = "2021"
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+
+[dependencies]
+sqlx = {version = "0.6.2", features = ["runtime-async-std-rustls", "mysql"]}
+futures = "0.3.25"
+num_enum = "0.5.7"
+mysql-binlog-connector-rust = { path = "/Users/xushicai/Documents/projects/mysql-binlog-connector-rust2/mysql-binlog-connector-rust" }
+serde = {version = "1", features = ["derive"]}
+serde_json = "1.0.87"
+chrono = "0.4.23"
+byteorder = "1.4.3"
+concurrent-queue = "2.0.0"
+async-std = "1.12.0"
+url = "2.3.1"
+serde_yaml = "0.9.16"
+
+[features]
+
