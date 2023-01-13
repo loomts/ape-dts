@@ -19,7 +19,7 @@ use crate::{
 
 pub struct MysqlSnapshotExtractor<'a> {
     pub conn_pool: &'a Pool<MySql>,
-    pub db_meta_manager: &'a DbMetaManager<'a>,
+    pub db_meta_manager: DbMetaManager<'a>,
     pub buffer: &'a ConcurrentQueue<RowData>,
     pub db: String,
     pub tb: String,
@@ -27,7 +27,7 @@ pub struct MysqlSnapshotExtractor<'a> {
 }
 
 impl MysqlSnapshotExtractor<'_> {
-    pub async fn extract(&self) -> Result<(), Error> {
+    pub async fn extract(&mut self) -> Result<(), Error> {
         let tb_meta = self.db_meta_manager.get_tb_meta(&self.db, &self.tb).await?;
 
         if let Some(order_col) = &tb_meta.order_col {
@@ -81,7 +81,7 @@ impl MysqlSnapshotExtractor<'_> {
             let query = if let ColValue::None = start_value {
                 sqlx::query(&sql1)
             } else {
-                sqlx::query(&sql2).bind_col_value(start_value.clone())
+                sqlx::query(&sql2).bind_col_value(Some(start_value.clone()))
             };
 
             let mut rows = query.fetch(self.conn_pool);
@@ -206,9 +206,9 @@ impl MysqlSnapshotExtractor<'_> {
                 let value: u16 = row.try_get(col_name)?;
                 return Ok(ColValue::Year(value));
             }
-            ColType::String => {
+            ColType::String(_, _) | ColType::Binary(_) | ColType::VarBinary(_) => {
                 let value: Vec<u8> = row.try_get(col_name)?;
-                return Ok(ColValue::String(value));
+                return Ok(ColValue::Blob(value));
             }
             ColType::Blob => {
                 let value: Vec<u8> = row.try_get(col_name)?;

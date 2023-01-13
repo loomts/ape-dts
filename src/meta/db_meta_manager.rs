@@ -10,15 +10,42 @@ use super::{col_meta::ColMeta, col_type::ColType, tb_meta::TbMeta};
 
 pub struct DbMetaManager<'a> {
     pub conn_pool: &'a Pool<MySql>,
+    pub cache: HashMap<String, TbMeta>,
+    pub version: String,
 }
 
-impl DbMetaManager<'_> {
-    pub async fn get_tb_meta(&self, db: &str, tb: &str) -> Result<TbMeta, Error> {
+const COLUMN_NAME: &str = "COLUMN_NAME";
+const COLUMN_TYPE: &str = "COLUMN_TYPE";
+const DATA_TYPE: &str = "DATA_TYPE";
+const CHARACTER_MAXIMUM_LENGTH: &str = "CHARACTER_MAXIMUM_LENGTH";
+const CHARACTER_SET_NAME: &str = "CHARACTER_SET_NAME";
+
+impl<'a> DbMetaManager<'a> {
+    pub fn new(conn_pool: &'a Pool<MySql>) -> Self {
+        Self {
+            conn_pool,
+            cache: HashMap::new(),
+            version: "".to_string(),
+        }
+    }
+
+    pub async fn init(mut self) -> Result<DbMetaManager<'a>, Error> {
+        let version = self.get_version().await?;
+        self.version = version.to_string();
+        Ok(self)
+    }
+
+    pub async fn get_tb_meta(&mut self, db: &str, tb: &str) -> Result<TbMeta, Error> {
+        let full_name = format!("{}.{}", db, tb);
+        if let Some(tb_meta) = self.cache.get(&full_name) {
+            return Ok(tb_meta.clone());
+        }
+
         let (cols, col_meta_map) = self.parse_cols(db, tb).await?;
         let key_map = self.parse_keys(db, tb).await?;
         let order_col = Self::get_order_col(&key_map)?;
         let where_cols = Self::get_where_cols(&key_map, &cols)?;
-        Ok(TbMeta {
+        let tb_meta = TbMeta {
             db: db.to_string(),
             tb: tb.to_string(),
             cols,
@@ -26,21 +53,24 @@ impl DbMetaManager<'_> {
             key_map,
             order_col,
             where_cols,
-        })
+        };
+        self.cache.insert(full_name.clone(), tb_meta.clone());
+        Ok(tb_meta)
     }
 
     async fn parse_cols(
-        &self,
+        &mut self,
         db: &str,
         tb: &str,
     ) -> Result<(Vec<String>, HashMap<String, ColMeta>), Error> {
         let mut cols = Vec::new();
         let mut col_meta_map = HashMap::new();
 
-        let sql = format!("DESC {}.{}", db, tb);
-        let mut rows = sqlx::query(&sql).fetch(self.conn_pool);
+        let sql = format!("SELECT {}, {}, {}, {}, {} FROM information_schema.columns WHERE table_schema = ? AND table_name = ?", 
+            COLUMN_NAME, COLUMN_TYPE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_SET_NAME);
+        let mut rows = sqlx::query(&sql).bind(db).bind(tb).fetch(self.conn_pool);
         while let Some(row) = rows.try_next().await? {
-            let col_type = Self::parse_col_meta(&row)?;
+            let col_type = self.parse_col_meta(&row).await?;
             cols.push(col_type.name.clone());
             col_meta_map.insert(col_type.name.clone(), col_type);
         }
@@ -53,14 +83,14 @@ impl DbMetaManager<'_> {
         Ok((cols, col_meta_map))
     }
 
-    fn parse_col_meta(row: &MySqlRow) -> Result<ColMeta, Error> {
-        let col_name: String = row.try_get(0)?;
-        let mut col_type_raw: String = row.try_get(1)?;
-        col_type_raw = col_type_raw.to_lowercase();
+    async fn parse_col_meta(&mut self, row: &MySqlRow) -> Result<ColMeta, Error> {
+        let col_name: String = row.try_get(COLUMN_NAME)?;
+        let col_type: String = row.try_get(COLUMN_TYPE)?;
+        let data_type: String = row.try_get(DATA_TYPE)?;
 
-        let unsigned = col_type_raw.contains("unsigned");
-        let col_type = match col_type_raw {
-            ctr if ctr.contains("tinyint") => {
+        let unsigned = col_type.to_lowercase().contains("unsigned");
+        let typee = match data_type.as_str() {
+            "tinyint" => {
                 if unsigned {
                     ColType::UnsignedTiny
                 } else {
@@ -68,7 +98,7 @@ impl DbMetaManager<'_> {
                 }
             }
 
-            ctr if ctr.contains("smallint") => {
+            "smallint" => {
                 if unsigned {
                     ColType::UnsignedShort
                 } else {
@@ -76,7 +106,7 @@ impl DbMetaManager<'_> {
                 }
             }
 
-            ctr if ctr.contains("bigint") => {
+            "bigint" => {
                 if unsigned {
                     ColType::UnsignedLongLong
                 } else {
@@ -84,7 +114,7 @@ impl DbMetaManager<'_> {
                 }
             }
 
-            ctr if ctr.contains("mediumint") || ctr.contains("int") => {
+            "mediumint" | "int" => {
                 if unsigned {
                     ColType::UnsignedLong
                 } else {
@@ -92,38 +122,35 @@ impl DbMetaManager<'_> {
                 }
             }
 
-            ctr if ctr.contains("tinytext")
-                || ctr.contains("mediumtext")
-                || ctr.contains("longtext")
-                || ctr.contains("text")
-                || ctr.contains("varchar")
-                || ctr.contains("char") =>
-            {
-                ColType::String
+            "varbinary" => {
+                let length = self.get_col_length(&row).await?;
+                ColType::VarBinary(length as u16)
             }
 
-            ctr if ctr.contains("tinyblob")
-                || ctr.contains("mediumblob")
-                || ctr.contains("longblob")
-                || ctr.contains("varbinary")
-                || ctr.contains("binary")
-                || ctr.contains("blob") =>
-            {
-                ColType::Blob
+            "binary" => {
+                let length = self.get_col_length(&row).await?;
+                ColType::Binary(length as u8)
             }
 
-            ctr if ctr.contains("float") => ColType::Float,
-            ctr if ctr.contains("double") => ColType::Double,
-            ctr if ctr.contains("decimal") => ColType::Decimal,
-            ctr if ctr.contains("datetime") => ColType::DateTime,
-            ctr if ctr.contains("timestamp") => ColType::Timestamp,
-            ctr if ctr.contains("date") => ColType::Date,
-            ctr if ctr.contains("time") => ColType::Time,
-            ctr if ctr.contains("year") => ColType::Year,
-            ctr if ctr.contains("enum") => ColType::Enum,
-            ctr if ctr.contains("set") => ColType::Set,
-            ctr if ctr.contains("bit") => ColType::Bit,
-            ctr if ctr.contains("json") => ColType::Json,
+            "varchar" | "char" => {
+                let length = self.get_col_length(&row).await?;
+                ColType::String(length, row.try_get(CHARACTER_SET_NAME)?)
+            }
+
+            "tinytext" | "mediumtext" | "longtext" | "text" => ColType::Blob,
+            "tinyblob" | "mediumblob" | "longblob" | "blob" => ColType::Blob,
+            "float" => ColType::Float,
+            "double" => ColType::Double,
+            "decimal" => ColType::Decimal,
+            "datetime" => ColType::DateTime,
+            "timestamp" => ColType::Timestamp,
+            "date" => ColType::Date,
+            "time" => ColType::Time,
+            "year" => ColType::Year,
+            "enum" => ColType::Enum,
+            "set" => ColType::Set,
+            "bit" => ColType::Bit,
+            "json" => ColType::Json,
 
             // TODO
             // "geometry": "geometrycollection": "linestring": "multilinestring":
@@ -133,8 +160,20 @@ impl DbMetaManager<'_> {
 
         Ok(ColMeta {
             name: col_name,
-            typee: col_type,
+            typee,
         })
+    }
+
+    async fn get_col_length(&mut self, row: &MySqlRow) -> Result<u64, Error> {
+        // with A expression, error will throw for mysql 8.0: ColumnDecode { index: "\"CHARACTER_MAXIMUM_LENGTH\"", source: "mismatched types; Rust type `u64` (as SQL type `BIGINT UNSIGNED`) is not compatible with SQL type `BIGINT`" }'
+        // with B expression, error will throw for mysql 5.7: ColumnDecode { index: "\"CHARACTER_MAXIMUM_LENGTH\"", source: "mismatched types; Rust type `i64` (as SQL type `BIGINT`) is not compatible with SQL type `BIGINT UNSIGNED`" }'
+        if self.version.contains("5.7") {
+            let length: u64 = row.try_get(CHARACTER_MAXIMUM_LENGTH).unwrap();
+            Ok(length)
+        } else {
+            let length: i64 = row.try_get(CHARACTER_MAXIMUM_LENGTH).unwrap();
+            Ok(length as u64)
+        }
     }
 
     async fn parse_keys(&self, db: &str, tb: &str) -> Result<HashMap<String, Vec<String>>, Error> {
@@ -189,5 +228,22 @@ impl DbMetaManager<'_> {
         }
 
         Ok(col_names.clone())
+    }
+
+    async fn get_version(&mut self) -> Result<&str, Error> {
+        if !self.version.is_empty() {
+            return Ok(&self.version);
+        }
+
+        let sql = "SELECT VERSION()";
+        let mut rows = sqlx::query(&sql).fetch(self.conn_pool);
+        if let Some(row) = rows.try_next().await? {
+            self.version = row.try_get(0)?;
+            return Ok(&self.version);
+        }
+
+        Err(Error::MetadataError {
+            error: "failed to get mysql version".to_string(),
+        })
     }
 }

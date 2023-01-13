@@ -19,17 +19,13 @@ impl MysqlCdcTask {
     pub async fn start(&self) -> Result<(), Error> {
         let (filter, router, src_conn_pool, dst_conn_pool) =
             MysqlTaskUtil::init_components(&self.config).await?;
-        let src_db_meta_manager = DbMetaManager {
-            conn_pool: &src_conn_pool,
-        };
-        let dst_db_meta_manager = DbMetaManager {
-            conn_pool: &dst_conn_pool,
-        };
+        let src_db_meta_manager = DbMetaManager::new(&src_conn_pool).init().await?;
+        let dst_db_meta_manager = DbMetaManager::new(&dst_conn_pool).init().await?;
         let buffer = ConcurrentQueue::bounded(self.config.buffer_size);
         let shut_down = AtomicBool::new(false);
 
         let mut extractor = MysqlCdcExtractor {
-            db_meta_manager: &src_db_meta_manager,
+            db_meta_manager: src_db_meta_manager,
             buffer: &buffer,
             filter,
             url: self.config.src_url.clone(),
@@ -41,7 +37,7 @@ impl MysqlCdcTask {
 
         let mut sinker = MysqlSinker {
             conn_pool: &dst_conn_pool,
-            db_meta_manager: &dst_db_meta_manager,
+            db_meta_manager: dst_db_meta_manager,
             buffer: &buffer,
             router,
             shut_down: &shut_down,

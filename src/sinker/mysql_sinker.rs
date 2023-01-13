@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     sync::atomic::{AtomicBool, Ordering},
     time::Duration,
 };
@@ -9,14 +10,17 @@ use sqlx::{MySql, Pool};
 use crate::{
     error::Error,
     ext::sqlx_ext::SqlxExt,
-    meta::{db_meta_manager::DbMetaManager, row_data::RowData, row_type::RowType, tb_meta::TbMeta},
+    meta::{
+        col_value::ColValue, db_meta_manager::DbMetaManager, row_data::RowData, row_type::RowType,
+        tb_meta::TbMeta,
+    },
 };
 
 use super::router::Router;
 
 pub struct MysqlSinker<'a> {
     pub conn_pool: &'a Pool<MySql>,
-    pub db_meta_manager: &'a DbMetaManager<'a>,
+    pub db_meta_manager: DbMetaManager<'a>,
     pub buffer: &'a ConcurrentQueue<RowData>,
     pub router: Router,
     pub shut_down: &'a AtomicBool,
@@ -64,7 +68,7 @@ impl MysqlSinker<'_> {
         let mut after = row_data.after.unwrap();
         let mut query = sqlx::query(&sql);
         for col_name in tb_meta.cols.iter() {
-            query = query.bind_col_value(after.remove(col_name).unwrap());
+            query = query.bind_col_value(after.remove(col_name));
         }
         query.execute(self.conn_pool).await?;
         Ok(())
@@ -72,23 +76,17 @@ impl MysqlSinker<'_> {
 
     pub async fn delete(&mut self, row_data: RowData) -> Result<(), Error> {
         let tb_meta = self.get_tb_meta(&row_data).await?;
-        let mut where_col_values = Vec::new();
-        for _ in tb_meta.where_cols.iter() {
-            where_col_values.push("?");
-        }
+        let mut before = row_data.before.unwrap();
 
+        let (where_sql, not_null_cols) = self.get_where_info(&tb_meta, &before)?;
         let delete_sql = format!(
-            "DELETE FROM {}.{} WHERE ({}) IN ({}) LIMIT 1",
-            tb_meta.db,
-            tb_meta.tb,
-            tb_meta.where_cols.join(","),
-            where_col_values.join(",")
+            "DELETE FROM {}.{} WHERE {} LIMIT 1",
+            tb_meta.db, tb_meta.tb, where_sql,
         );
 
-        let mut before = row_data.before.unwrap();
         let mut query = sqlx::query(&delete_sql);
-        for col_name in tb_meta.where_cols.iter() {
-            query = query.bind_col_value(before.remove(col_name).unwrap());
+        for col_name in not_null_cols.iter() {
+            query = query.bind_col_value(before.remove(col_name));
         }
         query.execute(self.conn_pool).await?;
         Ok(())
@@ -99,11 +97,6 @@ impl MysqlSinker<'_> {
         let mut before = row_data.before.unwrap();
         let mut after = row_data.after.unwrap();
 
-        let mut where_col_values = Vec::new();
-        for _ in tb_meta.where_cols.iter() {
-            where_col_values.push("?");
-        }
-
         let mut set_cols = Vec::new();
         let mut set_pairs = Vec::new();
         for (col_name, _) in after.iter() {
@@ -111,25 +104,54 @@ impl MysqlSinker<'_> {
             set_pairs.push(format!("{}=?", col_name));
         }
 
+        let (where_sql, not_null_cols) = self.get_where_info(&tb_meta, &before)?;
         let sql = format!(
-            "UPDATE {}.{} SET {} WHERE ({}) IN ({}) LIMIT 1",
+            "UPDATE {}.{} SET {} WHERE {} LIMIT 1",
             tb_meta.db,
             tb_meta.tb,
             set_pairs.join(","),
-            tb_meta.where_cols.join(","),
-            where_col_values.join(",")
+            where_sql,
         );
 
         let mut query = sqlx::query(&sql);
         for col_name in set_cols {
-            query = query.bind_col_value(after.remove(&col_name).unwrap());
+            query = query.bind_col_value(after.remove(&col_name));
         }
-        for col_name in tb_meta.where_cols.iter() {
-            query = query.bind_col_value(before.remove(col_name).unwrap());
+        for col_name in not_null_cols.iter() {
+            query = query.bind_col_value(before.remove(col_name));
         }
 
         query.execute(self.conn_pool).await?;
         Ok(())
+    }
+
+    fn get_where_info(
+        &mut self,
+        tb_meta: &TbMeta,
+        where_col_values: &HashMap<String, ColValue>,
+    ) -> Result<(String, Vec<String>), Error> {
+        let mut where_sql = "".to_string();
+        let mut not_null_cols = Vec::new();
+
+        for col_name in tb_meta.where_cols.iter() {
+            if !where_sql.is_empty() {
+                where_sql += " AND";
+            }
+
+            let col_value = where_col_values.get(col_name);
+            if let Some(value) = col_value {
+                if *value == ColValue::None {
+                    where_sql = format!("{} {} IS NULL", where_sql, col_name);
+                } else {
+                    where_sql = format!("{} {} = ?", where_sql, col_name);
+                    not_null_cols.push(col_name.clone());
+                }
+            } else {
+                where_sql = format!("{} {} IS NULL", where_sql, col_name);
+            }
+        }
+
+        Ok((where_sql, not_null_cols))
     }
 
     async fn get_tb_meta(&mut self, row_data: &RowData) -> Result<TbMeta, Error> {

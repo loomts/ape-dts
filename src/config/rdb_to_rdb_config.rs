@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::Error;
 
-use super::{filter_config::FilterConfig, route_config::RouteConfig};
+use super::{filter_config::FilterConfig, route_config::RouteConfig, task_type::TaskType};
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct RdbToRdbConfig {
@@ -17,6 +17,7 @@ pub struct RdbToRdbConfig {
     pub filter: FilterConfig,
     pub route: RouteConfig,
     pub buffer_size: usize,
+    pub task_type: TaskType,
 }
 
 impl RdbToRdbConfig {

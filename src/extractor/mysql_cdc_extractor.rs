@@ -16,7 +16,7 @@ use crate::{
 use super::filter::Filter;
 
 pub struct MysqlCdcExtractor<'a> {
-    pub db_meta_manager: &'a DbMetaManager<'a>,
+    pub db_meta_manager: DbMetaManager<'a>,
     pub buffer: &'a ConcurrentQueue<RowData>,
     pub filter: Filter,
     pub url: String,
@@ -128,7 +128,7 @@ impl MysqlCdcExtractor<'_> {
     }
 
     async fn parse_row_data(
-        &self,
+        &mut self,
         table_map_event: &TableMapEvent,
         included_columns: &Vec<bool>,
         event: &mut RowEvent,

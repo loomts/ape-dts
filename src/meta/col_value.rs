@@ -8,7 +8,7 @@ use crate::error::Error;
 
 use super::{col_meta::ColMeta, col_type::ColType};
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 #[allow(dead_code)]
 pub enum ColValue {
     None,
@@ -28,7 +28,7 @@ pub enum ColValue {
     DateTime(String),
     Timestamp(String),
     Year(u16),
-    String(Vec<u8>),
+    String(String),
     Blob(Vec<u8>),
     Bit(u64),
     Set(String),
@@ -137,7 +137,21 @@ impl ColValue {
             ColumnValue::DateTime(v) => ColValue::DateTime(v),
             // ColumnValue::Timestamp(v) => ColValue::Timestamp(v),
             ColumnValue::Year(v) => ColValue::Year(v),
-            ColumnValue::String(v) => ColValue::String(v),
+
+            // char, varchar, binary, varbinary
+            ColumnValue::String(v) => {
+                // when the type is binary(length), the value shoud be right-padded with '\0' to the specified length,
+                // otherwise the comparison will fail. https://dev.mysql.com/doc/refman/8.0/en/binary-varbinary.html
+                if let ColType::Binary(length) = meta.typee {
+                    if length as usize > v.len() {
+                        let pad_v: Vec<u8> = vec![0; length as usize - v.len()];
+                        let final_v = [v, pad_v].concat();
+                        return ColValue::Blob(final_v);
+                    }
+                }
+                return ColValue::Blob(v);
+            }
+
             ColumnValue::Blob(v) => ColValue::Blob(v),
             // ColumnValue::Bit(v) => ColValue::Bit(v),
             // ColumnValue::Set(v) => ColValue::Set(v),

@@ -4,7 +4,7 @@ use super::col_meta::ColMeta;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TbMeta {
     pub db: String,
     pub tb: String,

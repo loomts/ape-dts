@@ -49,18 +49,14 @@ impl MysqlSnapshotTask {
         let db = vec.get(0).unwrap().to_string();
         let tb = vec.get(1).unwrap().to_string();
 
-        let src_db_meta_manager = DbMetaManager {
-            conn_pool: &src_conn_pool,
-        };
-        let dst_db_meta_manager = DbMetaManager {
-            conn_pool: &dst_conn_pool,
-        };
+        let src_db_meta_manager = DbMetaManager::new(&src_conn_pool).init().await?;
+        let dst_db_meta_manager = DbMetaManager::new(&dst_conn_pool).init().await?;
         let buffer = ConcurrentQueue::bounded(self.config.buffer_size);
         let shut_down = AtomicBool::new(false);
 
-        let extractor = MysqlSnapshotExtractor {
+        let mut extractor = MysqlSnapshotExtractor {
             conn_pool: &src_conn_pool,
-            db_meta_manager: &src_db_meta_manager,
+            db_meta_manager: src_db_meta_manager,
             buffer: &buffer,
             db,
             tb,
@@ -69,7 +65,7 @@ impl MysqlSnapshotTask {
 
         let mut sinker = MysqlSinker {
             conn_pool: &dst_conn_pool,
-            db_meta_manager: &dst_db_meta_manager,
+            db_meta_manager: dst_db_meta_manager,
             buffer: &buffer,
             router,
             shut_down: &shut_down,
