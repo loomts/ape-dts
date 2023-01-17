@@ -1,3 +1,3 @@
 pub mod mysql_cdc_task;
 pub mod mysql_snapshot_task;
-pub mod mysql_task_util;
+pub mod task_type;

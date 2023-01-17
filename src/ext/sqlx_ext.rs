@@ -30,7 +30,9 @@ impl SqlxExt for Query<'_, MySql, MySqlArguments> {
                 ColValue::Blob(v) => self.bind(v),
                 ColValue::Bit(v) => self.bind(v),
                 ColValue::Set(v) => self.bind(v),
+                ColValue::Set2(v) => self.bind(v),
                 ColValue::Enum(v) => self.bind(v),
+                ColValue::Enum2(v) => self.bind(v),
                 ColValue::Json(v) => self.bind(v),
                 _ => {
                     let none: Option<String> = Option::None;

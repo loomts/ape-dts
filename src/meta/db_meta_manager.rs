@@ -12,6 +12,8 @@ pub struct DbMetaManager<'a> {
     pub conn_pool: &'a Pool<MySql>,
     pub cache: HashMap<String, TbMeta>,
     pub version: String,
+    // timezone diff with utc in seconds
+    pub timezone_diff_utc_seconds: i64,
 }
 
 const COLUMN_NAME: &str = "COLUMN_NAME";
@@ -26,12 +28,13 @@ impl<'a> DbMetaManager<'a> {
             conn_pool,
             cache: HashMap::new(),
             version: "".to_string(),
+            timezone_diff_utc_seconds: 0,
         }
     }
 
     pub async fn init(mut self) -> Result<DbMetaManager<'a>, Error> {
-        let version = self.get_version().await?;
-        self.version = version.to_string();
+        self.init_version().await?;
+        self.init_timezone_diff_utc_seconds().await?;
         Ok(self)
     }
 
@@ -124,18 +127,29 @@ impl<'a> DbMetaManager<'a> {
 
             "varbinary" => {
                 let length = self.get_col_length(&row).await?;
-                ColType::VarBinary(length as u16)
+                ColType::VarBinary {
+                    length: length as u16,
+                }
             }
 
             "binary" => {
                 let length = self.get_col_length(&row).await?;
-                ColType::Binary(length as u8)
+                ColType::Binary {
+                    length: length as u8,
+                }
             }
 
             "varchar" | "char" => {
                 let length = self.get_col_length(&row).await?;
-                ColType::String(length, row.try_get(CHARACTER_SET_NAME)?)
+                ColType::String {
+                    length,
+                    charset: row.try_get(CHARACTER_SET_NAME)?,
+                }
             }
+
+            "timestamp" => ColType::Timestamp {
+                timezone_diff_utc_seconds: self.timezone_diff_utc_seconds,
+            },
 
             "tinytext" | "mediumtext" | "longtext" | "text" => ColType::Blob,
             "tinyblob" | "mediumblob" | "longblob" | "blob" => ColType::Blob,
@@ -143,7 +157,6 @@ impl<'a> DbMetaManager<'a> {
             "double" => ColType::Double,
             "decimal" => ColType::Decimal,
             "datetime" => ColType::DateTime,
-            "timestamp" => ColType::Timestamp,
             "date" => ColType::Date,
             "time" => ColType::Time,
             "year" => ColType::Year,
@@ -230,20 +243,30 @@ impl<'a> DbMetaManager<'a> {
         Ok(col_names.clone())
     }
 
-    async fn get_version(&mut self) -> Result<&str, Error> {
-        if !self.version.is_empty() {
-            return Ok(&self.version);
-        }
-
+    async fn init_version(&mut self) -> Result<(), Error> {
         let sql = "SELECT VERSION()";
         let mut rows = sqlx::query(&sql).fetch(self.conn_pool);
         if let Some(row) = rows.try_next().await? {
             self.version = row.try_get(0)?;
-            return Ok(&self.version);
+            return Ok(());
         }
 
         Err(Error::MetadataError {
-            error: "failed to get mysql version".to_string(),
+            error: "failed to init mysql version".to_string(),
+        })
+    }
+
+    async fn init_timezone_diff_utc_seconds(&mut self) -> Result<(), Error> {
+        let sql = "SELECT TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP, NOW())";
+        let mut rows = sqlx::query(&sql).fetch(self.conn_pool);
+        if let Some(row) = rows.try_next().await? {
+            // by default, sqlx will use UTC(+00:00) for connections which TIMESTAMPDIFF is 0
+            self.timezone_diff_utc_seconds = row.try_get(0)?;
+            return Ok(());
+        }
+
+        Err(Error::MetadataError {
+            error: "failed to init timestamp diff with utc".to_string(),
         })
     }
 }

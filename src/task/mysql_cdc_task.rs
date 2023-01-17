@@ -1,24 +1,34 @@
 use futures::future::join;
+use sqlx::mysql::MySqlPoolOptions;
 use std::sync::atomic::AtomicBool;
 
 use concurrent_queue::ConcurrentQueue;
 
 use crate::{
-    config::rdb_to_rdb_config::RdbToRdbConfig, error::Error,
-    extractor::mysql_cdc_extractor::MysqlCdcExtractor, meta::db_meta_manager::DbMetaManager,
-    sinker::mysql_sinker::MysqlSinker,
+    config::mysql_to_rdb_cdc_config::MysqlToRdbCdcConfig,
+    error::Error,
+    extractor::{filter::Filter, mysql_cdc_extractor::MysqlCdcExtractor},
+    meta::db_meta_manager::DbMetaManager,
+    sinker::{mysql_sinker::MysqlSinker, router::Router},
 };
 
-use super::mysql_task_util::MysqlTaskUtil;
-
 pub struct MysqlCdcTask {
-    pub config: RdbToRdbConfig,
+    pub config: MysqlToRdbCdcConfig,
 }
 
 impl MysqlCdcTask {
     pub async fn start(&self) -> Result<(), Error> {
-        let (filter, router, src_conn_pool, dst_conn_pool) =
-            MysqlTaskUtil::init_components(&self.config).await?;
+        let filter = Filter::from_config(&self.config.filter)?;
+        let router = Router::from_config(&self.config.router)?;
+        let src_conn_pool = MySqlPoolOptions::new()
+            .max_connections(1)
+            .connect(&self.config.src_url)
+            .await?;
+        let dst_conn_pool = MySqlPoolOptions::new()
+            .max_connections(1)
+            .connect(&self.config.dst_url)
+            .await?;
+
         let src_db_meta_manager = DbMetaManager::new(&src_conn_pool).init().await?;
         let dst_db_meta_manager = DbMetaManager::new(&dst_conn_pool).init().await?;
         let buffer = ConcurrentQueue::bounded(self.config.buffer_size);
@@ -29,9 +39,9 @@ impl MysqlCdcTask {
             buffer: &buffer,
             filter,
             url: self.config.src_url.clone(),
-            binlog_filename: "".to_string(),
-            binlog_position: 0,
-            server_id: 200,
+            binlog_filename: self.config.binlog_filename.clone(),
+            binlog_position: self.config.binlog_position,
+            server_id: self.config.server_id,
             shut_down: &shut_down,
         };
 

@@ -1,4 +1,4 @@
 pub mod filter_config;
-pub mod rdb_to_rdb_config;
-pub mod route_config;
-pub mod task_type;
+pub mod mysql_to_rdb_cdc_config;
+pub mod rdb_to_rdb_snapshot_config;
+pub mod router_config;

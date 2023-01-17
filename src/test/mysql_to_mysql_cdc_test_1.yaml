@@ -1,16 +1,16 @@
 src_url: mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
 dst_url: mysql://root:123456@127.0.0.1:3308
-src_pool_size: 5
-dst_pool_size: 5
 buffer_size: 2
-task_type: MysqlToMysqlCdc
+binlog_filename: 
+binlog_position: 0
+server_id: 2000
 filter:
   do_dbs: 
   ignore_dbs: 
   do_tbs: a.all_types,a.keys6
   ignore_tbs: 
   do_events: insert,update,delete
-route:
+router:
   db_map: 
   tb_map: a.keys6:b.keys6_dst
   field_map: 

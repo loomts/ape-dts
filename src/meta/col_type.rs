@@ -17,17 +17,16 @@ pub enum ColType {
     Time,
     Date,
     DateTime,
-    Timestamp,
+    // timezone diff with utc in seconds
+    // refer: https://dev.mysql.com/doc/refman/8.0/en/datetime.html
+    Timestamp { timezone_diff_utc_seconds: i64 },
     Year,
-    // String(length, charset)
     // for char(length), the maximum length is 255,
     // for varchar(length), the maximum length is 65535
     // refer: https://dev.mysql.com/doc/refman/5.7/en/storage-requirements.html
-    String(u64, String),
-    // Binary(length)
-    Binary(u8),
-    // VarBinary(length)
-    VarBinary(u16),
+    String { length: u64, charset: String },
+    Binary { length: u8 },
+    VarBinary { length: u16 },
     Blob,
     Bit,
     Set,

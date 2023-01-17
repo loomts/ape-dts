@@ -48,8 +48,8 @@ impl MysqlSnapshotExtractor<'_> {
     async fn extract_all(&self, tb_meta: &TbMeta) -> Result<(), Error> {
         let sql = format!("SELECT * FROM {}.{}", self.db, self.tb);
         let mut rows = sqlx::query(&sql).fetch(self.conn_pool);
-        while let Some(row) = rows.try_next().await? {
-            self.push_row_to_buffer(&row, tb_meta).await?;
+        while let Some(row) = rows.try_next().await.unwrap() {
+            self.push_row_to_buffer(&row, tb_meta).await.unwrap();
         }
         Ok(())
     }
@@ -86,9 +86,9 @@ impl MysqlSnapshotExtractor<'_> {
 
             let mut rows = query.fetch(self.conn_pool);
             let mut count = 0usize;
-            while let Some(row) = rows.try_next().await? {
-                self.push_row_to_buffer(&row, tb_meta).await?;
-                start_value = Self::get_col_value(&row, order_col_meta)?;
+            while let Some(row) = rows.try_next().await.unwrap() {
+                self.push_row_to_buffer(&row, tb_meta).await.unwrap();
+                start_value = Self::get_col_value(&row, order_col_meta).unwrap();
                 count += 1;
             }
 
@@ -198,7 +198,9 @@ impl MysqlSnapshotExtractor<'_> {
                 let value: Vec<u8> = row.get_unchecked(col_name);
                 return ColValue::parse_datetime(value);
             }
-            ColType::Timestamp => {
+            ColType::Timestamp {
+                timezone_diff_utc_seconds: _,
+            } => {
                 let value: Vec<u8> = row.get_unchecked(col_name);
                 return ColValue::parse_timestamp(value);
             }
@@ -206,7 +208,18 @@ impl MysqlSnapshotExtractor<'_> {
                 let value: u16 = row.try_get(col_name)?;
                 return Ok(ColValue::Year(value));
             }
-            ColType::String(_, _) | ColType::Binary(_) | ColType::VarBinary(_) => {
+            ColType::String {
+                length: _,
+                charset: _,
+            } => {
+                let value: Vec<u8> = row.try_get(col_name)?;
+                return Ok(ColValue::Blob(value));
+            }
+            ColType::Binary { length: _ } => {
+                let value: Vec<u8> = row.try_get(col_name)?;
+                return Ok(ColValue::Blob(value));
+            }
+            ColType::VarBinary { length: _ } => {
                 let value: Vec<u8> = row.try_get(col_name)?;
                 return Ok(ColValue::Blob(value));
             }
@@ -216,15 +229,15 @@ impl MysqlSnapshotExtractor<'_> {
             }
             ColType::Bit => {
                 let value: u64 = row.try_get(col_name)?;
-                return Ok(ColValue::Bit(value));
+                return Ok(ColValue::Bit(value as u64));
             }
             ColType::Set => {
                 let value: String = row.try_get(col_name)?;
-                return Ok(ColValue::Set(value));
+                return Ok(ColValue::Set2(value));
             }
             ColType::Enum => {
                 let value: String = row.try_get(col_name)?;
-                return Ok(ColValue::Enum(value));
+                return Ok(ColValue::Enum2(value));
             }
             ColType::Json => {
                 let value: Vec<u8> = row.get_unchecked(col_name);

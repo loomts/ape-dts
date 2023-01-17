@@ -2,26 +2,32 @@ use std::sync::atomic::AtomicBool;
 
 use concurrent_queue::ConcurrentQueue;
 use futures::future::{join, join_all};
-use sqlx::{MySql, Pool};
+use sqlx::{mysql::MySqlPoolOptions, MySql, Pool};
 
 use crate::{
-    config::rdb_to_rdb_config::RdbToRdbConfig,
+    config::rdb_to_rdb_snapshot_config::RdbToRdbSnapshotConfig,
     error::Error,
-    extractor::mysql_snapshot_extractor::MysqlSnapshotExtractor,
+    extractor::{filter::Filter, mysql_snapshot_extractor::MysqlSnapshotExtractor},
     meta::db_meta_manager::DbMetaManager,
     sinker::{mysql_sinker::MysqlSinker, router::Router},
 };
 
-use super::mysql_task_util::MysqlTaskUtil;
-
 pub struct MysqlSnapshotTask {
-    pub config: RdbToRdbConfig,
+    pub config: RdbToRdbSnapshotConfig,
 }
 
 impl MysqlSnapshotTask {
     pub async fn start(&self) -> Result<(), Error> {
-        let (filter, router, src_conn_pool, dst_conn_pool) =
-            MysqlTaskUtil::init_components(&self.config).await?;
+        let filter = Filter::from_config(&self.config.filter)?;
+        let router = Router::from_config(&self.config.router)?;
+        let src_conn_pool = MySqlPoolOptions::new()
+            .max_connections(self.config.src_pool_size)
+            .connect(&self.config.src_url)
+            .await?;
+        let dst_conn_pool = MySqlPoolOptions::new()
+            .max_connections(self.config.dst_pool_size)
+            .connect(&self.config.dst_url)
+            .await?;
 
         let mut futures = Vec::new();
         for do_tb in filter.do_tbs.iter() {

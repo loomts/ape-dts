@@ -32,15 +32,15 @@ impl MysqlSinker<'_> {
             if let Ok(row_data) = self.buffer.pop() {
                 match row_data.row_type {
                     RowType::Insert => {
-                        self.insert(row_data).await?;
+                        self.insert(row_data).await.unwrap();
                     }
 
                     RowType::Update => {
-                        self.update(row_data).await?;
+                        self.update(row_data).await.unwrap();
                     }
 
                     RowType::Delete => {
-                        self.delete(row_data).await?;
+                        self.delete(row_data).await.unwrap();
                     }
                 }
             } else {
@@ -58,7 +58,7 @@ impl MysqlSinker<'_> {
         }
 
         let sql = format!(
-            "INSERT INTO {}.{}({}) VALUES({})",
+            "REPLACE INTO {}.{}({}) VALUES({})",
             tb_meta.db,
             tb_meta.tb,
             tb_meta.cols.join(","),
@@ -128,7 +128,7 @@ impl MysqlSinker<'_> {
     fn get_where_info(
         &mut self,
         tb_meta: &TbMeta,
-        where_col_values: &HashMap<String, ColValue>,
+        col_value_map: &HashMap<String, ColValue>,
     ) -> Result<(String, Vec<String>), Error> {
         let mut where_sql = "".to_string();
         let mut not_null_cols = Vec::new();
@@ -138,7 +138,7 @@ impl MysqlSinker<'_> {
                 where_sql += " AND";
             }
 
-            let col_value = where_col_values.get(col_name);
+            let col_value = col_value_map.get(col_name);
             if let Some(value) = col_value {
                 if *value == ColValue::None {
                     where_sql = format!("{} {} IS NULL", where_sql, col_name);

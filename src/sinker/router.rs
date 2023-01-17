@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{config::route_config::RouteConfig, error::Error};
+use crate::{config::router_config::RouterConfig, error::Error};
 
 #[derive(Debug, Clone)]
 pub struct Router {
@@ -10,7 +10,7 @@ pub struct Router {
 }
 
 impl Router {
-    pub fn from_config(config: &RouteConfig) -> Result<Self, Error> {
+    pub fn from_config(config: &RouterConfig) -> Result<Self, Error> {
         let db_map = Self::parse_str(&config.db_map);
         let tb_map = Self::parse_str(&config.tb_map);
         Ok(Self {

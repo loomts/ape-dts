@@ -1,6 +1,7 @@
 use std::io::{Cursor, Seek, SeekFrom};
 
 use byteorder::{LittleEndian, ReadBytesExt};
+use chrono::{TimeZone, Utc};
 use mysql_binlog_connector_rust::column::column_value::ColumnValue;
 use serde::{Deserialize, Serialize};
 
@@ -31,8 +32,10 @@ pub enum ColValue {
     String(String),
     Blob(Vec<u8>),
     Bit(u64),
-    Set(String),
-    Enum(String),
+    Set(u64),
+    Enum(u32),
+    Set2(String),
+    Enum2(String),
     Json(Vec<u8>),
 }
 
@@ -95,10 +98,10 @@ impl ColValue {
         }
     }
 
-    pub fn from_mysql_column_value(meta: &ColMeta, value: ColumnValue) -> ColValue {
+    pub fn from_mysql_column_value(col_meta: &ColMeta, value: ColumnValue) -> ColValue {
         match value {
             ColumnValue::Tiny(v) => {
-                if meta.typee == ColType::UnsignedTiny {
+                if col_meta.typee == ColType::UnsignedTiny {
                     return ColValue::UnsignedTiny(v as u8);
                 } else {
                     return ColValue::Tiny(v);
@@ -106,7 +109,7 @@ impl ColValue {
             }
 
             ColumnValue::Short(v) => {
-                if meta.typee == ColType::UnsignedShort {
+                if col_meta.typee == ColType::UnsignedShort {
                     return ColValue::UnsignedShort(v as u16);
                 } else {
                     return ColValue::Short(v);
@@ -114,7 +117,7 @@ impl ColValue {
             }
 
             ColumnValue::Long(v) => {
-                if meta.typee == ColType::UnsignedLong {
+                if col_meta.typee == ColType::UnsignedLong {
                     return ColValue::UnsignedLong(v as u32);
                 } else {
                     return ColValue::Long(v);
@@ -122,7 +125,7 @@ impl ColValue {
             }
 
             ColumnValue::LongLong(v) => {
-                if meta.typee == ColType::UnsignedLongLong {
+                if col_meta.typee == ColType::UnsignedLongLong {
                     return ColValue::UnsignedLongLong(v as u64);
                 } else {
                     return ColValue::LongLong(v);
@@ -135,14 +138,27 @@ impl ColValue {
             ColumnValue::Time(v) => ColValue::Time(v),
             ColumnValue::Date(v) => ColValue::Date(v),
             ColumnValue::DateTime(v) => ColValue::DateTime(v),
-            // ColumnValue::Timestamp(v) => ColValue::Timestamp(v),
             ColumnValue::Year(v) => ColValue::Year(v),
+
+            ColumnValue::Timestamp(v) => {
+                if let ColType::Timestamp {
+                    timezone_diff_utc_seconds,
+                } = col_meta.typee
+                {
+                    // the value parsed from binlog is in millis with UTC
+                    let dt = Utc.timestamp_nanos(v * 1000 + timezone_diff_utc_seconds * 1000000000);
+                    return ColValue::Timestamp(dt.to_string().replace(" UTC", ""));
+                } else {
+                    let dt = Utc.timestamp_nanos(v * 1000);
+                    return ColValue::Timestamp(dt.to_string().replace(" UTC", ""));
+                }
+            }
 
             // char, varchar, binary, varbinary
             ColumnValue::String(v) => {
                 // when the type is binary(length), the value shoud be right-padded with '\0' to the specified length,
                 // otherwise the comparison will fail. https://dev.mysql.com/doc/refman/8.0/en/binary-varbinary.html
-                if let ColType::Binary(length) = meta.typee {
+                if let ColType::Binary { length } = col_meta.typee {
                     if length as usize > v.len() {
                         let pad_v: Vec<u8> = vec![0; length as usize - v.len()];
                         let final_v = [v, pad_v].concat();
@@ -153,9 +169,9 @@ impl ColValue {
             }
 
             ColumnValue::Blob(v) => ColValue::Blob(v),
-            // ColumnValue::Bit(v) => ColValue::Bit(v),
-            // ColumnValue::Set(v) => ColValue::Set(v),
-            // ColumnValue::Enum(v) => ColValue::Enum(v),
+            ColumnValue::Bit(v) => ColValue::Bit(v),
+            ColumnValue::Set(v) => ColValue::Set(v),
+            ColumnValue::Enum(v) => ColValue::Enum(v),
             ColumnValue::Json(v) => ColValue::Json(v),
 
             _ => ColValue::None,
