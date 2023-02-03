@@ -2,12 +2,12 @@ use sqlx::{mysql::MySqlArguments, query::Query, MySql};
 
 use crate::meta::col_value::ColValue;
 
-pub trait SqlxExt {
-    fn bind_col_value(self, value: Option<ColValue>) -> Self;
+pub trait SqlxExt<'q> {
+    fn bind_col_value<'b: 'q>(self, col_value: Option<&'b ColValue>) -> Self;
 }
 
-impl SqlxExt for Query<'_, MySql, MySqlArguments> {
-    fn bind_col_value(self, col_value: Option<ColValue>) -> Self {
+impl<'q> SqlxExt<'q> for Query<'q, MySql, MySqlArguments> {
+    fn bind_col_value<'b: 'q>(self, col_value: Option<&'b ColValue>) -> Self {
         if let Some(value) = col_value {
             match value {
                 ColValue::Tiny(v) => self.bind(v),

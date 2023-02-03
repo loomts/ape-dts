@@ -1,0 +1,79 @@
+appenders:
+  console_appender:
+    kind: console
+    encoder:
+      kind: pattern
+      pattern: "{h({d(%H:%M:%S)})} - {level} - {m}{n}"
+
+  default_file_appender:
+    kind: rolling_file
+    append: true
+    path: "logs/default.log"
+    encoder:
+      pattern: "{h({d(%Y-%m-%d %H:%M:%S)})} - {level} - {m}{n}"
+    policy:
+      kind: compound
+      trigger:
+        kind: size
+        limit: 10mb
+      roller:
+        kind: fixed_window
+        base: 1
+        count: 100
+        pattern: "logs/default{}.log"
+
+  commit_file_appender:
+    kind: rolling_file
+    append: true
+    path: "logs/commit.log"
+    encoder:
+      pattern: "{h({d(%Y-%m-%d %H:%M:%S)})} - {level} - {m}{n}"
+    policy:
+      kind: compound
+      trigger:
+        kind: size
+        limit: 10mb
+      roller:
+        kind: fixed_window
+        base: 1
+        count: 100
+        pattern: "logs/commit{}.log"
+
+  position_file_appender:
+    kind: rolling_file
+    append: true
+    path: "logs/position.log"
+    encoder:
+      pattern: "{h({d(%Y-%m-%d %H:%M:%S)})} - {level} - {m}{n}"
+    policy:
+      kind: compound
+      trigger:
+        kind: size
+        limit: 10mb
+      roller:
+        kind: fixed_window
+        base: 1
+        count: 100
+        pattern: "logs/position{}.log"
+
+loggers:
+  default_file_logger:
+    level: debug
+    appenders: 
+      - default_file_appender
+
+  commit_file_logger:
+    level: debug
+    appenders: 
+      - commit_file_appender
+
+  position_file_logger:
+    level: debug
+    appenders: 
+      - position_file_appender
+
+root:
+  level: debug
+  appenders:
+    # - console
+    - default_file_appender

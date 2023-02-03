@@ -1,6 +1,7 @@
 use std::{collections::HashMap, sync::atomic::AtomicBool, time::Duration};
 
 use concurrent_queue::ConcurrentQueue;
+use log::info;
 use mysql_binlog_connector_rust::{
     binlog_client::BinlogClient,
     event::{event_data::EventData, row_event::RowEvent, table_map_event::TableMapEvent},
@@ -9,7 +10,8 @@ use mysql_binlog_connector_rust::{
 use crate::{
     error::Error,
     meta::{
-        col_value::ColValue, db_meta_manager::DbMetaManager, row_data::RowData, row_type::RowType,
+        col_value::ColValue, db_meta_manager::DbMetaManager, position_info::PositionInfo,
+        row_data::RowData, row_type::RowType,
     },
 };
 
@@ -21,26 +23,41 @@ pub struct MysqlCdcExtractor<'a> {
     pub filter: Filter,
     pub url: String,
     pub binlog_filename: String,
-    pub binlog_position: u64,
+    pub binlog_position: u32,
     pub server_id: u64,
     pub shut_down: &'a AtomicBool,
 }
 
 impl MysqlCdcExtractor<'_> {
     pub async fn extract(&mut self) -> Result<(), Error> {
+        info!(
+            "start extracting binlog, binlog_filename: {}, binlog_position: {}",
+            self.binlog_filename, self.binlog_position
+        );
+
         let mut client = BinlogClient {
             url: self.url.clone(),
             binlog_filename: self.binlog_filename.clone(),
             binlog_position: self.binlog_position,
             server_id: self.server_id,
         };
-
         let mut stream = client.connect().await?;
+
         let mut table_map_event_map = HashMap::new();
+        let mut cur_binlog_filename = self.binlog_filename.clone();
 
         loop {
-            let (_header, data) = stream.read().await?;
+            let (header, data) = stream.read().await?;
+            let position_info = PositionInfo::MysqlCdc {
+                binlog_filename: cur_binlog_filename.clone(),
+                next_event_position: header.next_event_position as u64,
+            };
+
             match data {
+                EventData::Rotate(r) => {
+                    cur_binlog_filename = r.binlog_filename;
+                }
+
                 EventData::TableMap(d) => {
                     table_map_event_map.insert(d.table_id, d);
                 }
@@ -57,6 +74,7 @@ impl MysqlCdcExtractor<'_> {
                             row_type: RowType::Insert,
                             before: Option::None,
                             after: Some(col_values),
+                            position_info: Some(position_info.clone()),
                         };
                         let _ = self.push_row_to_buf(row_data).await?;
                     }
@@ -85,6 +103,7 @@ impl MysqlCdcExtractor<'_> {
                             row_type: RowType::Update,
                             before: Some(col_values_before),
                             after: Some(col_values_after),
+                            position_info: Some(position_info.clone()),
                         };
                         let _ = self.push_row_to_buf(row_data).await?;
                     }
@@ -102,6 +121,7 @@ impl MysqlCdcExtractor<'_> {
                             row_type: RowType::Delete,
                             before: Some(col_values),
                             after: Option::None,
+                            position_info: Some(position_info.clone()),
                         };
                         let _ = self.push_row_to_buf(row_data).await?;
                     }

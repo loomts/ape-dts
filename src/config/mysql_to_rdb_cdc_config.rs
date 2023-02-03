@@ -9,7 +9,7 @@ pub struct MysqlToRdbCdcConfig {
     pub src_url: String,
     pub dst_url: String,
     pub binlog_filename: String,
-    pub binlog_position: u64,
+    pub binlog_position: u32,
     pub server_id: u64,
     pub filter: FilterConfig,
     pub router: RouterConfig,
