@@ -20,6 +20,10 @@ pub enum Error {
         error: serde_yaml::Error,
     },
 
+    VarError {
+        error: std::env::VarError,
+    },
+
     ColumnNotMatch,
 }
 
@@ -44,5 +48,11 @@ impl From<std::io::Error> for Error {
 impl From<serde_yaml::Error> for Error {
     fn from(err: serde_yaml::Error) -> Self {
         Self::YamlError { error: err }
+    }
+}
+
+impl From<std::env::VarError> for Error {
+    fn from(err: std::env::VarError) -> Self {
+        Self::VarError { error: err }
     }
 }

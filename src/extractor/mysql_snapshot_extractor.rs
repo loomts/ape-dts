@@ -6,6 +6,7 @@ use std::{
 
 use concurrent_queue::ConcurrentQueue;
 use futures::TryStreamExt;
+use log::info;
 use sqlx::{mysql::MySqlRow, MySql, Pool, Row};
 
 use crate::{
@@ -46,11 +47,23 @@ impl MysqlSnapshotExtractor<'_> {
     }
 
     async fn extract_all(&self, tb_meta: &TbMeta) -> Result<(), Error> {
+        info!(
+            "start extracting data from {}.{} without slices",
+            self.db, self.tb
+        );
+
+        let mut all_count = 0;
         let sql = format!("SELECT * FROM {}.{}", self.db, self.tb);
         let mut rows = sqlx::query(&sql).fetch(self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             self.push_row_to_buffer(&row, tb_meta).await.unwrap();
+            all_count += 1;
         }
+
+        info!(
+            "end extracting data from {}.{}, all count: {}",
+            self.db, self.tb, all_count
+        );
         Ok(())
     }
 
@@ -60,6 +73,12 @@ impl MysqlSnapshotExtractor<'_> {
         order_col_meta: &ColMeta,
         init_start_value: ColValue,
     ) -> Result<(), Error> {
+        info!(
+            "start extracting data from {}.{} by slices",
+            self.db, self.tb
+        );
+
+        let mut all_count = 0;
         let mut start_value = init_start_value;
         let sql1 = format!(
             "SELECT * FROM {}.{} order by {} ASC LIMIT {}",
@@ -78,25 +97,32 @@ impl MysqlSnapshotExtractor<'_> {
         );
 
         loop {
+            let start_value_for_bind = start_value.clone();
             let query = if let ColValue::None = start_value {
                 sqlx::query(&sql1)
             } else {
-                sqlx::query(&sql2).bind_col_value(Some(start_value.clone()))
+                sqlx::query(&sql2).bind_col_value(Some(&start_value_for_bind))
             };
 
             let mut rows = query.fetch(self.conn_pool);
-            let mut count = 0usize;
+            let mut slice_count = 0usize;
             while let Some(row) = rows.try_next().await.unwrap() {
                 self.push_row_to_buffer(&row, tb_meta).await.unwrap();
                 start_value = Self::get_col_value(&row, order_col_meta).unwrap();
-                count += 1;
+                slice_count += 1;
+                all_count += 1;
             }
 
             // all data extracted
-            if count < self.buffer.capacity().unwrap() {
+            if slice_count < self.buffer.capacity().unwrap() {
                 break;
             }
         }
+
+        info!(
+            "end extracting data from {}.{}, all count: {}",
+            self.db, self.tb, all_count
+        );
         Ok(())
     }
 
@@ -130,6 +156,7 @@ impl MysqlSnapshotExtractor<'_> {
             before: None,
             after: Some(after),
             row_type: RowType::Insert,
+            position_info: None,
         });
         Ok(())
     }
