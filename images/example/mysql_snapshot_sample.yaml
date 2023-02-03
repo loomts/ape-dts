@@ -1,0 +1,15 @@
+src_url: mysql://root:123456@127.0.0.1:3306?ssl-mode=disabled
+dst_url: mysql://root:123456@127.0.0.1:3306
+src_pool_size: 5
+dst_pool_size: 5
+buffer_size: 2
+filter:
+  do_dbs: 
+  ignore_dbs: 
+  do_tbs: source_db.dts_test
+  ignore_tbs: 
+  do_events: insert
+router:
+  db_map: 
+  tb_map: source_db.dts_test:target_db.dts_test
+  field_map: f
