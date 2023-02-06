@@ -14,12 +14,12 @@ use crate::{
 
 use super::task_util::TaskUtil;
 
-pub struct MysqlSnapshotTask<'a> {
+pub struct MysqlSnapshotTask {
     pub config: RdbToRdbSnapshotConfig,
-    pub env_var: &'a EnvVar,
+    pub env_var: EnvVar,
 }
 
-impl MysqlSnapshotTask<'_> {
+impl MysqlSnapshotTask {
     pub async fn start(&self) -> Result<(), Error> {
         let filter = Filter::from_config(&self.config.filter)?;
         let router = Router::from_config(&self.config.router)?;

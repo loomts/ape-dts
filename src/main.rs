@@ -22,6 +22,7 @@ mod logger;
 mod meta;
 mod sinker;
 mod task;
+mod test;
 
 fn main() {
     dotenv().ok();
@@ -43,12 +44,24 @@ async fn start_task(env_var: &EnvVar) -> Result<(), Error> {
     match TaskType::from_name(&env_var.task_type) {
         TaskType::MysqlToMysqlCdc => {
             let config = MysqlToRdbCdcConfig::from_str(&config_str).unwrap();
-            MysqlCdcTask { config, env_var }.start().await.unwrap();
+            MysqlCdcTask {
+                config,
+                env_var: env_var.clone(),
+            }
+            .start()
+            .await
+            .unwrap();
         }
 
         TaskType::MysqlToMysqlSnapshot => {
             let config = RdbToRdbSnapshotConfig::from_str(&config_str).unwrap();
-            MysqlSnapshotTask { config, env_var }.start().await.unwrap();
+            MysqlSnapshotTask {
+                config,
+                env_var: env_var.clone(),
+            }
+            .start()
+            .await
+            .unwrap();
         }
 
         _ => {}

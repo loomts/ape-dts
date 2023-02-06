@@ -14,12 +14,12 @@ use crate::{
 
 use super::task_util::TaskUtil;
 
-pub struct MysqlCdcTask<'a> {
+pub struct MysqlCdcTask {
     pub config: MysqlToRdbCdcConfig,
-    pub env_var: &'a EnvVar,
+    pub env_var: EnvVar,
 }
 
-impl MysqlCdcTask<'_> {
+impl MysqlCdcTask {
     pub async fn start(&self) -> Result<(), Error> {
         let filter = Filter::from_config(&self.config.filter)?;
         let router = Router::from_config(&self.config.router)?;

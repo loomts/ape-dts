@@ -2,6 +2,7 @@ use std::env;
 
 use crate::error::Error;
 
+#[derive(Clone)]
 pub struct EnvVar {
     pub sqlx_log: String,
     pub log4rs_file: String,

@@ -1,15 +1,15 @@
 src_url: mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
 dst_url: mysql://root:123456@127.0.0.1:3308
-src_pool_size: 5
-dst_pool_size: 5
+src_pool_size: 3
+dst_pool_size: 3
 buffer_size: 2
 filter:
   do_dbs: 
   ignore_dbs: 
-  do_tbs: a.all_types,a.keys6
+  do_tbs: test_db_1.no_pk_no_uk,test_db_1.one_pk_no_uk,test_db_1.no_pk_one_uk,test_db_1.no_pk_multi_uk,test_db_1.one_pk_multi_uk
   ignore_tbs: 
   do_events: insert
 router:
   db_map: 
-  tb_map: a.keys6:b.keys6_dst
+  tb_map: 
   field_map: 
