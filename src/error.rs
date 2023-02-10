@@ -20,7 +20,7 @@ pub enum Error {
         error: serde_yaml::Error,
     },
 
-    VarError {
+    EnvVarError {
         error: std::env::VarError,
     },
 
@@ -53,6 +53,6 @@ impl From<serde_yaml::Error> for Error {
 
 impl From<std::env::VarError> for Error {
     fn from(err: std::env::VarError) -> Self {
-        Self::VarError { error: err }
+        Self::EnvVarError { error: err }
     }
 }

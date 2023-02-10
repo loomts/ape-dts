@@ -12,5 +12,6 @@ pub struct TbMeta {
     pub col_meta_map: HashMap<String, ColMeta>,
     pub key_map: HashMap<String, Vec<String>>,
     pub order_col: Option<String>,
+    pub partition_col: String,
     pub where_cols: Vec<String>,
 }

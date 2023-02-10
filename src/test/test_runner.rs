@@ -5,14 +5,14 @@ use sqlx::{MySql, Pool, Row};
 
 use crate::{config::env_var::EnvVar, error::Error, task::task_util::TaskUtil};
 
-pub struct TaskRunner {
+pub struct TestRunner {
     pub env_var: EnvVar,
     pub src_conn_pool: Pool<MySql>,
     pub dst_conn_pool: Pool<MySql>,
 }
 
 #[allow(dead_code)]
-impl TaskRunner {
+impl TestRunner {
     pub async fn new(env_file: &str) -> Result<Self, Error> {
         let env_path = env::current_dir().unwrap().join(env_file);
         dotenv::from_path(env_path).unwrap();

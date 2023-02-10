@@ -1,4 +1,3 @@
-use async_std::path::PathBuf;
 use config::{
     mysql_to_rdb_cdc_config::MysqlToRdbCdcConfig,
     rdb_to_rdb_snapshot_config::RdbToRdbSnapshotConfig,
@@ -7,6 +6,7 @@ use dotenv::dotenv;
 use error::Error;
 use futures::executor::block_on;
 use log::info;
+use std::path::PathBuf;
 use std::{fs::File, io::Read};
 use task::{
     mysql_cdc_task::MysqlCdcTask, mysql_snapshot_task::MysqlSnapshotTask, task_type::TaskType,
@@ -18,7 +18,6 @@ mod config;
 mod error;
 mod ext;
 mod extractor;
-mod logger;
 mod meta;
 mod sinker;
 mod task;

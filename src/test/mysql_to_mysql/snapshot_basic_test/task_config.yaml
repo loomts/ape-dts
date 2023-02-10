@@ -1,8 +1,8 @@
 src_url: mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
 dst_url: mysql://root:123456@127.0.0.1:3308
-src_pool_size: 3
-dst_pool_size: 3
-buffer_size: 2
+src_pool_size: 1
+buffer_size: 4
+parallel_count: 2
 filter:
   do_dbs: 
   ignore_dbs: 

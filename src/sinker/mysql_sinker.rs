@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    sync::atomic::{AtomicBool, Ordering},
-    time::Duration,
-};
+use std::collections::HashMap;
 
 use concurrent_queue::ConcurrentQueue;
 
@@ -12,56 +8,57 @@ use sqlx::{mysql::MySqlQueryResult, MySql, Pool};
 use crate::{
     error::Error,
     ext::sqlx_ext::SqlxExt,
-    logger::Logger,
     meta::{
         col_value::ColValue, db_meta_manager::DbMetaManager, row_data::RowData, row_type::RowType,
         tb_meta::TbMeta,
     },
 };
 
-use super::router::Router;
+use super::{router::Router, traits::Sinker};
 
-pub struct MysqlSinker<'a> {
-    pub conn_pool: &'a Pool<MySql>,
-    pub db_meta_manager: DbMetaManager<'a>,
-    pub buffer: &'a ConcurrentQueue<RowData>,
+use async_trait::async_trait;
+
+pub struct MysqlSinker {
+    pub conn_pool: Pool<MySql>,
+    pub db_meta_manager: DbMetaManager,
+    pub buffer: ConcurrentQueue<RowData>,
     pub router: Router,
-    pub shut_down: &'a AtomicBool,
 }
 
-impl MysqlSinker<'_> {
-    pub async fn sink(&mut self) -> Result<(), Error> {
-        let mut logger = Logger::new();
-        let mut last_row_data = Option::None;
+#[async_trait]
+impl Sinker for MysqlSinker {
+    async fn sink(&mut self) -> Result<(), Error> {
+        self.sink_internal().await
+    }
 
-        while !self.shut_down.load(Ordering::Acquire) {
-            if let Ok(mut row_data) = self.buffer.pop() {
-                match row_data.row_type {
-                    RowType::Insert => {
-                        self.insert(&mut row_data).await.unwrap();
-                    }
+    async fn accept(&self, row_data: RowData) -> Result<(), Error> {
+        self.buffer.push(row_data).unwrap();
+        Ok(())
+    }
+}
 
-                    RowType::Update => {
-                        self.update(&mut row_data).await.unwrap();
-                    }
-
-                    RowType::Delete => {
-                        self.delete(&mut row_data).await.unwrap();
-                    }
+impl MysqlSinker {
+    pub async fn sink_internal(&mut self) -> Result<(), Error> {
+        while let Ok(mut row_data) = self.buffer.pop() {
+            match row_data.row_type {
+                RowType::Insert => {
+                    self.insert(&mut row_data).await.unwrap();
                 }
 
-                last_row_data = Some(row_data);
-                logger.log_position(&last_row_data, false)?;
-            } else {
-                async_std::task::sleep(Duration::from_millis(1)).await;
+                RowType::Update => {
+                    self.update(&mut row_data).await.unwrap();
+                }
+
+                RowType::Delete => {
+                    self.delete(&mut row_data).await.unwrap();
+                }
             }
         }
 
-        logger.log_position(&last_row_data, true)?;
         Ok(())
     }
 
-    pub async fn insert(&mut self, row_data: &mut RowData) -> Result<(), Error> {
+    async fn insert(&mut self, row_data: &mut RowData) -> Result<(), Error> {
         let tb_meta = self.get_tb_meta(&row_data).await?;
         let mut col_values = Vec::new();
         for _ in tb_meta.cols.iter() {
@@ -82,11 +79,11 @@ impl MysqlSinker<'_> {
             query = query.bind_col_value(after.get(col_name));
         }
 
-        let result = query.execute(self.conn_pool).await?;
+        let result = query.execute(&self.conn_pool).await?;
         self.check_result(result, &sql, row_data, &tb_meta).await
     }
 
-    pub async fn delete(&mut self, row_data: &mut RowData) -> Result<(), Error> {
+    async fn delete(&mut self, row_data: &mut RowData) -> Result<(), Error> {
         let tb_meta = self.get_tb_meta(&row_data).await?;
         let before = row_data.before.as_ref().unwrap();
 
@@ -101,11 +98,11 @@ impl MysqlSinker<'_> {
             query = query.bind_col_value(before.get(col_name));
         }
 
-        let result = query.execute(self.conn_pool).await?;
+        let result = query.execute(&self.conn_pool).await?;
         self.check_result(result, &sql, row_data, &tb_meta).await
     }
 
-    pub async fn update(&mut self, row_data: &mut RowData) -> Result<(), Error> {
+    async fn update(&mut self, row_data: &mut RowData) -> Result<(), Error> {
         let tb_meta = self.get_tb_meta(&row_data).await?;
         let before = row_data.before.as_ref().unwrap();
         let after = row_data.after.as_ref().unwrap();
@@ -134,7 +131,7 @@ impl MysqlSinker<'_> {
             query = query.bind_col_value(before.get(col_name));
         }
 
-        let result = query.execute(self.conn_pool).await?;
+        let result = query.execute(&self.conn_pool).await?;
         self.check_result(result, &sql, row_data, &tb_meta).await
     }
 

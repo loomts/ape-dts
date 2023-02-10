@@ -30,4 +30,9 @@ impl TaskUtil {
             .await?;
         Ok(conn_pool)
     }
+
+    pub async fn sleep_millis(millis: u64) {
+        async_std::task::sleep(Duration::from_millis(millis)).await;
+        // tokio::time::sleep(Duration::from_millis(1)).await;
+    }
 }

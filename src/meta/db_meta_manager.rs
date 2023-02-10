@@ -8,8 +8,9 @@ use crate::error::Error;
 
 use super::{col_meta::ColMeta, col_type::ColType, tb_meta::TbMeta};
 
-pub struct DbMetaManager<'a> {
-    pub conn_pool: &'a Pool<MySql>,
+#[derive(Clone)]
+pub struct DbMetaManager {
+    pub conn_pool: Pool<MySql>,
     pub cache: HashMap<String, TbMeta>,
     pub version: String,
     // timezone diff with utc in seconds
@@ -22,8 +23,8 @@ const DATA_TYPE: &str = "DATA_TYPE";
 const CHARACTER_MAXIMUM_LENGTH: &str = "CHARACTER_MAXIMUM_LENGTH";
 const CHARACTER_SET_NAME: &str = "CHARACTER_SET_NAME";
 
-impl<'a> DbMetaManager<'a> {
-    pub fn new(conn_pool: &'a Pool<MySql>) -> Self {
+impl<'a> DbMetaManager {
+    pub fn new(conn_pool: Pool<MySql>) -> Self {
         Self {
             conn_pool,
             cache: HashMap::new(),
@@ -32,7 +33,7 @@ impl<'a> DbMetaManager<'a> {
         }
     }
 
-    pub async fn init(mut self) -> Result<DbMetaManager<'a>, Error> {
+    pub async fn init(mut self) -> Result<DbMetaManager, Error> {
         self.init_version().await?;
         self.init_timezone_diff_utc_seconds().await?;
         Ok(self)
@@ -48,6 +49,11 @@ impl<'a> DbMetaManager<'a> {
         let key_map = self.parse_keys(db, tb).await?;
         let order_col = Self::get_order_col(&key_map)?;
         let where_cols = Self::get_where_cols(&key_map, &cols)?;
+        let partition_col = if let Some(col) = &order_col {
+            col.clone()
+        } else {
+            where_cols[0].clone()
+        };
         let tb_meta = TbMeta {
             db: db.to_string(),
             tb: tb.to_string(),
@@ -55,6 +61,7 @@ impl<'a> DbMetaManager<'a> {
             col_meta_map,
             key_map,
             order_col,
+            partition_col,
             where_cols,
         };
         self.cache.insert(full_name.clone(), tb_meta.clone());
@@ -71,7 +78,7 @@ impl<'a> DbMetaManager<'a> {
 
         let sql = format!("SELECT {}, {}, {}, {}, {} FROM information_schema.columns WHERE table_schema = ? AND table_name = ?", 
             COLUMN_NAME, COLUMN_TYPE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_SET_NAME);
-        let mut rows = sqlx::query(&sql).bind(db).bind(tb).fetch(self.conn_pool);
+        let mut rows = sqlx::query(&sql).bind(db).bind(tb).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await? {
             let col_type = self.parse_col_meta(&row).await?;
             cols.push(col_type.name.clone());
@@ -192,7 +199,7 @@ impl<'a> DbMetaManager<'a> {
     async fn parse_keys(&self, db: &str, tb: &str) -> Result<HashMap<String, Vec<String>>, Error> {
         let mut key_map: HashMap<String, Vec<String>> = HashMap::new();
         let sql = format!("SHOW INDEXES FROM {}.{}", db, tb);
-        let mut rows = sqlx::query(&sql).fetch(self.conn_pool);
+        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await? {
             let non_unique: i8 = row.try_get("Non_unique")?;
             if non_unique == 1 {
@@ -245,7 +252,7 @@ impl<'a> DbMetaManager<'a> {
 
     async fn init_version(&mut self) -> Result<(), Error> {
         let sql = "SELECT VERSION()";
-        let mut rows = sqlx::query(&sql).fetch(self.conn_pool);
+        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         if let Some(row) = rows.try_next().await? {
             self.version = row.try_get(0)?;
             return Ok(());
@@ -258,7 +265,7 @@ impl<'a> DbMetaManager<'a> {
 
     async fn init_timezone_diff_utc_seconds(&mut self) -> Result<(), Error> {
         let sql = "SELECT TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP, NOW())";
-        let mut rows = sqlx::query(&sql).fetch(self.conn_pool);
+        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         if let Some(row) = rows.try_next().await? {
             // by default, sqlx will use UTC(+00:00) for connections which TIMESTAMPDIFF is 0
             self.timezone_diff_utc_seconds = row.try_get(0)?;

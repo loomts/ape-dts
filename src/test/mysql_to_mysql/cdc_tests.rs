@@ -1,13 +1,15 @@
 #[cfg(test)]
 mod test {
-    use std::{thread, time::Duration};
+    use std::thread;
 
     use futures::executor::block_on;
     use serial_test::serial;
 
     use crate::{
-        config::mysql_to_rdb_cdc_config::MysqlToRdbCdcConfig, error::Error,
-        task::mysql_cdc_task::MysqlCdcTask, test::task_runner::TaskRunner,
+        config::mysql_to_rdb_cdc_config::MysqlToRdbCdcConfig,
+        error::Error,
+        task::{mysql_cdc_task::MysqlCdcTask, task_util::TaskUtil},
+        test::test_runner::TestRunner,
     };
 
     const CDC_TASK_START_MILLIS: u64 = 3000;
@@ -46,7 +48,7 @@ mod test {
             "test_db_1.one_pk_multi_uk",
         ];
 
-        let runner = block_on(TaskRunner::new(&env_file)).unwrap();
+        let runner = block_on(TestRunner::new(&env_file)).unwrap();
         block_on(run_cdc_test(
             &runner,
             &src_ddl_file,
@@ -61,7 +63,7 @@ mod test {
     }
 
     async fn run_cdc_test(
-        runner: &TaskRunner,
+        runner: &TestRunner,
         src_ddl_file: &str,
         dst_ddl_file: &str,
         src_dml_file: &str,
@@ -80,7 +82,8 @@ mod test {
         thread::spawn(move || {
             block_on(MysqlCdcTask { config, env_var }.start()).unwrap();
         });
-        async_std::task::sleep(Duration::from_millis(CDC_TASK_START_MILLIS)).await;
+
+        TaskUtil::sleep_millis(CDC_TASK_START_MILLIS).await;
 
         // load dml sqls
         let src_dml_sqls = runner.load_sqls(src_dml_file).await?;
@@ -103,7 +106,7 @@ mod test {
         runner
             .execute_sqls(&src_insert_sqls, &runner.src_conn_pool)
             .await?;
-        async_std::task::sleep(Duration::from_millis(BINLOG_PARSE_MILLIS)).await;
+        TaskUtil::sleep_millis(BINLOG_PARSE_MILLIS).await;
         assert!(
             runner
                 .compare_data_for_tbs(&src_tbs, &dst_tbs, &cols)
@@ -114,7 +117,7 @@ mod test {
         runner
             .execute_sqls(&src_update_sqls, &runner.src_conn_pool)
             .await?;
-        async_std::task::sleep(Duration::from_millis(BINLOG_PARSE_MILLIS)).await;
+        TaskUtil::sleep_millis(BINLOG_PARSE_MILLIS).await;
         assert!(
             runner
                 .compare_data_for_tbs(&src_tbs, &dst_tbs, &cols)
@@ -125,7 +128,7 @@ mod test {
         runner
             .execute_sqls(&src_delete_sqls, &runner.src_conn_pool)
             .await?;
-        async_std::task::sleep(Duration::from_millis(BINLOG_PARSE_MILLIS)).await;
+        TaskUtil::sleep_millis(BINLOG_PARSE_MILLIS).await;
         assert!(
             runner
                 .compare_data_for_tbs(&src_tbs, &dst_tbs, &cols)

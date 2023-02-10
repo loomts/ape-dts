@@ -3,14 +3,14 @@ appenders:
     kind: console
     encoder:
       kind: pattern
-      pattern: "{h({d(%H:%M:%S)})} - {level} - {m}{n}"
+      pattern: "{h({d(%H:%M:%S)})} - {level} - {tid} - {m}{n}"
 
   default_file_appender:
     kind: rolling_file
     append: true
     path: "logs/default.log"
     encoder:
-      pattern: "{h({d(%Y-%m-%d %H:%M:%S)})} - {level} - {m}{n}"
+      pattern: "{h({d(%Y-%m-%d %H:%M:%S)})} - {level} - {tid} - {m}{n}"
     policy:
       kind: compound
       trigger:
@@ -27,7 +27,7 @@ appenders:
     append: true
     path: "logs/commit.log"
     encoder:
-      pattern: "{h({d(%Y-%m-%d %H:%M:%S)})} - {level} - {m}{n}"
+      pattern: "{h({d(%Y-%m-%d %H:%M:%S)})} - {level} - {tid} - {m}{n}"
     policy:
       kind: compound
       trigger:
@@ -44,7 +44,7 @@ appenders:
     append: true
     path: "logs/position.log"
     encoder:
-      pattern: "{h({d(%Y-%m-%d %H:%M:%S)})} - {level} - {m}{n}"
+      pattern: "{h({d(%Y-%m-%d %H:%M:%S)})} - {level} - {tid} - {m}{n}"
     policy:
       kind: compound
       trigger:

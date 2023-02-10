@@ -7,12 +7,11 @@ use super::{filter_config::FilterConfig, router_config::RouterConfig};
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct RdbToRdbSnapshotConfig {
     pub src_url: String,
-    pub src_pool_size: u32,
     pub dst_url: String,
-    pub dst_pool_size: u32,
     pub filter: FilterConfig,
     pub router: RouterConfig,
     pub buffer_size: usize,
+    pub parallel_count: usize,
 }
 
 impl RdbToRdbSnapshotConfig {

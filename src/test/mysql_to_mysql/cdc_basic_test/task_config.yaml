@@ -1,9 +1,10 @@
 src_url: mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
 dst_url: mysql://root:123456@127.0.0.1:3308
-buffer_size: 2
+buffer_size: 4
 binlog_filename: 
 binlog_position: 0
 server_id: 2000
+parallel_count: 2
 filter:
   do_dbs: 
   ignore_dbs: 

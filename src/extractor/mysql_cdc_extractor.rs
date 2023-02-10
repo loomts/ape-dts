@@ -1,4 +1,6 @@
-use std::{collections::HashMap, sync::atomic::AtomicBool, time::Duration};
+use std::{collections::HashMap, sync::atomic::AtomicBool};
+
+use async_trait::async_trait;
 
 use concurrent_queue::ConcurrentQueue;
 use log::info;
@@ -13,12 +15,13 @@ use crate::{
         col_value::ColValue, db_meta_manager::DbMetaManager, position_info::PositionInfo,
         row_data::RowData, row_type::RowType,
     },
+    task::task_util::TaskUtil,
 };
 
-use super::filter::Filter;
+use super::{filter::Filter, traits::Extractor};
 
 pub struct MysqlCdcExtractor<'a> {
-    pub db_meta_manager: DbMetaManager<'a>,
+    pub db_meta_manager: DbMetaManager,
     pub buffer: &'a ConcurrentQueue<RowData>,
     pub filter: Filter,
     pub url: String,
@@ -28,8 +31,15 @@ pub struct MysqlCdcExtractor<'a> {
     pub shut_down: &'a AtomicBool,
 }
 
+#[async_trait]
+impl Extractor for MysqlCdcExtractor<'_> {
+    async fn extract(&mut self) -> Result<(), Error> {
+        self.extract_internal().await
+    }
+}
+
 impl MysqlCdcExtractor<'_> {
-    pub async fn extract(&mut self) -> Result<(), Error> {
+    async fn extract_internal(&mut self) -> Result<(), Error> {
         info!(
             "start extracting binlog, binlog_filename: {}, binlog_position: {}",
             self.binlog_filename, self.binlog_position
@@ -141,7 +151,7 @@ impl MysqlCdcExtractor<'_> {
         }
 
         while self.buffer.is_full() {
-            async_std::task::sleep(Duration::from_millis(1)).await;
+            TaskUtil::sleep_millis(1).await;
         }
         let _ = self.buffer.push(row_data);
         Ok(())

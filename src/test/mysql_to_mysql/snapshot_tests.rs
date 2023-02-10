@@ -6,7 +6,7 @@ mod test {
 
     use crate::{
         config::rdb_to_rdb_snapshot_config::RdbToRdbSnapshotConfig, error::Error,
-        task::mysql_snapshot_task::MysqlSnapshotTask, test::task_runner::TaskRunner,
+        task::mysql_snapshot_task::MysqlSnapshotTask, test::test_runner::TestRunner,
     };
 
     const TEST_DIR: &str = "src/test/mysql_to_mysql";
@@ -43,7 +43,7 @@ mod test {
             "test_db_1.one_pk_multi_uk",
         ];
 
-        let runner = block_on(TaskRunner::new(&env_file)).unwrap();
+        let runner = block_on(TestRunner::new(&env_file)).unwrap();
         block_on(run_snapshot_test(
             &runner,
             &src_ddl_file,
@@ -58,7 +58,7 @@ mod test {
     }
 
     async fn run_snapshot_test(
-        runner: &TaskRunner,
+        runner: &TestRunner,
         src_ddl_file: &str,
         dst_ddl_file: &str,
         src_dml_file: &str,
