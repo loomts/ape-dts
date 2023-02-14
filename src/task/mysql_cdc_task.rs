@@ -35,7 +35,7 @@ impl MysqlCdcTask {
 
         let dst_conn_pool = TaskUtil::create_mysql_conn_pool(
             &self.config.dst_url,
-            self.config.parallel_count as u32 + 1,
+            self.config.parallel_size as u32 + 1,
             self.env_var.is_sqlx_log_enabled(),
         )
         .await?;
@@ -46,12 +46,12 @@ impl MysqlCdcTask {
         let shut_down = AtomicBool::new(false);
 
         let mut sub_sinkers: Vec<Box<dyn Sinker>> = Vec::new();
-        for _ in 0..self.config.parallel_count {
+        for _ in 0..self.config.parallel_size {
             let sinker = MysqlSinker {
                 conn_pool: dst_conn_pool.clone(),
                 db_meta_manager: dst_db_meta_manager.clone(),
-                buffer: ConcurrentQueue::unbounded(),
                 router: router.clone(),
+                batch_size: 1,
             };
             sub_sinkers.push(Box::new(sinker));
         }

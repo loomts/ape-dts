@@ -3,7 +3,5 @@ use async_trait::async_trait;
 
 #[async_trait]
 pub trait Sinker {
-    async fn sink(&mut self) -> Result<(), Error>;
-
-    async fn accept(&self, row_data: RowData) -> Result<(), Error>;
+    async fn sink(&mut self, mut data: Vec<RowData>) -> Result<(), Error>;
 }

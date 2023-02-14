@@ -36,17 +36,10 @@ impl ParallelSinker<'_> {
             // slice data
             let mut sub_datas = self.slicer.slice(all_data, slice_count).await?;
 
-            // distribute data to sub sinkers
-            for i in (0..slice_count).rev() {
-                for row_data in sub_datas.remove(i) {
-                    let _ = self.sub_sinkers[i].accept(row_data).await?;
-                }
-            }
-
             // start sub sinkers
             let mut futures = Vec::new();
             for sinker in self.sub_sinkers.iter_mut() {
-                futures.push(sinker.sink());
+                futures.push(sinker.sink(sub_datas.remove(0)));
             }
 
             // wait for sub sinkers to finish and unwrap errors if happen

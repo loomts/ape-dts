@@ -110,6 +110,10 @@ impl TestRunner {
             let src_tb = src_tbs[i];
             let dst_tb = dst_tbs[i];
             if !self.compare_tb_data(src_tb, dst_tb, &cols).await? {
+                println!(
+                    "compare_tb_data failed, src_tb: {}, dst_tb: {}",
+                    src_tb, dst_tb
+                );
                 return Ok(false);
             }
         }
@@ -122,8 +126,8 @@ impl TestRunner {
         dst_tb: &str,
         cols: &Vec<&str>,
     ) -> Result<bool, Error> {
-        let src_sql = format!("select * from {}", src_tb);
-        let dst_sql = format!("select * from {}", dst_tb);
+        let src_sql = format!("select * from {} order by f_0", src_tb);
+        let dst_sql = format!("select * from {} order by f_0", dst_tb);
         let src_data = self.fetch_data(&src_sql, cols, &self.src_conn_pool).await?;
         let dst_data = self.fetch_data(&dst_sql, cols, &self.dst_conn_pool).await?;
         Ok(self.compare_row_data(&src_data, &dst_data))

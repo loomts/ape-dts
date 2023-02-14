@@ -11,7 +11,8 @@ pub struct RdbToRdbSnapshotConfig {
     pub filter: FilterConfig,
     pub router: RouterConfig,
     pub buffer_size: usize,
-    pub parallel_count: usize,
+    pub parallel_size: usize,
+    pub batch_size: usize,
 }
 
 impl RdbToRdbSnapshotConfig {
