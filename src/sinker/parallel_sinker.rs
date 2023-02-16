@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use concurrent_queue::ConcurrentQueue;
 use futures::future::join_all;
-use log::info;
+use log::{debug, info};
 
 use crate::{error::Error, meta::row_data::RowData, task::task_util::TaskUtil};
 
@@ -24,7 +24,23 @@ impl ParallelSinker<'_> {
             let slice_count = self.sub_sinkers.len();
             let mut all_data = Vec::new();
             while let Ok(row_data) = self.buffer.pop() {
-                all_data.push(row_data);
+                // if any col value of uk/pk changed, cut off the data and sink the pushed data immediately
+                let (uk_col_changed, changed_col, col_value_before, col_value_after) =
+                    self.slicer.check_uk_col_changed(&row_data).await?;
+                if uk_col_changed {
+                    debug!(
+                        "{}.{}.{} changed from {} to {}",
+                        &row_data.db,
+                        &row_data.tb,
+                        changed_col.unwrap(),
+                        col_value_before.unwrap().to_string(),
+                        col_value_after.unwrap().to_string()
+                    );
+                    all_data.push(row_data);
+                    break;
+                } else {
+                    all_data.push(row_data);
+                }
             }
 
             // record the last row_data for logging position_info

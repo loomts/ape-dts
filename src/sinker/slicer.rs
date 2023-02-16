@@ -1,6 +1,8 @@
 use crate::{
     error::Error,
-    meta::{db_meta_manager::DbMetaManager, row_data::RowData, row_type::RowType},
+    meta::{
+        col_value::ColValue, db_meta_manager::DbMetaManager, row_data::RowData, row_type::RowType,
+    },
 };
 
 pub struct Slicer {
@@ -24,6 +26,47 @@ impl Slicer {
         }
 
         Ok(sub_datas)
+    }
+
+    pub async fn check_uk_col_changed<'a>(
+        &mut self,
+        row_data: &'a RowData,
+    ) -> Result<
+        (
+            bool,
+            Option<String>,
+            Option<&'a ColValue>,
+            Option<&'a ColValue>,
+        ),
+        Error,
+    > {
+        if row_data.row_type != RowType::Update {
+            return Ok((false, Option::None, Option::None, Option::None));
+        }
+
+        let tb_meta = self
+            .db_meta_manager
+            .get_tb_meta(&row_data.db, &row_data.tb)
+            .await?;
+
+        let before = row_data.before.as_ref().unwrap();
+        let after = row_data.after.as_ref().unwrap();
+        // check if any col value of pk & uk has changed
+        for key_cols in tb_meta.key_map.values() {
+            for col in key_cols {
+                let col_value_before = before.get(col);
+                let col_value_after = after.get(col);
+                if col_value_before != col_value_after {
+                    return Ok((
+                        true,
+                        Some(col.to_string()),
+                        col_value_before,
+                        col_value_after,
+                    ));
+                }
+            }
+        }
+        Ok((false, Option::None, Option::None, Option::None))
     }
 
     async fn partition(&mut self, row_data: &RowData, slice_count: usize) -> Result<usize, Error> {

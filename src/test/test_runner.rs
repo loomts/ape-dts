@@ -13,6 +13,24 @@ pub struct TestRunner {
 
 #[allow(dead_code)]
 impl TestRunner {
+    pub fn get_default_tb_cols() -> Vec<&'static str> {
+        vec![
+            "f_0", "f_1", "f_2", "f_3", "f_4", "f_5", "f_6", "f_7", "f_8", "f_9", "f_10", "f_11",
+            "f_12", "f_13", "f_14", "f_15", "f_16", "f_17", "f_18", "f_19", "f_20", "f_21", "f_22",
+            "f_23", "f_24", "f_25", "f_26", "f_27", "f_28",
+        ]
+    }
+
+    pub fn get_default_tbs() -> Vec<&'static str> {
+        vec![
+            "test_db_1.no_pk_no_uk",
+            "test_db_1.one_pk_no_uk",
+            "test_db_1.no_pk_one_uk",
+            "test_db_1.no_pk_multi_uk",
+            "test_db_1.one_pk_multi_uk",
+        ]
+    }
+
     pub async fn new(env_file: &str) -> Result<Self, Error> {
         let env_path = env::current_dir().unwrap().join(env_file);
         dotenv::from_path(env_path).unwrap();
@@ -23,6 +41,7 @@ impl TestRunner {
 
         let src_conn_pool = TaskUtil::create_mysql_conn_pool(&src_url, 1, true).await?;
         let dst_conn_pool = TaskUtil::create_mysql_conn_pool(&dst_url, 1, true).await?;
+        log4rs::init_file(env_var.log4rs_file.clone(), Default::default()).unwrap();
 
         Ok(Self {
             env_var,
@@ -59,9 +78,10 @@ impl TestRunner {
 
         let mut sqls = Vec::new();
         for sql in content.split("\n") {
-            if !sql.is_empty() {
-                sqls.push(sql.to_string());
+            if sql.is_empty() || sql.starts_with("--") {
+                continue;
             }
+            sqls.push(sql.to_string());
         }
         Ok(sqls)
     }

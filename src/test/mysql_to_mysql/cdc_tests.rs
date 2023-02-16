@@ -26,27 +26,37 @@ mod test {
         let task_config_file = format!("{}/cdc_basic_test/task_config.yaml", TEST_DIR);
 
         // compare src and dst data
-        let cols = vec![
-            "f_0", "f_1", "f_2", "f_3", "f_4", "f_5", "f_6", "f_7", "f_8", "f_9", "f_10", "f_11",
-            "f_12", "f_13", "f_14", "f_15", "f_16", "f_17", "f_18", "f_19", "f_20", "f_21", "f_22",
-            "f_23", "f_24", "f_25", "f_26", "f_27", "f_28",
-        ];
+        let cols = TestRunner::get_default_tb_cols();
+        let src_tbs = TestRunner::get_default_tbs();
+        let dst_tbs = TestRunner::get_default_tbs();
 
-        let src_tbs = vec![
-            "test_db_1.no_pk_no_uk",
-            "test_db_1.one_pk_no_uk",
-            "test_db_1.no_pk_one_uk",
-            "test_db_1.no_pk_multi_uk",
-            "test_db_1.one_pk_multi_uk",
-        ];
+        let runner = block_on(TestRunner::new(&env_file)).unwrap();
+        block_on(run_cdc_test(
+            &runner,
+            &src_ddl_file,
+            &dst_ddl_file,
+            &src_dml_file,
+            &task_config_file,
+            &src_tbs,
+            &dst_tbs,
+            &cols,
+        ))
+        .unwrap();
+    }
 
-        let dst_tbs = vec![
-            "test_db_1.no_pk_no_uk",
-            "test_db_1.one_pk_no_uk",
-            "test_db_1.no_pk_one_uk",
-            "test_db_1.no_pk_multi_uk",
-            "test_db_1.one_pk_multi_uk",
-        ];
+    #[test]
+    #[serial]
+    fn cdc_uk_changed_test() {
+        let env_file = format!("{}/.env", TEST_DIR);
+        let src_ddl_file = format!("{}/cdc_uk_changed_test/src_ddl.sql", TEST_DIR);
+        let dst_ddl_file = format!("{}/cdc_uk_changed_test/dst_ddl.sql", TEST_DIR);
+        let src_dml_file = format!("{}/cdc_uk_changed_test/src_dml.sql", TEST_DIR);
+        let task_config_file = format!("{}/cdc_uk_changed_test/task_config.yaml", TEST_DIR);
+
+        // compare src and dst data
+        let cols = TestRunner::get_default_tb_cols();
+        let src_tbs = vec!["test_db_1.one_pk_multi_uk"];
+        let dst_tbs = vec!["test_db_1.one_pk_multi_uk"];
 
         let runner = block_on(TestRunner::new(&env_file)).unwrap();
         block_on(run_cdc_test(

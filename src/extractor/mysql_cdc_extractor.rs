@@ -163,9 +163,10 @@ impl MysqlCdcExtractor<'_> {
         included_columns: &Vec<bool>,
         event: &mut RowEvent,
     ) -> Result<HashMap<String, ColValue>, Error> {
-        let db = table_map_event.database_name.clone();
-        let tb = table_map_event.table_name.clone();
-        let tb_meta = self.db_meta_manager.get_tb_meta(&db, &tb).await?;
+        let tb_meta = self
+            .db_meta_manager
+            .get_tb_meta(&table_map_event.database_name, &table_map_event.table_name)
+            .await?;
 
         if included_columns.len() != event.column_values.len() {
             return Err(Error::ColumnNotMatch);
