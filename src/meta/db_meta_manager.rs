@@ -76,12 +76,18 @@ impl<'a> DbMetaManager {
         let mut cols = Vec::new();
         let mut col_meta_map = HashMap::new();
 
+        let sql = format!("DESC {}.{}", db, tb);
+        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+        while let Some(row) = rows.try_next().await? {
+            let col_name: String = row.try_get("Field")?;
+            cols.push(col_name);
+        }
+
         let sql = format!("SELECT {}, {}, {}, {}, {} FROM information_schema.columns WHERE table_schema = ? AND table_name = ?", 
             COLUMN_NAME, COLUMN_TYPE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_SET_NAME);
         let mut rows = sqlx::query(&sql).bind(db).bind(tb).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await? {
             let col_type = self.parse_col_meta(&row).await?;
-            cols.push(col_type.name.clone());
             col_meta_map.insert(col_type.name.clone(), col_type);
         }
 

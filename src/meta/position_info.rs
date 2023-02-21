@@ -2,7 +2,7 @@
 pub enum PositionInfo {
     MysqlCdc {
         binlog_filename: String,
-        next_event_position: u64,
+        next_event_position: u32,
     },
 
     MysqlSnapshot {

@@ -1,12 +1,16 @@
 use std::{collections::HashMap, sync::atomic::AtomicBool};
 
+use async_recursion::async_recursion;
 use async_trait::async_trait;
 
 use concurrent_queue::ConcurrentQueue;
 use log::info;
 use mysql_binlog_connector_rust::{
     binlog_client::BinlogClient,
-    event::{event_data::EventData, row_event::RowEvent, table_map_event::TableMapEvent},
+    event::{
+        event_data::EventData, event_header::EventHeader, row_event::RowEvent,
+        table_map_event::TableMapEvent,
+    },
 };
 
 use crate::{
@@ -51,95 +55,111 @@ impl MysqlCdcExtractor<'_> {
             binlog_position: self.binlog_position,
             server_id: self.server_id,
         };
-        let mut stream = client.connect().await?;
+        let mut stream = client.connect().await.unwrap();
 
         let mut table_map_event_map = HashMap::new();
-        let mut cur_binlog_filename = self.binlog_filename.clone();
-
+        let mut binlog_filename = self.binlog_filename.clone();
         loop {
             let (header, data) = stream.read().await?;
-            let position_info = PositionInfo::MysqlCdc {
-                binlog_filename: cur_binlog_filename.clone(),
-                next_event_position: header.next_event_position as u64,
-            };
-
             match data {
                 EventData::Rotate(r) => {
-                    cur_binlog_filename = r.binlog_filename;
+                    binlog_filename = r.binlog_filename;
                 }
 
-                EventData::TableMap(d) => {
-                    table_map_event_map.insert(d.table_id, d);
+                _ => {
+                    self.parse_events(header, data, &binlog_filename, &mut table_map_event_map)
+                        .await?
                 }
-
-                EventData::WriteRows(mut w) => {
-                    for event in w.rows.iter_mut() {
-                        let table_map_event = table_map_event_map.get(&w.table_id).unwrap();
-                        let col_values = self
-                            .parse_row_data(&table_map_event, &w.included_columns, event)
-                            .await?;
-                        let row_data = RowData {
-                            db: table_map_event.database_name.clone(),
-                            tb: table_map_event.table_name.clone(),
-                            row_type: RowType::Insert,
-                            before: Option::None,
-                            after: Some(col_values),
-                            position_info: Some(position_info.clone()),
-                        };
-                        let _ = self.push_row_to_buf(row_data).await?;
-                    }
-                }
-
-                EventData::UpdateRows(mut u) => {
-                    for event in u.rows.iter_mut() {
-                        let table_map_event = table_map_event_map.get(&u.table_id).unwrap();
-                        let col_values_before = self
-                            .parse_row_data(
-                                &table_map_event,
-                                &u.included_columns_before,
-                                &mut event.0,
-                            )
-                            .await?;
-                        let col_values_after = self
-                            .parse_row_data(
-                                &table_map_event,
-                                &u.included_columns_after,
-                                &mut event.1,
-                            )
-                            .await?;
-                        let row_data = RowData {
-                            db: table_map_event.database_name.clone(),
-                            tb: table_map_event.table_name.clone(),
-                            row_type: RowType::Update,
-                            before: Some(col_values_before),
-                            after: Some(col_values_after),
-                            position_info: Some(position_info.clone()),
-                        };
-                        let _ = self.push_row_to_buf(row_data).await?;
-                    }
-                }
-
-                EventData::DeleteRows(mut d) => {
-                    for event in d.rows.iter_mut() {
-                        let table_map_event = table_map_event_map.get(&d.table_id).unwrap();
-                        let col_values = self
-                            .parse_row_data(&table_map_event, &d.included_columns, event)
-                            .await?;
-                        let row_data = RowData {
-                            db: table_map_event.database_name.clone(),
-                            tb: table_map_event.table_name.clone(),
-                            row_type: RowType::Delete,
-                            before: Some(col_values),
-                            after: Option::None,
-                            position_info: Some(position_info.clone()),
-                        };
-                        let _ = self.push_row_to_buf(row_data).await?;
-                    }
-                }
-
-                _ => {}
             }
         }
+    }
+
+    #[async_recursion]
+    async fn parse_events(
+        &mut self,
+        header: EventHeader,
+        data: EventData,
+        binlog_filename: &str,
+        table_map_event_map: &mut HashMap<u64, TableMapEvent>,
+    ) -> Result<(), Error> {
+        let position_info = PositionInfo::MysqlCdc {
+            binlog_filename: binlog_filename.to_string(),
+            next_event_position: header.next_event_position,
+        };
+
+        match data {
+            EventData::TableMap(d) => {
+                table_map_event_map.insert(d.table_id, d);
+            }
+
+            EventData::TransactionPayload(event) => {
+                for event in event.uncompressed_events {
+                    self.parse_events(event.0, event.1, binlog_filename, table_map_event_map)
+                        .await?;
+                }
+            }
+
+            EventData::WriteRows(mut w) => {
+                for event in w.rows.iter_mut() {
+                    let table_map_event = table_map_event_map.get(&w.table_id).unwrap();
+                    let col_values = self
+                        .parse_row_data(&table_map_event, &w.included_columns, event)
+                        .await?;
+                    let row_data = RowData {
+                        db: table_map_event.database_name.clone(),
+                        tb: table_map_event.table_name.clone(),
+                        row_type: RowType::Insert,
+                        before: Option::None,
+                        after: Some(col_values),
+                        position_info: Some(position_info.clone()),
+                    };
+                    let _ = self.push_row_to_buf(row_data).await?;
+                }
+            }
+
+            EventData::UpdateRows(mut u) => {
+                for event in u.rows.iter_mut() {
+                    let table_map_event = table_map_event_map.get(&u.table_id).unwrap();
+                    let col_values_before = self
+                        .parse_row_data(&table_map_event, &u.included_columns_before, &mut event.0)
+                        .await?;
+                    let col_values_after = self
+                        .parse_row_data(&table_map_event, &u.included_columns_after, &mut event.1)
+                        .await?;
+                    let row_data = RowData {
+                        db: table_map_event.database_name.clone(),
+                        tb: table_map_event.table_name.clone(),
+                        row_type: RowType::Update,
+                        before: Some(col_values_before),
+                        after: Some(col_values_after),
+                        position_info: Some(position_info.clone()),
+                    };
+                    let _ = self.push_row_to_buf(row_data).await?;
+                }
+            }
+
+            EventData::DeleteRows(mut d) => {
+                for event in d.rows.iter_mut() {
+                    let table_map_event = table_map_event_map.get(&d.table_id).unwrap();
+                    let col_values = self
+                        .parse_row_data(&table_map_event, &d.included_columns, event)
+                        .await?;
+                    let row_data = RowData {
+                        db: table_map_event.database_name.clone(),
+                        tb: table_map_event.table_name.clone(),
+                        row_type: RowType::Delete,
+                        before: Some(col_values),
+                        after: Option::None,
+                        position_info: Some(position_info.clone()),
+                    };
+                    let _ = self.push_row_to_buf(row_data).await?;
+                }
+            }
+
+            _ => {}
+        }
+
+        Ok(())
     }
 
     async fn push_row_to_buf(&mut self, row_data: RowData) -> Result<(), Error> {
