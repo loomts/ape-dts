@@ -35,4 +35,8 @@ impl TaskUtil {
         async_std::task::sleep(Duration::from_millis(millis)).await;
         // tokio::time::sleep(Duration::from_millis(1)).await;
     }
+
+    pub fn check_enable_sqlx_log(log_level: &str) -> bool {
+        log_level == "debug" || log_level == "trace"
+    }
 }

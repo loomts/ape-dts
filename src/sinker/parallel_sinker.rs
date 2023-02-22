@@ -64,9 +64,9 @@ impl ParallelSinker<'_> {
                 res.unwrap();
             }
 
-            // record position_info
+            // record position
             if let Some(row_data) = last_row_data {
-                info!(target: POSITION_FILE_LOGGER, "{:?}", row_data.position_info);
+                info!(target: POSITION_FILE_LOGGER, "{}", row_data.position);
             }
 
             // sleep 1 millis for data preparing

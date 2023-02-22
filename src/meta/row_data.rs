@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::{col_value::ColValue, position_info::PositionInfo, row_type::RowType, tb_meta::TbMeta};
+use super::{col_value::ColValue, row_type::RowType, tb_meta::TbMeta};
 
 #[derive(Debug, Clone)]
 pub struct RowData {
@@ -9,7 +9,7 @@ pub struct RowData {
     pub row_type: RowType,
     pub before: Option<HashMap<String, ColValue>>,
     pub after: Option<HashMap<String, ColValue>>,
-    pub position_info: Option<PositionInfo>,
+    pub position: String,
 }
 
 impl RowData {

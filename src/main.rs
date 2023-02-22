@@ -5,14 +5,13 @@ use config::{
 use dotenv::dotenv;
 use error::Error;
 use futures::executor::block_on;
-use log::info;
+use log4rs::config::RawConfig;
+use std::env;
 use std::path::PathBuf;
 use std::{fs::File, io::Read};
 use task::{
     mysql_cdc_task::MysqlCdcTask, mysql_snapshot_task::MysqlSnapshotTask, task_type::TaskType,
 };
-
-use crate::config::env_var::EnvVar;
 
 mod config;
 mod error;
@@ -23,48 +22,55 @@ mod sinker;
 mod task;
 mod test;
 
+const LOG_LEVEL_PLACEHODLER: &str = "LOG_LEVEL_PLACEHODLER";
+const LOG_DIR_PLACEHODLER: &str = "LOG_DIR_PLACEHODLER";
+const LOG4RS_YAML: &str = "log4rs.yaml";
+const TASK_CONFIG: &str = "TASK_CONFIG";
+const TASK_TYPE: &str = "TASK_TYPE";
+
 fn main() {
-    dotenv().ok();
-    let env_var = EnvVar::new().unwrap();
+    let args: Vec<String> = env::args().collect();
+    let (task_config, task_type) = if args.len() > 2 {
+        (args[1].clone(), args[2].clone())
+    } else {
+        dotenv().ok();
+        (env::var(TASK_CONFIG).unwrap(), env::var(TASK_TYPE).unwrap())
+    };
 
-    log4rs::init_file(env_var.log4rs_file.clone(), Default::default()).unwrap();
-    info!(
-        "start task, config: {}, type: {}",
-        env_var.task_config, env_var.task_type
-    );
-
-    let _ = block_on(start_task(&env_var));
+    let _ = block_on(start_task(&task_config, &task_type));
 }
 
-async fn start_task(env_var: &EnvVar) -> Result<(), Error> {
+async fn start_task(task_config: &str, task_type: &str) -> Result<(), Error> {
     let mut config_str = String::new();
-    File::open(PathBuf::from(env_var.task_config.clone()))?.read_to_string(&mut config_str)?;
+    File::open(PathBuf::from(task_config))?.read_to_string(&mut config_str)?;
 
-    match TaskType::from_name(&env_var.task_type) {
+    match TaskType::from_name(task_type) {
         TaskType::MysqlToMysqlCdc => {
             let config = MysqlToRdbCdcConfig::from_str(&config_str).unwrap();
-            MysqlCdcTask {
-                config,
-                env_var: env_var.clone(),
-            }
-            .start()
-            .await
-            .unwrap();
+            init_log4rs(&config.log_dir, &config.log_level)?;
+            MysqlCdcTask { config }.start().await.unwrap();
         }
 
         TaskType::MysqlToMysqlSnapshot => {
             let config = RdbToRdbSnapshotConfig::from_str(&config_str).unwrap();
-            MysqlSnapshotTask {
-                config,
-                env_var: env_var.clone(),
-            }
-            .start()
-            .await
-            .unwrap();
+            init_log4rs(&config.log_dir, &config.log_level)?;
+            MysqlSnapshotTask { config }.start().await.unwrap();
         }
 
         _ => {}
     }
 
+    Ok(())
+}
+
+fn init_log4rs(log_dir: &str, log_level: &str) -> Result<(), Error> {
+    let mut config_str = String::new();
+    File::open(LOG4RS_YAML)?.read_to_string(&mut config_str)?;
+    config_str = config_str
+        .replace(LOG_DIR_PLACEHODLER, log_dir)
+        .replace(LOG_LEVEL_PLACEHODLER, log_level);
+
+    let config: RawConfig = serde_yaml::from_str(&config_str)?;
+    log4rs::init_raw_config(config).unwrap();
     Ok(())
 }

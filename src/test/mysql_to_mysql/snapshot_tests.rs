@@ -62,13 +62,7 @@ mod test {
         // start task
         let config_str = runner.load_task_config(task_config_file).await?;
         let config = RdbToRdbSnapshotConfig::from_str(&config_str).unwrap();
-        MysqlSnapshotTask {
-            config,
-            env_var: runner.env_var.clone(),
-        }
-        .start()
-        .await
-        .unwrap();
+        MysqlSnapshotTask { config }.start().await.unwrap();
 
         let res = runner
             .compare_data_for_tbs(&src_tbs, &dst_tbs, &cols)

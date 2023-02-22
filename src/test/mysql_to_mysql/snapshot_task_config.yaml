@@ -3,6 +3,8 @@ dst_url: mysql://root:123456@127.0.0.1:3308
 buffer_size: 8000
 parallel_size: 10
 batch_size: 200
+log_level: info
+log_dir: ./logs
 filter:
   do_dbs: 
   ignore_dbs: 

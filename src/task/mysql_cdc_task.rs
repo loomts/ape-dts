@@ -4,7 +4,7 @@ use futures::future::join;
 use std::sync::atomic::AtomicBool;
 
 use crate::{
-    config::{env_var::EnvVar, mysql_to_rdb_cdc_config::MysqlToRdbCdcConfig},
+    config::mysql_to_rdb_cdc_config::MysqlToRdbCdcConfig,
     error::Error,
     extractor::{filter::Filter, mysql_cdc_extractor::MysqlCdcExtractor, traits::Extractor},
     meta::db_meta_manager::DbMetaManager,
@@ -18,25 +18,21 @@ use super::task_util::TaskUtil;
 
 pub struct MysqlCdcTask {
     pub config: MysqlToRdbCdcConfig,
-    pub env_var: EnvVar,
 }
 
 impl MysqlCdcTask {
     pub async fn start(&self) -> Result<(), Error> {
         let filter = Filter::from_config(&self.config.filter)?;
         let router = Router::from_config(&self.config.router)?;
+        let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(&self.config.log_level);
 
-        let src_conn_pool = TaskUtil::create_mysql_conn_pool(
-            &self.config.src_url,
-            1,
-            self.env_var.is_sqlx_log_enabled(),
-        )
-        .await?;
+        let src_conn_pool =
+            TaskUtil::create_mysql_conn_pool(&self.config.src_url, 1, enable_sqlx_log).await?;
 
         let dst_conn_pool = TaskUtil::create_mysql_conn_pool(
             &self.config.dst_url,
             self.config.parallel_size as u32 + 1,
-            self.env_var.is_sqlx_log_enabled(),
+            enable_sqlx_log,
         )
         .await?;
 

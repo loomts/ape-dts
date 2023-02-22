@@ -16,8 +16,7 @@ use mysql_binlog_connector_rust::{
 use crate::{
     error::Error,
     meta::{
-        col_value::ColValue, db_meta_manager::DbMetaManager, position_info::PositionInfo,
-        row_data::RowData, row_type::RowType,
+        col_value::ColValue, db_meta_manager::DbMetaManager, row_data::RowData, row_type::RowType,
     },
     task::task_util::TaskUtil,
 };
@@ -82,10 +81,10 @@ impl MysqlCdcExtractor<'_> {
         binlog_filename: &str,
         table_map_event_map: &mut HashMap<u64, TableMapEvent>,
     ) -> Result<(), Error> {
-        let position_info = PositionInfo::MysqlCdc {
-            binlog_filename: binlog_filename.to_string(),
-            next_event_position: header.next_event_position,
-        };
+        let position = format!(
+            "binlog_filename:{},next_event_position:{},timestamp:{}",
+            binlog_filename, header.next_event_position, header.timestamp
+        );
 
         match data {
             EventData::TableMap(d) => {
@@ -111,7 +110,7 @@ impl MysqlCdcExtractor<'_> {
                         row_type: RowType::Insert,
                         before: Option::None,
                         after: Some(col_values),
-                        position_info: Some(position_info.clone()),
+                        position: position.clone(),
                     };
                     let _ = self.push_row_to_buf(row_data).await?;
                 }
@@ -132,7 +131,7 @@ impl MysqlCdcExtractor<'_> {
                         row_type: RowType::Update,
                         before: Some(col_values_before),
                         after: Some(col_values_after),
-                        position_info: Some(position_info.clone()),
+                        position: position.clone(),
                     };
                     let _ = self.push_row_to_buf(row_data).await?;
                 }
@@ -150,7 +149,7 @@ impl MysqlCdcExtractor<'_> {
                         row_type: RowType::Delete,
                         before: Some(col_values),
                         after: Option::None,
-                        position_info: Some(position_info.clone()),
+                        position: position.clone(),
                     };
                     let _ = self.push_row_to_buf(row_data).await?;
                 }

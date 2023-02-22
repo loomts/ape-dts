@@ -8,72 +8,72 @@ appenders:
   default_file_appender:
     kind: rolling_file
     append: true
-    path: "logs/default.log"
+    path: "LOG_DIR_PLACEHODLER/default.log"
     encoder:
       pattern: "{h({d(%Y-%m-%d %H:%M:%S)})} - {level} - {tid} - {m}{n}"
     policy:
       kind: compound
       trigger:
         kind: size
-        limit: 10mb
+        limit: 100mb
       roller:
         kind: fixed_window
         base: 1
-        count: 100
-        pattern: "logs/default{}.log"
+        count: 10
+        pattern: "LOG_DIR_PLACEHODLER/default{}.log"
 
   commit_file_appender:
     kind: rolling_file
     append: true
-    path: "logs/commit.log"
+    path: "LOG_DIR_PLACEHODLER/commit.log"
     encoder:
       pattern: "{h({d(%Y-%m-%d %H:%M:%S)})} - {level} - {tid} - {m}{n}"
     policy:
       kind: compound
       trigger:
         kind: size
-        limit: 10mb
+        limit: 100mb
       roller:
         kind: fixed_window
         base: 1
-        count: 100
-        pattern: "logs/commit{}.log"
+        count: 10
+        pattern: "LOG_DIR_PLACEHODLER/commit{}.log"
 
   position_file_appender:
     kind: rolling_file
     append: true
-    path: "logs/position.log"
+    path: "LOG_DIR_PLACEHODLER/position.log"
     encoder:
-      pattern: "{h({d(%Y-%m-%d %H:%M:%S)})} - {level} - {tid} - {m}{n}"
+      pattern: "{h({d(%Y-%m-%d %H:%M:%S)})} | {m}{n}"
     policy:
       kind: compound
       trigger:
         kind: size
-        limit: 10mb
+        limit: 1mb
       roller:
         kind: fixed_window
         base: 1
-        count: 100
-        pattern: "logs/position{}.log"
+        count: 10
+        pattern: "LOG_DIR_PLACEHODLER/position{}.log"
 
 loggers:
   default_file_logger:
-    level: debug
+    level: LOG_LEVEL_PLACEHODLER
     appenders: 
       - default_file_appender
 
   commit_file_logger:
-    level: debug
+    level: LOG_LEVEL_PLACEHODLER
     appenders: 
       - commit_file_appender
 
   position_file_logger:
-    level: debug
+    level: LOG_LEVEL_PLACEHODLER
     appenders: 
       - position_file_appender
 
 root:
-  level: debug
+  level: LOG_LEVEL_PLACEHODLER
   appenders:
     # - console
     - default_file_appender

@@ -88,9 +88,8 @@ mod test {
         // start task
         let config_str = runner.load_task_config(task_config_file).await?;
         let config = MysqlToRdbCdcConfig::from_str(&config_str).unwrap();
-        let env_var = runner.env_var.clone();
         thread::spawn(move || {
-            block_on(MysqlCdcTask { config, env_var }.start()).unwrap();
+            block_on(MysqlCdcTask { config }.start()).unwrap();
         });
 
         TaskUtil::sleep_millis(CDC_TASK_START_MILLIS).await;

@@ -162,7 +162,7 @@ impl MysqlSnapshotExtractor<'_> {
             before: None,
             after: Some(after),
             row_type: RowType::Insert,
-            position_info: None,
+            position: "".to_string(),
         };
         let _ = self.buffer.push(row_data);
         Ok(())

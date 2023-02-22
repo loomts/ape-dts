@@ -5,7 +5,7 @@ use futures::future::join;
 use sqlx::{MySql, Pool};
 
 use crate::{
-    config::{env_var::EnvVar, rdb_to_rdb_snapshot_config::RdbToRdbSnapshotConfig},
+    config::rdb_to_rdb_snapshot_config::RdbToRdbSnapshotConfig,
     error::Error,
     extractor::{
         filter::Filter, mysql_snapshot_extractor::MysqlSnapshotExtractor, traits::Extractor,
@@ -21,27 +21,23 @@ use super::task_util::TaskUtil;
 
 pub struct MysqlSnapshotTask {
     pub config: RdbToRdbSnapshotConfig,
-    pub env_var: EnvVar,
 }
 
 impl MysqlSnapshotTask {
     pub async fn start(&self) -> Result<(), Error> {
         let filter = Filter::from_config(&self.config.filter)?;
         let router = Router::from_config(&self.config.router)?;
+        let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(&self.config.log_level);
 
         // max_connections: 1 for extracting data from table, 1 for db-meta-manager
-        let src_conn_pool = TaskUtil::create_mysql_conn_pool(
-            &self.config.src_url,
-            2,
-            self.env_var.is_sqlx_log_enabled(),
-        )
-        .await?;
+        let src_conn_pool =
+            TaskUtil::create_mysql_conn_pool(&self.config.src_url, 2, enable_sqlx_log).await?;
 
         // max_connections = self.config.parallel_count as u32 + 1 (for db-meta-manager in parallel-sinker)
         let dst_conn_pool = TaskUtil::create_mysql_conn_pool(
             &self.config.dst_url,
             self.config.parallel_size as u32 + 1,
-            self.env_var.is_sqlx_log_enabled(),
+            enable_sqlx_log,
         )
         .await?;
 

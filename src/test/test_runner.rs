@@ -3,10 +3,9 @@ use std::{env, fs::File, io::Read, path::PathBuf};
 use futures::TryStreamExt;
 use sqlx::{MySql, Pool, Row};
 
-use crate::{config::env_var::EnvVar, error::Error, task::task_util::TaskUtil};
+use crate::{error::Error, task::task_util::TaskUtil};
 
 pub struct TestRunner {
-    pub env_var: EnvVar,
     pub src_conn_pool: Pool<MySql>,
     pub dst_conn_pool: Pool<MySql>,
 }
@@ -34,17 +33,14 @@ impl TestRunner {
     pub async fn new(env_file: &str) -> Result<Self, Error> {
         let env_path = env::current_dir().unwrap().join(env_file);
         dotenv::from_path(env_path).unwrap();
-        let env_var = EnvVar::new().unwrap();
 
         let src_url = env::var("SRC_URL").unwrap();
         let dst_url = env::var("DST_URL").unwrap();
 
         let src_conn_pool = TaskUtil::create_mysql_conn_pool(&src_url, 1, true).await?;
         let dst_conn_pool = TaskUtil::create_mysql_conn_pool(&dst_url, 1, true).await?;
-        log4rs::init_file(env_var.log4rs_file.clone(), Default::default()).unwrap();
 
         Ok(Self {
-            env_var,
             src_conn_pool,
             dst_conn_pool,
         })

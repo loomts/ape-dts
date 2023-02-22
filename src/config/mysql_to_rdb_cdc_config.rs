@@ -15,6 +15,8 @@ pub struct MysqlToRdbCdcConfig {
     pub router: RouterConfig,
     pub buffer_size: usize,
     pub parallel_size: usize,
+    pub log_level: String,
+    pub log_dir: String,
 }
 
 impl MysqlToRdbCdcConfig {
