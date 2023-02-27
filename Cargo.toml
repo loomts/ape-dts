@@ -6,7 +6,7 @@ edition = "2021"
 
 
 [dependencies]
-sqlx = {version = "0.6.2", features = ["runtime-async-std-rustls", "mysql"]}
+sqlx = {version = "0.6.2", features = ["runtime-async-std-rustls", "mysql", "postgres"]}
 futures = "0.3.25"
 num_enum = "0.5.7"
 mysql-binlog-connector-rust = { path = "/Users/xushicai/Documents/projects/mysql-binlog-connector-rust2/mysql-binlog-connector-rust" }
@@ -24,6 +24,14 @@ dotenv = "0.15.0"
 serial_test = "1.0.0"
 async-trait = "0.1.64"
 async-recursion = "1.0.2"
+tokio-postgres = {git = "https://github.com/petrosagg/rust-postgres"}
+postgres-protocol = {git = "https://github.com/petrosagg/rust-postgres"}
+postgres-types= {git = "https://github.com/petrosagg/rust-postgres"}
+tokio = { version = "1.25.0", features = ["full"] }
+bytes = "1.0"
+env_logger = "0.10.0"
+java-properties = "1.4.1"
+configparser = "3.0.2"
 
 [features]
 

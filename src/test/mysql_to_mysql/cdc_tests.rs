@@ -1,14 +1,13 @@
 #[cfg(test)]
 mod test {
-    use std::thread;
+    use std::{thread, time::Duration};
 
     use futures::executor::block_on;
     use serial_test::serial;
 
     use crate::{
-        config::mysql_to_rdb_cdc_config::MysqlToRdbCdcConfig,
         error::Error,
-        task::{mysql_cdc_task::MysqlCdcTask, task_util::TaskUtil},
+        task::{task_runner::TaskRunner, task_util::TaskUtil},
         test::test_runner::TestRunner,
     };
 
@@ -23,7 +22,7 @@ mod test {
         let src_ddl_file = format!("{}/cdc_basic_test/src_ddl.sql", TEST_DIR);
         let dst_ddl_file = format!("{}/cdc_basic_test/dst_ddl.sql", TEST_DIR);
         let src_dml_file = format!("{}/cdc_basic_test/src_dml.sql", TEST_DIR);
-        let task_config_file = format!("{}/cdc_basic_test/task_config.yaml", TEST_DIR);
+        let task_config_file = format!("{}/cdc_basic_test/task_config.ini", TEST_DIR);
 
         // compare src and dst data
         let cols = TestRunner::get_default_tb_cols();
@@ -51,7 +50,7 @@ mod test {
         let src_ddl_file = format!("{}/cdc_uk_changed_test/src_ddl.sql", TEST_DIR);
         let dst_ddl_file = format!("{}/cdc_uk_changed_test/dst_ddl.sql", TEST_DIR);
         let src_dml_file = format!("{}/cdc_uk_changed_test/src_dml.sql", TEST_DIR);
-        let task_config_file = format!("{}/cdc_uk_changed_test/task_config.yaml", TEST_DIR);
+        let task_config_file = format!("{}/cdc_uk_changed_test/task_config.ini", TEST_DIR);
 
         // compare src and dst data
         let cols = TestRunner::get_default_tb_cols();
@@ -86,10 +85,9 @@ mod test {
         runner.prepare_test_tbs(src_ddl_file, dst_ddl_file).await?;
 
         // start task
-        let config_str = runner.load_task_config(task_config_file).await?;
-        let config = MysqlToRdbCdcConfig::from_str(&config_str).unwrap();
+        let config_file = task_config_file.to_string();
         thread::spawn(move || {
-            block_on(MysqlCdcTask { config }.start()).unwrap();
+            block_on(TaskRunner::start_task(&config_file)).unwrap();
         });
 
         TaskUtil::sleep_millis(CDC_TASK_START_MILLIS).await;
@@ -115,7 +113,7 @@ mod test {
         runner
             .execute_sqls(&src_insert_sqls, &runner.src_conn_pool)
             .await?;
-        TaskUtil::sleep_millis(BINLOG_PARSE_MILLIS).await;
+        thread::sleep(Duration::from_millis(BINLOG_PARSE_MILLIS));
         assert!(
             runner
                 .compare_data_for_tbs(&src_tbs, &dst_tbs, &cols)

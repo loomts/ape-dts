@@ -1,13 +1,9 @@
 #[cfg(test)]
 mod test {
-
-    use futures::executor::block_on;
     use serial_test::serial;
+    use tokio::runtime::Runtime;
 
-    use crate::{
-        config::rdb_to_rdb_snapshot_config::RdbToRdbSnapshotConfig, error::Error,
-        task::mysql_snapshot_task::MysqlSnapshotTask, test::test_runner::TestRunner,
-    };
+    use crate::{error::Error, task::task_runner::TaskRunner, test::test_runner::TestRunner};
 
     const TEST_DIR: &str = "src/test/mysql_to_mysql";
 
@@ -18,15 +14,16 @@ mod test {
         let src_ddl_file = format!("{}/snapshot_basic_test/src_ddl.sql", TEST_DIR);
         let dst_ddl_file = format!("{}/snapshot_basic_test/dst_ddl.sql", TEST_DIR);
         let src_dml_file = format!("{}/snapshot_basic_test/src_dml.sql", TEST_DIR);
-        let task_config_file = format!("{}/snapshot_basic_test/task_config.yaml", TEST_DIR);
+        let task_config_file = format!("{}/snapshot_basic_test/task_config.ini", TEST_DIR);
 
         // compare src and dst data
         let cols = TestRunner::get_default_tb_cols();
         let src_tbs = TestRunner::get_default_tbs();
         let dst_tbs = TestRunner::get_default_tbs();
 
-        let runner = block_on(TestRunner::new(&env_file)).unwrap();
-        block_on(run_snapshot_test(
+        let rt = Runtime::new().unwrap();
+        let runner = rt.block_on(TestRunner::new(&env_file)).unwrap();
+        rt.block_on(run_snapshot_test(
             &runner,
             &src_ddl_file,
             &dst_ddl_file,
@@ -60,9 +57,7 @@ mod test {
             .await?;
 
         // start task
-        let config_str = runner.load_task_config(task_config_file).await?;
-        let config = RdbToRdbSnapshotConfig::from_str(&config_str).unwrap();
-        MysqlSnapshotTask { config }.start().await.unwrap();
+        TaskRunner::start_task(task_config_file).await?;
 
         let res = runner
             .compare_data_for_tbs(&src_tbs, &dst_tbs, &cols)

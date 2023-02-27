@@ -2,15 +2,18 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use concurrent_queue::ConcurrentQueue;
 use futures::future::join_all;
-use log::{debug, info};
+use log::info;
 
-use crate::{error::Error, meta::row_data::RowData, task::task_util::TaskUtil};
-
-use super::{slicer::Slicer, traits::Sinker};
+use crate::{
+    error::Error,
+    meta::row_data::RowData,
+    task::task_util::TaskUtil,
+    traits::traits::{Partitioner, Sinker},
+};
 
 pub struct ParallelSinker<'a> {
     pub buffer: &'a ConcurrentQueue<RowData>,
-    pub slicer: Slicer,
+    pub partitioner: Box<dyn Partitioner>,
     pub sub_sinkers: Vec<Box<dyn Sinker>>,
     pub shut_down: &'a AtomicBool,
 }
@@ -24,18 +27,8 @@ impl ParallelSinker<'_> {
             let slice_count = self.sub_sinkers.len();
             let mut all_data = Vec::new();
             while let Ok(row_data) = self.buffer.pop() {
-                // if any col value of uk/pk changed, cut off the data and sink the pushed data immediately
-                let (uk_col_changed, changed_col, col_value_before, col_value_after) =
-                    self.slicer.check_uk_col_changed(&row_data).await?;
-                if uk_col_changed {
-                    debug!(
-                        "{}.{}.{} changed from {} to {}",
-                        &row_data.db,
-                        &row_data.tb,
-                        changed_col.unwrap(),
-                        col_value_before.unwrap().to_string(),
-                        col_value_after.unwrap().to_string()
-                    );
+                // if the row_data can not be partitioned, sink the pushed data immediately
+                if !self.partitioner.can_be_partitioned(&row_data).await? {
                     all_data.push(row_data);
                     break;
                 } else {
@@ -50,7 +43,7 @@ impl ParallelSinker<'_> {
             }
 
             // slice data
-            let mut sub_datas = self.slicer.slice(all_data, slice_count).await?;
+            let mut sub_datas = self.partitioner.partition(all_data, slice_count).await?;
 
             // start sub sinkers
             let mut futures = Vec::new();

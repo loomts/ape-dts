@@ -1,8 +1,7 @@
 #[cfg(test)]
 mod test {
-
-    use futures::executor::block_on;
     use serial_test::serial;
+    use tokio::runtime::Runtime;
 
     use crate::{error::Error, test::test_runner::TestRunner};
 
@@ -13,7 +12,8 @@ mod test {
     fn test() {
         let env_file = format!("{}/.env", TEST_DIR);
         let src_dml_file = format!("{}/generate_data_tmp/src_dml.sql", TEST_DIR);
-        block_on(run_test(&env_file, &src_dml_file)).unwrap();
+        let rt = Runtime::new().unwrap();
+        rt.block_on(run_test(&env_file, &src_dml_file)).unwrap();
     }
 
     async fn run_test(env_file: &str, src_dml_file: &str) -> Result<(), Error> {

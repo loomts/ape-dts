@@ -8,6 +8,10 @@ pub enum Error {
         error: sqlx::Error,
     },
 
+    Unexpected {
+        error: String,
+    },
+
     MetadataError {
         error: String,
     },
