@@ -21,6 +21,13 @@ pub struct ParallelSinker<'a> {
 const POSITION_FILE_LOGGER: &str = "position_file_logger";
 
 impl ParallelSinker<'_> {
+    pub async fn close(&mut self) -> Result<(), Error> {
+        for sinker in self.sub_sinkers.iter_mut() {
+            sinker.close().await.unwrap();
+        }
+        Ok(())
+    }
+
     pub async fn sink(&mut self) -> Result<(), Error> {
         while !self.shut_down.load(Ordering::Acquire) || !self.buffer.is_empty() {
             // process all row_datas in buffer at a time

@@ -4,11 +4,15 @@ use async_trait::async_trait;
 #[async_trait]
 pub trait Sinker {
     async fn sink(&mut self, mut data: Vec<RowData>) -> Result<(), Error>;
+
+    async fn close(&mut self) -> Result<(), Error>;
 }
 
 #[async_trait]
 pub trait Extractor {
     async fn extract(&mut self) -> Result<(), Error>;
+
+    async fn close(&mut self) -> Result<(), Error>;
 }
 
 #[async_trait]

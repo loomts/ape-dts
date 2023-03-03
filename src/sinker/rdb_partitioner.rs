@@ -42,10 +42,22 @@ impl Partitioner for RdbPartitioner {
             return Ok(true);
         }
 
-        let (_, key_map) = self.get_tb_meta_info(&row_data.db, &row_data.tb).await?;
+        let (partition_col, key_map) = self.get_tb_meta_info(&row_data.db, &row_data.tb).await?;
         let before = row_data.before.as_ref().unwrap();
         let after = row_data.after.as_ref().unwrap();
-        // check if any col value of pk & uk has changed, if changed
+        // if any col of pk & uk has changed, partition should not happen
+        // example:
+        // create table a(f1 int, f2 int, primary key(f1), unique key(f2));
+        // insert a: [(1, 1) (2, 2)]
+        // update a: [(1, 1) -> (1, 3), (2, 2) -> (2, 1)]
+        // if partitioned by 2,
+        // partition 1: [insert (1, 1), update((1, 1) -> (1, 3))]
+        // partition 2: [insert (2, 2), update((2, 2) -> (2, 1))]
+        // partitions will be sinked parallely, the below case may happen:
+        // partition 1 sinked: [insert (1, 1)]
+        // partition 2 sinked: [insert (2, 2)]
+        // if partition 2 sinking: [update((2, 2) -> (2, 1))] happens before
+        //    partition 1 sinking: [update((1, 1) -> (1, 3))], it would fail
         for key_cols in key_map.values() {
             for col in key_cols {
                 let col_value_before = before.get(col);
@@ -63,6 +75,14 @@ impl Partitioner for RdbPartitioner {
                 }
             }
         }
+        // no need to check parition_col if key_map is not empty,
+        // in which case partition_col is one of the key cols and has been checked
+        if key_map.is_empty() {
+            if before.get(&partition_col) != after.get(&partition_col) {
+                return Ok(false);
+            }
+        }
+
         Ok(true)
     }
 }

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use futures::TryStreamExt;
 use sqlx::{Pool, Postgres, Row};
 
-use crate::error::Error;
+use crate::{error::Error, meta::meta_util::MetaUtil};
 
 use super::{pg_col_type::PgColType, pg_tb_meta::PgTbMeta, type_registry::TypeRegistry};
 
@@ -31,6 +31,10 @@ impl PgMetaManager {
         Ok(self)
     }
 
+    pub fn get_col_type_by_oid(&mut self, oid: i32) -> Result<PgColType, Error> {
+        Ok(self.type_registry.oid_to_type.get(&oid).unwrap().clone())
+    }
+
     pub fn update_tb_meta_by_oid(&mut self, oid: i32, tb_meta: PgTbMeta) -> Result<(), Error> {
         self.oid_to_tb_meta.insert(oid, tb_meta.clone());
         let full_name = format!("{}.{}", tb_meta.schema.clone(), tb_meta.tb.clone());
@@ -51,14 +55,7 @@ impl PgMetaManager {
         let oid = self.get_oid(schema, tb).await?;
         let (cols, col_type_map) = self.parse_cols(schema, tb).await?;
         let key_map = self.parse_keys(schema, tb).await?;
-        let order_col = Self::get_order_col(&key_map)?;
-        let where_cols = Self::get_where_cols(&key_map, &cols)?;
-        let partition_col = if let Some(col) = &order_col {
-            col.clone()
-        } else {
-            where_cols[0].clone()
-        };
-
+        let (order_col, partition_col, where_cols) = MetaUtil::parse_rdb_cols(&key_map, &cols)?;
         let tb_meta = PgTbMeta {
             oid,
             schema: schema.to_string(),
@@ -92,7 +89,7 @@ impl PgMetaManager {
             schema, tb
         );
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-        while let Some(row) = rows.try_next().await? {
+        while let Some(row) = rows.try_next().await.unwrap() {
             let col: String = row.try_get("column_name")?;
             cols.push(col);
         }
@@ -108,7 +105,7 @@ impl PgMetaManager {
         );
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-        while let Some(row) = rows.try_next().await? {
+        while let Some(row) = rows.try_next().await.unwrap() {
             let col: String = row.try_get("col_name")?;
             if !cols.contains(&col) {
                 continue;
@@ -132,10 +129,12 @@ impl PgMetaManager {
         schema: &str,
         tb: &str,
     ) -> Result<HashMap<String, Vec<String>>, Error> {
+        // TODO, find pk and use pk as where_cols if tables has pk
         let sql = format!(
             "SELECT t.relname AS tb_name,
             i.relname AS index_name,
-            a.attname AS col_name
+            a.attname AS col_name,
+            ix.indisprimary AS is_primary
             FROM pg_class t, pg_class i, pg_index ix, pg_attribute a
             WHERE t.oid = ix.indrelid
                 AND i.oid = ix.indexrelid
@@ -151,11 +150,18 @@ impl PgMetaManager {
 
         let mut key_map: HashMap<String, Vec<String>> = HashMap::new();
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-        while let Some(row) = rows.try_next().await? {
+        while let Some(row) = rows.try_next().await.unwrap() {
             let mut col_name: String = row.try_get("col_name")?;
-            let mut key_name: String = row.try_get("index_name")?;
-            key_name = key_name.to_lowercase();
             col_name = col_name.to_lowercase();
+
+            let is_primary: bool = row.try_get("is_primary")?;
+            let mut key_name: String = row.try_get("index_name")?;
+            key_name = if is_primary {
+                "primary".to_string()
+            } else {
+                key_name.to_lowercase()
+            };
+
             // key_map
             if let Some(key_cols) = key_map.get_mut(&key_name) {
                 key_cols.push(col_name);
@@ -166,36 +172,10 @@ impl PgMetaManager {
         Ok(key_map)
     }
 
-    fn get_where_cols(
-        key_map: &HashMap<String, Vec<String>>,
-        col_names: &Vec<String>,
-    ) -> Result<Vec<String>, Error> {
-        let mut where_cols = Vec::new();
-        for key_cols in key_map.values() {
-            if where_cols.is_empty() || where_cols.len() > key_cols.len() {
-                where_cols = key_cols.clone();
-            }
-        }
-
-        if !where_cols.is_empty() {
-            return Ok(where_cols);
-        }
-        Ok(col_names.clone())
-    }
-
-    fn get_order_col(key_map: &HashMap<String, Vec<String>>) -> Result<Option<String>, Error> {
-        for cols in key_map.values() {
-            if cols.len() == 1 {
-                return Ok(Some(cols.get(0).unwrap().clone()));
-            }
-        }
-        Ok(Option::None)
-    }
-
     async fn get_oid(&self, schema: &str, tb: &str) -> Result<i32, Error> {
         let sql = format!("SELECT '{}.{}'::regclass::oid;", schema, tb);
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-        if let Some(row) = rows.try_next().await? {
+        if let Some(row) = rows.try_next().await.unwrap() {
             let oid: i32 = row.try_get_unchecked("oid")?;
             return Ok(oid);
         }

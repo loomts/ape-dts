@@ -177,12 +177,13 @@ impl TaskUtil {
         buffer: &'a ConcurrentQueue<RowData>,
         router: &RdbRouter,
         parallel_size: usize,
+        batch_size: usize,
         log_level: &str,
         shut_down: &'a AtomicBool,
     ) -> Result<ParallelSinker<'a>, Error> {
         let enable_sqlx_log = Self::check_enable_sqlx_log(log_level);
         let conn_pool =
-            Self::create_mysql_conn_pool(url, parallel_size as u32 + 1, enable_sqlx_log).await?;
+            Self::create_mysql_conn_pool(url, parallel_size as u32 * 2, enable_sqlx_log).await?;
 
         let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
         let mut sub_sinkers: Vec<Box<dyn Sinker>> = Vec::new();
@@ -191,7 +192,7 @@ impl TaskUtil {
                 conn_pool: conn_pool.clone(),
                 meta_manager: meta_manager.clone(),
                 router: router.clone(),
-                batch_size: 1,
+                batch_size,
             };
             sub_sinkers.push(Box::new(sinker));
         }
@@ -210,12 +211,13 @@ impl TaskUtil {
         buffer: &'a ConcurrentQueue<RowData>,
         router: &RdbRouter,
         parallel_size: usize,
+        batch_size: usize,
         log_level: &str,
         shut_down: &'a AtomicBool,
     ) -> Result<ParallelSinker<'a>, Error> {
         let enable_sqlx_log = Self::check_enable_sqlx_log(log_level);
         let conn_pool =
-            Self::create_pg_conn_pool(url, parallel_size as u32 + 1, enable_sqlx_log).await?;
+            Self::create_pg_conn_pool(url, parallel_size as u32 * 2, enable_sqlx_log).await?;
         let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
 
         let mut sub_sinkers: Vec<Box<dyn Sinker>> = Vec::new();
@@ -224,7 +226,7 @@ impl TaskUtil {
                 conn_pool: conn_pool.clone(),
                 meta_manager: meta_manager.clone(),
                 router: router.clone(),
-                batch_size: 1,
+                batch_size,
             };
             sub_sinkers.push(Box::new(sinker));
         }

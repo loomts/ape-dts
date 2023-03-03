@@ -42,6 +42,10 @@ impl Extractor for MysqlCdcExtractor<'_> {
     async fn extract(&mut self) -> Result<(), Error> {
         self.extract_internal().await
     }
+
+    async fn close(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
 }
 
 impl MysqlCdcExtractor<'_> {

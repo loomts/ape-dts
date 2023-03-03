@@ -127,6 +127,8 @@ impl TaskRunner {
         .await?;
 
         let result = join(extractor.extract(), sinker.sink()).await;
+        sinker.close().await?;
+        extractor.close().await?;
         if result.0.is_err() {
             return result.0;
         }
@@ -225,6 +227,7 @@ impl TaskRunner {
                     &buffer,
                     &router,
                     runtime_config.parallel_size,
+                    runtime_config.batch_size,
                     &runtime_config.log_level,
                     &shut_down,
                 )
@@ -237,6 +240,7 @@ impl TaskRunner {
                     &buffer,
                     &router,
                     runtime_config.parallel_size,
+                    runtime_config.batch_size,
                     &runtime_config.log_level,
                     &shut_down,
                 )

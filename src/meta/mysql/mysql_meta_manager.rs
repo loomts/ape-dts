@@ -4,7 +4,7 @@ use futures::TryStreamExt;
 
 use sqlx::{mysql::MySqlRow, MySql, Pool, Row};
 
-use crate::error::Error;
+use crate::{error::Error, meta::meta_util::MetaUtil};
 
 use super::{
     mysql_col_meta::MysqlColMeta, mysql_col_type::MysqlColType, mysql_tb_meta::MysqlTbMeta,
@@ -15,6 +15,7 @@ pub struct MysqlMetaManager {
     pub conn_pool: Pool<MySql>,
     pub cache: HashMap<String, MysqlTbMeta>,
     pub version: String,
+    // TODO, change this to offset
     // timezone diff with utc in seconds
     pub timezone_diff_utc_seconds: i64,
 }
@@ -49,13 +50,7 @@ impl<'a> MysqlMetaManager {
 
         let (cols, col_meta_map) = self.parse_cols(db, tb).await?;
         let key_map = self.parse_keys(db, tb).await?;
-        let order_col = Self::get_order_col(&key_map)?;
-        let where_cols = Self::get_where_cols(&key_map, &cols)?;
-        let partition_col = if let Some(col) = &order_col {
-            col.clone()
-        } else {
-            where_cols[0].clone()
-        };
+        let (order_col, partition_col, where_cols) = MetaUtil::parse_rdb_cols(&key_map, &cols)?;
         let tb_meta = MysqlTbMeta {
             db: db.to_string(),
             tb: tb.to_string(),
@@ -80,7 +75,7 @@ impl<'a> MysqlMetaManager {
 
         let sql = format!("DESC {}.{}", db, tb);
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-        while let Some(row) = rows.try_next().await? {
+        while let Some(row) = rows.try_next().await.unwrap() {
             let col_name: String = row.try_get("Field")?;
             cols.push(col_name);
         }
@@ -88,7 +83,7 @@ impl<'a> MysqlMetaManager {
         let sql = format!("SELECT {}, {}, {}, {}, {} FROM information_schema.columns WHERE table_schema = ? AND table_name = ?", 
             COLUMN_NAME, COLUMN_TYPE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_SET_NAME);
         let mut rows = sqlx::query(&sql).bind(db).bind(tb).fetch(&self.conn_pool);
-        while let Some(row) = rows.try_next().await? {
+        while let Some(row) = rows.try_next().await.unwrap() {
             let col_type = self.parse_col_meta(&row).await?;
             col_meta_map.insert(col_type.name.clone(), col_type);
         }
@@ -208,7 +203,7 @@ impl<'a> MysqlMetaManager {
         let mut key_map: HashMap<String, Vec<String>> = HashMap::new();
         let sql = format!("SHOW INDEXES FROM {}.{}", db, tb);
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-        while let Some(row) = rows.try_next().await? {
+        while let Some(row) = rows.try_next().await.unwrap() {
             let non_unique: i8 = row.try_get("Non_unique")?;
             if non_unique == 1 {
                 continue;
@@ -227,47 +222,10 @@ impl<'a> MysqlMetaManager {
         Ok(key_map)
     }
 
-    fn get_order_col(key_map: &HashMap<String, Vec<String>>) -> Result<Option<String>, Error> {
-        // use primary key first
-        if let Some(cols) = key_map.get("primary") {
-            if cols.len() == 1 {
-                return Ok(Some(cols.get(0).unwrap().clone()));
-            }
-        }
-
-        for cols in key_map.values() {
-            if cols.len() == 1 {
-                return Ok(Some(cols.get(0).unwrap().clone()));
-            }
-        }
-        Ok(Option::None)
-    }
-
-    fn get_where_cols(
-        key_map: &HashMap<String, Vec<String>>,
-        col_names: &Vec<String>,
-    ) -> Result<Vec<String>, Error> {
-        if let Some(cols) = key_map.get("primary") {
-            return Ok(cols.clone());
-        }
-
-        let mut where_cols = Vec::new();
-        for key_cols in key_map.values() {
-            if where_cols.is_empty() || where_cols.len() > key_cols.len() {
-                where_cols = key_cols.clone();
-            }
-        }
-
-        if !where_cols.is_empty() {
-            return Ok(where_cols);
-        }
-        Ok(col_names.clone())
-    }
-
     async fn init_version(&mut self) -> Result<(), Error> {
         let sql = "SELECT VERSION()";
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-        if let Some(row) = rows.try_next().await? {
+        if let Some(row) = rows.try_next().await.unwrap() {
             self.version = row.try_get(0)?;
             return Ok(());
         }
@@ -280,7 +238,7 @@ impl<'a> MysqlMetaManager {
     async fn init_timezone_diff_utc_seconds(&mut self) -> Result<(), Error> {
         let sql = "SELECT TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP, NOW())";
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-        if let Some(row) = rows.try_next().await? {
+        if let Some(row) = rows.try_next().await.unwrap() {
             // by default, sqlx will use UTC(+00:00) for connections which TIMESTAMPDIFF is 0
             self.timezone_diff_utc_seconds = row.try_get(0)?;
             return Ok(());

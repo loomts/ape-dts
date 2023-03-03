@@ -20,7 +20,7 @@ mod test {
         let runner = TestRunner::new(&env_file).await?;
 
         // load dml sqls
-        let src_dml_sqls_tmp = runner.load_sqls(src_dml_file).await?;
+        let src_dml_sqls_tmp = TestRunner::load_sqls(src_dml_file)?;
         let mut src_dml_sqls: Vec<String> = Vec::new();
         for _ in 0..10000 {
             src_dml_sqls.append(&mut src_dml_sqls_tmp.clone());
@@ -42,8 +42,6 @@ mod test {
         }
 
         // insert src data
-        runner
-            .execute_sqls(&src_insert_sqls, &runner.src_conn_pool)
-            .await
+        runner.execute_src_sqls(&src_insert_sqls).await
     }
 }

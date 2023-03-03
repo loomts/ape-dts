@@ -6,7 +6,8 @@ edition = "2021"
 
 
 [dependencies]
-sqlx = {version = "0.6.2", features = ["runtime-async-std-rustls", "mysql", "postgres"]}
+# sqlx = "0.6.2"
+sqlx = {version = "0.6.2", features = ["runtime-async-std-rustls", "mysql", "postgres", "decimal", "bigdecimal", "ipnetwork", "mac_address", "bit-vec", "time", "chrono", "json", "uuid"]}
 futures = "0.3.25"
 num_enum = "0.5.7"
 mysql-binlog-connector-rust = { path = "/Users/xushicai/Documents/projects/mysql-binlog-connector-rust2/mysql-binlog-connector-rust" }
@@ -32,6 +33,11 @@ bytes = "1.0"
 env_logger = "0.10.0"
 java-properties = "1.4.1"
 configparser = "3.0.2"
+# sqlparser = "0.30.0"
+# nom-sql = "0.0.11"
+# sql_lexer = "0.9.3"
+# sql-parse = "0.11.0"
+# sql-ast = "0.7.5"
 
 [features]
 

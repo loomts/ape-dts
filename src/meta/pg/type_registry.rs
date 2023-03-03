@@ -42,31 +42,37 @@ impl TypeRegistry {
             ON (t.oid = e.id)
             WHERE n.nspname != 'pg_toast'";
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-        while let Some(row) = rows.try_next().await? {
-            let typee = self.parse_col_meta(&row)?;
-            self.oid_to_type.insert(typee.oid.clone(), typee.clone());
-            self.name_to_type.insert(typee.name.clone(), typee.clone());
+        while let Some(row) = rows.try_next().await.unwrap() {
+            let col_type = self.parse_col_meta(&row)?;
+            self.oid_to_type
+                .insert(col_type.oid.clone(), col_type.clone());
+            self.name_to_type
+                .insert(col_type.long_name.clone(), col_type.clone());
         }
         Ok(self)
     }
 
     fn parse_col_meta(&mut self, row: &PgRow) -> Result<PgColType, Error> {
         let oid: i32 = row.get_unchecked("oid");
-        let name: String = row.try_get("name")?;
+        // cast to short name
+        let long_name: String = row.try_get("name")?;
+        let short_name = PgColType::get_short_type_name(&long_name);
         let element_oid: i32 = row.get_unchecked("element");
         let parent_oid: i32 = row.get_unchecked("parentoid");
         let modifiers: i32 = row.get_unchecked("modifiers");
         let category: String = row.get_unchecked("category");
         let enum_values: Option<Vec<u8>> = row.get_unchecked("enum_values");
         let enum_values = if None == enum_values {
-            "".to_string()
+            None
         } else {
-            row.try_get("enum_values")?
+            let enum_values: Vec<String> = row.try_get("enum_values")?;
+            Some(enum_values)
         };
 
         Ok(PgColType {
             oid,
-            name,
+            long_name,
+            short_name,
             element_oid,
             parent_oid,
             modifiers,

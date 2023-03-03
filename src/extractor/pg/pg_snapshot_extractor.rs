@@ -18,7 +18,7 @@ use crate::{
         row_type::RowType,
     },
     task::task_util::TaskUtil,
-    traits::{sqlx_ext::SqlxExt, traits::Extractor},
+    traits::{sqlx_ext::SqlxPg, traits::Extractor},
 };
 
 use super::pg_col_value_convertor::PgColValueConvertor;
@@ -37,6 +37,13 @@ pub struct PgSnapshotExtractor<'a> {
 impl Extractor for PgSnapshotExtractor<'_> {
     async fn extract(&mut self) -> Result<(), Error> {
         self.extract_internal().await
+    }
+
+    async fn close(&mut self) -> Result<(), Error> {
+        if self.conn_pool.is_closed() {
+            return Ok(());
+        }
+        return Ok(self.conn_pool.close().await);
     }
 }
 
@@ -76,7 +83,7 @@ impl PgSnapshotExtractor<'_> {
         );
 
         let mut all_count = 0;
-        let sql = format!("SELECT * FROM {}.{}", self.schema, self.tb);
+        let sql = self.build_extract_sql(tb_meta, false);
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             self.push_row_to_buffer(&row, tb_meta).await.unwrap();
@@ -104,15 +111,8 @@ impl PgSnapshotExtractor<'_> {
 
         let mut all_count = 0;
         let mut start_value = init_start_value;
-        let sql1 = format!(
-            "SELECT * FROM {}.{} ORDER BY {} ASC LIMIT {}",
-            self.schema, self.tb, order_col_name, self.slice_size
-        );
-        let sql2 = format!(
-            "SELECT * FROM {}.{} WHERE {} > $1 ORDER BY {} ASC LIMIT {}",
-            self.schema, self.tb, order_col_name, order_col_name, self.slice_size
-        );
-
+        let sql1 = self.build_extract_sql(tb_meta, false);
+        let sql2 = self.build_extract_sql(tb_meta, true);
         loop {
             let start_value_for_bind = start_value.clone();
             let query = if let ColValue::None = start_value {
@@ -144,11 +144,54 @@ impl PgSnapshotExtractor<'_> {
         Ok(())
     }
 
+    fn build_extract_sql(&mut self, tb_meta: &PgTbMeta, has_start_value: bool) -> String {
+        let mut cols = Vec::new();
+        for col in &tb_meta.cols {
+            let extract_col = Self::build_extract_col(&col, tb_meta);
+            cols.push(extract_col);
+        }
+        let cols_str = cols.join(",");
+
+        // SELECT col_1, col_2::text FROM tb_1 WHERE col_1 > $1 ORDER BY col_1;
+        if let Some(order_col) = &tb_meta.order_col {
+            if has_start_value {
+                let order_col_type = tb_meta.col_type_map.get(order_col).unwrap();
+                return format!(
+                    "SELECT {} FROM {}.{} WHERE {} > $1::{} ORDER BY {} ASC LIMIT {}",
+                    cols_str,
+                    self.schema,
+                    self.tb,
+                    order_col,
+                    order_col_type.short_name,
+                    order_col,
+                    self.slice_size
+                );
+            } else {
+                return format!(
+                    "SELECT {} FROM {}.{} ORDER BY {} ASC LIMIT {}",
+                    cols_str, self.schema, self.tb, order_col, self.slice_size
+                );
+            }
+        } else {
+            return format!("SELECT {} FROM {}.{}", cols_str, self.schema, self.tb);
+        }
+    }
+
+    fn build_extract_col(col: &str, tb_meta: &PgTbMeta) -> String {
+        let col_type = tb_meta.col_type_map.get(col).unwrap();
+        let extract_type = PgColValueConvertor::get_extract_type(col_type);
+        if extract_type.is_empty() {
+            col.to_string()
+        } else {
+            format!("{}::{}", col, extract_type)
+        }
+    }
+
     async fn push_row_to_buffer(&mut self, row: &PgRow, tb_meta: &PgTbMeta) -> Result<(), Error> {
         let mut after = HashMap::new();
         for (col_name, col_type) in &tb_meta.col_type_map {
-            let col_val = PgColValueConvertor::from_query(row, &col_name, &col_type)?;
-            after.insert(col_name.to_string(), col_val);
+            let col_value = PgColValueConvertor::from_query(row, &col_name, &col_type)?;
+            after.insert(col_name.to_string(), col_value);
         }
 
         while self.buffer.is_full() {

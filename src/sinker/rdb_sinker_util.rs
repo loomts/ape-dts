@@ -10,16 +10,16 @@ use crate::{
     },
 };
 
-pub struct RdbUtil {
+pub struct RdbSinkerUtil {
     schema: String,
     tb: String,
     cols: Vec<String>,
     where_cols: Vec<String>,
 }
 
-impl RdbUtil {
-    pub fn new_for_mysql(tb_meta: MysqlTbMeta) -> RdbUtil {
-        RdbUtil {
+impl RdbSinkerUtil {
+    pub fn new_for_mysql(tb_meta: MysqlTbMeta) -> RdbSinkerUtil {
+        RdbSinkerUtil {
             schema: tb_meta.db,
             tb: tb_meta.tb,
             cols: tb_meta.cols,
@@ -27,8 +27,8 @@ impl RdbUtil {
         }
     }
 
-    pub fn new_for_pg(tb_meta: PgTbMeta) -> RdbUtil {
-        RdbUtil {
+    pub fn new_for_pg(tb_meta: PgTbMeta) -> RdbSinkerUtil {
+        RdbSinkerUtil {
             schema: tb_meta.schema,
             tb: tb_meta.tb,
             cols: tb_meta.cols,
@@ -39,13 +39,13 @@ impl RdbUtil {
     pub fn get_query<'a>(
         &self,
         row_data: &'a RowData,
-    ) -> Result<(String, Vec<Option<&'a ColValue>>), Error> {
-        let (sql, binds) = match row_data.row_type {
+    ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
+        let (sql, cols, binds) = match row_data.row_type {
             RowType::Insert => self.get_insert_query(&row_data)?,
             RowType::Update => self.get_update_query(&row_data)?,
             RowType::Delete => self.get_delete_query(&row_data)?,
         };
-        Ok((sql, binds))
+        Ok((sql, cols, binds))
     }
 
     pub fn get_batch_insert_query<'a>(
@@ -53,7 +53,7 @@ impl RdbUtil {
         data: &'a Vec<RowData>,
         start_index: usize,
         batch_size: usize,
-    ) -> Result<(String, Vec<Option<&'a ColValue>>), Error> {
+    ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
         let mut col_values = Vec::new();
         for _ in self.cols.iter() {
             col_values.push("?");
@@ -73,15 +73,17 @@ impl RdbUtil {
             row_values.join(",")
         );
 
+        let mut cols = Vec::new();
         let mut binds = Vec::new();
         for i in start_index..start_index + batch_size {
             let row_data = &data[i];
             let after = row_data.after.as_ref().unwrap();
             for col_name in self.cols.iter() {
+                cols.push(col_name.clone());
                 binds.push(after.get(col_name));
             }
         }
-        Ok((sql, binds))
+        Ok((sql, cols, binds))
     }
 
     pub fn check_result(
@@ -106,7 +108,7 @@ impl RdbUtil {
     fn get_insert_query<'a>(
         &self,
         row_data: &'a RowData,
-    ) -> Result<(String, Vec<Option<&'a ColValue>>), Error> {
+    ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
         let mut col_values = Vec::new();
         for _ in self.cols.iter() {
             col_values.push("?");
@@ -120,18 +122,20 @@ impl RdbUtil {
             col_values.join(",")
         );
 
+        let mut cols = Vec::new();
         let mut binds = Vec::new();
         let after = row_data.after.as_ref().unwrap();
         for col_name in self.cols.iter() {
+            cols.push(col_name.clone());
             binds.push(after.get(col_name));
         }
-        Ok((sql, binds))
+        Ok((sql, cols, binds))
     }
 
     fn get_delete_query<'a>(
         &self,
         row_data: &'a RowData,
-    ) -> Result<(String, Vec<Option<&'a ColValue>>), Error> {
+    ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
         let before = row_data.before.as_ref().unwrap();
         let (where_sql, not_null_cols) = self.get_where_info(&before)?;
         let sql = format!(
@@ -139,17 +143,19 @@ impl RdbUtil {
             self.schema, self.tb, where_sql,
         );
 
+        let mut cols = Vec::new();
         let mut binds = Vec::new();
         for col_name in not_null_cols.iter() {
+            cols.push(col_name.clone());
             binds.push(before.get(col_name));
         }
-        Ok((sql, binds))
+        Ok((sql, cols, binds))
     }
 
     fn get_update_query<'a>(
         &self,
         row_data: &'a RowData,
-    ) -> Result<(String, Vec<Option<&'a ColValue>>), Error> {
+    ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
         let before = row_data.before.as_ref().unwrap();
         let after = row_data.after.as_ref().unwrap();
 
@@ -169,14 +175,17 @@ impl RdbUtil {
             where_sql,
         );
 
+        let mut cols = set_cols.clone();
         let mut binds = Vec::new();
         for col_name in set_cols.iter() {
+            cols.push(col_name.clone());
             binds.push(after.get(col_name));
         }
         for col_name in not_null_cols.iter() {
+            cols.push(col_name.clone());
             binds.push(before.get(col_name));
         }
-        Ok((sql, binds))
+        Ok((sql, cols, binds))
     }
 
     fn get_where_info(

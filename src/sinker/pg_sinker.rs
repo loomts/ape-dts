@@ -6,10 +6,10 @@ use crate::{
         pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
         row_data::RowData,
     },
-    traits::{sqlx_ext::SqlxExt, traits::Sinker},
+    traits::{sqlx_ext::SqlxPg, traits::Sinker},
 };
 
-use super::{rdb_router::RdbRouter, rdb_util::RdbUtil};
+use super::{rdb_router::RdbRouter, rdb_sinker_util::RdbSinkerUtil};
 
 use async_trait::async_trait;
 
@@ -34,19 +34,31 @@ impl Sinker for PgSinker {
             self.sink_internal(data).await
         }
     }
+
+    async fn close(&mut self) -> Result<(), Error> {
+        if self.conn_pool.is_closed() {
+            return Ok(());
+        }
+        return Ok(self.conn_pool.close().await);
+    }
 }
 
 impl PgSinker {
     async fn sink_internal(&mut self, data: Vec<RowData>) -> Result<(), Error> {
         for row_data in data.iter() {
             let tb_meta = self.get_tb_meta(&row_data).await?;
-            let rdb_util = RdbUtil::new_for_pg(tb_meta);
+            let rdb_util = RdbSinkerUtil::new_for_pg(tb_meta.clone());
 
-            let (mut sql, binds) = rdb_util.get_query(&row_data)?;
-            sql = self.replace_placeholder(&sql);
+            let (mut sql, cols, binds) = rdb_util.get_query(&row_data)?;
+            sql = self.replace_placeholder(&tb_meta, &sql, &cols);
             let mut query = sqlx::query(&sql);
+
+            let mut i = 0;
             for bind in binds {
+                let col_type = tb_meta.col_type_map.get(&cols[i]).unwrap();
+                println!("-----------: {}", cols[i]);
                 query = query.bind_col_value(bind);
+                i += 1;
             }
 
             let result = query.execute(&self.conn_pool).await.unwrap();
@@ -61,7 +73,7 @@ impl PgSinker {
 
         let first_row_data = &data[0];
         let tb_meta = self.get_tb_meta(first_row_data).await?;
-        let rdb_util = RdbUtil::new_for_pg(tb_meta);
+        let rdb_util = RdbSinkerUtil::new_for_pg(tb_meta.clone());
 
         loop {
             let mut batch_size = self.batch_size;
@@ -69,12 +81,17 @@ impl PgSinker {
                 batch_size = all_count - sinked_count;
             }
 
-            let (mut sql, binds) =
+            let (mut sql, cols, binds) =
                 rdb_util.get_batch_insert_query(&data, sinked_count, batch_size)?;
-            sql = self.replace_placeholder(&sql);
+            sql = self.replace_placeholder(&tb_meta, &sql, &cols);
             let mut query = sqlx::query(&sql);
+
+            let mut i = 0;
             for bind in binds {
+                let col_type = tb_meta.col_type_map.get(&cols[i]).unwrap();
+                println!("-----------: {}", cols[i]);
                 query = query.bind_col_value(bind);
+                i += 1;
             }
 
             let result = query.execute(&self.conn_pool).await.unwrap();
@@ -100,14 +117,25 @@ impl PgSinker {
         return Ok(tb_meta);
     }
 
-    fn replace_placeholder(&self, sql: &str) -> String {
+    fn replace_placeholder(&self, tb_meta: &PgTbMeta, sql: &str, cols: &Vec<String>) -> String {
         let mut new_sql = sql.to_string();
         let mut i = 1;
+
+        // INSERT INTO tb_1(col_1, col_2) VALUES ('{"bar": "baz"}'::json, 'a'), ('{"bar": "baz"}'::json, 'b');
 
         // TODO, handle ON CONFLICT cases
         new_sql = new_sql.replace("REPLACE", "INSERT");
         while new_sql.contains("?") {
-            let placeholder = format!("${}", i.to_string());
+            let col_index = (i - 1) % cols.len();
+            let col_type = tb_meta.col_type_map.get(&cols[col_index]).unwrap();
+            // TODO, workaround for bit
+            let col_type_name = if col_type.short_name == "bit" {
+                "varbit"
+            } else {
+                &col_type.short_name
+            };
+
+            let placeholder = format!("${}::{}", i.to_string(), col_type_name);
             new_sql = new_sql.replacen("?", &placeholder, 1);
             i += 1;
         }

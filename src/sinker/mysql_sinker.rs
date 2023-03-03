@@ -6,10 +6,10 @@ use crate::{
         mysql::{mysql_meta_manager::MysqlMetaManager, mysql_tb_meta::MysqlTbMeta},
         row_data::RowData,
     },
-    traits::{sqlx_ext::SqlxExt, traits::Sinker},
+    traits::{sqlx_ext::SqlxMysql, traits::Sinker},
 };
 
-use super::{rdb_router::RdbRouter, rdb_util::RdbUtil};
+use super::{rdb_router::RdbRouter, rdb_sinker_util::RdbSinkerUtil};
 
 use async_trait::async_trait;
 
@@ -34,15 +34,22 @@ impl Sinker for MysqlSinker {
             self.sink_internal(data).await
         }
     }
+
+    async fn close(&mut self) -> Result<(), Error> {
+        if self.conn_pool.is_closed() {
+            return Ok(());
+        }
+        return Ok(self.conn_pool.close().await);
+    }
 }
 
 impl MysqlSinker {
     async fn sink_internal(&mut self, data: Vec<RowData>) -> Result<(), Error> {
         for row_data in data.iter() {
             let tb_meta = self.get_tb_meta(&row_data).await?;
-            let rdb_util = RdbUtil::new_for_mysql(tb_meta);
+            let rdb_util = RdbSinkerUtil::new_for_mysql(tb_meta);
 
-            let (sql, binds) = rdb_util.get_query(&row_data)?;
+            let (sql, _cols, binds) = rdb_util.get_query(&row_data)?;
             let mut query = sqlx::query(&sql);
             for bind in binds {
                 query = query.bind_col_value(bind);
@@ -60,7 +67,7 @@ impl MysqlSinker {
 
         let first_row_data = &data[0];
         let tb_meta = self.get_tb_meta(first_row_data).await?;
-        let rdb_util = RdbUtil::new_for_mysql(tb_meta);
+        let rdb_util = RdbSinkerUtil::new_for_mysql(tb_meta);
 
         loop {
             let mut batch_size = self.batch_size;
@@ -68,7 +75,8 @@ impl MysqlSinker {
                 batch_size = all_count - sinked_count;
             }
 
-            let (sql, binds) = rdb_util.get_batch_insert_query(&data, sinked_count, batch_size)?;
+            let (sql, _cols, binds) =
+                rdb_util.get_batch_insert_query(&data, sinked_count, batch_size)?;
             let mut query = sqlx::query(&sql);
             for bind in binds {
                 query = query.bind_col_value(bind);

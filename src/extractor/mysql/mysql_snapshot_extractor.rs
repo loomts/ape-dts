@@ -21,7 +21,7 @@ use crate::{
         row_type::RowType,
     },
     task::task_util::TaskUtil,
-    traits::{sqlx_ext::SqlxExt, traits::Extractor},
+    traits::{sqlx_ext::SqlxMysql, traits::Extractor},
 };
 
 use super::mysql_col_value_convertor::MysqlColValueConvertor;
@@ -40,6 +40,13 @@ pub struct MysqlSnapshotExtractor<'a> {
 impl Extractor for MysqlSnapshotExtractor<'_> {
     async fn extract(&mut self) -> Result<(), Error> {
         self.extract_internal().await
+    }
+
+    async fn close(&mut self) -> Result<(), Error> {
+        if self.conn_pool.is_closed() {
+            return Ok(());
+        }
+        return Ok(self.conn_pool.close().await);
     }
 }
 
@@ -144,7 +151,7 @@ impl MysqlSnapshotExtractor<'_> {
             col_meta.name, col_meta.name, self.db, self.tb
         );
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-        if let Some(row) = rows.try_next().await? {
+        if let Some(row) = rows.try_next().await.unwrap() {
             return MysqlColValueConvertor::from_query(&row, &col_meta);
         }
         Ok(ColValue::None)
