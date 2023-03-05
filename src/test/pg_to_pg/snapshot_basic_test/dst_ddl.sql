@@ -4,7 +4,6 @@ CREATE EXTENSION IF NOT EXISTS isn;
 CREATE EXTENSION IF NOT EXISTS citext;
 CREATE EXTENSION IF NOT EXISTS hstore;
 CREATE EXTENSION IF NOT EXISTS postgis;
--- CREATE EXTENSION IF NOT EXISTS geometry;
 
 DROP TABLE IF EXISTS default_table;
 CREATE TABLE default_table(pk serial, val numeric(20,8), created_at timestamp, created_at_tz timestamptz, ctime time , ctime_tz timetz , cdate date , cmoney money , cbits bit(3) , csmallint smallint , cinteger integer , cbigint bigint , creal real , cbool bool , cfloat8 float8 , cnumeric numeric(6,2) , cvarchar varchar(5) , cbox box , ccircle circle , cinterval interval , cline line , clseg lseg , cpath path , cpoint point , cpolygon polygon , cchar char , ctext text , cjson json , cxml xml , cuuid uuid , cvarbit varbit(3) , cinet inet , ccidr cidr , cmacaddr macaddr , PRIMARY KEY(pk));
@@ -75,8 +74,8 @@ CREATE TABLE circle_table (pk serial, ccircle circle, PRIMARY KEY(pk));
 DROP TABLE IF EXISTS macaddr8_table;
 CREATE TABLE macaddr8_table (pk SERIAL, m MACADDR8, PRIMARY KEY(pk));
 
--- DROP TABLE IF EXISTS postgis_table;
--- CREATE TABLE postgis_table (pk SERIAL, p GEOMETRY(POINT,3187), ml GEOGRAPHY(MULTILINESTRING), PRIMARY KEY(pk));
+DROP TABLE IF EXISTS postgis_table;
+CREATE TABLE postgis_table (pk SERIAL, p GEOMETRY(POINT,3187), ml GEOGRAPHY(MULTILINESTRING), PRIMARY KEY(pk));
 
--- DROP TABLE IF EXISTS postgis_array_table;
--- CREATE TABLE postgis_array_table (pk SERIAL, ga GEOMETRY[], gann GEOMETRY[] NOT NULL, PRIMARY KEY(pk));
+DROP TABLE IF EXISTS postgis_array_table;
+CREATE TABLE postgis_array_table (pk SERIAL, ga GEOMETRY[], gann GEOMETRY[] NOT NULL, PRIMARY KEY(pk));

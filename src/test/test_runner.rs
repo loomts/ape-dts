@@ -201,15 +201,11 @@ impl TestRunner {
     }
 
     pub async fn execute_src_sqls(&self, sqls: &Vec<String>) -> Result<(), Error> {
-        for sql in sqls {
-            if let Some(pool) = &self.src_conn_pool_mysql {
-                let query = sqlx::query(sql);
-                query.execute(pool).await.unwrap();
-            }
-            if let Some(pool) = &self.src_conn_pool_pg {
-                let query = sqlx::query(sql);
-                query.execute(pool).await.unwrap();
-            }
+        if let Some(pool) = &self.src_conn_pool_mysql {
+            Self::execute_sqls_mysql(sqls, pool).await?;
+        }
+        if let Some(pool) = &self.src_conn_pool_pg {
+            Self::execute_sqls_pg(sqls, pool).await?;
         }
         Ok(())
     }
@@ -240,21 +236,18 @@ impl TestRunner {
         dst_tb: &str,
         cols: &Vec<String>,
     ) -> Result<bool, Error> {
-        let src_sql = format!("select * from {} order by {}", src_tb, cols[0]);
-        let dst_sql = format!("select * from {} order by {}", dst_tb, cols[0]);
-
         let src_data = if let Some(pool) = &self.src_conn_pool_mysql {
-            self.fetch_data_mysql(&src_sql, cols, pool).await?
+            self.fetch_data_mysql(src_tb, cols, pool).await?
         } else if let Some(pool) = &self.src_conn_pool_pg {
-            self.fetch_data_pg(&src_sql, cols, pool).await?
+            self.fetch_data_pg(src_tb, cols, pool).await?
         } else {
             Vec::new()
         };
 
         let dst_data = if let Some(pool) = &self.dst_conn_pool_mysql {
-            self.fetch_data_mysql(&dst_sql, cols, pool).await?
+            self.fetch_data_mysql(dst_tb, cols, pool).await?
         } else if let Some(pool) = &self.dst_conn_pool_pg {
-            self.fetch_data_pg(&src_sql, cols, pool).await?
+            self.fetch_data_pg(dst_tb, cols, pool).await?
         } else {
             Vec::new()
         };
@@ -269,11 +262,12 @@ impl TestRunner {
 
     async fn fetch_data_mysql(
         &self,
-        sql: &str,
+        tb: &str,
         cols: &Vec<String>,
         conn_pool: &Pool<MySql>,
     ) -> Result<Vec<Vec<Option<Vec<u8>>>>, Error> {
-        let query = sqlx::query(sql);
+        let sql = format!("SELECT * FROM {} ORDER BY {}", tb, cols[0]);
+        let query = sqlx::query(&sql);
         let mut rows = query.fetch(conn_pool);
 
         let mut result = Vec::new();
@@ -291,11 +285,22 @@ impl TestRunner {
 
     async fn fetch_data_pg(
         &self,
-        sql: &str,
+        tb: &str,
         cols: &Vec<String>,
         conn_pool: &Pool<Postgres>,
     ) -> Result<Vec<Vec<Option<Vec<u8>>>>, Error> {
-        let query = sqlx::query(sql);
+        let mut extract_cols = Vec::new();
+        for col in cols {
+            extract_cols.push(format!("{}::text", col));
+        }
+        let sql = format!(
+            "SELECT {} FROM {} ORDER BY {} ASC",
+            extract_cols.join(","),
+            tb,
+            cols[0]
+        );
+
+        let query = sqlx::query(&sql);
         let mut rows = query.fetch(conn_pool);
 
         let mut result = Vec::new();
