@@ -26,9 +26,9 @@ const LOG_DIR_PLACEHODLER: &str = "LOG_DIR_PLACEHODLER";
 const LOG4RS_YAML: &str = "log4rs.yaml";
 
 impl TaskRunner {
-    pub async fn start_task(task_config: &str) -> Result<(), Error> {
+    pub async fn start_task(task_config: String) -> Result<(), Error> {
         let (extractor_config, sinker_config, runtime_config, filter_config, router_config) =
-            ConfigLoader::load(task_config)?;
+            ConfigLoader::load(&task_config)?;
         Self::init_log4rs(&runtime_config.log_dir, &runtime_config.log_level)?;
 
         match &extractor_config {
@@ -141,8 +141,8 @@ impl TaskRunner {
         filter_config: &FilterConfig,
         buffer: &'a ConcurrentQueue<RowData>,
         shut_down: &'a AtomicBool,
-    ) -> Result<Box<dyn Extractor + 'a>, Error> {
-        let extractor: Box<dyn Extractor> = match extractor_config {
+    ) -> Result<Box<dyn Extractor + 'a + Send>, Error> {
+        let extractor: Box<dyn Extractor + Send> = match extractor_config {
             ExtractorConfig::MysqlSnapshot { url, do_tb } => {
                 let extractor = TaskUtil::create_mysql_snapshot_extractor(
                     &url,

@@ -15,7 +15,7 @@ DROP TABLE IF EXISTS numeric_decimal_table;
 CREATE TABLE numeric_decimal_table (pk SERIAL, d DECIMAL(3,2), dzs DECIMAL(4), dvs DECIMAL, d_nn DECIMAL(3,2), n NUMERIC(6,4), nzs NUMERIC(4), nvs NUMERIC, d_int DECIMAL(3,2), dzs_int DECIMAL(4), dvs_int DECIMAL, n_int NUMERIC(6,4), nzs_int NUMERIC(4), nvs_int NUMERIC, d_nan DECIMAL(3,2), dzs_nan DECIMAL(4), dvs_nan DECIMAL, n_nan NUMERIC(6,4), nzs_nan NUMERIC(4), nvs_nan NUMERIC, PRIMARY KEY(pk));
 
 DROP TABLE IF EXISTS string_table;
-CREATE TABLE string_table (pk SERIAL, vc VARCHAR(2), vcv CHARACTER VARYING(2), ch CHARACTER(4), c CHAR(3), t TEXT, b BYTEA, bnn BYTEA , ct CITEXT, PRIMARY KEY(pk));
+CREATE TABLE string_table (pk SERIAL, vc VARCHAR(2), vcv CHARACTER VARYING(2), ch CHARACTER(4), c CHAR(3), t TEXT, b BYTEA, bnn BYTEA, ct CITEXT, PRIMARY KEY(pk));
 
 DROP TABLE IF EXISTS network_address_table;
 CREATE TABLE network_address_table (pk SERIAL, i INET, PRIMARY KEY(pk));
@@ -51,7 +51,7 @@ DROP TABLE IF EXISTS array_table;
 CREATE TABLE array_table (pk SERIAL, int_array INT[], bigint_array BIGINT[], text_array TEXT[], char_array CHAR(10)[], varchar_array VARCHAR(10)[], date_array DATE[], numeric_array NUMERIC(10, 2)[], varnumeric_array NUMERIC[3], citext_array CITEXT[], inet_array INET[], cidr_array CIDR[], macaddr_array MACADDR[], tsrange_array TSRANGE[], tstzrange_array TSTZRANGE[], daterange_array DATERANGE[], int4range_array INT4RANGE[],numerange_array NUMRANGE[], int8range_array INT8RANGE[], uuid_array UUID[], json_array json[], jsonb_array jsonb[], oid_array OID[], PRIMARY KEY(pk));
 
 DROP TABLE IF EXISTS custom_table;
-CREATE TABLE custom_table (pk serial, lt ltree, i isbn , n TEXT, lt_array ltree[], PRIMARY KEY(pk));
+CREATE TABLE custom_table (pk serial, lt ltree, i isbn, n TEXT, lt_array ltree[], PRIMARY KEY(pk));
 
 DROP TABLE IF EXISTS hstore_table;
 CREATE TABLE hstore_table (pk serial, hs hstore, PRIMARY KEY(pk));
@@ -72,4 +72,4 @@ DROP TABLE IF EXISTS postgis_table;
 CREATE TABLE postgis_table (pk SERIAL, p GEOMETRY(POINT,3187), ml GEOGRAPHY(MULTILINESTRING), PRIMARY KEY(pk));
 
 DROP TABLE IF EXISTS postgis_array_table;
-CREATE TABLE postgis_array_table (pk SERIAL, ga GEOMETRY[], gann GEOMETRY[] , PRIMARY KEY(pk));
+CREATE TABLE postgis_array_table (pk SERIAL, ga GEOMETRY[], gann GEOMETRY[], PRIMARY KEY(pk));

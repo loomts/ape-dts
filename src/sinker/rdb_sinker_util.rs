@@ -15,6 +15,7 @@ pub struct RdbSinkerUtil {
     tb: String,
     cols: Vec<String>,
     where_cols: Vec<String>,
+    key_map: HashMap<String, Vec<String>>,
 }
 
 impl RdbSinkerUtil {
@@ -24,6 +25,7 @@ impl RdbSinkerUtil {
             tb: tb_meta.tb,
             cols: tb_meta.cols,
             where_cols: tb_meta.where_cols,
+            key_map: tb_meta.key_map,
         }
     }
 
@@ -33,6 +35,7 @@ impl RdbSinkerUtil {
             tb: tb_meta.tb,
             cols: tb_meta.cols,
             where_cols: tb_meta.where_cols,
+            key_map: tb_meta.key_map,
         }
     }
 
@@ -138,10 +141,13 @@ impl RdbSinkerUtil {
     ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
         let before = row_data.before.as_ref().unwrap();
         let (where_sql, not_null_cols) = self.get_where_info(&before)?;
-        let sql = format!(
-            "DELETE FROM {}.{} WHERE {} LIMIT 1",
-            self.schema, self.tb, where_sql,
+        let mut sql = format!(
+            "DELETE FROM {}.{} WHERE {}",
+            self.schema, self.tb, where_sql
         );
+        if self.key_map.is_empty() {
+            sql += " LIMIT 1";
+        }
 
         let mut cols = Vec::new();
         let mut binds = Vec::new();
@@ -167,18 +173,20 @@ impl RdbSinkerUtil {
         }
 
         let (where_sql, not_null_cols) = self.get_where_info(&before)?;
-        let sql = format!(
-            "UPDATE {}.{} SET {} WHERE {} LIMIT 1",
+        let mut sql = format!(
+            "UPDATE {}.{} SET {} WHERE {}",
             self.schema,
             self.tb,
             set_pairs.join(","),
             where_sql,
         );
+        if self.key_map.is_empty() {
+            sql += " LIMIT 1";
+        }
 
         let mut cols = set_cols.clone();
         let mut binds = Vec::new();
         for col_name in set_cols.iter() {
-            cols.push(col_name.clone());
             binds.push(after.get(col_name));
         }
         for col_name in not_null_cols.iter() {

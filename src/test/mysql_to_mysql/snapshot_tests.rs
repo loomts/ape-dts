@@ -15,15 +15,6 @@ mod test {
         let src_dml_file = format!("{}/snapshot_basic_test/src_dml.sql", TEST_DIR);
         let task_config_file = format!("{}/snapshot_basic_test/task_config.ini", TEST_DIR);
 
-        // compare src and dst data
-        let src_tbs = TestRunner::get_default_tbs();
-        let dst_tbs = TestRunner::get_default_tbs();
-        let cols = TestRunner::get_default_tb_cols();
-        let mut cols_list = Vec::new();
-        for _ in 0..src_tbs.len() {
-            cols_list.push(cols.clone());
-        }
-
         let rt = Runtime::new().unwrap();
         let runner = rt.block_on(TestRunner::new(&task_config_file)).unwrap();
         rt.block_on(runner.run_snapshot_test(
@@ -31,9 +22,6 @@ mod test {
             &dst_ddl_file,
             &src_dml_file,
             &task_config_file,
-            &src_tbs,
-            &dst_tbs,
-            &cols_list,
         ))
         .unwrap();
     }

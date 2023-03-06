@@ -13,8 +13,8 @@ use crate::{
 
 pub struct ParallelSinker<'a> {
     pub buffer: &'a ConcurrentQueue<RowData>,
-    pub partitioner: Box<dyn Partitioner>,
-    pub sub_sinkers: Vec<Box<dyn Sinker>>,
+    pub partitioner: Box<dyn Partitioner + Send>,
+    pub sub_sinkers: Vec<Box<dyn Sinker + Send>>,
     pub shut_down: &'a AtomicBool,
 }
 

@@ -25,8 +25,12 @@ async fn main() {
         env::var(TASK_CONFIG).unwrap()
     };
 
-    let task_config = "/Users/xushicai/Documents/projects/ape-dts/src/test/pg_to_pg/snapshot_basic_test/task_config.ini";
-    TaskRunner::start_task(&task_config).await.unwrap()
+    let task_config = "/Users/xushicai/Documents/projects/ape-dts/src/test/pg_to_pg/cdc_basic_test/task_config.ini";
+    // let task_config = "/Users/xushicai/Documents/projects/ape-dts/src/test/pg_to_pg/snapshot_basic_test/task_config.ini";
+
+    TaskRunner::start_task(task_config.to_string())
+        .await
+        .unwrap()
 
     // test_numeric().await.unwrap();
 }

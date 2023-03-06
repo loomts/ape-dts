@@ -1,24 +1,12 @@
-use std::str::FromStr;
-
-use bytes::Bytes;
-use postgres_protocol::types::Inet;
-use postgres_types::Timestamp;
-use sqlx::{
-    postgres::{
-        types::{PgInterval, PgMoney, PgTimeTz},
-        PgRow, PgValue,
-    },
-    types::{chrono, ipnetwork::IpNetwork, time::Time, BitVec, Decimal, Json},
-    Row,
-};
-
 use crate::{
     error::Error,
     meta::{
         col_value::ColValue,
-        pg::{pg_col_type::PgColType, pg_col_value::PgColValue, pg_meta_manager::PgMetaManager},
+        pg::{pg_col_type::PgColType, pg_meta_manager::PgMetaManager},
     },
 };
+use bytes::Bytes;
+use sqlx::{postgres::PgRow, Row};
 
 pub struct PgColValueConvertor {}
 
@@ -29,26 +17,18 @@ impl PgColValueConvertor {
 
             "oid" => "int8",
 
-            "citext" | "hstore" | "character" | "char" | "character varying" | "varchar"
-            | "bpchar" | "text" | "geometry" | "geography" | "json" | "jsonb" | "xml" | "uuid"
-            | "tsrange" | "tstzrange" | "daterange" | "inet" | "cidr" | "macaddr" | "macaddr8"
-            | "int4range" | "numrange" | "int8range" => "text",
+            "citext" | "hstore" | "char" | "varchar" | "bpchar" | "text" | "geometry"
+            | "geography" | "json" | "jsonb" | "xml" | "uuid" | "tsrange" | "tstzrange"
+            | "daterange" | "inet" | "cidr" | "macaddr" | "macaddr8" | "int4range" | "numrange"
+            | "int8range" => "text",
 
             "bit" | "varbit" => "text",
 
             "numeric" | "decimal" => "text",
 
-            "date" => "text",
+            "date" | "timestamp" | "time" => "text",
 
-            "timestamp with time zone" | "timestamptz" => "text",
-
-            "timestamp" | "timestamp without time zone" => "text",
-
-            "time" => "text",
-
-            "time without time zone" => "text",
-
-            "time with time zone" | "timetz" => "text",
+            "timestamptz" | "timetz" => "text",
 
             "box" | "circle" | "interval" | "line" | "lseg" | "money" | "path" | "point"
             | "polygon" => "text",
@@ -85,61 +65,83 @@ impl PgColValueConvertor {
             return Ok(ColValue::String(value_str));
         }
 
-        let col_value = match col_type.long_name.as_str() {
+        let col_value = match col_type.short_name.as_str() {
             "boolean" | "bool" => ColValue::Bool("t" == value_str.to_lowercase()),
 
-            "citext" => ColValue::String(value_str),
-
             "hstore" | "character" | "char" | "character varying" | "varchar" | "bpchar"
-            | "text" | "geometry" | "geography" | "bit" | "bit varying" | "varbit" | "json"
-            | "jsonb" | "xml" | "uuid" | "tsrange" | "tstzrange" | "daterange" | "inet"
-            | "cidr" | "macaddr" | "macaddr8" | "int4range" | "numrange" | "int8range" => {
+            | "text" | "geometry" | "geography" | "citext" | "bit" | "bit varying" | "varbit"
+            | "json" | "jsonb" | "xml" | "uuid" | "tsrange" | "tstzrange" | "daterange"
+            | "inet" | "cidr" | "macaddr" | "macaddr8" | "int4range" | "numrange" | "int8range" => {
                 ColValue::String(value_str)
             }
 
-            "integer" | "int" | "int4" | "smallint" | "int2" | "smallserial" | "serial"
-            | "serial2" | "serial4" => {
+            "integer" | "int" | "int4" | "serial" | "serial2" | "serial4" => {
                 let res: i32 = value_str.parse().unwrap();
                 ColValue::Long(res)
             }
 
+            "int2" | "smallserial" | "smallint" => {
+                let value: i16 = value_str.parse().unwrap();
+                return Ok(ColValue::Short(value));
+            }
+
             "bigint" | "bigserial" | "int8" | "oid" => {
-                let res: i64 = value_str.parse().unwrap();
-                ColValue::LongLong(res)
+                let value: i64 = value_str.parse().unwrap();
+                return Ok(ColValue::LongLong(value));
             }
 
             "real" | "float4" => {
-                let res: f32 = value_str.parse().unwrap();
-                ColValue::Float(res)
+                let value: f32 = value_str.parse().unwrap();
+                return Ok(ColValue::Float(value));
             }
 
-            "double precision" | "float8" => {
-                let res: f64 = value_str.parse().unwrap();
-                ColValue::Double(res)
+            "float8" => {
+                let value: f64 = value_str.parse().unwrap();
+                return Ok(ColValue::Double(value));
             }
 
-            "numeric" | "decimal" => ColValue::Decimal(value_str),
+            "numeric" | "decimal" => {
+                return Ok(ColValue::Decimal(value_str));
+            }
 
-            "date" => ColValue::String(value_str),
+            "date" => {
+                return Ok(ColValue::String(value_str));
+            }
 
-            "timestamp with time zone" | "timestamptz" => ColValue::Timestamp(value_str),
+            "timestamptz" => {
+                return Ok(ColValue::Timestamp(value_str));
+            }
 
-            "timestamp" | "timestamp without time zone" => ColValue::DateTime(value_str),
+            "timestamp" => {
+                return Ok(ColValue::DateTime(value_str));
+            }
 
-            "time" => ColValue::Time(value_str),
+            "time" => {
+                return Ok(ColValue::Time(value_str));
+            }
 
-            "time without time zone" => ColValue::Time(value_str),
+            "timetz" => {
+                return Ok(ColValue::String(value_str));
+            }
 
-            "time with time zone" | "timetz" => ColValue::Time(value_str),
+            "bytea" => {
+                return Ok(ColValue::String(value_str));
+            }
 
-            // these are all PG-specific types
             "box" | "circle" | "interval" | "line" | "lseg" | "money" | "path" | "point"
-            | "polygon" => ColValue::String(value_str),
+            | "polygon" => {
+                let value: String = value_str.parse().unwrap();
+                return Ok(ColValue::String(value));
+            }
 
-            "pg_lsn" | "tsquery" | "tsvector" | "txid_snapshot" => ColValue::String(value_str),
+            "pg_lsn" | "tsquery" | "tsvector" | "txid_snapshot" => {
+                let value: String = value_str.parse().unwrap();
+                return Ok(ColValue::String(value));
+            }
 
-            // others, e.g. enum
-            _ => ColValue::String(value_str),
+            _ => {
+                return Ok(ColValue::String(value_str));
+            }
         };
 
         Ok(col_value)

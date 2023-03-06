@@ -1,3 +1,4 @@
+use futures::executor::block_on;
 use sqlx::{MySql, Pool};
 
 use crate::{
@@ -6,13 +7,17 @@ use crate::{
         mysql::{mysql_meta_manager::MysqlMetaManager, mysql_tb_meta::MysqlTbMeta},
         row_data::RowData,
     },
-    traits::{sqlx_ext::SqlxMysql, traits::Sinker},
+    traits::{
+        sqlx_ext::SqlxMysql,
+        traits::{Sinker, Sinker2},
+    },
 };
 
 use super::{rdb_router::RdbRouter, rdb_sinker_util::RdbSinkerUtil};
 
 use async_trait::async_trait;
 
+#[derive(Clone)]
 pub struct MysqlSinker {
     pub conn_pool: Pool<MySql>,
     pub meta_manager: MysqlMetaManager,
@@ -42,6 +47,28 @@ impl Sinker for MysqlSinker {
         return Ok(self.conn_pool.close().await);
     }
 }
+
+// impl Sinker2 for MysqlSinker {
+//     fn sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
+//         if data.len() == 0 {
+//             return Ok(());
+//         }
+
+//         // currently only support batch insert
+//         if self.batch_size > 1 {
+//             block_on(self.batch_insert(data))
+//         } else {
+//             block_on(self.sink_internal(data))
+//         }
+//     }
+
+//     fn close(&mut self) -> Result<(), Error> {
+//         if self.conn_pool.is_closed() {
+//             return Ok(());
+//         }
+//         Ok(block_on(self.conn_pool.close()))
+//     }
+// }
 
 impl MysqlSinker {
     async fn sink_internal(&mut self, data: Vec<RowData>) -> Result<(), Error> {

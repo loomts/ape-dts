@@ -1,6 +1,6 @@
-use futures::TryStreamExt;
+use futures::{executor::block_on, TryStreamExt};
 use sqlx::{MySql, Pool, Postgres, Row};
-use std::{env, fs::File, io::Read};
+use std::{env, fs::File, io::Read, thread, time::Duration};
 
 use crate::{
     config::{
@@ -16,6 +16,9 @@ pub struct TestRunner {
     pub src_conn_pool_pg: Option<Pool<Postgres>>,
     pub dst_conn_pool_pg: Option<Pool<Postgres>>,
 }
+
+const CDC_TASK_START_MILLIS: u64 = 5000;
+const CDC_PARSE_MILLIS: u64 = 10000;
 
 #[allow(dead_code)]
 impl TestRunner {
@@ -83,11 +86,10 @@ impl TestRunner {
         src_ddl_file: &str,
         dst_ddl_file: &str,
         src_dml_file: &str,
-        task_config_file: &str,
-        src_tbs: &Vec<String>,
-        dst_tbs: &Vec<String>,
-        cols_list: &Vec<Vec<String>>,
+        task_config: &str,
     ) -> Result<(), Error> {
+        let (src_tbs, dst_tbs, cols_list) = TestRunner::parse_ddl(&src_ddl_file).unwrap();
+
         // prepare src and dst tables
         self.prepare_test_tbs(src_ddl_file, dst_ddl_file).await?;
 
@@ -96,17 +98,90 @@ impl TestRunner {
         self.execute_src_sqls(&src_dml_sqls).await?;
 
         // start task
-        TaskRunner::start_task(task_config_file).await?;
+        TaskRunner::start_task(task_config.to_string()).await?;
+        assert!(
+            self.compare_data_for_tbs(&src_tbs, &dst_tbs, &cols_list)
+                .await?
+        );
+        Ok(())
+    }
 
-        for i in 0..src_tbs.len() {
-            let src_tb = src_tbs[i].as_str();
-            let dst_tb = dst_tbs[i].as_str();
-            let cols = &cols_list[i];
-            let res = self.compare_tb_data(src_tb, dst_tb, cols).await?;
-            assert!(res);
+    pub async fn run_cdc_test(
+        &self,
+        src_ddl_file: &str,
+        dst_ddl_file: &str,
+        src_dml_file: &str,
+        task_config_file: &str,
+    ) -> Result<(), Error> {
+        let (src_tbs, dst_tbs, cols_list) = Self::parse_ddl(&src_ddl_file).unwrap();
+
+        // prepare src and dst tables
+        self.prepare_test_tbs(src_ddl_file, dst_ddl_file).await?;
+
+        // start task
+        let task_config = task_config_file.to_string();
+        tokio::spawn(async move { TaskRunner::start_task(task_config).await });
+        TaskUtil::sleep_millis(CDC_TASK_START_MILLIS).await;
+
+        // load dml sqls
+        let src_dml_sqls = TestRunner::load_sqls(src_dml_file)?;
+        let mut src_insert_sqls = Vec::new();
+        let mut src_update_sqls = Vec::new();
+        let mut src_delete_sqls = Vec::new();
+
+        for sql in src_dml_sqls {
+            if sql.to_lowercase().starts_with("insert") {
+                src_insert_sqls.push(sql);
+            } else if sql.to_lowercase().starts_with("update") {
+                src_update_sqls.push(sql);
+            } else {
+                src_delete_sqls.push(sql);
+            }
         }
 
+        // insert src data
+        self.execute_src_sqls(&src_insert_sqls).await?;
+        thread::sleep(Duration::from_millis(CDC_PARSE_MILLIS));
+        assert!(
+            self.compare_data_for_tbs(&src_tbs, &dst_tbs, &cols_list)
+                .await?
+        );
+
+        // update src data
+        self.execute_src_sqls(&src_update_sqls).await?;
+        TaskUtil::sleep_millis(CDC_PARSE_MILLIS).await;
+        assert!(
+            self.compare_data_for_tbs(&src_tbs, &dst_tbs, &cols_list)
+                .await?
+        );
+
+        // delete src data
+        self.execute_src_sqls(&src_delete_sqls).await?;
+        TaskUtil::sleep_millis(CDC_PARSE_MILLIS).await;
+        assert!(
+            self.compare_data_for_tbs(&src_tbs, &dst_tbs, &cols_list)
+                .await?
+        );
+
         Ok(())
+    }
+
+    pub fn parse_ddl(
+        src_ddl_file: &str,
+    ) -> Result<(Vec<String>, Vec<String>, Vec<Vec<String>>), Error> {
+        let src_ddl_sqls = TestRunner::load_sqls(&src_ddl_file).unwrap();
+        let mut src_tbs = Vec::new();
+        let mut cols_list = Vec::new();
+        for sql in src_ddl_sqls {
+            if sql.to_lowercase().contains("create table") {
+                let (tb, cols) = TestRunner::parse_create_table(&sql).unwrap();
+                src_tbs.push(tb);
+                cols_list.push(cols);
+            }
+        }
+        let dst_tbs = src_tbs.clone();
+
+        Ok((src_tbs, dst_tbs, cols_list))
     }
 
     pub fn parse_create_table(sql: &str) -> Result<(String, Vec<String>), Error> {
@@ -214,16 +289,12 @@ impl TestRunner {
         &self,
         src_tbs: &Vec<String>,
         dst_tbs: &Vec<String>,
-        cols: &Vec<String>,
+        cols_list: &Vec<Vec<String>>,
     ) -> Result<bool, Error> {
         for i in 0..src_tbs.len() {
             let src_tb = &src_tbs[i];
             let dst_tb = &dst_tbs[i];
-            if !self.compare_tb_data(src_tb, dst_tb, cols).await? {
-                println!(
-                    "compare_tb_data failed, src_tb: {}, dst_tb: {}",
-                    src_tb, dst_tb
-                );
+            if !self.compare_tb_data(src_tb, dst_tb, &cols_list[i]).await? {
                 return Ok(false);
             }
         }
@@ -257,7 +328,15 @@ impl TestRunner {
             src_tb,
             src_data.len()
         );
-        Ok(Self::compare_row_data(cols, &src_data, &dst_data))
+
+        if !Self::compare_row_data(cols, &src_data, &dst_data) {
+            println!(
+                "compare_tb_data failed, src_tb: {}, dst_tb: {}",
+                src_tb, dst_tb
+            );
+            return Ok(false);
+        }
+        Ok(true)
     }
 
     async fn fetch_data_mysql(

@@ -186,7 +186,7 @@ impl TaskUtil {
             Self::create_mysql_conn_pool(url, parallel_size as u32 * 2, enable_sqlx_log).await?;
 
         let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
-        let mut sub_sinkers: Vec<Box<dyn Sinker>> = Vec::new();
+        let mut sub_sinkers: Vec<Box<dyn Sinker + Send>> = Vec::new();
         for _ in 0..parallel_size {
             let sinker = MysqlSinker {
                 conn_pool: conn_pool.clone(),
@@ -220,7 +220,7 @@ impl TaskUtil {
             Self::create_pg_conn_pool(url, parallel_size as u32 * 2, enable_sqlx_log).await?;
         let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
 
-        let mut sub_sinkers: Vec<Box<dyn Sinker>> = Vec::new();
+        let mut sub_sinkers: Vec<Box<dyn Sinker + Send>> = Vec::new();
         for _ in 0..parallel_size {
             let sinker = PgSinker {
                 conn_pool: conn_pool.clone(),

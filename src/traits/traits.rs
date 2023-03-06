@@ -8,6 +8,12 @@ pub trait Sinker {
     async fn close(&mut self) -> Result<(), Error>;
 }
 
+pub trait Sinker2 {
+    fn sink(&mut self, data: Vec<RowData>) -> Result<(), Error>;
+
+    fn close(&mut self) -> Result<(), Error>;
+}
+
 #[async_trait]
 pub trait Extractor {
     async fn extract(&mut self) -> Result<(), Error>;
