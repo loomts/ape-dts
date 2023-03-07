@@ -9,7 +9,7 @@ use crate::{
         mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
         row_data::RowData, row_type::RowType,
     },
-    traits::traits::Partitioner,
+    traits::Partitioner,
 };
 
 pub struct RdbPartitioner {

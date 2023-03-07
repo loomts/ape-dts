@@ -61,7 +61,7 @@ impl RdbSinkerUtil {
         for _ in self.cols.iter() {
             col_values.push("?");
         }
-        let col_values_str = col_values.join(",");
+        let col_values_str = format!("({})", col_values.join(","));
 
         let mut row_values = Vec::new();
         for _ in 0..batch_size {

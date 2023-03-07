@@ -26,8 +26,8 @@ impl PgColType {
         "U" == self.category
     }
 
-    pub fn get_short_type_name(full_type_name: &str) -> String {
-        let short_type_name = match full_type_name {
+    pub fn get_short_name(long_name: &str) -> String {
+        let short_name = match long_name {
             "bigint" => "int8",
             "boolean" => "bool",
             "character" => "bpchar",
@@ -41,8 +41,8 @@ impl PgColType {
             "timestamp without time zone" => "timestamp",
             "time without time zone" => "time",
             "time with time zone" => "timetz",
-            _ => full_type_name,
+            _ => long_name,
         };
-        short_type_name.to_string()
+        short_name.to_string()
     }
 }

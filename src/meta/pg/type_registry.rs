@@ -56,7 +56,7 @@ impl TypeRegistry {
         let oid: i32 = row.get_unchecked("oid");
         // cast to short name
         let long_name: String = row.try_get("name")?;
-        let short_name = PgColType::get_short_type_name(&long_name);
+        let short_name = PgColType::get_short_name(&long_name);
         let element_oid: i32 = row.get_unchecked("element");
         let parent_oid: i32 = row.get_unchecked("parentoid");
         let modifiers: i32 = row.get_unchecked("modifiers");

@@ -1,4 +1,4 @@
-use futures::{executor::block_on, TryStreamExt};
+use futures::TryStreamExt;
 use sqlx::{MySql, Pool, Postgres, Row};
 use std::{env, fs::File, io::Read, thread, time::Duration};
 
@@ -11,49 +11,30 @@ use crate::{
 };
 
 pub struct TestRunner {
-    pub src_conn_pool_mysql: Option<Pool<MySql>>,
-    pub dst_conn_pool_mysql: Option<Pool<MySql>>,
-    pub src_conn_pool_pg: Option<Pool<Postgres>>,
-    pub dst_conn_pool_pg: Option<Pool<Postgres>>,
+    src_conn_pool_mysql: Option<Pool<MySql>>,
+    dst_conn_pool_mysql: Option<Pool<MySql>>,
+    src_conn_pool_pg: Option<Pool<Postgres>>,
+    dst_conn_pool_pg: Option<Pool<Postgres>>,
+    src_ddl_file: String,
+    dst_ddl_file: String,
+    src_dml_file: String,
+    task_config_file: String,
 }
-
-const CDC_TASK_START_MILLIS: u64 = 5000;
-const CDC_PARSE_MILLIS: u64 = 10000;
 
 #[allow(dead_code)]
 impl TestRunner {
-    pub fn get_default_tbs() -> Vec<String> {
-        let mut tbs = Vec::new();
-        for tb in vec![
-            "test_db_1.no_pk_no_uk",
-            "test_db_1.one_pk_no_uk",
-            "test_db_1.no_pk_one_uk",
-            "test_db_1.no_pk_multi_uk",
-            "test_db_1.one_pk_multi_uk",
-        ] {
-            tbs.push(tb.to_string());
-        }
-        tbs
-    }
+    pub async fn new(test_dir: &str) -> Result<Self, Error> {
+        let src_ddl_file = format!("{}/src_ddl.sql", test_dir);
+        let dst_ddl_file = format!("{}/dst_ddl.sql", test_dir);
+        let src_dml_file = format!("{}/src_dml.sql", test_dir);
+        let task_config_file = format!("{}/task_config.ini", test_dir);
 
-    pub fn get_default_tb_cols() -> Vec<String> {
-        let mut cols = Vec::new();
-        for col in vec![
-            "f_0", "f_1", "f_2", "f_3", "f_4", "f_5", "f_6", "f_7", "f_8", "f_9", "f_10", "f_11",
-            "f_12", "f_13", "f_14", "f_15", "f_16", "f_17", "f_18", "f_19", "f_20", "f_21", "f_22",
-            "f_23", "f_24", "f_25", "f_26", "f_27", "f_28",
-        ] {
-            cols.push(col.to_string());
-        }
-        cols
-    }
-
-    pub async fn new(task_config: &str) -> Result<Self, Error> {
         let mut src_conn_pool_mysql = None;
         let mut dst_conn_pool_mysql = None;
         let mut src_conn_pool_pg = None;
         let mut dst_conn_pool_pg = None;
-        let (extractor_config, sinker_config, _, _, _) = ConfigLoader::load(task_config)?;
+
+        let (extractor_config, sinker_config, _, _, _) = ConfigLoader::load(&task_config_file)?;
 
         match extractor_config {
             ExtractorConfig::MysqlCdc { url, .. } | ExtractorConfig::MysqlSnapshot { url, .. } => {
@@ -78,27 +59,26 @@ impl TestRunner {
             dst_conn_pool_mysql,
             src_conn_pool_pg,
             dst_conn_pool_pg,
+            src_ddl_file,
+            dst_ddl_file,
+            src_dml_file,
+            task_config_file,
         })
     }
 
-    pub async fn run_snapshot_test(
-        &self,
-        src_ddl_file: &str,
-        dst_ddl_file: &str,
-        src_dml_file: &str,
-        task_config: &str,
-    ) -> Result<(), Error> {
-        let (src_tbs, dst_tbs, cols_list) = TestRunner::parse_ddl(&src_ddl_file).unwrap();
+    pub async fn run_snapshot_test(&self) -> Result<(), Error> {
+        let (src_tbs, dst_tbs, cols_list) = TestRunner::parse_ddl(&self.src_ddl_file).unwrap();
 
         // prepare src and dst tables
-        self.prepare_test_tbs(src_ddl_file, dst_ddl_file).await?;
+        self.prepare_test_tbs(&self.src_ddl_file, &self.dst_ddl_file)
+            .await?;
 
         // prepare src data
-        let src_dml_sqls = TestRunner::load_sqls(src_dml_file)?;
-        self.execute_src_sqls(&src_dml_sqls).await?;
+        let src_dml_file_sqls = TestRunner::load_sqls(&self.src_dml_file)?;
+        self.execute_src_sqls(&src_dml_file_sqls).await?;
 
         // start task
-        TaskRunner::start_task(task_config.to_string()).await?;
+        TaskRunner::start_task(self.task_config_file.clone()).await?;
         assert!(
             self.compare_data_for_tbs(&src_tbs, &dst_tbs, &cols_list)
                 .await?
@@ -106,30 +86,25 @@ impl TestRunner {
         Ok(())
     }
 
-    pub async fn run_cdc_test(
-        &self,
-        src_ddl_file: &str,
-        dst_ddl_file: &str,
-        src_dml_file: &str,
-        task_config_file: &str,
-    ) -> Result<(), Error> {
-        let (src_tbs, dst_tbs, cols_list) = Self::parse_ddl(&src_ddl_file).unwrap();
+    pub async fn run_cdc_test(&self, start_millis: u64, parse_millis: u64) -> Result<(), Error> {
+        let (src_tbs, dst_tbs, cols_list) = Self::parse_ddl(&self.src_ddl_file).unwrap();
 
         // prepare src and dst tables
-        self.prepare_test_tbs(src_ddl_file, dst_ddl_file).await?;
+        self.prepare_test_tbs(&self.src_ddl_file, &self.dst_ddl_file)
+            .await?;
 
         // start task
-        let task_config = task_config_file.to_string();
+        let task_config = self.task_config_file.clone();
         tokio::spawn(async move { TaskRunner::start_task(task_config).await });
-        TaskUtil::sleep_millis(CDC_TASK_START_MILLIS).await;
+        TaskUtil::sleep_millis(start_millis).await;
 
         // load dml sqls
-        let src_dml_sqls = TestRunner::load_sqls(src_dml_file)?;
+        let src_dml_file_sqls = TestRunner::load_sqls(&self.src_dml_file)?;
         let mut src_insert_sqls = Vec::new();
         let mut src_update_sqls = Vec::new();
         let mut src_delete_sqls = Vec::new();
 
-        for sql in src_dml_sqls {
+        for sql in src_dml_file_sqls {
             if sql.to_lowercase().starts_with("insert") {
                 src_insert_sqls.push(sql);
             } else if sql.to_lowercase().starts_with("update") {
@@ -141,7 +116,7 @@ impl TestRunner {
 
         // insert src data
         self.execute_src_sqls(&src_insert_sqls).await?;
-        thread::sleep(Duration::from_millis(CDC_PARSE_MILLIS));
+        thread::sleep(Duration::from_millis(parse_millis));
         assert!(
             self.compare_data_for_tbs(&src_tbs, &dst_tbs, &cols_list)
                 .await?
@@ -149,7 +124,7 @@ impl TestRunner {
 
         // update src data
         self.execute_src_sqls(&src_update_sqls).await?;
-        TaskUtil::sleep_millis(CDC_PARSE_MILLIS).await;
+        TaskUtil::sleep_millis(parse_millis).await;
         assert!(
             self.compare_data_for_tbs(&src_tbs, &dst_tbs, &cols_list)
                 .await?
@@ -157,7 +132,7 @@ impl TestRunner {
 
         // delete src data
         self.execute_src_sqls(&src_delete_sqls).await?;
-        TaskUtil::sleep_millis(CDC_PARSE_MILLIS).await;
+        TaskUtil::sleep_millis(parse_millis).await;
         assert!(
             self.compare_data_for_tbs(&src_tbs, &dst_tbs, &cols_list)
                 .await?
@@ -169,7 +144,7 @@ impl TestRunner {
     pub fn parse_ddl(
         src_ddl_file: &str,
     ) -> Result<(Vec<String>, Vec<String>, Vec<Vec<String>>), Error> {
-        let src_ddl_sqls = TestRunner::load_sqls(&src_ddl_file).unwrap();
+        let src_ddl_sqls = TestRunner::load_sqls(src_ddl_file).unwrap();
         let mut src_tbs = Vec::new();
         let mut cols_list = Vec::new();
         for sql in src_ddl_sqls {
@@ -397,6 +372,7 @@ impl TestRunner {
 
     async fn execute_sqls_mysql(sqls: &Vec<String>, conn_pool: &Pool<MySql>) -> Result<(), Error> {
         for sql in sqls {
+            println!("executing sql: {}", sql);
             let query = sqlx::query(sql);
             query.execute(conn_pool).await.unwrap();
         }

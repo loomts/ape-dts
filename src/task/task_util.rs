@@ -25,7 +25,7 @@ use crate::{
         mysql_sinker::MysqlSinker, parallel_sinker::ParallelSinker, pg_sinker::PgSinker,
         rdb_partitioner::RdbPartitioner, rdb_router::RdbRouter,
     },
-    traits::traits::Sinker,
+    traits::Sinker,
 };
 
 pub struct TaskUtil {}

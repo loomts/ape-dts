@@ -17,8 +17,9 @@ use crate::{
         row_data::RowData,
         row_type::RowType,
     },
+    sqlx_ext::SqlxPg,
     task::task_util::TaskUtil,
-    traits::{sqlx_ext::SqlxPg, traits::Extractor},
+    traits::Extractor,
 };
 
 use super::pg_col_value_convertor::PgColValueConvertor;
@@ -118,7 +119,7 @@ impl PgSnapshotExtractor<'_> {
             let query = if let ColValue::None = start_value {
                 sqlx::query(&sql1)
             } else {
-                sqlx::query(&sql2).bind_col_value(Some(&start_value_for_bind))
+                sqlx::query(&sql2).bind_col_value(Some(&start_value_for_bind), order_col_type)
             };
 
             let mut rows = query.fetch(&self.conn_pool);

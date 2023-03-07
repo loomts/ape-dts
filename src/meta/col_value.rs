@@ -3,12 +3,6 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use serde::{Deserialize, Serialize};
-use sqlx::{
-    postgres::types::{PgMoney, PgTimeTz},
-    types::BitVec,
-};
-
 #[derive(Debug, Clone, PartialEq)]
 #[allow(dead_code)]
 pub enum ColValue {
@@ -39,17 +33,6 @@ pub enum ColValue {
     Set2(String),
     Enum2(String),
     Json(Vec<u8>),
-
-    PgMoney(PgMoney),
-    IpNetwork(sqlx::types::ipnetwork::IpNetwork),
-    BitVec(BitVec),
-    Interval(Option<sqlx::postgres::types::PgInterval>),
-    PgTimeTz(Option<PgTimeTz>),
-    NaiveDateTime(Option<chrono::NaiveDateTime>),
-    DateTime2(Option<chrono::DateTime<chrono::Utc>>),
-    NaiveDate(Option<chrono::NaiveDate>),
-    NaiveTime(Option<chrono::NaiveTime>),
-    Uuid(Option<sqlx::types::uuid::Uuid>),
 }
 
 impl ColValue {

@@ -8,7 +8,7 @@ use crate::{
     error::Error,
     meta::row_data::RowData,
     task::task_util::TaskUtil,
-    traits::traits::{Partitioner, Sinker},
+    traits::{Partitioner, Sinker},
 };
 
 pub struct ParallelSinker<'a> {

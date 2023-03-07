@@ -14,7 +14,7 @@ use crate::{
     extractor::rdb_filter::RdbFilter,
     meta::row_data::RowData,
     sinker::{parallel_sinker::ParallelSinker, rdb_router::RdbRouter},
-    traits::traits::Extractor,
+    traits::Extractor,
 };
 
 use super::task_util::TaskUtil;

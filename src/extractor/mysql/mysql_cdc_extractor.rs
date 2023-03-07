@@ -21,7 +21,7 @@ use crate::{
         row_type::RowType,
     },
     task::task_util::TaskUtil,
-    traits::traits::Extractor,
+    traits::Extractor,
 };
 
 use super::mysql_col_value_convertor::MysqlColValueConvertor;

@@ -31,7 +31,7 @@ use crate::{
         row_type::RowType,
     },
     task::task_util::TaskUtil,
-    traits::traits::Extractor,
+    traits::Extractor,
 };
 
 use super::pg_col_value_convertor::PgColValueConvertor;
@@ -74,42 +74,28 @@ impl PgCdcExtractor<'_> {
                     let data = body.into_data();
                     match data {
                         Relation(relation) => {
-                            println!("relation: {:?}", relation);
                             self.decode_relation(&relation).await?;
                         }
 
-                        Begin(begin) => {
-                            println!("begin: {:?}", begin);
-                        }
+                        Begin(_begin) => {}
 
-                        Commit(commit) => {
-                            println!("commit: {:?}", commit);
-                        }
+                        Commit(_commit) => {}
 
-                        Origin(origin) => {
-                            println!("origin: {:?}", origin);
-                        }
+                        Origin(_origin) => {}
 
-                        Truncate(truncate) => {
-                            println!("truncate: {:?}", truncate);
-                        }
+                        Truncate(_truncate) => {}
 
-                        Type(typee) => {
-                            println!("type: {:?}", typee);
-                        }
+                        Type(_typee) => {}
 
                         Insert(insert) => {
-                            println!("insert: {:?}", insert);
                             self.decode_insert(&insert).await?;
                         }
 
                         Update(update) => {
-                            println!("update: {:?}", update);
                             self.decode_update(&update).await?;
                         }
 
                         Delete(delete) => {
-                            println!("delete: {:?}", delete);
                             self.decode_delete(&delete).await?;
                         }
 

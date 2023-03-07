@@ -20,8 +20,9 @@ use crate::{
         row_data::RowData,
         row_type::RowType,
     },
+    sqlx_ext::SqlxMysql,
     task::task_util::TaskUtil,
-    traits::{sqlx_ext::SqlxMysql, traits::Extractor},
+    traits::Extractor,
 };
 
 use super::mysql_col_value_convertor::MysqlColValueConvertor;
