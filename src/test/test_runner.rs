@@ -18,6 +18,7 @@ pub struct TestRunner {
     src_ddl_file: String,
     dst_ddl_file: String,
     src_dml_file: String,
+    dst_dml_file: String,
     task_config_file: String,
 }
 
@@ -27,6 +28,7 @@ impl TestRunner {
         let src_ddl_file = format!("{}/src_ddl.sql", test_dir);
         let dst_ddl_file = format!("{}/dst_ddl.sql", test_dir);
         let src_dml_file = format!("{}/src_dml.sql", test_dir);
+        let dst_dml_file = format!("{}/dst_dml.sql", test_dir);
         let task_config_file = format!("{}/task_config.ini", test_dir);
 
         let mut src_conn_pool_mysql = None;
@@ -62,23 +64,55 @@ impl TestRunner {
             src_ddl_file,
             dst_ddl_file,
             src_dml_file,
+            dst_dml_file,
             task_config_file,
         })
     }
 
-    pub async fn run_snapshot_test(&self) -> Result<(), Error> {
+    pub async fn run_perf_test(&self, prepare_data_batch_size: u32) -> Result<(), Error> {
+        self.prepare_test_tbs(&self.src_ddl_file, &self.dst_ddl_file)
+            .await?;
+
+        // prepare data
+        let (sqls, counts) =
+            TestRunner::load_perf_dml_sqls(&self.src_dml_file, prepare_data_batch_size)?;
+
+        for i in 0..sqls.len() {
+            for _ in 0..counts[i] {
+                let batch_sql = vec![sqls[i].clone()];
+                self.execute_src_sqls(&batch_sql).await?;
+            }
+        }
+
+        // start task
+        let task_config = self.task_config_file.clone();
+        TaskRunner::new(task_config).await.start_task(true).await?;
+        Ok(())
+    }
+
+    pub async fn run_snapshot_test(&self, enable_log4rs: bool) -> Result<(), Error> {
         let (src_tbs, dst_tbs, cols_list) = TestRunner::parse_ddl(&self.src_ddl_file).unwrap();
 
         // prepare src and dst tables
         self.prepare_test_tbs(&self.src_ddl_file, &self.dst_ddl_file)
             .await?;
 
-        // prepare src data
-        let src_dml_file_sqls = TestRunner::load_sqls(&self.src_dml_file)?;
-        self.execute_src_sqls(&src_dml_file_sqls).await?;
+        if Self::check_file_exists(&self.src_dml_file) {
+            let src_dml_file_sqls = TestRunner::load_sqls(&self.src_dml_file)?;
+            self.execute_src_sqls(&src_dml_file_sqls).await?;
+        }
+
+        if Self::check_file_exists(&self.dst_dml_file) {
+            let dst_dml_file_sqls = TestRunner::load_sqls(&self.dst_dml_file)?;
+            self.execute_dst_sqls(&dst_dml_file_sqls).await?;
+        }
 
         // start task
-        TaskRunner::start_task(self.task_config_file.clone()).await?;
+        let task_config = self.task_config_file.clone();
+        TaskRunner::new(task_config)
+            .await
+            .start_task(enable_log4rs)
+            .await?;
         assert!(
             self.compare_data_for_tbs(&src_tbs, &dst_tbs, &cols_list)
                 .await?
@@ -86,7 +120,12 @@ impl TestRunner {
         Ok(())
     }
 
-    pub async fn run_cdc_test(&self, start_millis: u64, parse_millis: u64) -> Result<(), Error> {
+    pub async fn run_cdc_test(
+        &self,
+        start_millis: u64,
+        parse_millis: u64,
+        enable_log4rs: bool,
+    ) -> Result<(), Error> {
         let (src_tbs, dst_tbs, cols_list) = Self::parse_ddl(&self.src_ddl_file).unwrap();
 
         // prepare src and dst tables
@@ -95,7 +134,8 @@ impl TestRunner {
 
         // start task
         let task_config = self.task_config_file.clone();
-        tokio::spawn(async move { TaskRunner::start_task(task_config).await });
+        let runner = TaskRunner::new(task_config).await;
+        let task = tokio::spawn(async move { runner.start_task(enable_log4rs).await.unwrap() });
         TaskUtil::sleep_millis(start_millis).await;
 
         // load dml sqls
@@ -137,6 +177,11 @@ impl TestRunner {
             self.compare_data_for_tbs(&src_tbs, &dst_tbs, &cols_list)
                 .await?
         );
+
+        task.abort();
+        while !task.is_finished() {
+            TaskUtil::sleep_millis(1).await;
+        }
 
         Ok(())
     }
@@ -212,6 +257,11 @@ impl TestRunner {
         Ok((tb, cols))
     }
 
+    fn check_file_exists(file: &str) -> bool {
+        let file_path = env::current_dir().unwrap().join(file);
+        file_path.exists()
+    }
+
     pub fn load_sqls(sql_file: &str) -> Result<Vec<String>, Error> {
         let mut content = String::new();
         let file_path = env::current_dir().unwrap().join(sql_file);
@@ -228,11 +278,38 @@ impl TestRunner {
         Ok(sqls)
     }
 
-    pub async fn prepare_test_tbs(
-        &self,
-        src_ddl_file: &str,
-        dst_ddl_file: &str,
-    ) -> Result<(), Error> {
+    pub fn load_perf_dml_sqls(
+        sql_file: &str,
+        batch_size: u32,
+    ) -> Result<(Vec<String>, Vec<u32>), Error> {
+        let lines = Self::load_sqls(sql_file)?;
+        let mut perf_sqls = Vec::new();
+        let mut counts = Vec::new();
+
+        let mut i = 0;
+        while i < lines.len() {
+            let sql = lines[i].replace("insert_sql:", "");
+            let value = lines[i + 1].replace("insert_value:", "");
+            let count = lines[i + 2]
+                .replace("insert_count:", "")
+                .trim()
+                .parse::<u32>()
+                .unwrap();
+            i += 3;
+
+            let mut values = Vec::new();
+            for _ in 0..batch_size {
+                values.push(value.clone());
+            }
+
+            let perf_sql = format!("{} VALUES {}", sql, values.join(","));
+            perf_sqls.push(perf_sql);
+            counts.push(count / batch_size);
+        }
+        Ok((perf_sqls, counts))
+    }
+
+    async fn prepare_test_tbs(&self, src_ddl_file: &str, dst_ddl_file: &str) -> Result<(), Error> {
         let src_ddl_sqls = Self::load_sqls(src_ddl_file)?;
         let dst_ddl_sqls = Self::load_sqls(dst_ddl_file)?;
         if let Some(pool) = &self.src_conn_pool_mysql {
@@ -260,7 +337,17 @@ impl TestRunner {
         Ok(())
     }
 
-    pub async fn compare_data_for_tbs(
+    async fn execute_dst_sqls(&self, sqls: &Vec<String>) -> Result<(), Error> {
+        if let Some(pool) = &self.dst_conn_pool_mysql {
+            Self::execute_sqls_mysql(sqls, pool).await?;
+        }
+        if let Some(pool) = &self.dst_conn_pool_pg {
+            Self::execute_sqls_pg(sqls, pool).await?;
+        }
+        Ok(())
+    }
+
+    async fn compare_data_for_tbs(
         &self,
         src_tbs: &Vec<String>,
         dst_tbs: &Vec<String>,
@@ -276,7 +363,7 @@ impl TestRunner {
         Ok(true)
     }
 
-    pub async fn compare_tb_data(
+    async fn compare_tb_data(
         &self,
         src_tb: &str,
         dst_tb: &str,

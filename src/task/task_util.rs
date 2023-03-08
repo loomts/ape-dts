@@ -1,4 +1,8 @@
-use std::{str::FromStr, sync::atomic::AtomicBool, time::Duration};
+use std::{
+    str::FromStr,
+    sync::{atomic::AtomicBool, Arc, Mutex},
+    time::Duration,
+};
 
 use concurrent_queue::ConcurrentQueue;
 use sqlx::{
@@ -8,6 +12,7 @@ use sqlx::{
 };
 
 use crate::{
+    config::runtime_config::RuntimeConfig,
     error::Error,
     extractor::{
         mysql::{
@@ -21,6 +26,7 @@ use crate::{
         mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
         row_data::RowData,
     },
+    metric::Metric,
     sinker::{
         mysql_sinker::MysqlSinker, parallel_sinker::ParallelSinker, pg_sinker::PgSinker,
         rdb_partitioner::RdbPartitioner, rdb_router::RdbRouter,
@@ -107,6 +113,7 @@ impl TaskUtil {
         filter: RdbFilter,
         log_level: &str,
         shut_down: &'a AtomicBool,
+        metric: Arc<Mutex<Metric>>,
     ) -> Result<PgCdcExtractor<'a>, Error> {
         let enable_sqlx_log = Self::check_enable_sqlx_log(log_level);
         let conn_pool = Self::create_pg_conn_pool(url, 2, enable_sqlx_log).await?;
@@ -120,6 +127,7 @@ impl TaskUtil {
             slot_name: slot_name.to_string(),
             start_sln: start_sln.to_string(),
             shut_down: &shut_down,
+            metric,
         })
     }
 
@@ -176,23 +184,26 @@ impl TaskUtil {
         url: &str,
         buffer: &'a ConcurrentQueue<RowData>,
         router: &RdbRouter,
-        parallel_size: usize,
-        batch_size: usize,
-        log_level: &str,
+        runtime_config: &RuntimeConfig,
         shut_down: &'a AtomicBool,
+        metric: Arc<Mutex<Metric>>,
     ) -> Result<ParallelSinker<'a>, Error> {
-        let enable_sqlx_log = Self::check_enable_sqlx_log(log_level);
-        let conn_pool =
-            Self::create_mysql_conn_pool(url, parallel_size as u32 * 2, enable_sqlx_log).await?;
+        let enable_sqlx_log = Self::check_enable_sqlx_log(&runtime_config.log_level);
+        let conn_pool = Self::create_mysql_conn_pool(
+            url,
+            runtime_config.parallel_size as u32 * 2,
+            enable_sqlx_log,
+        )
+        .await?;
 
         let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
         let mut sub_sinkers: Vec<Box<dyn Sinker + Send>> = Vec::new();
-        for _ in 0..parallel_size {
+        for _ in 0..runtime_config.parallel_size {
             let sinker = MysqlSinker {
                 conn_pool: conn_pool.clone(),
                 meta_manager: meta_manager.clone(),
                 router: router.clone(),
-                batch_size,
+                batch_size: runtime_config.batch_size,
             };
             sub_sinkers.push(Box::new(sinker));
         }
@@ -203,6 +214,7 @@ impl TaskUtil {
             partitioner: Box::new(partitioner),
             sub_sinkers,
             shut_down,
+            metric,
         })
     }
 
@@ -210,23 +222,26 @@ impl TaskUtil {
         url: &str,
         buffer: &'a ConcurrentQueue<RowData>,
         router: &RdbRouter,
-        parallel_size: usize,
-        batch_size: usize,
-        log_level: &str,
+        runtime_config: &RuntimeConfig,
         shut_down: &'a AtomicBool,
+        metric: Arc<Mutex<Metric>>,
     ) -> Result<ParallelSinker<'a>, Error> {
-        let enable_sqlx_log = Self::check_enable_sqlx_log(log_level);
-        let conn_pool =
-            Self::create_pg_conn_pool(url, parallel_size as u32 * 2, enable_sqlx_log).await?;
+        let enable_sqlx_log = Self::check_enable_sqlx_log(&runtime_config.log_level);
+        let conn_pool = Self::create_pg_conn_pool(
+            url,
+            runtime_config.parallel_size as u32 * 2,
+            enable_sqlx_log,
+        )
+        .await?;
         let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
 
         let mut sub_sinkers: Vec<Box<dyn Sinker + Send>> = Vec::new();
-        for _ in 0..parallel_size {
+        for _ in 0..runtime_config.parallel_size {
             let sinker = PgSinker {
                 conn_pool: conn_pool.clone(),
                 meta_manager: meta_manager.clone(),
                 router: router.clone(),
-                batch_size,
+                batch_size: runtime_config.batch_size,
             };
             sub_sinkers.push(Box::new(sinker));
         }
@@ -237,13 +252,13 @@ impl TaskUtil {
             partitioner: Box::new(partitioner),
             sub_sinkers,
             shut_down,
+            metric,
         })
     }
 
+    #[inline(always)]
     pub async fn sleep_millis(millis: u64) {
-        async_std::task::sleep(Duration::from_millis(millis)).await;
-        // tokio::task::yield_now().await;
-        // tokio::time::sleep(Duration::from_secs(millis)).await;
+        tokio::time::sleep(Duration::from_millis(millis)).await;
     }
 
     fn check_enable_sqlx_log(log_level: &str) -> bool {

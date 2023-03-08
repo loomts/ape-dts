@@ -50,7 +50,8 @@ impl MysqlSinker {
             let tb_meta = self.get_tb_meta(&row_data).await?;
             let rdb_util = RdbSinkerUtil::new_for_mysql(tb_meta);
 
-            let (sql, _cols, binds) = rdb_util.get_query(&row_data)?;
+            let (mut sql, _cols, binds) = rdb_util.get_query(&row_data)?;
+            sql = self.handle_dialect(&sql);
             let mut query = sqlx::query(&sql);
             for bind in binds {
                 query = query.bind_col_value(bind);
@@ -76,8 +77,9 @@ impl MysqlSinker {
                 batch_size = all_count - sinked_count;
             }
 
-            let (sql, _cols, binds) =
+            let (mut sql, _cols, binds) =
                 rdb_util.get_batch_insert_query(&data, sinked_count, batch_size)?;
+            sql = self.handle_dialect(&sql);
             let mut query = sqlx::query(&sql);
             for bind in binds {
                 query = query.bind_col_value(bind);
@@ -100,9 +102,15 @@ impl MysqlSinker {
         Ok(())
     }
 
+    #[inline(always)]
     async fn get_tb_meta(&mut self, row_data: &RowData) -> Result<MysqlTbMeta, Error> {
         let (db, tb) = self.router.get_route(&row_data.db, &row_data.tb);
         let tb_meta = self.meta_manager.get_tb_meta(&db, &tb).await?;
         return Ok(tb_meta);
+    }
+
+    #[inline(always)]
+    fn handle_dialect(&self, sql: &str) -> String {
+        sql.replace("INSERT", "REPLACE")
     }
 }

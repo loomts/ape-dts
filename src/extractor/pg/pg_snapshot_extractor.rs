@@ -205,7 +205,8 @@ impl PgSnapshotExtractor<'_> {
             before: None,
             after: Some(after),
             row_type: RowType::Insert,
-            position: "".to_string(),
+            current_position: "".to_string(),
+            checkpoint_position: "".to_string(),
         };
         let _ = self.buffer.push(row_data);
         Ok(())

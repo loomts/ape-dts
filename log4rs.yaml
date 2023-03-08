@@ -56,6 +56,23 @@ appenders:
         count: 10
         pattern: "LOG_DIR_PLACEHODLER/position{}.log"
 
+  monitor_file_appender:
+    kind: rolling_file
+    append: true
+    path: "LOG_DIR_PLACEHODLER/monitor.log"
+    encoder:
+      pattern: "{h({d(%Y-%m-%d %H:%M:%S)})} | {m}{n}"
+    policy:
+      kind: compound
+      trigger:
+        kind: size
+        limit: 100mb
+      roller:
+        kind: fixed_window
+        base: 1
+        count: 10
+        pattern: "LOG_DIR_PLACEHODLER/monitor{}.log"
+
 loggers:
   default_file_logger:
     level: LOG_LEVEL_PLACEHODLER
@@ -71,6 +88,11 @@ loggers:
     level: LOG_LEVEL_PLACEHODLER
     appenders: 
       - position_file_appender
+
+  monitor_file_logger:
+    level: LOG_LEVEL_PLACEHODLER
+    appenders: 
+      - monitor_file_appender
 
 root:
   level: LOG_LEVEL_PLACEHODLER

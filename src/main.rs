@@ -5,6 +5,8 @@ mod config;
 mod error;
 mod extractor;
 mod meta;
+mod metric;
+mod monitor;
 mod sinker;
 mod sqlx_ext;
 mod task;
@@ -19,7 +21,6 @@ async fn main() {
     }
 
     let task_config = args[1].clone();
-    TaskRunner::start_task(task_config.to_string())
-        .await
-        .unwrap()
+    let runner = TaskRunner::new(task_config).await;
+    runner.start_task(true).await.unwrap()
 }

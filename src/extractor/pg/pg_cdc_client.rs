@@ -13,7 +13,7 @@ pub struct PgCdcClient {
 }
 
 impl PgCdcClient {
-    pub async fn connect(&mut self) -> Result<LogicalReplicationStream, Error> {
+    pub async fn connect(&mut self) -> Result<(LogicalReplicationStream, String), Error> {
         let url_info = Url::parse(&self.url).unwrap();
         let host = url_info.host_str().unwrap().to_string();
         let port = format!("{}", url_info.port().unwrap());
@@ -31,14 +31,13 @@ impl PgCdcClient {
                 info!("postgres replication connection drops, error: {}", e);
             }
         });
-        let stream = self.start_replication(&client).await?;
-        Ok(stream)
+        self.start_replication(&client).await
     }
 
     async fn start_replication(
         &mut self,
         client: &Client,
-    ) -> Result<LogicalReplicationStream, Error> {
+    ) -> Result<(LogicalReplicationStream, String), Error> {
         let mut start_lsn = self.start_sln.clone();
 
         // create publication for all tables if not exists
@@ -98,14 +97,11 @@ impl PgCdcClient {
             self.slot_name, start_lsn, options
         );
 
-        // todo: remove this
-        self.start_sln = start_lsn;
-
         let copy_stream = client
             .copy_both_simple::<bytes::Bytes>(&query)
             .await
             .unwrap();
         let stream = LogicalReplicationStream::new(copy_stream);
-        Ok(stream)
+        Ok((stream, start_lsn))
     }
 }

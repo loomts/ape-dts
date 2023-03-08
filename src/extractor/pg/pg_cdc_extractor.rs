@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    sync::atomic::AtomicBool,
+    sync::{atomic::AtomicBool, Arc, Mutex},
     time::{Duration, UNIX_EPOCH},
 };
 
@@ -20,6 +20,7 @@ use postgres_protocol::message::backend::{
 };
 
 use postgres_types::PgLsn;
+use tokio::time::Instant;
 
 use crate::{
     error::Error,
@@ -30,6 +31,7 @@ use crate::{
         row_data::RowData,
         row_type::RowType,
     },
+    metric::Metric,
     task::task_util::TaskUtil,
     traits::Extractor,
 };
@@ -44,6 +46,7 @@ pub struct PgCdcExtractor<'a> {
     pub slot_name: String,
     pub start_sln: String,
     pub shut_down: &'a AtomicBool,
+    pub metric: Arc<Mutex<Metric>>,
 }
 
 #[async_trait]
@@ -64,10 +67,11 @@ impl PgCdcExtractor<'_> {
             slot_name: self.slot_name.clone(),
             start_sln: self.start_sln.clone(),
         };
-        let stream = cdc_client.connect().await?;
+        let (stream, actual_start_lsn) = cdc_client.connect().await?;
         tokio::pin!(stream);
 
         // refer: https://www.postgresql.org/docs/10/protocol-replication.html to get WAL data details
+        let mut commited_lsn = actual_start_lsn.clone();
         loop {
             match stream.next().await {
                 Some(Ok(XLogData(body))) => {
@@ -77,9 +81,12 @@ impl PgCdcExtractor<'_> {
                             self.decode_relation(&relation).await?;
                         }
 
+                        // do not push Begin and Commit into buffer to accelerate sinking
                         Begin(_begin) => {}
 
-                        Commit(_commit) => {}
+                        Commit(commit) => {
+                            commited_lsn = PgLsn::from(commit.commit_lsn()).to_string();
+                        }
 
                         Origin(_origin) => {}
 
@@ -88,15 +95,15 @@ impl PgCdcExtractor<'_> {
                         Type(_typee) => {}
 
                         Insert(insert) => {
-                            self.decode_insert(&insert).await?;
+                            self.decode_insert(&insert, &commited_lsn).await?;
                         }
 
                         Update(update) => {
-                            self.decode_update(&update).await?;
+                            self.decode_update(&update, &commited_lsn).await?;
                         }
 
                         Delete(delete) => {
-                            self.decode_delete(&delete).await?;
+                            self.decode_delete(&delete, &commited_lsn).await?;
                         }
 
                         _ => {
@@ -108,8 +115,15 @@ impl PgCdcExtractor<'_> {
                 Some(Ok(PrimaryKeepAlive(data))) => {
                     // Send a standby status update and require a keep alive response
                     if data.reply() == 1 {
-                        // TODO, response with sinked sln
-                        let lsn: PgLsn = "0/2C280E70".parse().unwrap();
+                        let start = Instant::now();
+
+                        let position = self.metric.lock().unwrap().position.clone();
+                        let lsn = if position.is_empty() {
+                            actual_start_lsn.as_str().parse().unwrap()
+                        } else {
+                            position.as_str().parse().unwrap()
+                        };
+
                         // Postgres epoch is 2000-01-01T00:00:00Z
                         let pg_epoch = UNIX_EPOCH + Duration::from_secs(946_684_800);
                         let ts = pg_epoch.elapsed().unwrap().as_micros() as i64;
@@ -118,6 +132,10 @@ impl PgCdcExtractor<'_> {
                             .standby_status_update(lsn, lsn, lsn, ts, 1)
                             .await
                             .unwrap();
+
+                        // TODO, move this to metrics
+                        let elapsed = start.elapsed();
+                        println!("-------------: {} ms", elapsed.as_micros());
                     }
                 }
 
@@ -164,7 +182,7 @@ impl PgCdcExtractor<'_> {
         Ok(())
     }
 
-    async fn decode_insert(&mut self, event: &InsertBody) -> Result<(), Error> {
+    async fn decode_insert(&mut self, event: &InsertBody, commited_sln: &str) -> Result<(), Error> {
         let tb_meta = self
             .meta_manager
             .get_tb_meta_by_oid(event.rel_id() as i32)?;
@@ -176,12 +194,13 @@ impl PgCdcExtractor<'_> {
             row_type: RowType::Insert,
             before: Option::None,
             after: Some(col_values),
-            position: "".to_string(),
+            current_position: "".to_string(),
+            checkpoint_position: commited_sln.to_string(),
         };
         self.push_row_to_buf(row_data).await
     }
 
-    async fn decode_update(&mut self, event: &UpdateBody) -> Result<(), Error> {
+    async fn decode_update(&mut self, event: &UpdateBody, commited_sln: &str) -> Result<(), Error> {
         let tb_meta = self
             .meta_manager
             .get_tb_meta_by_oid(event.rel_id() as i32)?;
@@ -208,12 +227,13 @@ impl PgCdcExtractor<'_> {
             row_type: RowType::Update,
             before: Some(col_values_before),
             after: Some(col_values_after),
-            position: "".to_string(),
+            current_position: "".to_string(),
+            checkpoint_position: commited_sln.to_string(),
         };
         self.push_row_to_buf(row_data).await
     }
 
-    async fn decode_delete(&mut self, event: &DeleteBody) -> Result<(), Error> {
+    async fn decode_delete(&mut self, event: &DeleteBody, commited_sln: &str) -> Result<(), Error> {
         let tb_meta = self
             .meta_manager
             .get_tb_meta_by_oid(event.rel_id() as i32)?;
@@ -232,7 +252,8 @@ impl PgCdcExtractor<'_> {
             row_type: RowType::Delete,
             before: Some(col_values),
             after: None,
-            position: "".to_string(),
+            current_position: "".to_string(),
+            checkpoint_position: commited_sln.to_string(),
         };
         self.push_row_to_buf(row_data).await
     }

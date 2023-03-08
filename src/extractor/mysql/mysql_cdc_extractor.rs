@@ -65,6 +65,11 @@ impl MysqlCdcExtractor<'_> {
 
         let mut table_map_event_map = HashMap::new();
         let mut binlog_filename = self.binlog_filename.clone();
+        // get the actual starting binlog position from client,
+        // since we may pass an empty binlog position in which case client will start from the latest position
+        let mut last_xid_position = client.binlog_position;
+        // no timestamp provided when starting client
+        let mut last_xid_timestamp = 0;
         loop {
             let (header, data) = stream.read().await?;
             match data {
@@ -73,8 +78,16 @@ impl MysqlCdcExtractor<'_> {
                 }
 
                 _ => {
-                    self.parse_events(header, data, &binlog_filename, &mut table_map_event_map)
-                        .await?
+                    (last_xid_position, last_xid_timestamp) = self
+                        .parse_events(
+                            header,
+                            data,
+                            &binlog_filename,
+                            last_xid_position,
+                            last_xid_timestamp,
+                            &mut table_map_event_map,
+                        )
+                        .await?;
                 }
             }
         }
@@ -86,12 +99,20 @@ impl MysqlCdcExtractor<'_> {
         header: EventHeader,
         data: EventData,
         binlog_filename: &str,
+        last_xid_position: u32,
+        last_xid_timestamp: u32,
         table_map_event_map: &mut HashMap<u64, TableMapEvent>,
-    ) -> Result<(), Error> {
-        let position = format!(
+    ) -> Result<(u32, u32), Error> {
+        let current_position = format!(
             "binlog_filename:{},next_event_position:{},timestamp:{}",
             binlog_filename, header.next_event_position, header.timestamp
         );
+        let checkpoint_position = format!(
+            "binlog_filename:{},last_xid_position:{},timestamp:{}",
+            binlog_filename, last_xid_position, last_xid_timestamp
+        );
+        let mut last_xid_position = last_xid_position;
+        let mut last_xid_timestamp = last_xid_timestamp;
 
         match data {
             EventData::TableMap(d) => {
@@ -100,7 +121,15 @@ impl MysqlCdcExtractor<'_> {
 
             EventData::TransactionPayload(event) => {
                 for event in event.uncompressed_events {
-                    self.parse_events(event.0, event.1, binlog_filename, table_map_event_map)
+                    (last_xid_position, last_xid_timestamp) = self
+                        .parse_events(
+                            event.0,
+                            event.1,
+                            binlog_filename,
+                            last_xid_position,
+                            last_xid_timestamp,
+                            table_map_event_map,
+                        )
                         .await?;
                 }
             }
@@ -117,7 +146,8 @@ impl MysqlCdcExtractor<'_> {
                         row_type: RowType::Insert,
                         before: Option::None,
                         after: Some(col_values),
-                        position: position.clone(),
+                        current_position: current_position.clone(),
+                        checkpoint_position: checkpoint_position.clone(),
                     };
                     let _ = self.push_row_to_buf(row_data).await?;
                 }
@@ -138,7 +168,8 @@ impl MysqlCdcExtractor<'_> {
                         row_type: RowType::Update,
                         before: Some(col_values_before),
                         after: Some(col_values_after),
-                        position: position.clone(),
+                        current_position: current_position.clone(),
+                        checkpoint_position: checkpoint_position.clone(),
                     };
                     let _ = self.push_row_to_buf(row_data).await?;
                 }
@@ -156,16 +187,22 @@ impl MysqlCdcExtractor<'_> {
                         row_type: RowType::Delete,
                         before: Some(col_values),
                         after: Option::None,
-                        position: position.clone(),
+                        current_position: current_position.clone(),
+                        checkpoint_position: checkpoint_position.clone(),
                     };
                     let _ = self.push_row_to_buf(row_data).await?;
                 }
             }
 
+            EventData::Xid(_xid) => {
+                last_xid_position = header.next_event_position;
+                last_xid_timestamp = header.timestamp;
+            }
+
             _ => {}
         }
 
-        Ok(())
+        Ok((last_xid_position, last_xid_timestamp))
     }
 
     async fn push_row_to_buf(&mut self, row_data: RowData) -> Result<(), Error> {

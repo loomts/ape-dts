@@ -6,12 +6,13 @@ mod test {
 
     #[test]
     #[serial]
-    fn cdc_basic_test() {
+    fn snapshot_perf_test() {
         let rt = Runtime::new().unwrap();
         let runner = rt
-            .block_on(TestRunner::new("src/test/pg_to_pg/cdc_basic_test"))
+            .block_on(TestRunner::new(
+                "src/test/mysql_to_mysql/snapshot_perf_test",
+            ))
             .unwrap();
-        rt.block_on(runner.run_cdc_test(5000, 10000, false))
-            .unwrap();
+        rt.block_on(runner.run_perf_test(200)).unwrap();
     }
 }

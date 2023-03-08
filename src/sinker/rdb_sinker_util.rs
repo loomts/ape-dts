@@ -69,7 +69,7 @@ impl RdbSinkerUtil {
         }
 
         let sql = format!(
-            "REPLACE INTO {}.{}({}) VALUES{}",
+            "INSERT INTO {}.{}({}) VALUES{}",
             self.schema,
             self.tb,
             self.cols.join(","),
@@ -108,7 +108,7 @@ impl RdbSinkerUtil {
         Ok(())
     }
 
-    fn get_insert_query<'a>(
+    pub fn get_insert_query<'a>(
         &self,
         row_data: &'a RowData,
     ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
@@ -118,7 +118,7 @@ impl RdbSinkerUtil {
         }
 
         let sql = format!(
-            "REPLACE INTO {}.{}({}) VALUES({})",
+            "INSERT INTO {}.{}({}) VALUES({})",
             self.schema,
             self.tb,
             self.cols.join(","),

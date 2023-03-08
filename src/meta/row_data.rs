@@ -9,7 +9,10 @@ pub struct RowData {
     pub row_type: RowType,
     pub before: Option<HashMap<String, ColValue>>,
     pub after: Option<HashMap<String, ColValue>>,
-    pub position: String,
+    pub current_position: String,
+    // for mysql, this is the binlog position of the last commited transaction
+    // for postgres, this is the sln of the last commited commited transaction
+    pub checkpoint_position: String,
 }
 
 impl RowData {

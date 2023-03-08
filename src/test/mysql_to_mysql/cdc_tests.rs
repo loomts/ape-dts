@@ -11,7 +11,7 @@ mod test {
         let runner = rt
             .block_on(TestRunner::new("src/test/mysql_to_mysql/cdc_basic_test"))
             .unwrap();
-        rt.block_on(runner.run_cdc_test(3000, 1000)).unwrap();
+        rt.block_on(runner.run_cdc_test(3000, 1000, false)).unwrap();
     }
 
     #[test]
@@ -23,6 +23,6 @@ mod test {
                 "src/test/mysql_to_mysql/cdc_uk_changed_test",
             ))
             .unwrap();
-        rt.block_on(runner.run_cdc_test(3000, 1000)).unwrap();
+        rt.block_on(runner.run_cdc_test(3000, 1000, false)).unwrap();
     }
 }
