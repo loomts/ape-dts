@@ -4,7 +4,7 @@
 - source
 ```
 docker run --name some-postgres-1 \
--p 5432:5432 \
+-p 5433:5432 \
 -e POSTGRES_PASSWORD=postgres \
 -d postgis/postgis:latest 
 
@@ -15,7 +15,7 @@ run `ALTER SYSTEM SET wal_level = logical;` and restart
 - target
 ```
 docker run --name some-postgres-2 \
--p 5433:5432 \
+-p 5434:5432 \
 -e POSTGRES_PASSWORD=postgres \
 -d postgis/postgis:latest
 ```

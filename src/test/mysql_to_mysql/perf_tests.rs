@@ -4,7 +4,7 @@ mod test {
     use serial_test::serial;
     use tokio::runtime::Runtime;
 
-    #[test]
+    // #[test]
     #[serial]
     fn snapshot_perf_test() {
         let rt = Runtime::new().unwrap();

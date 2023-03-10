@@ -1,13 +1,9 @@
-use std::{
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
-    },
-    time::Instant,
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
 };
 
 use concurrent_queue::ConcurrentQueue;
-use futures::future::join_all;
 use log::info;
 
 use crate::{
@@ -22,7 +18,7 @@ use crate::{
 pub struct ParallelSinker<'a> {
     pub buffer: &'a ConcurrentQueue<RowData>,
     pub partitioner: Box<dyn Partitioner + Send>,
-    pub sub_sinkers: Vec<Box<dyn Sinker + Send>>,
+    pub sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
     pub shut_down: &'a AtomicBool,
     pub metric: Arc<Mutex<Metric>>,
 }
@@ -34,7 +30,7 @@ const CHECKPOINT_INTERVAL_SECS: u64 = 60;
 impl ParallelSinker<'_> {
     pub async fn close(&mut self) -> Result<(), Error> {
         for sinker in self.sub_sinkers.iter_mut() {
-            sinker.close().await.unwrap();
+            sinker.lock().await.close().await.unwrap();
         }
         Ok(())
     }
@@ -69,16 +65,18 @@ impl ParallelSinker<'_> {
                 .partition(all_data, partition_count)
                 .await?;
 
-            // start sub sinkers
             let mut futures = Vec::new();
-            for sinker in self.sub_sinkers.iter_mut() {
-                futures.push(sinker.sink(sub_datas.remove(0)));
+            for i in 0..partition_count {
+                let data = sub_datas.remove(0);
+                let sinker = self.sub_sinkers[i].clone();
+                futures.push(tokio::spawn(async move {
+                    sinker.lock().await.sink(data).await.unwrap();
+                }));
             }
 
-            // wait for sub sinkers to finish and unwrap errors if happen
-            let result = join_all(futures).await;
-            for res in result {
-                res.unwrap();
+            // wait for sub sinkers to finish and unwrap errors
+            for future in futures {
+                future.await.unwrap();
             }
 
             self.record_position(&last_row_data);

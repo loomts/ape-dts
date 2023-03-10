@@ -141,7 +141,7 @@ impl TaskUtil {
     ) -> Result<MysqlSnapshotExtractor<'a>, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         // max_connections: 1 for extracting data from table, 1 for db-meta-manager
-        let conn_pool = TaskUtil::create_mysql_conn_pool(url, 20, enable_sqlx_log).await?;
+        let conn_pool = TaskUtil::create_mysql_conn_pool(url, 2, enable_sqlx_log).await?;
         let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
 
         let (db, tb) = Self::parse_do_tb(do_tb)?;
@@ -197,7 +197,7 @@ impl TaskUtil {
         .await?;
 
         let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
-        let mut sub_sinkers: Vec<Box<dyn Sinker + Send>> = Vec::new();
+        let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
         for _ in 0..runtime_config.parallel_size {
             let sinker = MysqlSinker {
                 conn_pool: conn_pool.clone(),
@@ -205,7 +205,7 @@ impl TaskUtil {
                 router: router.clone(),
                 batch_size: runtime_config.batch_size,
             };
-            sub_sinkers.push(Box::new(sinker));
+            sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
         }
 
         let partitioner = RdbPartitioner::new_for_mysql(meta_manager);
@@ -235,7 +235,7 @@ impl TaskUtil {
         .await?;
         let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
 
-        let mut sub_sinkers: Vec<Box<dyn Sinker + Send>> = Vec::new();
+        let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
         for _ in 0..runtime_config.parallel_size {
             let sinker = PgSinker {
                 conn_pool: conn_pool.clone(),
@@ -243,10 +243,10 @@ impl TaskUtil {
                 router: router.clone(),
                 batch_size: runtime_config.batch_size,
             };
-            sub_sinkers.push(Box::new(sinker));
+            sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
         }
 
-        let partitioner = RdbPartitioner::new_for_pg(meta_manager);
+        let partitioner = RdbPartitioner::new_for_pg(meta_manager.clone());
         Ok(ParallelSinker {
             buffer,
             partitioner: Box::new(partitioner),
@@ -261,6 +261,7 @@ impl TaskUtil {
         tokio::time::sleep(Duration::from_millis(millis)).await;
     }
 
+    #[inline(always)]
     fn check_enable_sqlx_log(log_level: &str) -> bool {
         log_level == "debug" || log_level == "trace"
     }

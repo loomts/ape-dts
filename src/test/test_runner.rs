@@ -133,9 +133,9 @@ impl TestRunner {
             .await?;
 
         // start task
-        let task_config = self.task_config_file.clone();
-        let runner = TaskRunner::new(task_config).await;
-        let task = tokio::spawn(async move { runner.start_task(enable_log4rs).await.unwrap() });
+        let task_runner = TaskRunner::new(self.task_config_file.clone()).await;
+        let task =
+            tokio::spawn(async move { task_runner.start_task(enable_log4rs).await.unwrap() });
         TaskUtil::sleep_millis(start_millis).await;
 
         // load dml sqls

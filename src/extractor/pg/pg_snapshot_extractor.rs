@@ -101,7 +101,7 @@ impl PgSnapshotExtractor<'_> {
     async fn extract_by_slices(
         &mut self,
         tb_meta: &PgTbMeta,
-        order_col_name: &str,
+        order_col: &str,
         order_col_type: &PgColType,
         init_start_value: ColValue,
     ) -> Result<(), Error> {
@@ -127,7 +127,7 @@ impl PgSnapshotExtractor<'_> {
             while let Some(row) = rows.try_next().await.unwrap() {
                 self.push_row_to_buffer(&row, tb_meta).await.unwrap();
                 start_value =
-                    PgColValueConvertor::from_query(&row, order_col_name, order_col_type).unwrap();
+                    PgColValueConvertor::from_query(&row, order_col, order_col_type).unwrap();
                 slice_count += 1;
                 all_count += 1;
             }

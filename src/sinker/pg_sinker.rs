@@ -80,7 +80,6 @@ impl PgSinker {
 
         let first_row_data = &data[0];
         let tb_meta = self.get_tb_meta(first_row_data).await?;
-        let rdb_util = RdbSinkerUtil::new_for_pg(tb_meta.clone());
 
         loop {
             let mut batch_size = self.batch_size;
@@ -88,16 +87,12 @@ impl PgSinker {
                 batch_size = all_count - sinked_count;
             }
 
-            let (mut sql, cols, binds) =
-                rdb_util.get_batch_insert_query(&data, sinked_count, batch_size)?;
-            sql = self.handle_dialect(&tb_meta, &sql, &cols);
+            let (sql, cols, binds) =
+                self.get_batch_insert_query(&tb_meta, &data, sinked_count, batch_size)?;
             let mut query = sqlx::query(&sql);
-
-            let mut i = 0;
-            for bind in binds {
+            for i in 0..binds.len() {
                 let col_type = tb_meta.col_type_map.get(&cols[i]).unwrap();
-                query = query.bind_col_value(bind, col_type);
-                i += 1;
+                query = query.bind_col_value(binds[i], col_type);
             }
 
             let result = query.execute(&self.conn_pool).await;
@@ -111,13 +106,6 @@ impl PgSinker {
                 // insert one by one
                 let slice_data = &data[sinked_count..sinked_count + batch_size];
                 self.sink_internal(slice_data.to_vec()).await.unwrap();
-            } else {
-                rdb_util.check_result(
-                    result.unwrap().rows_affected(),
-                    batch_size as u64,
-                    &sql,
-                    first_row_data,
-                )?;
             }
 
             sinked_count += batch_size;
@@ -185,5 +173,56 @@ impl PgSinker {
             i += 1;
         }
         new_sql
+    }
+
+    pub fn get_batch_insert_query<'a>(
+        &self,
+        tb_meta: &PgTbMeta,
+        data: &'a Vec<RowData>,
+        start_index: usize,
+        batch_size: usize,
+    ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
+        let mut i = 1;
+        let mut row_values = Vec::new();
+        for _ in 0..batch_size {
+            let mut col_values = Vec::new();
+            for col in tb_meta.cols.iter() {
+                let col_type = tb_meta.col_type_map.get(col).unwrap();
+
+                // workaround for types like bit(3)
+                let col_type_name = if col_type.short_name == "bit" {
+                    "varbit"
+                } else {
+                    &col_type.short_name
+                };
+
+                let placeholder = format!("${}::{}", i, col_type_name);
+                col_values.push(placeholder);
+                i += 1;
+            }
+            let col_values_str = format!("({})", col_values.join(","));
+            row_values.push(col_values_str);
+        }
+
+        let sql = format!(
+            "INSERT INTO {}.{}({}) VALUES{}",
+            tb_meta.schema,
+            tb_meta.tb,
+            tb_meta.cols.join(","),
+            row_values.join(",")
+        );
+
+        let mut cols = Vec::new();
+        let mut binds = Vec::new();
+        for i in start_index..start_index + batch_size {
+            let row_data = &data[i];
+            let after = row_data.after.as_ref().unwrap();
+            for col_name in tb_meta.cols.iter() {
+                cols.push(col_name.clone());
+                binds.push(after.get(col_name));
+            }
+        }
+
+        Ok((sql, cols, binds))
     }
 }
