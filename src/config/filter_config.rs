@@ -1,12 +1,9 @@
-use serde::{Deserialize, Serialize};
-
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
-pub struct FilterConfig {
-    pub do_dbs: String,
-    pub ignore_dbs: String,
-    pub do_tbs: String,
-    pub ignore_tbs: String,
-    pub do_events: String,
+pub enum FilterConfig {
+    Rdb {
+        do_dbs: String,
+        ignore_dbs: String,
+        do_tbs: String,
+        ignore_tbs: String,
+        do_events: String,
+    },
 }
-
-impl FilterConfig {}

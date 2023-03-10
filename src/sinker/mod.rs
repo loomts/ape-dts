@@ -1,6 +1,6 @@
 pub mod mysql_sinker;
 pub mod parallel_sinker;
-pub mod router;
-pub mod slicer;
-pub mod sql_util;
-pub mod traits;
+pub mod pg_sinker;
+pub mod rdb_partitioner;
+pub mod rdb_router;
+pub mod rdb_sinker_util;
