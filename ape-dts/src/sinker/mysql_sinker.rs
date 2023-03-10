@@ -48,7 +48,7 @@ impl MysqlSinker {
     async fn sink_internal(&mut self, data: Vec<RowData>) -> Result<(), Error> {
         for row_data in data.iter() {
             let tb_meta = self.get_tb_meta(&row_data).await?;
-            let rdb_util = RdbSinkerUtil::new_for_mysql(tb_meta);
+            let rdb_util = RdbSinkerUtil::new_for_mysql(&tb_meta);
 
             let (mut sql, _cols, binds) = rdb_util.get_query(&row_data)?;
             sql = self.handle_dialect(&sql);
@@ -69,7 +69,7 @@ impl MysqlSinker {
 
         let first_row_data = &data[0];
         let tb_meta = self.get_tb_meta(first_row_data).await?;
-        let rdb_util = RdbSinkerUtil::new_for_mysql(tb_meta);
+        let rdb_util = RdbSinkerUtil::new_for_mysql(&tb_meta);
 
         loop {
             let mut batch_size = self.batch_size;

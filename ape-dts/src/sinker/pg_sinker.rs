@@ -51,21 +51,18 @@ impl PgSinker {
     async fn sink_internal(&mut self, data: Vec<RowData>) -> Result<(), Error> {
         for row_data in data.iter() {
             let tb_meta = self.get_tb_meta(&row_data).await?;
-            let rdb_util = RdbSinkerUtil::new_for_pg(tb_meta.clone());
+            let rdb_util = RdbSinkerUtil::new_for_pg(&tb_meta);
 
-            let (mut sql, cols, binds) = if row_data.row_type == RowType::Insert {
+            let (sql, cols, binds) = if row_data.row_type == RowType::Insert {
                 self.get_insert_query(&rdb_util, &tb_meta, row_data)?
             } else {
                 rdb_util.get_query(&row_data)?
             };
-            sql = self.handle_dialect(&tb_meta, &sql, &cols);
-            let mut query = sqlx::query(&sql);
 
-            let mut i = 0;
-            for bind in binds {
+            let mut query = sqlx::query(&sql);
+            for i in 0..binds.len() {
                 let col_type = tb_meta.col_type_map.get(&cols[i]).unwrap();
-                query = query.bind_col_value(bind, col_type);
-                i += 1;
+                query = query.bind_col_value(binds[i], col_type);
             }
 
             let result = query.execute(&self.conn_pool).await.unwrap();
@@ -80,6 +77,7 @@ impl PgSinker {
 
         let first_row_data = &data[0];
         let tb_meta = self.get_tb_meta(first_row_data).await?;
+        let rdb_util = RdbSinkerUtil::new_for_pg(&tb_meta);
 
         loop {
             let mut batch_size = self.batch_size;
@@ -88,7 +86,7 @@ impl PgSinker {
             }
 
             let (sql, cols, binds) =
-                self.get_batch_insert_query(&tb_meta, &data, sinked_count, batch_size)?;
+                rdb_util.get_batch_insert_query(&data, sinked_count, batch_size)?;
             let mut query = sqlx::query(&sql);
             for i in 0..binds.len() {
                 let col_type = tb_meta.col_type_map.get(&cols[i]).unwrap();
@@ -117,13 +115,6 @@ impl PgSinker {
         Ok(())
     }
 
-    #[inline(always)]
-    async fn get_tb_meta(&mut self, row_data: &RowData) -> Result<PgTbMeta, Error> {
-        let (db, tb) = self.router.get_route(&row_data.db, &row_data.tb);
-        let tb_meta = self.meta_manager.get_tb_meta(&db, &tb).await?;
-        return Ok(tb_meta);
-    }
-
     fn get_insert_query<'a>(
         &self,
         rdb_util: &RdbSinkerUtil,
@@ -132,15 +123,22 @@ impl PgSinker {
     ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
         let (mut sql, mut cols, mut binds) = rdb_util.get_insert_query(row_data)?;
 
+        let mut placeholder_index = cols.len() + 1;
         let after = row_data.after.as_ref().unwrap();
         let mut set_pairs = Vec::new();
         for col in &tb_meta.cols {
             if tb_meta.where_cols.contains(col) {
                 continue;
             }
-            set_pairs.push(format!("{}=?", col));
+            let set_pair = format!(
+                "{}={}",
+                col,
+                rdb_util.get_placeholder(placeholder_index, col)
+            );
+            set_pairs.push(set_pair);
             cols.push(col.clone());
             binds.push(after.get(col));
+            placeholder_index += 1;
         }
 
         sql = format!(
@@ -153,76 +151,9 @@ impl PgSinker {
     }
 
     #[inline(always)]
-    fn handle_dialect(&self, tb_meta: &PgTbMeta, sql: &str, cols: &Vec<String>) -> String {
-        // INSERT INTO tb_1(col_1, col_2) VALUES ('{"bar": "baz"}'::json, 'a'), ('{"bar": "baz"}'::json, 'b');
-        let mut i = 1;
-        let mut new_sql = sql.to_string();
-        while new_sql.contains("?") {
-            let col_index = (i - 1) % cols.len();
-            let col_type = tb_meta.col_type_map.get(&cols[col_index]).unwrap();
-
-            // workaround for types like bit(3)
-            let col_type_name = if col_type.short_name == "bit" {
-                "varbit"
-            } else {
-                &col_type.short_name
-            };
-
-            let placeholder = format!("${}::{}", i.to_string(), col_type_name);
-            new_sql = new_sql.replacen("?", &placeholder, 1);
-            i += 1;
-        }
-        new_sql
-    }
-
-    pub fn get_batch_insert_query<'a>(
-        &self,
-        tb_meta: &PgTbMeta,
-        data: &'a Vec<RowData>,
-        start_index: usize,
-        batch_size: usize,
-    ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
-        let mut i = 1;
-        let mut row_values = Vec::new();
-        for _ in 0..batch_size {
-            let mut col_values = Vec::new();
-            for col in tb_meta.cols.iter() {
-                let col_type = tb_meta.col_type_map.get(col).unwrap();
-
-                // workaround for types like bit(3)
-                let col_type_name = if col_type.short_name == "bit" {
-                    "varbit"
-                } else {
-                    &col_type.short_name
-                };
-
-                let placeholder = format!("${}::{}", i, col_type_name);
-                col_values.push(placeholder);
-                i += 1;
-            }
-            let col_values_str = format!("({})", col_values.join(","));
-            row_values.push(col_values_str);
-        }
-
-        let sql = format!(
-            "INSERT INTO {}.{}({}) VALUES{}",
-            tb_meta.schema,
-            tb_meta.tb,
-            tb_meta.cols.join(","),
-            row_values.join(",")
-        );
-
-        let mut cols = Vec::new();
-        let mut binds = Vec::new();
-        for i in start_index..start_index + batch_size {
-            let row_data = &data[i];
-            let after = row_data.after.as_ref().unwrap();
-            for col_name in tb_meta.cols.iter() {
-                cols.push(col_name.clone());
-                binds.push(after.get(col_name));
-            }
-        }
-
-        Ok((sql, cols, binds))
+    async fn get_tb_meta(&mut self, row_data: &RowData) -> Result<PgTbMeta, Error> {
+        let (db, tb) = self.router.get_route(&row_data.db, &row_data.tb);
+        let tb_meta = self.meta_manager.get_tb_meta(&db, &tb).await?;
+        return Ok(tb_meta);
     }
 }

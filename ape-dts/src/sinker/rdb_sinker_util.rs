@@ -10,32 +10,37 @@ use crate::{
     },
 };
 
-pub struct RdbSinkerUtil {
-    schema: String,
-    tb: String,
-    cols: Vec<String>,
-    where_cols: Vec<String>,
-    key_map: HashMap<String, Vec<String>>,
+pub struct RdbSinkerUtil<'a> {
+    schema: &'a str,
+    tb: &'a str,
+    cols: &'a Vec<String>,
+    where_cols: &'a Vec<String>,
+    key_map: &'a HashMap<String, Vec<String>>,
+    pg_tb_meta: Option<&'a PgTbMeta>,
 }
 
-impl RdbSinkerUtil {
-    pub fn new_for_mysql(tb_meta: MysqlTbMeta) -> RdbSinkerUtil {
+impl RdbSinkerUtil<'_> {
+    #[inline(always)]
+    pub fn new_for_mysql<'a>(tb_meta: &'a MysqlTbMeta) -> RdbSinkerUtil {
         RdbSinkerUtil {
-            schema: tb_meta.db,
-            tb: tb_meta.tb,
-            cols: tb_meta.cols,
-            where_cols: tb_meta.where_cols,
-            key_map: tb_meta.key_map,
+            schema: &tb_meta.db,
+            tb: &tb_meta.tb,
+            cols: &tb_meta.cols,
+            where_cols: &tb_meta.where_cols,
+            key_map: &tb_meta.key_map,
+            pg_tb_meta: Option::None,
         }
     }
 
-    pub fn new_for_pg(tb_meta: PgTbMeta) -> RdbSinkerUtil {
+    #[inline(always)]
+    pub fn new_for_pg<'a>(tb_meta: &'a PgTbMeta) -> RdbSinkerUtil {
         RdbSinkerUtil {
-            schema: tb_meta.schema,
-            tb: tb_meta.tb,
-            cols: tb_meta.cols,
-            where_cols: tb_meta.where_cols,
-            key_map: tb_meta.key_map,
+            schema: &tb_meta.schema,
+            tb: &tb_meta.tb,
+            cols: &tb_meta.cols,
+            where_cols: &tb_meta.where_cols,
+            key_map: &tb_meta.key_map,
+            pg_tb_meta: Some(&tb_meta),
         }
     }
 
@@ -57,15 +62,15 @@ impl RdbSinkerUtil {
         start_index: usize,
         batch_size: usize,
     ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
-        let mut col_values = Vec::new();
-        for _ in self.cols.iter() {
-            col_values.push("?");
-        }
-        let col_values_str = format!("({})", col_values.join(","));
-
+        let mut placeholder_index = 1;
         let mut row_values = Vec::new();
         for _ in 0..batch_size {
-            row_values.push(col_values_str.as_str());
+            let mut col_values = Vec::new();
+            for col in self.cols.iter() {
+                col_values.push(self.get_placeholder(placeholder_index, col));
+                placeholder_index += 1;
+            }
+            row_values.push(format!("({})", col_values.join(",")));
         }
 
         let sql = format!(
@@ -89,32 +94,13 @@ impl RdbSinkerUtil {
         Ok((sql, cols, binds))
     }
 
-    pub fn check_result(
-        &self,
-        actual_rows_affected: u64,
-        expect_rows_affected: u64,
-        sql: &str,
-        row_data: &RowData,
-    ) -> Result<(), Error> {
-        if actual_rows_affected != expect_rows_affected {
-            info!(
-                "sql: {}\nrows_affected: {},rows_affected_expected: {}\n{}",
-                sql,
-                actual_rows_affected,
-                expect_rows_affected,
-                row_data.to_string(&self.cols)
-            );
-        }
-        Ok(())
-    }
-
     pub fn get_insert_query<'a>(
         &self,
         row_data: &'a RowData,
     ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
         let mut col_values = Vec::new();
-        for _ in self.cols.iter() {
-            col_values.push("?");
+        for i in 0..self.cols.len() {
+            col_values.push(self.get_placeholder(i + 1, &self.cols[i]));
         }
 
         let sql = format!(
@@ -140,7 +126,7 @@ impl RdbSinkerUtil {
         row_data: &'a RowData,
     ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
         let before = row_data.before.as_ref().unwrap();
-        let (where_sql, not_null_cols) = self.get_where_info(&before)?;
+        let (where_sql, not_null_cols) = self.get_where_info(1, &before)?;
         let mut sql = format!(
             "DELETE FROM {}.{} WHERE {}",
             self.schema, self.tb, where_sql
@@ -165,14 +151,20 @@ impl RdbSinkerUtil {
         let before = row_data.before.as_ref().unwrap();
         let after = row_data.after.as_ref().unwrap();
 
+        let mut placeholder_index = 1;
         let mut set_cols = Vec::new();
         let mut set_pairs = Vec::new();
-        for (col_name, _) in after.iter() {
-            set_cols.push(col_name.clone());
-            set_pairs.push(format!("{}=?", col_name));
+        for (col, _) in after.iter() {
+            set_cols.push(col.clone());
+            set_pairs.push(format!(
+                "{}={}",
+                col,
+                self.get_placeholder(placeholder_index, col)
+            ));
+            placeholder_index += 1;
         }
 
-        let (where_sql, not_null_cols) = self.get_where_info(&before)?;
+        let (where_sql, not_null_cols) = self.get_where_info(placeholder_index, &before)?;
         let mut sql = format!(
             "UPDATE {}.{} SET {} WHERE {}",
             self.schema,
@@ -198,28 +190,72 @@ impl RdbSinkerUtil {
 
     fn get_where_info(
         &self,
+        mut placeholder_index: usize,
         col_value_map: &HashMap<String, ColValue>,
     ) -> Result<(String, Vec<String>), Error> {
         let mut where_sql = "".to_string();
         let mut not_null_cols = Vec::new();
 
-        for col_name in self.where_cols.iter() {
+        for col in self.where_cols.iter() {
             if !where_sql.is_empty() {
                 where_sql += " AND";
             }
 
-            let col_value = col_value_map.get(col_name);
+            let col_value = col_value_map.get(col);
             if let Some(value) = col_value {
                 if *value == ColValue::None {
-                    where_sql = format!("{} {} IS NULL", where_sql, col_name);
+                    where_sql = format!("{} {} IS NULL", where_sql, col);
                 } else {
-                    where_sql = format!("{} {} = ?", where_sql, col_name);
-                    not_null_cols.push(col_name.clone());
+                    where_sql = format!(
+                        "{} {} = {}",
+                        where_sql,
+                        col,
+                        self.get_placeholder(placeholder_index, col)
+                    );
+                    not_null_cols.push(col.clone());
                 }
             } else {
-                where_sql = format!("{} {} IS NULL", where_sql, col_name);
+                where_sql = format!("{} {} IS NULL", where_sql, col);
             }
+
+            placeholder_index += 1;
         }
         Ok((where_sql, not_null_cols))
+    }
+
+    #[inline(always)]
+    pub fn get_placeholder(&self, index: usize, col: &str) -> String {
+        if let Some(tb_meta) = self.pg_tb_meta {
+            let col_type = tb_meta.col_type_map.get(col).unwrap();
+            // workaround for types like bit(3)
+            let col_type_name = if col_type.short_name == "bit" {
+                "varbit"
+            } else {
+                &col_type.short_name
+            };
+            return format!("${}::{}", index, col_type_name);
+        }
+
+        "?".to_string()
+    }
+
+    #[inline(always)]
+    pub fn check_result(
+        &self,
+        actual_rows_affected: u64,
+        expect_rows_affected: u64,
+        sql: &str,
+        row_data: &RowData,
+    ) -> Result<(), Error> {
+        if actual_rows_affected != expect_rows_affected {
+            info!(
+                "sql: {}\nrows_affected: {},rows_affected_expected: {}\n{}",
+                sql,
+                actual_rows_affected,
+                expect_rows_affected,
+                row_data.to_string(&self.cols)
+            );
+        }
+        Ok(())
     }
 }
