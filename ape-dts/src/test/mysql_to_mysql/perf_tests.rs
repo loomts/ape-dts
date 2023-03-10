@@ -9,9 +9,7 @@ mod test {
     fn snapshot_perf_test() {
         let rt = Runtime::new().unwrap();
         let runner = rt
-            .block_on(TestRunner::new(
-                "src/test/mysql_to_mysql/snapshot_perf_test",
-            ))
+            .block_on(TestRunner::new("mysql_to_mysql/snapshot_perf_test"))
             .unwrap();
         rt.block_on(runner.run_perf_test(200)).unwrap();
     }

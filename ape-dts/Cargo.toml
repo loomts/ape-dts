@@ -29,6 +29,7 @@ tokio = { version = "1.25.0", features = ["full"] }
 bytes = "1.0"
 configparser = "3.0.2"
 async-mutex = "1.4.0"
+project-root = "0.2.2"
 
 [features]
 

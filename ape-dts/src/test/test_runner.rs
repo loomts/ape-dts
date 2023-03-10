@@ -24,7 +24,13 @@ pub struct TestRunner {
 
 #[allow(dead_code)]
 impl TestRunner {
-    pub async fn new(test_dir: &str) -> Result<Self, Error> {
+    pub async fn new(relative_test_dir: &str) -> Result<Self, Error> {
+        let test_dir = format!(
+            "{}/ape-dts/src/test/{}",
+            project_root::get_project_root().unwrap().to_str().unwrap(),
+            relative_test_dir
+        );
+
         let src_ddl_file = format!("{}/src_ddl.sql", test_dir);
         let dst_ddl_file = format!("{}/dst_ddl.sql", test_dir);
         let src_dml_file = format!("{}/src_dml.sql", test_dir);

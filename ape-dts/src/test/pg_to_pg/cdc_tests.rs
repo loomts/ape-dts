@@ -9,7 +9,7 @@ mod test {
     fn cdc_basic_test() {
         let rt = Runtime::new().unwrap();
         let runner = rt
-            .block_on(TestRunner::new("src/test/pg_to_pg/cdc_basic_test"))
+            .block_on(TestRunner::new("pg_to_pg/cdc_basic_test"))
             .unwrap();
         rt.block_on(runner.run_cdc_test(5000, 10000, false))
             .unwrap();

@@ -9,7 +9,7 @@ mod test {
     fn snapshot_basic_test() {
         let rt = Runtime::new().unwrap();
         let runner = rt
-            .block_on(TestRunner::new("src/test/pg_to_pg/snapshot_basic_test"))
+            .block_on(TestRunner::new("pg_to_pg/snapshot_basic_test"))
             .unwrap();
         rt.block_on(runner.run_snapshot_test(false)).unwrap();
     }
@@ -21,9 +21,7 @@ mod test {
     fn snapshot_on_duplicate_test() {
         let rt = Runtime::new().unwrap();
         let runner = rt
-            .block_on(TestRunner::new(
-                "src/test/pg_to_pg/snapshot_on_duplicate_test",
-            ))
+            .block_on(TestRunner::new("pg_to_pg/snapshot_on_duplicate_test"))
             .unwrap();
         rt.block_on(runner.run_snapshot_test(false)).unwrap();
     }

@@ -9,7 +9,7 @@ mod test {
     fn cdc_basic_test() {
         let rt = Runtime::new().unwrap();
         let runner = rt
-            .block_on(TestRunner::new("src/test/mysql_to_mysql/cdc_basic_test"))
+            .block_on(TestRunner::new("mysql_to_mysql/cdc_basic_test"))
             .unwrap();
         rt.block_on(runner.run_cdc_test(3000, 1000, false)).unwrap();
     }
@@ -19,9 +19,7 @@ mod test {
     fn cdc_uk_changed_test() {
         let rt = Runtime::new().unwrap();
         let runner = rt
-            .block_on(TestRunner::new(
-                "src/test/mysql_to_mysql/cdc_uk_changed_test",
-            ))
+            .block_on(TestRunner::new("mysql_to_mysql/cdc_uk_changed_test"))
             .unwrap();
         rt.block_on(runner.run_cdc_test(3000, 1000, false)).unwrap();
     }
