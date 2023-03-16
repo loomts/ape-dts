@@ -5,13 +5,16 @@ use async_trait::async_trait;
 pub trait Sinker {
     async fn sink(&mut self, mut data: Vec<RowData>) -> Result<(), Error>;
 
+    async fn batch_sink(&mut self, data: Vec<RowData>) -> Result<(), Error>;
+
     async fn close(&mut self) -> Result<(), Error>;
 }
 
-pub trait Sinker2 {
-    fn sink(&mut self, data: Vec<RowData>) -> Result<(), Error>;
+#[async_trait]
+pub trait Pipeline {
+    async fn start(&mut self) -> Result<(), Error>;
 
-    fn close(&mut self) -> Result<(), Error>;
+    async fn stop(&mut self) -> Result<(), Error>;
 }
 
 #[async_trait]

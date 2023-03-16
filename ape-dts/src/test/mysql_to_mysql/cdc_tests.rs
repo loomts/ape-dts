@@ -1,8 +1,9 @@
 #[cfg(test)]
 mod test {
-    use crate::test::test_runner::TestRunner;
     use serial_test::serial;
     use tokio::runtime::Runtime;
+
+    use crate::test::{test_config_util::TestConfigUtil, test_runner::TestRunner};
 
     #[test]
     #[serial]
@@ -11,7 +12,9 @@ mod test {
         let runner = rt
             .block_on(TestRunner::new("mysql_to_mysql/cdc_basic_test"))
             .unwrap();
-        rt.block_on(runner.run_cdc_test(3000, 1000, false)).unwrap();
+        let configs = TestConfigUtil::get_default_configs();
+        rt.block_on(runner.run_cdc_test_with_different_configs(3000, 1000, false, &configs))
+            .unwrap();
     }
 
     #[test]
@@ -21,6 +24,8 @@ mod test {
         let runner = rt
             .block_on(TestRunner::new("mysql_to_mysql/cdc_uk_changed_test"))
             .unwrap();
-        rt.block_on(runner.run_cdc_test(3000, 1000, false)).unwrap();
+        let configs = TestConfigUtil::get_default_configs();
+        rt.block_on(runner.run_cdc_test_with_different_configs(3000, 1000, false, &configs))
+            .unwrap();
     }
 }

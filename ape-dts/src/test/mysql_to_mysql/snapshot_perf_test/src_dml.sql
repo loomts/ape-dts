@@ -1,3 +1,0 @@
-insert_sql: INSERT INTO test_db_1.one_pk_no_uk 
-insert_value: (NULL,2,3,4,5,123456.1234,1234.12,12345.123,1893,'2022-01-02 03:04:05.123456','03:04:05.123456','2022-01-02',2022,'2022-01-02 03:04:05.123456','ab','cd','ef','gh','ij','kl','mn','op',x'0123456789ABCDEF',x'0123456789ABCDEF',x'0123456789ABCDEF',x'0123456789ABCDEF','x-small','c', NULL)
-insert_count: 100000

@@ -4,13 +4,16 @@ use std::{env, fs::File, io::Read, thread, time::Duration};
 
 use crate::{
     config::{
-        config_loader::ConfigLoader, extractor_config::ExtractorConfig, sinker_config::SinkerConfig,
+        extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
     },
     error::Error,
     task::{task_runner::TaskRunner, task_util::TaskUtil},
 };
 
+use super::test_config_util::TestConfigUtil;
+
 pub struct TestRunner {
+    pub task_config_file: String,
     src_conn_pool_mysql: Option<Pool<MySql>>,
     dst_conn_pool_mysql: Option<Pool<MySql>>,
     src_conn_pool_pg: Option<Pool<Postgres>>,
@@ -19,7 +22,6 @@ pub struct TestRunner {
     dst_ddl_file: String,
     src_dml_file: String,
     dst_dml_file: String,
-    task_config_file: String,
 }
 
 #[allow(dead_code)]
@@ -42,9 +44,8 @@ impl TestRunner {
         let mut src_conn_pool_pg = None;
         let mut dst_conn_pool_pg = None;
 
-        let (extractor_config, sinker_config, _, _, _) = ConfigLoader::load(&task_config_file)?;
-
-        match extractor_config {
+        let config = TaskConfig::new(&task_config_file);
+        match config.extractor {
             ExtractorConfig::MysqlCdc { url, .. } | ExtractorConfig::MysqlSnapshot { url, .. } => {
                 src_conn_pool_mysql = Some(TaskUtil::create_mysql_conn_pool(&url, 1, true).await?);
             }
@@ -53,7 +54,7 @@ impl TestRunner {
             }
         }
 
-        match sinker_config {
+        match config.sinker {
             SinkerConfig::Mysql { url, .. } => {
                 dst_conn_pool_mysql = Some(TaskUtil::create_mysql_conn_pool(&url, 1, true).await?);
             }
@@ -75,24 +76,33 @@ impl TestRunner {
         })
     }
 
-    pub async fn run_perf_test(&self, prepare_data_batch_size: u32) -> Result<(), Error> {
-        self.prepare_test_tbs(&self.src_ddl_file, &self.dst_ddl_file)
-            .await?;
-
-        // prepare data
-        let (sqls, counts) =
-            TestRunner::load_perf_dml_sqls(&self.src_dml_file, prepare_data_batch_size)?;
-
-        for i in 0..sqls.len() {
-            for _ in 0..counts[i] {
-                let batch_sql = vec![sqls[i].clone()];
-                self.execute_src_sqls(&batch_sql).await?;
-            }
+    pub async fn run_snapshot_test_with_different_configs(
+        &self,
+        enable_log4rs: bool,
+        configs: &Vec<Vec<(String, String, String)>>,
+    ) -> Result<(), Error> {
+        for config in configs {
+            TestConfigUtil::update_task_config(&self.task_config_file, config);
+            self.run_snapshot_test(enable_log4rs).await.unwrap();
         }
+        Ok(())
+    }
 
-        // start task
-        let task_config = self.task_config_file.clone();
-        TaskRunner::new(task_config).await.start_task(true).await?;
+    pub async fn run_cdc_test_with_different_configs(
+        &self,
+        start_millis: u64,
+        parse_millis: u64,
+        enable_log4rs: bool,
+        configs: &Vec<Vec<(String, String, String)>>,
+    ) -> Result<(), Error> {
+        for config in configs {
+            TestConfigUtil::update_task_config(&self.task_config_file, config);
+            println!("----------------------------------------");
+            println!("running cdc test with config: {:?}", config);
+            self.run_cdc_test(start_millis, parse_millis, enable_log4rs)
+                .await
+                .unwrap();
+        }
         Ok(())
     }
 

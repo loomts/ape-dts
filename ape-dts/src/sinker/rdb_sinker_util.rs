@@ -56,6 +56,53 @@ impl RdbSinkerUtil<'_> {
         Ok((sql, cols, binds))
     }
 
+    pub fn get_batch_delete_query<'a>(
+        &self,
+        data: &'a Vec<RowData>,
+        start_index: usize,
+        batch_size: usize,
+    ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
+        let mut all_placeholders = Vec::new();
+        let mut placeholder_index = 1;
+        for _ in 0..batch_size {
+            let mut placeholders = Vec::new();
+            for col in self.where_cols.iter() {
+                placeholders.push(self.get_placeholder(placeholder_index, col));
+                placeholder_index += 1;
+            }
+            all_placeholders.push(format!("({})", placeholders.join(",")));
+        }
+
+        let sql = format!(
+            "DELETE FROM {}.{} WHERE ({}) IN ({})",
+            self.schema,
+            self.tb,
+            self.where_cols.join(","),
+            all_placeholders.join(",")
+        );
+
+        let mut cols = Vec::new();
+        let mut binds = Vec::new();
+        for i in start_index..start_index + batch_size {
+            let row_data = &data[i];
+            let before = row_data.before.as_ref().unwrap();
+            for col in self.where_cols.iter() {
+                cols.push(col.clone());
+                let col_value = before.get(col);
+                if *col_value.unwrap() == ColValue::None {
+                    return Err(Error::Unexpected {
+                        error: format!(
+                            "db: {}, tb: {}, where col: {} is NULL, which should not happen in batch delete",
+                            self.schema, self.tb, col
+                        ),
+                    });
+                }
+                binds.push(col_value);
+            }
+        }
+        Ok((sql, cols, binds))
+    }
+
     pub fn get_batch_insert_query<'a>(
         &self,
         data: &'a Vec<RowData>,
@@ -162,6 +209,15 @@ impl RdbSinkerUtil<'_> {
                 self.get_placeholder(placeholder_index, col)
             ));
             placeholder_index += 1;
+        }
+
+        if set_pairs.is_empty() {
+            return Err(Error::Unexpected {
+                error: format!(
+                    "db: {}, tb: {}, no cols in after, which should not happen in update",
+                    self.schema, self.tb
+                ),
+            });
         }
 
         let (where_sql, not_null_cols) = self.get_where_info(placeholder_index, &before)?;

@@ -38,16 +38,7 @@ pub enum ColValue {
 impl ColValue {
     pub fn hash_code(&self) -> u64 {
         match self {
-            ColValue::Tiny(v) => *v as u64,
-            ColValue::UnsignedTiny(v) => *v as u64,
-            ColValue::Short(v) => *v as u64,
-            ColValue::UnsignedShort(v) => *v as u64,
-            ColValue::Long(v) => *v as u64,
-            ColValue::UnsignedLong(v) => *v as u64,
-            ColValue::LongLong(v) => *v as u64,
-            ColValue::UnsignedLongLong(v) => *v as u64,
-            ColValue::Year(v) => *v as u64,
-            ColValue::Enum(v) => *v as u64,
+            ColValue::None => 0,
             _ => {
                 let mut hasher = DefaultHasher::new();
                 self.to_string().hash(&mut hasher);

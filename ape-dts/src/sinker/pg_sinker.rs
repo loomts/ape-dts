@@ -30,13 +30,7 @@ impl Sinker for PgSinker {
         if data.len() == 0 {
             return Ok(());
         }
-
-        // currently only support batch insert
-        if self.batch_size > 1 {
-            self.batch_insert(data).await
-        } else {
-            self.sink_internal(data).await
-        }
+        self.serial_sink(data).await
     }
 
     async fn close(&mut self) -> Result<(), Error> {
@@ -45,10 +39,22 @@ impl Sinker for PgSinker {
         }
         return Ok(self.conn_pool.close().await);
     }
+
+    async fn batch_sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
+        if data.len() == 0 {
+            return Ok(());
+        }
+
+        match &data[0].row_type {
+            RowType::Delete => self.batch_delete(data).await,
+            RowType::Insert => self.batch_insert(data).await,
+            _ => self.serial_sink(data).await,
+        }
+    }
 }
 
 impl PgSinker {
-    async fn sink_internal(&mut self, data: Vec<RowData>) -> Result<(), Error> {
+    async fn serial_sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
         for row_data in data.iter() {
             let tb_meta = self.get_tb_meta(&row_data).await?;
             let rdb_util = RdbSinkerUtil::new_for_pg(&tb_meta);
@@ -65,8 +71,37 @@ impl PgSinker {
                 query = query.bind_col_value(binds[i], col_type);
             }
 
-            let result = query.execute(&self.conn_pool).await.unwrap();
-            rdb_util.check_result(result.rows_affected(), 1, &sql, row_data)?;
+            let result = query.execute(&self.conn_pool).await;
+            rdb_util.check_result(result.unwrap().rows_affected(), 1, &sql, row_data)?;
+        }
+        Ok(())
+    }
+
+    async fn batch_delete(&mut self, data: Vec<RowData>) -> Result<(), Error> {
+        let all_count = data.len();
+        let mut sinked_count = 0;
+        let tb_meta = self.get_tb_meta(&data[0]).await?;
+        let rdb_util = RdbSinkerUtil::new_for_pg(&tb_meta);
+
+        loop {
+            let mut batch_size = self.batch_size;
+            if all_count - sinked_count < batch_size {
+                batch_size = all_count - sinked_count;
+            }
+
+            let (sql, cols, binds) =
+                rdb_util.get_batch_delete_query(&data, sinked_count, batch_size)?;
+            let mut query = sqlx::query(&sql);
+            for i in 0..binds.len() {
+                let col_type = tb_meta.col_type_map.get(&cols[i]).unwrap();
+                query = query.bind_col_value(binds[i], col_type);
+            }
+
+            query.execute(&self.conn_pool).await.unwrap();
+            sinked_count += batch_size;
+            if sinked_count == all_count {
+                break;
+            }
         }
         Ok(())
     }
@@ -74,9 +109,7 @@ impl PgSinker {
     async fn batch_insert(&mut self, data: Vec<RowData>) -> Result<(), Error> {
         let all_count = data.len();
         let mut sinked_count = 0;
-
-        let first_row_data = &data[0];
-        let tb_meta = self.get_tb_meta(first_row_data).await?;
+        let tb_meta = self.get_tb_meta(&data[0]).await?;
         let rdb_util = RdbSinkerUtil::new_for_pg(&tb_meta);
 
         loop {
@@ -101,9 +134,8 @@ impl PgSinker {
                     tb_meta.tb,
                     error.to_string()
                 );
-                // insert one by one
-                let slice_data = &data[sinked_count..sinked_count + batch_size];
-                self.sink_internal(slice_data.to_vec()).await.unwrap();
+                let sub_data = &data[sinked_count..sinked_count + batch_size];
+                self.serial_sink(sub_data.to_vec()).await.unwrap();
             }
 
             sinked_count += batch_size;
@@ -111,7 +143,6 @@ impl PgSinker {
                 break;
             }
         }
-
         Ok(())
     }
 
@@ -127,9 +158,6 @@ impl PgSinker {
         let after = row_data.after.as_ref().unwrap();
         let mut set_pairs = Vec::new();
         for col in &tb_meta.cols {
-            if tb_meta.where_cols.contains(col) {
-                continue;
-            }
             let set_pair = format!(
                 "{}={}",
                 col,

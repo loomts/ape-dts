@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test {
-    use crate::test::test_runner::TestRunner;
+    use crate::test::{test_config_util::TestConfigUtil, test_runner::TestRunner};
     use serial_test::serial;
     use tokio::runtime::Runtime;
 
@@ -11,7 +11,8 @@ mod test {
         let runner = rt
             .block_on(TestRunner::new("pg_to_pg/cdc_basic_test"))
             .unwrap();
-        rt.block_on(runner.run_cdc_test(5000, 10000, false))
+        let configs = TestConfigUtil::get_default_configs();
+        rt.block_on(runner.run_cdc_test_with_different_configs(5000, 5000, false, &configs))
             .unwrap();
     }
 }
