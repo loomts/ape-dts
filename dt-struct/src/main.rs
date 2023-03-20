@@ -1,4 +1,4 @@
-use dt_common::config::config_loader::ConfigLoader;
+use dt_common::config::task_config::TaskConfig;
 use factory::database_worker_builder::StructBuilder;
 use meta::common::database_model::StructModel;
 use std::env;
@@ -19,14 +19,13 @@ fn main() {
     // let task_config = String::from(
     //     "/Users/caiqinyu/Desktop/Project/rust/ape-dts/dt-struct/src/test/task_config.ini",
     // );
-    let (extractor_config, sinker_config, _, filter_config, router_config) =
-        ConfigLoader::load(&task_config).unwrap();
+    let task_config = TaskConfig::new(&task_config);
 
     let builder = StructBuilder {
-        extractor_config: extractor_config,
-        sinker_config: sinker_config,
-        filter_config: filter_config,
-        router_config: router_config,
+        extractor_config: task_config.extractor,
+        sinker_config: task_config.sinker,
+        filter_config: task_config.filter,
+        router_config: task_config.router,
     };
 
     let rt = tokio::runtime::Builder::new_current_thread()

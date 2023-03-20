@@ -4,7 +4,7 @@ use crate::meta::db_enum::DatabaseType;
 pub enum SinkerConfig {
     BasicStruct { url: String, db_type: DatabaseType },
 
-    Mysql { url: String },
+    Mysql { url: String, batch_size: usize },
 
-    Pg { url: String },
+    Pg { url: String, batch_size: usize },
 }
