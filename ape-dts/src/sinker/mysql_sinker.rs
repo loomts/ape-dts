@@ -3,10 +3,12 @@ use crate::{
     meta::{
         mysql::{mysql_meta_manager::MysqlMetaManager, mysql_tb_meta::MysqlTbMeta},
         row_data::RowData,
+        row_type::RowType,
     },
     sqlx_ext::SqlxMysql,
     traits::Sinker,
 };
+use log::error;
 use sqlx::{MySql, Pool};
 
 use super::{rdb_router::RdbRouter, rdb_sinker_util::RdbSinkerUtil};
@@ -27,13 +29,7 @@ impl Sinker for MysqlSinker {
         if data.len() == 0 {
             return Ok(());
         }
-
-        // currently only support batch insert
-        if self.batch_size > 1 {
-            self.batch_insert(data).await
-        } else {
-            self.sink_internal(data).await
-        }
+        self.serial_sink(data).await
     }
 
     async fn close(&mut self) -> Result<(), Error> {
@@ -42,13 +38,25 @@ impl Sinker for MysqlSinker {
         }
         return Ok(self.conn_pool.close().await);
     }
+
+    async fn batch_sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
+        if data.len() == 0 {
+            return Ok(());
+        }
+
+        match &data[0].row_type {
+            RowType::Insert => self.batch_insert(data).await,
+            RowType::Delete => self.batch_delete(data).await,
+            _ => self.serial_sink(data).await,
+        }
+    }
 }
 
 impl MysqlSinker {
-    async fn sink_internal(&mut self, data: Vec<RowData>) -> Result<(), Error> {
+    async fn serial_sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
         for row_data in data.iter() {
             let tb_meta = self.get_tb_meta(&row_data).await?;
-            let rdb_util = RdbSinkerUtil::new_for_mysql(tb_meta);
+            let rdb_util = RdbSinkerUtil::new_for_mysql(&tb_meta);
 
             let (mut sql, _cols, binds) = rdb_util.get_query(&row_data)?;
             sql = self.handle_dialect(&sql);
@@ -63,13 +71,39 @@ impl MysqlSinker {
         Ok(())
     }
 
+    async fn batch_delete(&mut self, data: Vec<RowData>) -> Result<(), Error> {
+        let all_count = data.len();
+        let mut sinked_count = 0;
+        let tb_meta = self.get_tb_meta(&data[0]).await?;
+        let rdb_util = RdbSinkerUtil::new_for_mysql(&tb_meta);
+
+        loop {
+            let mut batch_size = self.batch_size;
+            if all_count - sinked_count < batch_size {
+                batch_size = all_count - sinked_count;
+            }
+
+            let (sql, _cols, binds) =
+                rdb_util.get_batch_delete_query(&data, sinked_count, batch_size)?;
+            let mut query = sqlx::query(&sql);
+            for bind in binds {
+                query = query.bind_col_value(bind);
+            }
+
+            query.execute(&self.conn_pool).await.unwrap();
+            sinked_count += batch_size;
+            if sinked_count == all_count {
+                break;
+            }
+        }
+        Ok(())
+    }
+
     async fn batch_insert(&mut self, data: Vec<RowData>) -> Result<(), Error> {
         let all_count = data.len();
         let mut sinked_count = 0;
-
-        let first_row_data = &data[0];
-        let tb_meta = self.get_tb_meta(first_row_data).await?;
-        let rdb_util = RdbSinkerUtil::new_for_mysql(tb_meta);
+        let tb_meta = self.get_tb_meta(&data[0]).await?;
+        let rdb_util = RdbSinkerUtil::new_for_mysql(&tb_meta);
 
         loop {
             let mut batch_size = self.batch_size;
@@ -85,13 +119,18 @@ impl MysqlSinker {
                 query = query.bind_col_value(bind);
             }
 
-            let result = query.execute(&self.conn_pool).await.unwrap();
-            rdb_util.check_result(
-                result.rows_affected(),
-                batch_size as u64,
-                &sql,
-                first_row_data,
-            )?;
+            let result = query.execute(&self.conn_pool).await;
+            if let Err(error) = result {
+                error!(
+                    "batch insert failed, will insert one by one, schema: {}, tb: {}, error: {}",
+                    tb_meta.db,
+                    tb_meta.tb,
+                    error.to_string()
+                );
+                // insert one by one
+                let sub_data = &data[sinked_count..sinked_count + batch_size];
+                self.serial_sink(sub_data.to_vec()).await.unwrap();
+            }
 
             sinked_count += batch_size;
             if sinked_count == all_count {

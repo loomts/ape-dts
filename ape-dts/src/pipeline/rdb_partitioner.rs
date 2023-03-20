@@ -25,6 +25,11 @@ impl Partitioner for RdbPartitioner {
         partition_count: usize,
     ) -> Result<Vec<Vec<RowData>>, Error> {
         let mut sub_datas = Vec::new();
+        if partition_count <= 1 {
+            sub_datas.push(data);
+            return Ok(sub_datas);
+        }
+
         for _ in 0..partition_count {
             sub_datas.push(Vec::new());
         }
@@ -42,7 +47,7 @@ impl Partitioner for RdbPartitioner {
             return Ok(true);
         }
 
-        let (partition_col, key_map) = self.get_tb_meta_info(&row_data.db, &row_data.tb).await?;
+        let (partition_col, key_map, _) = self.get_tb_meta_info(&row_data.db, &row_data.tb).await?;
         let before = row_data.before.as_ref().unwrap();
         let after = row_data.after.as_ref().unwrap();
         // if any col of pk & uk has changed, partition should not happen
@@ -116,7 +121,7 @@ impl RdbPartitioner {
             _ => row_data.before.as_ref().unwrap(),
         };
 
-        let (partition_col, _) = self.get_tb_meta_info(&row_data.db, &row_data.tb).await?;
+        let (partition_col, _, _) = self.get_tb_meta_info(&row_data.db, &row_data.tb).await?;
         if let Some(partition_col_value) = col_values.get(&partition_col) {
             Ok(partition_col_value.hash_code() as usize % slice_count)
         } else {
@@ -124,19 +129,19 @@ impl RdbPartitioner {
         }
     }
 
-    async fn get_tb_meta_info(
+    pub async fn get_tb_meta_info(
         &mut self,
         schema: &str,
         tb: &str,
-    ) -> Result<(String, HashMap<String, Vec<String>>), Error> {
+    ) -> Result<(String, HashMap<String, Vec<String>>, Vec<String>), Error> {
         if let Some(mysql_meta_manager) = self.mysql_meta_manager.as_mut() {
             let tb_meta = mysql_meta_manager.get_tb_meta(schema, tb).await?;
-            return Ok((tb_meta.partition_col, tb_meta.key_map));
+            return Ok((tb_meta.partition_col, tb_meta.key_map, tb_meta.where_cols));
         }
 
         if let Some(pg_meta_manager) = self.pg_meta_manager.as_mut() {
             let tb_meta = pg_meta_manager.get_tb_meta(schema, tb).await?;
-            return Ok((tb_meta.partition_col, tb_meta.key_map));
+            return Ok((tb_meta.partition_col, tb_meta.key_map, tb_meta.where_cols));
         }
 
         Err(Error::Unexpected {

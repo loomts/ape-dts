@@ -7,6 +7,7 @@ mod extractor;
 mod meta;
 mod metric;
 mod monitor;
+mod pipeline;
 mod sinker;
 mod sqlx_ext;
 mod task;

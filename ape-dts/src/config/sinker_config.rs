@@ -1,5 +1,5 @@
 pub enum SinkerConfig {
-    Mysql { url: String },
+    Mysql { url: String, batch_size: usize },
 
-    Pg { url: String },
+    Pg { url: String, batch_size: usize },
 }

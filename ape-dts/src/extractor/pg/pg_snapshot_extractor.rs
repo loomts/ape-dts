@@ -37,6 +37,10 @@ pub struct PgSnapshotExtractor<'a> {
 #[async_trait]
 impl Extractor for PgSnapshotExtractor<'_> {
     async fn extract(&mut self) -> Result<(), Error> {
+        info!(
+            "PgSnapshotExtractor starts, schema: {}, tb: {}, slice_size: {}",
+            self.schema, self.tb, self.slice_size
+        );
         self.extract_internal().await
     }
 

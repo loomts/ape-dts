@@ -21,5 +21,6 @@ pub enum ExtractorConfig {
         url: String,
         slot_name: String,
         start_lsn: String,
+        heartbeat_interval_secs: u64,
     },
 }

@@ -5,37 +5,41 @@ use configparser::ini::Ini;
 use crate::error::Error;
 
 use super::{
-    extractor_config::ExtractorConfig, filter_config::FilterConfig, router_config::RouterConfig,
-    runtime_config::RuntimeConfig, sinker_config::SinkerConfig,
+    extractor_config::ExtractorConfig,
+    filter_config::FilterConfig,
+    pipeline_config::{PipelineConfig, PipelineType},
+    router_config::RouterConfig,
+    runtime_config::RuntimeConfig,
+    sinker_config::SinkerConfig,
 };
 
-pub struct ConfigLoader {}
+pub struct TaskConfig {
+    pub extractor: ExtractorConfig,
+    pub sinker: SinkerConfig,
+    pub runtime: RuntimeConfig,
+    pub pipeline: PipelineConfig,
+    pub filter: FilterConfig,
+    pub router: RouterConfig,
+}
 
-impl ConfigLoader {
-    pub fn load(
-        task_config: &str,
-    ) -> Result<
-        (
-            ExtractorConfig,
-            SinkerConfig,
-            RuntimeConfig,
-            FilterConfig,
-            RouterConfig,
-        ),
-        Error,
-    > {
+impl TaskConfig {
+    pub fn new(task_config_file: &str) -> Self {
         let mut config_str = String::new();
-        File::open(task_config)?.read_to_string(&mut config_str)?;
+        File::open(task_config_file)
+            .unwrap()
+            .read_to_string(&mut config_str)
+            .unwrap();
         let mut ini = Ini::new();
         ini.read(config_str).unwrap();
 
-        Ok((
-            Self::load_extractor_config(&ini)?,
-            Self::load_sinker_config(&ini)?,
-            Self::load_runtime_config(&ini),
-            Self::load_filter_config(&ini)?,
-            Self::load_router_config(&ini)?,
-        ))
+        Self {
+            extractor: Self::load_extractor_config(&ini).unwrap(),
+            pipeline: Self::load_pipeline_config(&ini),
+            sinker: Self::load_sinker_config(&ini).unwrap(),
+            runtime: Self::load_runtime_config(&ini),
+            filter: Self::load_filter_config(&ini).unwrap(),
+            router: Self::load_router_config(&ini).unwrap(),
+        }
     }
 
     fn load_extractor_config(ini: &Ini) -> Result<ExtractorConfig, Error> {
@@ -65,6 +69,10 @@ impl ConfigLoader {
                 url: ini.get("extractor", "url").unwrap(),
                 slot_name: ini.get("extractor", "slot_name").unwrap(),
                 start_lsn: ini.get("extractor", "start_lsn").unwrap(),
+                heartbeat_interval_secs: ini
+                    .getuint("extractor", "heartbeat_interval_secs")
+                    .unwrap()
+                    .unwrap() as u64,
             }),
 
             _ => Err(Error::Unexpected {
@@ -78,10 +86,12 @@ impl ConfigLoader {
         match sinker_type.as_str() {
             "mysql" => Ok(SinkerConfig::Mysql {
                 url: ini.get("sinker", "url").unwrap(),
+                batch_size: ini.getuint("sinker", "batch_size").unwrap().unwrap() as usize,
             }),
 
             "pg" => Ok(SinkerConfig::Pg {
                 url: ini.get("sinker", "url").unwrap(),
+                batch_size: ini.getuint("sinker", "batch_size").unwrap().unwrap() as usize,
             }),
 
             _ => Err(Error::Unexpected {
@@ -90,11 +100,20 @@ impl ConfigLoader {
         }
     }
 
+    fn load_pipeline_config(ini: &Ini) -> PipelineConfig {
+        PipelineConfig {
+            buffer_size: ini.getuint("pipeline", "buffer_size").unwrap().unwrap() as usize,
+            parallel_size: ini.getuint("pipeline", "parallel_size").unwrap().unwrap() as usize,
+            pipeline_type: PipelineType::from_str(&ini.get("pipeline", "type").unwrap()),
+            checkpoint_interval_secs: ini
+                .getuint("pipeline", "checkpoint_interval_secs")
+                .unwrap()
+                .unwrap() as u64,
+        }
+    }
+
     fn load_runtime_config(ini: &Ini) -> RuntimeConfig {
         RuntimeConfig {
-            buffer_size: ini.getuint("runtime", "buffer_size").unwrap().unwrap() as usize,
-            parallel_size: ini.getuint("runtime", "parallel_size").unwrap().unwrap() as usize,
-            batch_size: ini.getuint("runtime", "batch_size").unwrap().unwrap() as usize,
             log_level: ini.get("runtime", "log_level").unwrap(),
             log_dir: ini.get("runtime", "log_dir").unwrap(),
         }

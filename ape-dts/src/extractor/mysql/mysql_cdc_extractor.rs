@@ -40,6 +40,10 @@ pub struct MysqlCdcExtractor<'a> {
 #[async_trait]
 impl Extractor for MysqlCdcExtractor<'_> {
     async fn extract(&mut self) -> Result<(), Error> {
+        info!(
+            "MysqlCdcExtractor starts, binlog_filename: {}, binlog_position: {}",
+            self.binlog_filename, self.binlog_position
+        );
         self.extract_internal().await
     }
 
@@ -50,11 +54,6 @@ impl Extractor for MysqlCdcExtractor<'_> {
 
 impl MysqlCdcExtractor<'_> {
     async fn extract_internal(&mut self) -> Result<(), Error> {
-        info!(
-            "start extracting binlog, binlog_filename: {}, binlog_position: {}",
-            self.binlog_filename, self.binlog_position
-        );
-
         let mut client = BinlogClient {
             url: self.url.clone(),
             binlog_filename: self.binlog_filename.clone(),

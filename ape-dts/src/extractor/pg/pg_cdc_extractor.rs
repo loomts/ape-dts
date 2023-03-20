@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    pin::Pin,
     sync::{atomic::AtomicBool, Arc, Mutex},
     time::{Duration, UNIX_EPOCH},
 };
@@ -21,7 +22,9 @@ use postgres_protocol::message::backend::{
 
 use postgres_types::PgLsn;
 use tokio::time::Instant;
+use tokio_postgres::replication::LogicalReplicationStream;
 
+use super::pg_col_value_convertor::PgColValueConvertor;
 use crate::{
     error::Error,
     extractor::{pg::pg_cdc_client::PgCdcClient, rdb_filter::RdbFilter},
@@ -35,8 +38,8 @@ use crate::{
     task::task_util::TaskUtil,
     traits::Extractor,
 };
-
-use super::pg_col_value_convertor::PgColValueConvertor;
+use log::error;
+use log::info;
 
 pub struct PgCdcExtractor<'a> {
     pub meta_manager: PgMetaManager,
@@ -45,6 +48,7 @@ pub struct PgCdcExtractor<'a> {
     pub url: String,
     pub slot_name: String,
     pub start_sln: String,
+    pub heartbeat_interval_secs: u64,
     pub shut_down: &'a AtomicBool,
     pub metric: Arc<Mutex<Metric>>,
 }
@@ -52,6 +56,10 @@ pub struct PgCdcExtractor<'a> {
 #[async_trait]
 impl Extractor for PgCdcExtractor<'_> {
     async fn extract(&mut self) -> Result<(), Error> {
+        info!(
+            "PgCdcExtractor starts, slot_name: {}, start_sln: {}, heartbeat_interval_secs: {}",
+            self.slot_name, self.start_sln, self.heartbeat_interval_secs
+        );
         Ok(self.extract_internal().await.unwrap())
     }
 
@@ -72,7 +80,19 @@ impl PgCdcExtractor<'_> {
 
         // refer: https://www.postgresql.org/docs/10/protocol-replication.html to get WAL data details
         let mut commited_lsn = actual_start_lsn.clone();
+        let mut start_time = Instant::now();
         loop {
+            // send a heartbeat to keep alive
+            if start_time.elapsed().as_secs() > self.heartbeat_interval_secs {
+                self.heartbeat(&mut stream, &actual_start_lsn).await?;
+                start_time = Instant::now();
+            }
+
+            while self.buffer.is_full() {
+                TaskUtil::sleep_millis(1).await;
+                continue;
+            }
+
             match stream.next().await {
                 Some(Ok(XLogData(body))) => {
                     let data = body.into_data();
@@ -106,48 +126,55 @@ impl PgCdcExtractor<'_> {
                             self.decode_delete(&delete, &commited_lsn).await?;
                         }
 
-                        _ => {
-                            println!("other XLogData: {:?}", data);
-                        }
+                        _ => {}
                     }
                 }
 
                 Some(Ok(PrimaryKeepAlive(data))) => {
                     // Send a standby status update and require a keep alive response
                     if data.reply() == 1 {
-                        let start = Instant::now();
-
-                        let position = self.metric.lock().unwrap().position.clone();
-                        let lsn = if position.is_empty() {
-                            actual_start_lsn.as_str().parse().unwrap()
-                        } else {
-                            position.as_str().parse().unwrap()
-                        };
-
-                        // Postgres epoch is 2000-01-01T00:00:00Z
-                        let pg_epoch = UNIX_EPOCH + Duration::from_secs(946_684_800);
-                        let ts = pg_epoch.elapsed().unwrap().as_micros() as i64;
-                        stream
-                            .as_mut()
-                            .standby_status_update(lsn, lsn, lsn, ts, 1)
-                            .await
-                            .unwrap();
-
-                        // TODO, move this to metrics
-                        let elapsed = start.elapsed();
-                        println!("-------------: {} ms", elapsed.as_micros());
+                        self.heartbeat(&mut stream, &actual_start_lsn).await?;
+                        start_time = Instant::now();
                     }
                 }
 
                 Some(Ok(data)) => {
-                    println!("unkown replication data: {:?}", data);
+                    info!("received unkown replication data: {:?}", data);
                 }
 
-                Some(Err(x)) => panic!("unexpected replication stream error: {}", x),
+                Some(Err(error)) => panic!("unexpected replication stream error: {}", error),
 
                 None => panic!("unexpected replication stream end"),
             }
         }
+    }
+
+    async fn heartbeat(
+        &mut self,
+        stream: &mut Pin<&mut LogicalReplicationStream>,
+        start_sln: &str,
+    ) -> Result<(), Error> {
+        let position = self.metric.lock().unwrap().position.clone();
+        let lsn = if position.is_empty() {
+            start_sln.parse().unwrap()
+        } else {
+            position.as_str().parse().unwrap()
+        };
+
+        // Postgres epoch is 2000-01-01T00:00:00Z
+        let pg_epoch = UNIX_EPOCH + Duration::from_secs(946_684_800);
+        let ts = pg_epoch.elapsed().unwrap().as_micros() as i64;
+        let result = stream
+            .as_mut()
+            .standby_status_update(lsn, lsn, lsn, ts, 1)
+            .await;
+        if let Err(error) = result {
+            error!(
+                "heartbeat to postgres failed, lsn: {}, error: {}",
+                position, error
+            );
+        }
+        Ok(())
     }
 
     async fn decode_relation(&mut self, event: &RelationBody) -> Result<(), Error> {
@@ -297,11 +324,7 @@ impl PgCdcExtractor<'_> {
         {
             return Ok(());
         }
-
-        while self.buffer.is_full() {
-            TaskUtil::sleep_millis(1).await;
-        }
-        let _ = self.buffer.push(row_data);
+        self.buffer.push(row_data).unwrap();
         Ok(())
     }
 }

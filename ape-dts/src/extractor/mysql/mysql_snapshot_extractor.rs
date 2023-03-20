@@ -40,6 +40,10 @@ pub struct MysqlSnapshotExtractor<'a> {
 #[async_trait]
 impl Extractor for MysqlSnapshotExtractor<'_> {
     async fn extract(&mut self) -> Result<(), Error> {
+        info!(
+            "MysqlSnapshotExtractor starts, schema: {}, tb: {}, slice_size: {}",
+            self.db, self.tb, self.slice_size
+        );
         self.extract_internal().await
     }
 
