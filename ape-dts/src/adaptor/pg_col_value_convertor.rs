@@ -47,21 +47,17 @@ impl PgColValueConvertor {
         extract_type.to_string()
     }
 
-    pub fn from_wal(
+    pub fn from_str(
         col_type: &PgColType,
-        value: &Bytes,
+        value_str: &str,
         meta_manager: &mut PgMetaManager,
     ) -> Result<ColValue, Error> {
         if col_type.parent_oid != 0 {
             let parent_col_type = meta_manager.get_col_type_by_oid(col_type.parent_oid)?;
-            return Self::from_wal(&parent_col_type, value, meta_manager);
+            return Self::from_str(&parent_col_type, value_str, meta_manager);
         }
 
-        // include all types from https://www.postgresql.org/docs/current/static/datatype.html#DATATYPE-TABLE
-        // plus aliases from the shorter names produced by older wal2json
-        // let value = value.unwrap();
-        let value_str = std::str::from_utf8(value).unwrap().to_string();
-
+        let value_str = value_str.to_string();
         if col_type.is_array() {
             return Ok(ColValue::String(value_str));
         }
@@ -120,6 +116,18 @@ impl PgColValueConvertor {
             _ => ColValue::String(value_str),
         };
         Ok(col_value)
+    }
+
+    pub fn from_wal(
+        col_type: &PgColType,
+        value: &Bytes,
+        meta_manager: &mut PgMetaManager,
+    ) -> Result<ColValue, Error> {
+        // include all types from https://www.postgresql.org/docs/current/static/datatype.html#DATATYPE-TABLE
+        // plus aliases from the shorter names produced by older wal2json
+        // let value = value.unwrap();
+        let value_str = std::str::from_utf8(value).unwrap();
+        return Self::from_str(col_type, value_str, meta_manager);
     }
 
     pub fn from_query(

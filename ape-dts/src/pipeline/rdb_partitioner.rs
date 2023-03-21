@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use async_trait::async_trait;
 use log::debug;
 
 use crate::{
@@ -9,7 +8,6 @@ use crate::{
         mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
         row_data::RowData, row_type::RowType,
     },
-    traits::Partitioner,
 };
 
 pub struct RdbPartitioner {
@@ -17,9 +15,8 @@ pub struct RdbPartitioner {
     pg_meta_manager: Option<PgMetaManager>,
 }
 
-#[async_trait]
-impl Partitioner for RdbPartitioner {
-    async fn partition(
+impl RdbPartitioner {
+    pub async fn partition(
         &mut self,
         data: Vec<RowData>,
         partition_count: usize,
@@ -42,7 +39,7 @@ impl Partitioner for RdbPartitioner {
         Ok(sub_datas)
     }
 
-    async fn can_be_partitioned<'a>(&mut self, row_data: &'a RowData) -> Result<bool, Error> {
+    pub async fn can_be_partitioned<'a>(&mut self, row_data: &'a RowData) -> Result<bool, Error> {
         if row_data.row_type != RowType::Update {
             return Ok(true);
         }
@@ -90,9 +87,7 @@ impl Partitioner for RdbPartitioner {
 
         Ok(true)
     }
-}
 
-impl RdbPartitioner {
     pub fn new_for_mysql(meta_manager: MysqlMetaManager) -> RdbPartitioner {
         Self {
             mysql_meta_manager: Some(meta_manager),

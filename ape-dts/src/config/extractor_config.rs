@@ -1,4 +1,3 @@
-#[derive(Clone)]
 pub enum ExtractorConfig {
     MysqlSnapshot {
         url: String,
@@ -12,6 +11,11 @@ pub enum ExtractorConfig {
         server_id: u64,
     },
 
+    MysqlCheck {
+        url: String,
+        check_log_dir: String,
+    },
+
     PgSnapshot {
         url: String,
         do_tb: String,
@@ -22,5 +26,10 @@ pub enum ExtractorConfig {
         slot_name: String,
         start_lsn: String,
         heartbeat_interval_secs: u64,
+    },
+
+    PgCheck {
+        url: String,
+        check_log_dir: String,
     },
 }

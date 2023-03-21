@@ -154,6 +154,94 @@ impl MysqlColValueConvertor {
         }
     }
 
+    pub fn from_str(col_meta: &MysqlColMeta, value_str: &str) -> Result<ColValue, Error> {
+        let value_str = value_str.to_string();
+        if ColValue::None.to_string() == value_str {
+            return Ok(ColValue::None);
+        }
+
+        let col_value = match col_meta.typee {
+            MysqlColType::Tiny => match value_str.parse::<i8>() {
+                Ok(value) => ColValue::Tiny(value),
+                Err(_) => ColValue::None,
+            },
+            MysqlColType::UnsignedTiny => match value_str.parse::<u8>() {
+                Ok(value) => ColValue::UnsignedTiny(value),
+                Err(_) => ColValue::None,
+            },
+            MysqlColType::Short => match value_str.parse::<i16>() {
+                Ok(value) => ColValue::Short(value),
+                Err(_) => ColValue::None,
+            },
+            MysqlColType::UnsignedShort => match value_str.parse::<u16>() {
+                Ok(value) => ColValue::UnsignedShort(value),
+                Err(_) => ColValue::None,
+            },
+            MysqlColType::Long => match value_str.parse::<i32>() {
+                Ok(value) => ColValue::Long(value),
+                Err(_) => ColValue::None,
+            },
+            MysqlColType::UnsignedLong => match value_str.parse::<u32>() {
+                Ok(value) => ColValue::UnsignedLong(value),
+                Err(_) => ColValue::None,
+            },
+            MysqlColType::LongLong => match value_str.parse::<i64>() {
+                Ok(value) => ColValue::LongLong(value),
+                Err(_) => ColValue::None,
+            },
+            MysqlColType::UnsignedLongLong => match value_str.parse::<u64>() {
+                Ok(value) => ColValue::UnsignedLongLong(value),
+                Err(_) => ColValue::None,
+            },
+            MysqlColType::Float => match value_str.parse::<f32>() {
+                Ok(value) => ColValue::Float(value),
+                Err(_) => ColValue::None,
+            },
+            MysqlColType::Double => match value_str.parse::<f64>() {
+                Ok(value) => ColValue::Double(value),
+                Err(_) => ColValue::None,
+            },
+
+            MysqlColType::Decimal => ColValue::Decimal(value_str),
+            MysqlColType::Time => ColValue::Time(value_str),
+            MysqlColType::Date => ColValue::Date(value_str),
+            MysqlColType::DateTime => ColValue::DateTime(value_str),
+
+            MysqlColType::Timestamp {
+                timezone_diff_utc_seconds: _,
+            } => ColValue::Timestamp(value_str),
+
+            MysqlColType::Year => match value_str.parse::<u16>() {
+                Ok(value) => ColValue::Year(value),
+                Err(_) => ColValue::None,
+            },
+
+            MysqlColType::String {
+                length: _,
+                charset: _,
+            } => ColValue::String(value_str),
+
+            MysqlColType::Bit => match value_str.parse::<u64>() {
+                Ok(value) => ColValue::Bit(value),
+                Err(_) => ColValue::None,
+            },
+
+            MysqlColType::Set => ColValue::String(value_str),
+            MysqlColType::Enum => ColValue::String(value_str),
+
+            _ => {
+                return Err(Error::Unexpected {
+                    error: format!(
+                        "unsupported column type, column: {}, column type: {:?}",
+                        col_meta.name, col_meta.typee
+                    ),
+                })
+            }
+        };
+
+        Ok(col_value)
+    }
+
     pub fn from_query(row: &MySqlRow, col_meta: &MysqlColMeta) -> Result<ColValue, Error> {
         let col_name: &str = col_meta.name.as_ref();
         let value: Option<Vec<u8>> = row.get_unchecked(col_name);

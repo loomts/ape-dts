@@ -10,6 +10,7 @@ use log::info;
 use sqlx::{mysql::MySqlRow, MySql, Pool};
 
 use crate::{
+    adaptor::{mysql_col_value_convertor::MysqlColValueConvertor, sqlx_ext::SqlxMysqlExt},
     error::Error,
     meta::{
         col_value::ColValue,
@@ -20,12 +21,9 @@ use crate::{
         row_data::RowData,
         row_type::RowType,
     },
-    sqlx_ext::SqlxMysql,
     task::task_util::TaskUtil,
     traits::Extractor,
 };
-
-use super::mysql_col_value_convertor::MysqlColValueConvertor;
 
 pub struct MysqlSnapshotExtractor<'a> {
     pub conn_pool: Pool<MySql>,

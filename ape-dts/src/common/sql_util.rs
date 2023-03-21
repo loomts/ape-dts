@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use log::info;
 
 use crate::{
+    adaptor::pg_col_value_convertor::PgColValueConvertor,
     error::Error,
     meta::{
         col_value::ColValue, mysql::mysql_tb_meta::MysqlTbMeta, pg::pg_tb_meta::PgTbMeta,
@@ -10,7 +11,7 @@ use crate::{
     },
 };
 
-pub struct RdbSinkerUtil<'a> {
+pub struct SqlUtil<'a> {
     schema: &'a str,
     tb: &'a str,
     cols: &'a Vec<String>,
@@ -19,10 +20,10 @@ pub struct RdbSinkerUtil<'a> {
     pg_tb_meta: Option<&'a PgTbMeta>,
 }
 
-impl RdbSinkerUtil<'_> {
+impl SqlUtil<'_> {
     #[inline(always)]
-    pub fn new_for_mysql<'a>(tb_meta: &'a MysqlTbMeta) -> RdbSinkerUtil {
-        RdbSinkerUtil {
+    pub fn new_for_mysql<'a>(tb_meta: &'a MysqlTbMeta) -> SqlUtil {
+        SqlUtil {
             schema: &tb_meta.db,
             tb: &tb_meta.tb,
             cols: &tb_meta.cols,
@@ -33,8 +34,8 @@ impl RdbSinkerUtil<'_> {
     }
 
     #[inline(always)]
-    pub fn new_for_pg<'a>(tb_meta: &'a PgTbMeta) -> RdbSinkerUtil {
-        RdbSinkerUtil {
+    pub fn new_for_pg<'a>(tb_meta: &'a PgTbMeta) -> SqlUtil {
+        SqlUtil {
             schema: &tb_meta.schema,
             tb: &tb_meta.tb,
             cols: &tb_meta.cols,
@@ -244,6 +245,88 @@ impl RdbSinkerUtil<'_> {
         Ok((sql, cols, binds))
     }
 
+    pub fn get_select_query<'a>(
+        &self,
+        row_data: &'a RowData,
+    ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
+        let after = row_data.after.as_ref().unwrap();
+        let (where_sql, not_null_cols) = self.get_where_info(1, &after)?;
+        let mut sql = format!(
+            "SELECT {} FROM {}.{} WHERE {}",
+            self.build_extract_cols_str()?,
+            self.schema,
+            self.tb,
+            where_sql,
+        );
+
+        if self.key_map.is_empty() {
+            sql += " LIMIT 1";
+        }
+
+        let mut cols = Vec::new();
+        let mut binds = Vec::new();
+        for col_name in not_null_cols.iter() {
+            cols.push(col_name.clone());
+            binds.push(after.get(col_name));
+        }
+        Ok((sql, cols, binds))
+    }
+
+    pub fn get_batch_select_query<'a>(
+        &self,
+        data: &'a Vec<RowData>,
+        start_index: usize,
+        batch_size: usize,
+    ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
+        let where_sql = self.get_where_in_info(batch_size)?;
+        let sql = format!(
+            "SELECT {} FROM {}.{} WHERE {}",
+            self.build_extract_cols_str()?,
+            self.schema,
+            self.tb,
+            where_sql,
+        );
+
+        let mut cols = Vec::new();
+        let mut binds = Vec::new();
+        for i in start_index..start_index + batch_size {
+            let row_data = &data[i];
+            let after = row_data.after.as_ref().unwrap();
+            for col in self.where_cols.iter() {
+                cols.push(col.clone());
+                let col_value = after.get(col);
+                if *col_value.unwrap() == ColValue::None {
+                    return Err(Error::Unexpected {
+                        error: format!(
+                            "db: {}, tb: {}, where col: {} is NULL, which should not happen in batch delete",
+                            self.schema, self.tb, col
+                        ),
+                    });
+                }
+                binds.push(col_value);
+            }
+        }
+        Ok((sql, cols, binds))
+    }
+
+    fn build_extract_cols_str(&self) -> Result<String, Error> {
+        if let Some(tb_meta) = self.pg_tb_meta {
+            let mut extract_cols = Vec::new();
+            for col in self.cols.iter() {
+                let col_type = tb_meta.col_type_map.get(col).unwrap();
+                let extract_type = PgColValueConvertor::get_extract_type(col_type);
+                let extract_col = if extract_type.is_empty() {
+                    col.to_string()
+                } else {
+                    format!("{}::{}", col, extract_type)
+                };
+                extract_cols.push(extract_col);
+            }
+            return Ok(extract_cols.join(","));
+        }
+        Ok("*".to_string())
+    }
+
     fn get_where_info(
         &self,
         mut placeholder_index: usize,
@@ -277,6 +360,25 @@ impl RdbSinkerUtil<'_> {
             placeholder_index += 1;
         }
         Ok((where_sql, not_null_cols))
+    }
+
+    fn get_where_in_info(&self, batch_size: usize) -> Result<String, Error> {
+        let mut all_placeholders = Vec::new();
+        let mut placeholder_index = 1;
+        for _ in 0..batch_size {
+            let mut placeholders = Vec::new();
+            for col in self.where_cols.iter() {
+                placeholders.push(self.get_placeholder(placeholder_index, col));
+                placeholder_index += 1;
+            }
+            all_placeholders.push(format!("({})", placeholders.join(",")));
+        }
+
+        Ok(format!(
+            "({}) IN ({})",
+            self.where_cols.join(","),
+            all_placeholders.join(",")
+        ))
     }
 
     #[inline(always)]

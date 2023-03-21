@@ -2,10 +2,20 @@ use std::{fs::File, io::Read};
 
 use configparser::ini::Ini;
 
+use crate::config::pipeline_config::PipelineType;
+
 pub struct TestConfigUtil {}
 
 #[allow(dead_code)]
 impl TestConfigUtil {
+    pub fn get_absolute_dir(relative_dir: &str) -> String {
+        format!(
+            "{}/ape-dts/src/test/{}",
+            project_root::get_project_root().unwrap().to_str().unwrap(),
+            relative_dir
+        )
+    }
+
     pub fn transfer_config(config: Vec<(&str, &str, &str)>) -> Vec<(String, String, String)> {
         let mut result = Vec::new();
         for i in config.iter() {
@@ -24,7 +34,7 @@ impl TestConfigUtil {
 
     pub fn get_default_serial_config() -> Vec<(String, String, String)> {
         Self::transfer_config(vec![
-            ("pipeline", "type", "parralel"),
+            ("pipeline", "type", &PipelineType::RdbPartition.to_string()),
             ("pipeline", "parallel_size", "1"),
             ("sinker", "batch_size", "1"),
         ])
@@ -32,7 +42,7 @@ impl TestConfigUtil {
 
     pub fn get_default_parallel_config() -> Vec<(String, String, String)> {
         Self::transfer_config(vec![
-            ("pipeline", "type", "parralel"),
+            ("pipeline", "type", &PipelineType::RdbPartition.to_string()),
             ("pipeline", "parallel_size", "2"),
             ("sinker", "batch_size", "1"),
         ])
@@ -40,7 +50,7 @@ impl TestConfigUtil {
 
     pub fn get_default_rdb_merge_config() -> Vec<(String, String, String)> {
         Self::transfer_config(vec![
-            ("pipeline", "type", "rdb_merge"),
+            ("pipeline", "type", &PipelineType::RdbMerge.to_string()),
             ("pipeline", "parallel_size", "2"),
             ("sinker", "batch_size", "2"),
         ])

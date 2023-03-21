@@ -10,6 +10,7 @@ use log::info;
 use sqlx::{postgres::PgRow, Pool, Postgres};
 
 use crate::{
+    adaptor::{pg_col_value_convertor::PgColValueConvertor, sqlx_ext::SqlxPgExt},
     error::Error,
     meta::{
         col_value::ColValue,
@@ -17,12 +18,9 @@ use crate::{
         row_data::RowData,
         row_type::RowType,
     },
-    sqlx_ext::SqlxPg,
     task::task_util::TaskUtil,
     traits::Extractor,
 };
-
-use super::pg_col_value_convertor::PgColValueConvertor;
 
 pub struct PgSnapshotExtractor<'a> {
     pub conn_pool: Pool<Postgres>,

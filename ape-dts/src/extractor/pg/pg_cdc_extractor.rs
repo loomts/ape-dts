@@ -24,8 +24,8 @@ use postgres_types::PgLsn;
 use tokio::time::Instant;
 use tokio_postgres::replication::LogicalReplicationStream;
 
-use super::pg_col_value_convertor::PgColValueConvertor;
 use crate::{
+    adaptor::pg_col_value_convertor::PgColValueConvertor,
     error::Error,
     extractor::{pg::pg_cdc_client::PgCdcClient, rdb_filter::RdbFilter},
     meta::{

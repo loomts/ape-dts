@@ -7,17 +7,29 @@ pub struct PipelineConfig {
 }
 
 pub enum PipelineType {
-    DEFAULT,
-    MERGE,
-    SNAPSHOT,
+    Snapshot,
+    RdbPartition,
+    RdbMerge,
+    RdbCheck,
 }
 
 impl PipelineType {
+    pub fn to_string(&self) -> String {
+        match self {
+            Self::Snapshot => "snapshot".to_string(),
+            Self::RdbMerge => "rdb_merge".to_string(),
+            Self::RdbCheck => "rdb_check".to_string(),
+            Self::RdbPartition => "rdb_partition".to_string(),
+        }
+    }
+
     pub fn from_str(type_str: &str) -> Self {
         match type_str {
-            "merge" => Self::MERGE,
-            "snapshot" => Self::SNAPSHOT,
-            _ => Self::DEFAULT,
+            "snapshot" => Self::Snapshot,
+            "rdb_merge" => Self::RdbMerge,
+            "rdb_check" => Self::RdbCheck,
+            "rdb_partition" => Self::RdbPartition,
+            _ => Self::RdbPartition,
         }
     }
 }

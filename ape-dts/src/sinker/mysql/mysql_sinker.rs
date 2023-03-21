@@ -1,17 +1,17 @@
 use crate::{
+    adaptor::sqlx_ext::SqlxMysqlExt,
+    common::sql_util::SqlUtil,
     error::Error,
     meta::{
         mysql::{mysql_meta_manager::MysqlMetaManager, mysql_tb_meta::MysqlTbMeta},
         row_data::RowData,
         row_type::RowType,
     },
-    sqlx_ext::SqlxMysql,
+    sinker::rdb_router::RdbRouter,
     traits::Sinker,
 };
 use log::error;
 use sqlx::{MySql, Pool};
-
-use super::{rdb_router::RdbRouter, rdb_sinker_util::RdbSinkerUtil};
 
 use async_trait::async_trait;
 
@@ -56,9 +56,9 @@ impl MysqlSinker {
     async fn serial_sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
         for row_data in data.iter() {
             let tb_meta = self.get_tb_meta(&row_data).await?;
-            let rdb_util = RdbSinkerUtil::new_for_mysql(&tb_meta);
+            let sql_util = SqlUtil::new_for_mysql(&tb_meta);
 
-            let (mut sql, _cols, binds) = rdb_util.get_query(&row_data)?;
+            let (mut sql, _cols, binds) = sql_util.get_query(&row_data)?;
             sql = self.handle_dialect(&sql);
             let mut query = sqlx::query(&sql);
             for bind in binds {
@@ -66,7 +66,7 @@ impl MysqlSinker {
             }
 
             let result = query.execute(&self.conn_pool).await.unwrap();
-            rdb_util.check_result(result.rows_affected(), 1, &sql, row_data)?;
+            sql_util.check_result(result.rows_affected(), 1, &sql, row_data)?;
         }
         Ok(())
     }
@@ -75,7 +75,7 @@ impl MysqlSinker {
         let all_count = data.len();
         let mut sinked_count = 0;
         let tb_meta = self.get_tb_meta(&data[0]).await?;
-        let rdb_util = RdbSinkerUtil::new_for_mysql(&tb_meta);
+        let sql_util = SqlUtil::new_for_mysql(&tb_meta);
 
         loop {
             let mut batch_size = self.batch_size;
@@ -84,7 +84,7 @@ impl MysqlSinker {
             }
 
             let (sql, _cols, binds) =
-                rdb_util.get_batch_delete_query(&data, sinked_count, batch_size)?;
+                sql_util.get_batch_delete_query(&data, sinked_count, batch_size)?;
             let mut query = sqlx::query(&sql);
             for bind in binds {
                 query = query.bind_col_value(bind);
@@ -103,7 +103,7 @@ impl MysqlSinker {
         let all_count = data.len();
         let mut sinked_count = 0;
         let tb_meta = self.get_tb_meta(&data[0]).await?;
-        let rdb_util = RdbSinkerUtil::new_for_mysql(&tb_meta);
+        let sql_util = SqlUtil::new_for_mysql(&tb_meta);
 
         loop {
             let mut batch_size = self.batch_size;
@@ -112,7 +112,7 @@ impl MysqlSinker {
             }
 
             let (mut sql, _cols, binds) =
-                rdb_util.get_batch_insert_query(&data, sinked_count, batch_size)?;
+                sql_util.get_batch_insert_query(&data, sinked_count, batch_size)?;
             sql = self.handle_dialect(&sql);
             let mut query = sqlx::query(&sql);
             for bind in binds {

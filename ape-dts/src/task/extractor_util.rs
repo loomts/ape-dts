@@ -6,10 +6,13 @@ use crate::{
     error::Error,
     extractor::{
         mysql::{
-            mysql_cdc_extractor::MysqlCdcExtractor,
+            mysql_cdc_extractor::MysqlCdcExtractor, mysql_check_extractor::MysqlCheckExtractor,
             mysql_snapshot_extractor::MysqlSnapshotExtractor,
         },
-        pg::{pg_cdc_extractor::PgCdcExtractor, pg_snapshot_extractor::PgSnapshotExtractor},
+        pg::{
+            pg_cdc_extractor::PgCdcExtractor, pg_check_extractor::PgCheckExtractor,
+            pg_snapshot_extractor::PgSnapshotExtractor,
+        },
         rdb_filter::RdbFilter,
     },
     meta::{
@@ -103,7 +106,51 @@ impl ExtractorUtil {
         })
     }
 
+    pub async fn create_mysql_check_extractor<'a>(
+        url: &str,
+        check_log_dir: &str,
+        slice_size: usize,
+        buffer: &'a ConcurrentQueue<RowData>,
+        log_level: &str,
+        shut_down: &'a AtomicBool,
+    ) -> Result<MysqlCheckExtractor<'a>, Error> {
+        let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
+        let conn_pool = TaskUtil::create_mysql_conn_pool(url, 2, enable_sqlx_log).await?;
+        let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
+
+        Ok(MysqlCheckExtractor {
+            conn_pool: conn_pool.clone(),
+            meta_manager,
+            buffer,
+            check_log_dir: check_log_dir.to_string(),
+            slice_size,
+            shut_down: &&shut_down,
+        })
+    }
+
     pub async fn create_pg_snapshot_extractor<'a>(
+        url: &str,
+        check_log_dir: &str,
+        slice_size: usize,
+        buffer: &'a ConcurrentQueue<RowData>,
+        log_level: &str,
+        shut_down: &'a AtomicBool,
+    ) -> Result<PgCheckExtractor<'a>, Error> {
+        let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
+        let conn_pool = TaskUtil::create_pg_conn_pool(url, 2, enable_sqlx_log).await?;
+        let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
+
+        Ok(PgCheckExtractor {
+            conn_pool: conn_pool.clone(),
+            meta_manager,
+            check_log_dir: check_log_dir.to_string(),
+            buffer,
+            slice_size,
+            shut_down: &&shut_down,
+        })
+    }
+
+    pub async fn create_pg_check_extractor<'a>(
         url: &str,
         do_tb: &str,
         slice_size: usize,

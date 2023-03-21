@@ -14,6 +14,7 @@ use mysql_binlog_connector_rust::{
 };
 
 use crate::{
+    adaptor::mysql_col_value_convertor::MysqlColValueConvertor,
     error::Error,
     extractor::rdb_filter::RdbFilter,
     meta::{
@@ -23,8 +24,6 @@ use crate::{
     task::task_util::TaskUtil,
     traits::Extractor,
 };
-
-use super::mysql_col_value_convertor::MysqlColValueConvertor;
 
 pub struct MysqlCdcExtractor<'a> {
     pub meta_manager: MysqlMetaManager,

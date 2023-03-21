@@ -50,6 +50,11 @@ impl TaskConfig {
                 do_tb: "".to_string(),
             }),
 
+            "mysql_check" => Ok(ExtractorConfig::MysqlCheck {
+                url: ini.get("extractor", "url").unwrap(),
+                check_log_dir: ini.get("extractor", "check_log_dir").unwrap(),
+            }),
+
             "mysql_cdc" => Ok(ExtractorConfig::MysqlCdc {
                 url: ini.get("extractor", "url").unwrap(),
                 binlog_filename: ini.get("extractor", "binlog_filename").unwrap(),
@@ -63,6 +68,11 @@ impl TaskConfig {
             "pg_snapshot" => Ok(ExtractorConfig::PgSnapshot {
                 url: ini.get("extractor", "url").unwrap(),
                 do_tb: "".to_string(),
+            }),
+
+            "pg_check" => Ok(ExtractorConfig::PgCheck {
+                url: ini.get("extractor", "url").unwrap(),
+                check_log_dir: ini.get("extractor", "check_log_dir").unwrap(),
             }),
 
             "pg_cdc" => Ok(ExtractorConfig::PgCdc {
@@ -90,6 +100,16 @@ impl TaskConfig {
             }),
 
             "pg" => Ok(SinkerConfig::Pg {
+                url: ini.get("sinker", "url").unwrap(),
+                batch_size: ini.getuint("sinker", "batch_size").unwrap().unwrap() as usize,
+            }),
+
+            "mysql_check" => Ok(SinkerConfig::MysqlCheck {
+                url: ini.get("sinker", "url").unwrap(),
+                batch_size: ini.getuint("sinker", "batch_size").unwrap().unwrap() as usize,
+            }),
+
+            "pg_check" => Ok(SinkerConfig::PgCheck {
                 url: ini.get("sinker", "url").unwrap(),
                 batch_size: ini.getuint("sinker", "batch_size").unwrap().unwrap() as usize,
             }),
@@ -122,16 +142,12 @@ impl TaskConfig {
     fn load_filter_config(ini: &Ini) -> Result<FilterConfig, Error> {
         let extractor_type = ini.get("extractor", "type").unwrap();
         match extractor_type.as_str() {
-            "mysql_snapshot" | "mysql_cdc" | "pg_snapshot" | "pg_cdc" => Ok(FilterConfig::Rdb {
+            _ => Ok(FilterConfig::Rdb {
                 do_dbs: ini.get("filter", "do_dbs").unwrap(),
                 ignore_dbs: ini.get("filter", "ignore_dbs").unwrap(),
                 do_tbs: ini.get("filter", "do_tbs").unwrap(),
                 ignore_tbs: ini.get("filter", "ignore_tbs").unwrap(),
                 do_events: ini.get("filter", "do_events").unwrap(),
-            }),
-
-            _ => Err(Error::Unexpected {
-                error: "unexpected extractor type".to_string(),
             }),
         }
     }
@@ -139,7 +155,7 @@ impl TaskConfig {
     fn load_router_config(ini: &Ini) -> Result<RouterConfig, Error> {
         let extractor_type = ini.get("sinker", "type").unwrap();
         match extractor_type.as_str() {
-            "mysql" | "pg" => Ok(RouterConfig::Rdb {
+            "mysql" | "pg" | "mysql_check" | "pg_check" => Ok(RouterConfig::Rdb {
                 db_map: ini.get("router", "db_map").unwrap(),
                 tb_map: ini.get("router", "tb_map").unwrap(),
                 field_map: ini.get("router", "field_map").unwrap(),

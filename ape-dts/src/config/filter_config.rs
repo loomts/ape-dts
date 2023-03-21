@@ -1,3 +1,4 @@
+#[derive(Clone)]
 pub enum FilterConfig {
     Rdb {
         do_dbs: String,

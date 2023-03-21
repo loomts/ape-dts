@@ -22,21 +22,20 @@ pub struct TestRunner {
     dst_ddl_file: String,
     src_dml_file: String,
     dst_dml_file: String,
+    miss_log_file: String,
+    diff_log_file: String,
 }
 
 #[allow(dead_code)]
 impl TestRunner {
     pub async fn new(relative_test_dir: &str) -> Result<Self, Error> {
-        let test_dir = format!(
-            "{}/ape-dts/src/test/{}",
-            project_root::get_project_root().unwrap().to_str().unwrap(),
-            relative_test_dir
-        );
-
+        let test_dir = TestConfigUtil::get_absolute_dir(relative_test_dir);
         let src_ddl_file = format!("{}/src_ddl.sql", test_dir);
         let dst_ddl_file = format!("{}/dst_ddl.sql", test_dir);
         let src_dml_file = format!("{}/src_dml.sql", test_dir);
         let dst_dml_file = format!("{}/dst_dml.sql", test_dir);
+        let miss_log_file = format!("{}/miss.log", test_dir);
+        let diff_log_file = format!("{}/diff.log", test_dir);
         let task_config_file = format!("{}/task_config.ini", test_dir);
 
         let mut src_conn_pool_mysql = None;
@@ -46,19 +45,25 @@ impl TestRunner {
 
         let config = TaskConfig::new(&task_config_file);
         match config.extractor {
-            ExtractorConfig::MysqlCdc { url, .. } | ExtractorConfig::MysqlSnapshot { url, .. } => {
+            ExtractorConfig::MysqlCdc { url, .. }
+            | ExtractorConfig::MysqlSnapshot { url, .. }
+            | ExtractorConfig::MysqlCheck { url, .. } => {
                 src_conn_pool_mysql = Some(TaskUtil::create_mysql_conn_pool(&url, 1, true).await?);
             }
-            ExtractorConfig::PgCdc { url, .. } | ExtractorConfig::PgSnapshot { url, .. } => {
+
+            ExtractorConfig::PgCdc { url, .. }
+            | ExtractorConfig::PgSnapshot { url, .. }
+            | ExtractorConfig::PgCheck { url, .. } => {
                 src_conn_pool_pg = Some(TaskUtil::create_pg_conn_pool(&url, 1, true).await?);
             }
         }
 
         match config.sinker {
-            SinkerConfig::Mysql { url, .. } => {
+            SinkerConfig::Mysql { url, .. } | SinkerConfig::MysqlCheck { url, .. } => {
                 dst_conn_pool_mysql = Some(TaskUtil::create_mysql_conn_pool(&url, 1, true).await?);
             }
-            SinkerConfig::Pg { url, .. } => {
+
+            SinkerConfig::Pg { url, .. } | SinkerConfig::PgCheck { url, .. } => {
                 dst_conn_pool_pg = Some(TaskUtil::create_pg_conn_pool(&url, 1, true).await?);
             }
         }
@@ -73,19 +78,9 @@ impl TestRunner {
             src_dml_file,
             dst_dml_file,
             task_config_file,
+            miss_log_file,
+            diff_log_file,
         })
-    }
-
-    pub async fn run_snapshot_test_with_different_configs(
-        &self,
-        enable_log4rs: bool,
-        configs: &Vec<Vec<(String, String, String)>>,
-    ) -> Result<(), Error> {
-        for config in configs {
-            TestConfigUtil::update_task_config(&self.task_config_file, config);
-            self.run_snapshot_test(enable_log4rs).await.unwrap();
-        }
-        Ok(())
     }
 
     pub async fn run_cdc_test_with_different_configs(
@@ -103,6 +98,31 @@ impl TestRunner {
                 .await
                 .unwrap();
         }
+        Ok(())
+    }
+
+    pub async fn run_check_test(&self, enable_log4rs: bool) -> Result<(), Error> {
+        // prepare src and dst tables
+        self.prepare_test_tbs(&self.src_ddl_file, &self.dst_ddl_file)
+            .await?;
+
+        if Self::check_file_exists(&self.src_dml_file) {
+            let src_dml_file_sqls = TestRunner::load_sqls(&self.src_dml_file)?;
+            self.execute_src_sqls(&src_dml_file_sqls).await?;
+        }
+
+        if Self::check_file_exists(&self.dst_dml_file) {
+            let dst_dml_file_sqls = TestRunner::load_sqls(&self.dst_dml_file)?;
+            self.execute_dst_sqls(&dst_dml_file_sqls).await?;
+        }
+
+        // start task
+        let task_config = self.task_config_file.clone();
+        TaskRunner::new(task_config)
+            .await
+            .start_task(enable_log4rs)
+            .await?;
+
         Ok(())
     }
 

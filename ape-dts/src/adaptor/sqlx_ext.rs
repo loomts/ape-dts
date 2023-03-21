@@ -2,11 +2,11 @@ use sqlx::{mysql::MySqlArguments, postgres::PgArguments, query::Query, MySql, Po
 
 use crate::meta::{col_value::ColValue, pg::pg_col_type::PgColType};
 
-pub trait SqlxPg<'q> {
+pub trait SqlxPgExt<'q> {
     fn bind_col_value<'b: 'q>(self, col_value: Option<&'b ColValue>, col_type: &PgColType) -> Self;
 }
 
-impl<'q> SqlxPg<'q> for Query<'q, Postgres, PgArguments> {
+impl<'q> SqlxPgExt<'q> for Query<'q, Postgres, PgArguments> {
     fn bind_col_value<'b: 'q>(self, col_value: Option<&'b ColValue>, col_type: &PgColType) -> Self {
         if let Some(value) = col_value {
             match value {
@@ -71,11 +71,11 @@ impl<'q> SqlxPg<'q> for Query<'q, Postgres, PgArguments> {
     }
 }
 
-pub trait SqlxMysql<'q> {
+pub trait SqlxMysqlExt<'q> {
     fn bind_col_value<'b: 'q>(self, col_value: Option<&'b ColValue>) -> Self;
 }
 
-impl<'q> SqlxMysql<'q> for Query<'q, MySql, MySqlArguments> {
+impl<'q> SqlxMysqlExt<'q> for Query<'q, MySql, MySqlArguments> {
     fn bind_col_value<'b: 'q>(self, col_value: Option<&'b ColValue>) -> Self {
         if let Some(value) = col_value {
             match value {

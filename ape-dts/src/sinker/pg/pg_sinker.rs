@@ -1,4 +1,6 @@
 use crate::{
+    adaptor::sqlx_ext::SqlxPgExt,
+    common::sql_util::SqlUtil,
     error::Error,
     meta::{
         col_value::ColValue,
@@ -6,13 +8,11 @@ use crate::{
         row_data::RowData,
         row_type::RowType,
     },
-    sqlx_ext::SqlxPg,
+    sinker::rdb_router::RdbRouter,
     traits::Sinker,
 };
 use log::error;
 use sqlx::{Pool, Postgres};
-
-use super::{rdb_router::RdbRouter, rdb_sinker_util::RdbSinkerUtil};
 
 use async_trait::async_trait;
 
@@ -57,12 +57,12 @@ impl PgSinker {
     async fn serial_sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
         for row_data in data.iter() {
             let tb_meta = self.get_tb_meta(&row_data).await?;
-            let rdb_util = RdbSinkerUtil::new_for_pg(&tb_meta);
+            let sql_util = SqlUtil::new_for_pg(&tb_meta);
 
             let (sql, cols, binds) = if row_data.row_type == RowType::Insert {
-                self.get_insert_query(&rdb_util, &tb_meta, row_data)?
+                self.get_insert_query(&sql_util, &tb_meta, row_data)?
             } else {
-                rdb_util.get_query(&row_data)?
+                sql_util.get_query(&row_data)?
             };
 
             let mut query = sqlx::query(&sql);
@@ -72,7 +72,7 @@ impl PgSinker {
             }
 
             let result = query.execute(&self.conn_pool).await;
-            rdb_util.check_result(result.unwrap().rows_affected(), 1, &sql, row_data)?;
+            sql_util.check_result(result.unwrap().rows_affected(), 1, &sql, row_data)?;
         }
         Ok(())
     }
@@ -81,7 +81,7 @@ impl PgSinker {
         let all_count = data.len();
         let mut sinked_count = 0;
         let tb_meta = self.get_tb_meta(&data[0]).await?;
-        let rdb_util = RdbSinkerUtil::new_for_pg(&tb_meta);
+        let sql_util = SqlUtil::new_for_pg(&tb_meta);
 
         loop {
             let mut batch_size = self.batch_size;
@@ -90,7 +90,7 @@ impl PgSinker {
             }
 
             let (sql, cols, binds) =
-                rdb_util.get_batch_delete_query(&data, sinked_count, batch_size)?;
+                sql_util.get_batch_delete_query(&data, sinked_count, batch_size)?;
             let mut query = sqlx::query(&sql);
             for i in 0..binds.len() {
                 let col_type = tb_meta.col_type_map.get(&cols[i]).unwrap();
@@ -110,7 +110,7 @@ impl PgSinker {
         let all_count = data.len();
         let mut sinked_count = 0;
         let tb_meta = self.get_tb_meta(&data[0]).await?;
-        let rdb_util = RdbSinkerUtil::new_for_pg(&tb_meta);
+        let sql_util = SqlUtil::new_for_pg(&tb_meta);
 
         loop {
             let mut batch_size = self.batch_size;
@@ -119,7 +119,7 @@ impl PgSinker {
             }
 
             let (sql, cols, binds) =
-                rdb_util.get_batch_insert_query(&data, sinked_count, batch_size)?;
+                sql_util.get_batch_insert_query(&data, sinked_count, batch_size)?;
             let mut query = sqlx::query(&sql);
             for i in 0..binds.len() {
                 let col_type = tb_meta.col_type_map.get(&cols[i]).unwrap();
@@ -148,11 +148,11 @@ impl PgSinker {
 
     fn get_insert_query<'a>(
         &self,
-        rdb_util: &RdbSinkerUtil,
+        sql_util: &SqlUtil,
         tb_meta: &PgTbMeta,
         row_data: &'a RowData,
     ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
-        let (mut sql, mut cols, mut binds) = rdb_util.get_insert_query(row_data)?;
+        let (mut sql, mut cols, mut binds) = sql_util.get_insert_query(row_data)?;
 
         let mut placeholder_index = cols.len() + 1;
         let after = row_data.after.as_ref().unwrap();
@@ -161,7 +161,7 @@ impl PgSinker {
             let set_pair = format!(
                 "{}={}",
                 col,
-                rdb_util.get_placeholder(placeholder_index, col)
+                sql_util.get_placeholder(placeholder_index, col)
             );
             set_pairs.push(set_pair);
             cols.push(col.clone());

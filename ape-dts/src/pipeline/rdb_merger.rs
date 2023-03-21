@@ -170,11 +170,6 @@ impl RdbMerger {
     }
 
     async fn get_hash_code(&mut self, row_data: &RowData) -> Result<u128, Error> {
-        let col_values = match row_data.row_type {
-            RowType::Insert => row_data.after.as_ref().unwrap(),
-            _ => row_data.before.as_ref().unwrap(),
-        };
-
         let (_, key_map, where_cols) = self
             .rdb_partitioner
             .get_tb_meta_info(&row_data.db, &row_data.tb)
@@ -183,25 +178,7 @@ impl RdbMerger {
             return Ok(0);
         }
 
-        // refer to: https://docs.oracle.com/javase/6/docs/api/java/util/List.html#hashCode%28%29
-        let mut hash_code = 1u128;
-        let mut key_col_hash_codes = Vec::new();
-        for col in where_cols {
-            let col_hash_code = col_values.get(&col).unwrap().hash_code();
-            // col_hash_code is 0 if col_value is ColValue::None,
-            // consider fowlling case,
-            // create table a(id int, value int, unique key(id, value));
-            // insert into a values(1, NULL);
-            // delete from a where (id, value) in ((1, NULL));  // this won't work
-            // delete from a where id=1 and value is NULL;  // this works
-            // so here return 0 to stop merging to avoid batch deleting
-            if col_hash_code == 0 {
-                return Ok(0);
-            }
-            hash_code = 31 * hash_code + col_hash_code as u128;
-            key_col_hash_codes.push(col_hash_code);
-        }
-        Ok(hash_code)
+        Ok(row_data.get_hash_code(&where_cols))
     }
 }
 

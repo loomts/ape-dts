@@ -9,23 +9,16 @@ use futures::future::join;
 use log4rs::config::RawConfig;
 
 use crate::{
-    config::{
-        extractor_config::ExtractorConfig, pipeline_config::PipelineType,
-        sinker_config::SinkerConfig, task_config::TaskConfig,
-    },
+    config::{extractor_config::ExtractorConfig, task_config::TaskConfig},
     error::Error,
     extractor::rdb_filter::RdbFilter,
     meta::row_data::RowData,
     metric::Metric,
-    pipeline::{
-        default_pipeline::DefaultPipeline, merge_pipeline::MergePipeline,
-        snapshot_pipeline::SnapshotPipeline,
-    },
-    sinker::rdb_router::RdbRouter,
-    traits::{Extractor, Pipeline},
+    pipeline::pipeline::Pipeline,
+    traits::Extractor,
 };
 
-use super::{extractor_util::ExtractorUtil, sinker_util::SinkerUtil};
+use super::{extractor_util::ExtractorUtil, pipeline_util::PipelineUtil, sinker_util::SinkerUtil};
 
 pub struct TaskRunner {
     config: TaskConfig,
@@ -95,7 +88,17 @@ impl TaskRunner {
         let mut extractor = self
             .create_extractor(&extractor_config, &buffer, &shut_down, metric.clone())
             .await?;
-        let mut pipeline = self.create_pipeline(&buffer, &shut_down, metric).await?;
+
+        let sinkers = SinkerUtil::create_sinkers(&self.config).await?;
+        let parallelizer = PipelineUtil::create_parallelizer(&self.config).await?;
+        let mut pipeline = Pipeline {
+            buffer: &buffer,
+            parallelizer,
+            sinkers,
+            shut_down: &shut_down,
+            checkpoint_interval_secs: self.config.pipeline.checkpoint_interval_secs,
+            metric,
+        };
 
         let result = join(extractor.extract(), pipeline.start()).await;
         pipeline.stop().await?;
@@ -118,6 +121,19 @@ impl TaskRunner {
                 let extractor = ExtractorUtil::create_mysql_snapshot_extractor(
                     &url,
                     &do_tb,
+                    self.config.pipeline.buffer_size,
+                    &buffer,
+                    &self.config.runtime.log_level,
+                    &shut_down,
+                )
+                .await?;
+                Box::new(extractor)
+            }
+
+            ExtractorConfig::MysqlCheck { url, check_log_dir } => {
+                let extractor = ExtractorUtil::create_mysql_check_extractor(
+                    &url,
+                    &check_log_dir,
                     self.config.pipeline.buffer_size,
                     &buffer,
                     &self.config.runtime.log_level,
@@ -161,6 +177,19 @@ impl TaskRunner {
                 Box::new(extractor)
             }
 
+            ExtractorConfig::PgCheck { url, check_log_dir } => {
+                let extractor = ExtractorUtil::create_pg_check_extractor(
+                    &url,
+                    &check_log_dir,
+                    self.config.pipeline.buffer_size,
+                    &buffer,
+                    &self.config.runtime.log_level,
+                    &shut_down,
+                )
+                .await?;
+                Box::new(extractor)
+            }
+
             ExtractorConfig::PgCdc {
                 url,
                 slot_name,
@@ -184,81 +213,6 @@ impl TaskRunner {
             }
         };
         Ok(extractor)
-    }
-
-    async fn create_pipeline<'a>(
-        &self,
-        buffer: &'a ConcurrentQueue<RowData>,
-        shut_down: &'a AtomicBool,
-        metric: Arc<Mutex<Metric>>,
-    ) -> Result<Box<dyn Pipeline + 'a + Send>, Error> {
-        let router = RdbRouter::from_config(&self.config.router)?;
-        let sub_sinkers = match &self.config.sinker {
-            SinkerConfig::Mysql { url, batch_size } => {
-                SinkerUtil::create_mysql_sinker(
-                    &url,
-                    &router,
-                    &self.config.runtime.log_level,
-                    self.config.pipeline.parallel_size,
-                    *batch_size,
-                )
-                .await?
-            }
-
-            SinkerConfig::Pg { url, batch_size } => {
-                SinkerUtil::create_pg_sinker(
-                    &url,
-                    &router,
-                    &self.config.runtime.log_level,
-                    self.config.pipeline.parallel_size,
-                    *batch_size,
-                )
-                .await?
-            }
-        };
-
-        let pipeline: Box<dyn Pipeline + 'a + Send> = match self.config.pipeline.pipeline_type {
-            PipelineType::MERGE => {
-                let merger = SinkerUtil::create_rdb_merger(
-                    &self.config.runtime.log_level,
-                    &self.config.sinker,
-                )
-                .await?;
-                Box::new(MergePipeline {
-                    buffer,
-                    merger,
-                    sinkers: sub_sinkers,
-                    shut_down,
-                    metric,
-                    checkpoint_interval_secs: self.config.pipeline.checkpoint_interval_secs,
-                })
-            }
-
-            PipelineType::SNAPSHOT => Box::new(SnapshotPipeline {
-                buffer,
-                sinkers: sub_sinkers,
-                shut_down,
-                metric,
-                checkpoint_interval_secs: self.config.pipeline.checkpoint_interval_secs,
-            }),
-
-            PipelineType::DEFAULT => {
-                let partitioner = SinkerUtil::create_rdb_partitioner(
-                    &self.config.runtime.log_level,
-                    &self.config.sinker,
-                )
-                .await?;
-                Box::new(DefaultPipeline {
-                    buffer,
-                    partitioner: Box::new(partitioner),
-                    sinkers: sub_sinkers,
-                    shut_down,
-                    metric,
-                    checkpoint_interval_secs: self.config.pipeline.checkpoint_interval_secs,
-                })
-            }
-        };
-        Ok(pipeline)
     }
 
     fn init_log4rs(&self) -> Result<(), Error> {

@@ -73,7 +73,7 @@ impl ColValue {
             ColValue::Enum(v) => v.to_string(),
             ColValue::Enum2(v) => v.to_string(),
             ColValue::Json(v) => format!("{:?}", v),
-            _ => "none".to_string(),
+            _ => "null".to_string(),
         }
     }
 }
