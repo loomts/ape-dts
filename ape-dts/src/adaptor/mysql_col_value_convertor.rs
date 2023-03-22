@@ -7,10 +7,7 @@ use sqlx::{mysql::MySqlRow, Row};
 
 use crate::{
     error::Error,
-    meta::{
-        col_value::ColValue,
-        mysql::{mysql_col_meta::MysqlColMeta, mysql_col_type::MysqlColType},
-    },
+    meta::{col_value::ColValue, mysql::mysql_col_type::MysqlColType},
 };
 
 pub struct MysqlColValueConvertor {}
@@ -74,10 +71,10 @@ impl MysqlColValueConvertor {
         }
     }
 
-    pub fn from_binlog(col_meta: &MysqlColMeta, value: ColumnValue) -> ColValue {
+    pub fn from_binlog(col_type: &MysqlColType, value: ColumnValue) -> ColValue {
         match value {
             ColumnValue::Tiny(v) => {
-                if col_meta.typee == MysqlColType::UnsignedTiny {
+                if *col_type == MysqlColType::UnsignedTiny {
                     return ColValue::UnsignedTiny(v as u8);
                 } else {
                     return ColValue::Tiny(v);
@@ -85,7 +82,7 @@ impl MysqlColValueConvertor {
             }
 
             ColumnValue::Short(v) => {
-                if col_meta.typee == MysqlColType::UnsignedShort {
+                if *col_type == MysqlColType::UnsignedShort {
                     return ColValue::UnsignedShort(v as u16);
                 } else {
                     return ColValue::Short(v);
@@ -93,7 +90,7 @@ impl MysqlColValueConvertor {
             }
 
             ColumnValue::Long(v) => {
-                if col_meta.typee == MysqlColType::UnsignedLong {
+                if *col_type == MysqlColType::UnsignedLong {
                     return ColValue::UnsignedLong(v as u32);
                 } else {
                     return ColValue::Long(v);
@@ -101,7 +98,7 @@ impl MysqlColValueConvertor {
             }
 
             ColumnValue::LongLong(v) => {
-                if col_meta.typee == MysqlColType::UnsignedLongLong {
+                if *col_type == MysqlColType::UnsignedLongLong {
                     return ColValue::UnsignedLongLong(v as u64);
                 } else {
                     return ColValue::LongLong(v);
@@ -119,7 +116,7 @@ impl MysqlColValueConvertor {
             ColumnValue::Timestamp(v) => {
                 if let MysqlColType::Timestamp {
                     timezone_diff_utc_seconds,
-                } = col_meta.typee
+                } = *col_type
                 {
                     // the value parsed from binlog is in millis with UTC
                     let dt = Utc.timestamp_nanos(v * 1000 + timezone_diff_utc_seconds * 1000000000);
@@ -134,7 +131,7 @@ impl MysqlColValueConvertor {
             ColumnValue::String(v) => {
                 // when the type is binary(length), the value shoud be right-padded with '\0' to the specified length,
                 // otherwise the comparison will fail. https://dev.mysql.com/doc/refman/8.0/en/binary-varbinary.html
-                if let MysqlColType::Binary { length } = col_meta.typee {
+                if let MysqlColType::Binary { length } = *col_type {
                     if length as usize > v.len() {
                         let pad_v: Vec<u8> = vec![0; length as usize - v.len()];
                         let final_v = [v, pad_v].concat();
@@ -154,13 +151,13 @@ impl MysqlColValueConvertor {
         }
     }
 
-    pub fn from_str(col_meta: &MysqlColMeta, value_str: &str) -> Result<ColValue, Error> {
+    pub fn from_str(col_type: &MysqlColType, value_str: &str) -> Result<ColValue, Error> {
         let value_str = value_str.to_string();
         if ColValue::None.to_string() == value_str {
             return Ok(ColValue::None);
         }
 
-        let col_value = match col_meta.typee {
+        let col_value = match *col_type {
             MysqlColType::Tiny => match value_str.parse::<i8>() {
                 Ok(value) => ColValue::Tiny(value),
                 Err(_) => ColValue::None,
@@ -231,10 +228,7 @@ impl MysqlColValueConvertor {
 
             _ => {
                 return Err(Error::Unexpected {
-                    error: format!(
-                        "unsupported column type, column: {}, column type: {:?}",
-                        col_meta.name, col_meta.typee
-                    ),
+                    error: format!("unsupported column type,  column type: {:?}", col_type),
                 })
             }
         };
@@ -242,113 +236,116 @@ impl MysqlColValueConvertor {
         Ok(col_value)
     }
 
-    pub fn from_query(row: &MySqlRow, col_meta: &MysqlColMeta) -> Result<ColValue, Error> {
-        let col_name: &str = col_meta.name.as_ref();
-        let value: Option<Vec<u8>> = row.get_unchecked(col_name);
+    pub fn from_query(
+        row: &MySqlRow,
+        col: &str,
+        col_type: &MysqlColType,
+    ) -> Result<ColValue, Error> {
+        let value: Option<Vec<u8>> = row.get_unchecked(col);
         if let None = value {
             return Ok(ColValue::None);
         }
 
-        match col_meta.typee {
+        match col_type {
             MysqlColType::Tiny => {
-                let value: i8 = row.try_get(col_name)?;
+                let value: i8 = row.try_get(col)?;
                 return Ok(ColValue::Tiny(value));
             }
             MysqlColType::UnsignedTiny => {
-                let value: u8 = row.try_get(col_name)?;
+                let value: u8 = row.try_get(col)?;
                 return Ok(ColValue::UnsignedTiny(value));
             }
             MysqlColType::Short => {
-                let value: i16 = row.try_get(col_name)?;
+                let value: i16 = row.try_get(col)?;
                 return Ok(ColValue::Short(value));
             }
             MysqlColType::UnsignedShort => {
-                let value: u16 = row.try_get(col_name)?;
+                let value: u16 = row.try_get(col)?;
                 return Ok(ColValue::UnsignedShort(value));
             }
             MysqlColType::Long => {
-                let value: i32 = row.try_get(col_name)?;
+                let value: i32 = row.try_get(col)?;
                 return Ok(ColValue::Long(value));
             }
             MysqlColType::UnsignedLong => {
-                let value: u32 = row.try_get(col_name)?;
+                let value: u32 = row.try_get(col)?;
                 return Ok(ColValue::UnsignedLong(value));
             }
             MysqlColType::LongLong => {
-                let value: i64 = row.try_get(col_name)?;
+                let value: i64 = row.try_get(col)?;
                 return Ok(ColValue::LongLong(value));
             }
             MysqlColType::UnsignedLongLong => {
-                let value: u64 = row.try_get(col_name)?;
+                let value: u64 = row.try_get(col)?;
                 return Ok(ColValue::UnsignedLongLong(value));
             }
             MysqlColType::Float => {
-                let value: f32 = row.try_get(col_name)?;
+                let value: f32 = row.try_get(col)?;
                 return Ok(ColValue::Float(value));
             }
             MysqlColType::Double => {
-                let value: f64 = row.try_get(col_name)?;
+                let value: f64 = row.try_get(col)?;
                 return Ok(ColValue::Double(value));
             }
             MysqlColType::Decimal => {
-                let value: String = row.get_unchecked(col_name);
+                let value: String = row.get_unchecked(col);
                 return Ok(ColValue::Decimal(value));
             }
             MysqlColType::Time => {
-                let value: Vec<u8> = row.get_unchecked(col_name);
+                let value: Vec<u8> = row.get_unchecked(col);
                 return MysqlColValueConvertor::parse_time(value);
             }
             MysqlColType::Date => {
-                let value: Vec<u8> = row.get_unchecked(col_name);
+                let value: Vec<u8> = row.get_unchecked(col);
                 return MysqlColValueConvertor::parse_date(value);
             }
             MysqlColType::DateTime => {
-                let value: Vec<u8> = row.get_unchecked(col_name);
+                let value: Vec<u8> = row.get_unchecked(col);
                 return MysqlColValueConvertor::parse_datetime(value);
             }
             MysqlColType::Timestamp {
                 timezone_diff_utc_seconds: _,
             } => {
-                let value: Vec<u8> = row.get_unchecked(col_name);
+                let value: Vec<u8> = row.get_unchecked(col);
                 return MysqlColValueConvertor::parse_timestamp(value);
             }
             MysqlColType::Year => {
-                let value: u16 = row.try_get(col_name)?;
+                let value: u16 = row.try_get(col)?;
                 return Ok(ColValue::Year(value));
             }
             MysqlColType::String {
                 length: _,
                 charset: _,
             } => {
-                let value: Vec<u8> = row.try_get(col_name)?;
+                let value: Vec<u8> = row.try_get(col)?;
                 return Ok(ColValue::Blob(value));
             }
             MysqlColType::Binary { length: _ } => {
-                let value: Vec<u8> = row.try_get(col_name)?;
+                let value: Vec<u8> = row.try_get(col)?;
                 return Ok(ColValue::Blob(value));
             }
             MysqlColType::VarBinary { length: _ } => {
-                let value: Vec<u8> = row.try_get(col_name)?;
+                let value: Vec<u8> = row.try_get(col)?;
                 return Ok(ColValue::Blob(value));
             }
             MysqlColType::Blob => {
-                let value: Vec<u8> = row.try_get(col_name)?;
+                let value: Vec<u8> = row.try_get(col)?;
                 return Ok(ColValue::Blob(value));
             }
             MysqlColType::Bit => {
-                let value: u64 = row.try_get(col_name)?;
+                let value: u64 = row.try_get(col)?;
                 return Ok(ColValue::Bit(value as u64));
             }
             MysqlColType::Set => {
-                let value: String = row.try_get(col_name)?;
+                let value: String = row.try_get(col)?;
                 return Ok(ColValue::Set2(value));
             }
             MysqlColType::Enum => {
-                let value: String = row.try_get(col_name)?;
+                let value: String = row.try_get(col)?;
                 return Ok(ColValue::Enum2(value));
             }
             MysqlColType::Json => {
-                let value: Vec<u8> = row.get_unchecked(col_name);
+                let value: Vec<u8> = row.get_unchecked(col);
                 return Ok(ColValue::Json(value));
             }
             _ => {}

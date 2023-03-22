@@ -13,7 +13,7 @@ mod test {
             .block_on(TestRunner::new("mysql_to_mysql/cdc_basic_test"))
             .unwrap();
         let configs = TestConfigUtil::get_default_configs();
-        rt.block_on(runner.run_cdc_test_with_different_configs(3000, 1000, false, &configs))
+        rt.block_on(runner.run_cdc_test_with_different_configs(3000, 1000, &configs))
             .unwrap();
     }
 
@@ -25,7 +25,7 @@ mod test {
             .block_on(TestRunner::new("mysql_to_mysql/cdc_uk_changed_test"))
             .unwrap();
         let configs = TestConfigUtil::get_default_configs();
-        rt.block_on(runner.run_cdc_test_with_different_configs(3000, 1000, false, &configs))
+        rt.block_on(runner.run_cdc_test_with_different_configs(3000, 1000, &configs))
             .unwrap();
     }
 }

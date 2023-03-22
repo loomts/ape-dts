@@ -234,16 +234,16 @@ impl MysqlCdcExtractor<'_> {
         }
 
         let mut data = HashMap::new();
-        for i in (0..tb_meta.cols.len()).rev() {
-            let key = tb_meta.cols.get(i).unwrap();
+        for i in (0..tb_meta.basic.cols.len()).rev() {
+            let key = tb_meta.basic.cols.get(i).unwrap();
             if let Some(false) = included_columns.get(i) {
                 data.insert(key.clone(), ColValue::None);
                 continue;
             }
 
-            let meta = tb_meta.col_meta_map.get(key);
+            let col_type = tb_meta.col_type_map.get(key).unwrap();
             let raw_value = event.column_values.remove(i);
-            let value = MysqlColValueConvertor::from_binlog(&meta.unwrap(), raw_value);
+            let value = MysqlColValueConvertor::from_binlog(col_type, raw_value);
             data.insert(key.clone(), value);
         }
         Ok(data)

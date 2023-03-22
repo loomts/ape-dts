@@ -4,11 +4,12 @@ use futures::TryStreamExt;
 
 use sqlx::{mysql::MySqlRow, MySql, Pool, Row};
 
-use crate::{error::Error, meta::meta_util::MetaUtil};
-
-use super::{
-    mysql_col_meta::MysqlColMeta, mysql_col_type::MysqlColType, mysql_tb_meta::MysqlTbMeta,
+use crate::{
+    error::Error,
+    meta::{meta_util::MetaUtil, rdb_tb_meta::RdbTbMeta},
 };
+
+use super::{mysql_col_type::MysqlColType, mysql_tb_meta::MysqlTbMeta};
 
 #[derive(Clone)]
 pub struct MysqlMetaManager {
@@ -42,38 +43,43 @@ impl<'a> MysqlMetaManager {
         Ok(self)
     }
 
-    pub async fn get_tb_meta(&mut self, db: &str, tb: &str) -> Result<MysqlTbMeta, Error> {
-        let full_name = format!("{}.{}", db, tb);
+    pub async fn get_tb_meta(&mut self, schema: &str, tb: &str) -> Result<MysqlTbMeta, Error> {
+        let full_name = format!("{}.{}", schema, tb);
         if let Some(tb_meta) = self.cache.get(&full_name) {
             return Ok(tb_meta.clone());
         }
 
-        let (cols, col_meta_map) = self.parse_cols(db, tb).await?;
-        let key_map = self.parse_keys(db, tb).await?;
-        let (order_col, partition_col, where_cols) = MetaUtil::parse_rdb_cols(&key_map, &cols)?;
-        let tb_meta = MysqlTbMeta {
-            db: db.to_string(),
+        let (cols, col_type_map) = self.parse_cols(schema, tb).await?;
+        let key_map = self.parse_keys(schema, tb).await?;
+        let (order_col, partition_col, id_cols) = MetaUtil::parse_rdb_cols(&key_map, &cols)?;
+
+        let basic = RdbTbMeta {
+            schema: schema.to_string(),
             tb: tb.to_string(),
             cols,
-            col_meta_map,
             key_map,
             order_col,
             partition_col,
-            where_cols,
+            id_cols,
         };
+        let tb_meta = MysqlTbMeta {
+            basic,
+            col_type_map,
+        };
+
         self.cache.insert(full_name.clone(), tb_meta.clone());
         Ok(tb_meta)
     }
 
     async fn parse_cols(
         &mut self,
-        db: &str,
+        schema: &str,
         tb: &str,
-    ) -> Result<(Vec<String>, HashMap<String, MysqlColMeta>), Error> {
+    ) -> Result<(Vec<String>, HashMap<String, MysqlColType>), Error> {
         let mut cols = Vec::new();
-        let mut col_meta_map = HashMap::new();
+        let mut col_type_map = HashMap::new();
 
-        let sql = format!("DESC {}.{}", db, tb);
+        let sql = format!("DESC {}.{}", schema, tb);
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let col_name: String = row.try_get("Field")?;
@@ -82,27 +88,30 @@ impl<'a> MysqlMetaManager {
 
         let sql = format!("SELECT {}, {}, {}, {}, {} FROM information_schema.columns WHERE table_schema = ? AND table_name = ?", 
             COLUMN_NAME, COLUMN_TYPE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_SET_NAME);
-        let mut rows = sqlx::query(&sql).bind(db).bind(tb).fetch(&self.conn_pool);
+        let mut rows = sqlx::query(&sql)
+            .bind(schema)
+            .bind(tb)
+            .fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
-            let col_type = self.parse_col_meta(&row).await?;
-            col_meta_map.insert(col_type.name.clone(), col_type);
+            let col: String = row.try_get(COLUMN_NAME)?;
+            let col_type = self.get_col_type(&row).await?;
+            col_type_map.insert(col, col_type);
         }
 
         if cols.is_empty() {
             return Err(Error::MetadataError {
-                error: format!("failed to get table metadata for: {}.{}", db, tb),
+                error: format!("failed to get table metadata for: {}.{}", schema, tb),
             });
         }
-        Ok((cols, col_meta_map))
+        Ok((cols, col_type_map))
     }
 
-    async fn parse_col_meta(&mut self, row: &MySqlRow) -> Result<MysqlColMeta, Error> {
-        let col_name: String = row.try_get(COLUMN_NAME)?;
-        let col_type: String = row.try_get(COLUMN_TYPE)?;
+    async fn get_col_type(&mut self, row: &MySqlRow) -> Result<MysqlColType, Error> {
+        let column_type: String = row.try_get(COLUMN_TYPE)?;
         let data_type: String = row.try_get(DATA_TYPE)?;
 
-        let unsigned = col_type.to_lowercase().contains("unsigned");
-        let typee = match data_type.as_str() {
+        let unsigned = column_type.to_lowercase().contains("unsigned");
+        let col_type = match data_type.as_str() {
             "tinyint" => {
                 if unsigned {
                     MysqlColType::UnsignedTiny
@@ -181,10 +190,7 @@ impl<'a> MysqlMetaManager {
             _ => MysqlColType::Unkown,
         };
 
-        Ok(MysqlColMeta {
-            name: col_name,
-            typee,
-        })
+        Ok(col_type)
     }
 
     async fn get_col_length(&mut self, row: &MySqlRow) -> Result<u64, Error> {
@@ -199,9 +205,13 @@ impl<'a> MysqlMetaManager {
         }
     }
 
-    async fn parse_keys(&self, db: &str, tb: &str) -> Result<HashMap<String, Vec<String>>, Error> {
+    async fn parse_keys(
+        &self,
+        schema: &str,
+        tb: &str,
+    ) -> Result<HashMap<String, Vec<String>>, Error> {
         let mut key_map: HashMap<String, Vec<String>> = HashMap::new();
-        let sql = format!("SHOW INDEXES FROM {}.{}", db, tb);
+        let sql = format!("SHOW INDEXES FROM {}.{}", schema, tb);
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let non_unique: i8 = row.try_get("Non_unique")?;

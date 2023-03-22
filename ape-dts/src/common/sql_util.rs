@@ -1,34 +1,56 @@
 use std::collections::HashMap;
 
-use log::info;
+use sqlx::{mysql::MySqlArguments, postgres::PgArguments, query::Query, MySql, Postgres};
 
 use crate::{
-    adaptor::pg_col_value_convertor::PgColValueConvertor,
+    adaptor::{
+        pg_col_value_convertor::PgColValueConvertor,
+        sqlx_ext::{SqlxMysqlExt, SqlxPgExt},
+    },
     error::Error,
     meta::{
         col_value::ColValue, mysql::mysql_tb_meta::MysqlTbMeta, pg::pg_tb_meta::PgTbMeta,
-        row_data::RowData, row_type::RowType,
+        rdb_tb_meta::RdbTbMeta, row_data::RowData, row_type::RowType,
     },
 };
 
 pub struct SqlUtil<'a> {
-    schema: &'a str,
-    tb: &'a str,
-    cols: &'a Vec<String>,
-    where_cols: &'a Vec<String>,
-    key_map: &'a HashMap<String, Vec<String>>,
+    rdb_tb_meta: RdbTbMeta,
     pg_tb_meta: Option<&'a PgTbMeta>,
 }
 
 impl SqlUtil<'_> {
     #[inline(always)]
+    pub fn create_mysql_query<'a>(
+        sql: &'a str,
+        binds: &'a Vec<Option<&ColValue>>,
+    ) -> Query<'a, MySql, MySqlArguments> {
+        let mut query: Query<MySql, MySqlArguments> = sqlx::query(&sql);
+        for i in 0..binds.len() {
+            query = query.bind_col_value(binds[i]);
+        }
+        query
+    }
+
+    #[inline(always)]
+    pub fn create_pg_query<'a>(
+        sql: &'a str,
+        cols: &'a Vec<String>,
+        binds: &'a Vec<Option<&ColValue>>,
+        tb_meta: &PgTbMeta,
+    ) -> Query<'a, Postgres, PgArguments> {
+        let mut query: Query<Postgres, PgArguments> = sqlx::query(sql);
+        for i in 0..binds.len() {
+            let col_type = tb_meta.col_type_map.get(&cols[i]).unwrap();
+            query = query.bind_col_value(binds[i], col_type);
+        }
+        query
+    }
+
+    #[inline(always)]
     pub fn new_for_mysql<'a>(tb_meta: &'a MysqlTbMeta) -> SqlUtil {
         SqlUtil {
-            schema: &tb_meta.db,
-            tb: &tb_meta.tb,
-            cols: &tb_meta.cols,
-            where_cols: &tb_meta.where_cols,
-            key_map: &tb_meta.key_map,
+            rdb_tb_meta: tb_meta.basic.clone(),
             pg_tb_meta: Option::None,
         }
     }
@@ -36,16 +58,12 @@ impl SqlUtil<'_> {
     #[inline(always)]
     pub fn new_for_pg<'a>(tb_meta: &'a PgTbMeta) -> SqlUtil {
         SqlUtil {
-            schema: &tb_meta.schema,
-            tb: &tb_meta.tb,
-            cols: &tb_meta.cols,
-            where_cols: &tb_meta.where_cols,
-            key_map: &tb_meta.key_map,
+            rdb_tb_meta: tb_meta.basic.clone(),
             pg_tb_meta: Some(&tb_meta),
         }
     }
 
-    pub fn get_query<'a>(
+    pub fn get_query_info<'a>(
         &self,
         row_data: &'a RowData,
     ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
@@ -67,7 +85,7 @@ impl SqlUtil<'_> {
         let mut placeholder_index = 1;
         for _ in 0..batch_size {
             let mut placeholders = Vec::new();
-            for col in self.where_cols.iter() {
+            for col in self.rdb_tb_meta.id_cols.iter() {
                 placeholders.push(self.get_placeholder(placeholder_index, col));
                 placeholder_index += 1;
             }
@@ -76,9 +94,9 @@ impl SqlUtil<'_> {
 
         let sql = format!(
             "DELETE FROM {}.{} WHERE ({}) IN ({})",
-            self.schema,
-            self.tb,
-            self.where_cols.join(","),
+            self.rdb_tb_meta.schema,
+            self.rdb_tb_meta.tb,
+            self.rdb_tb_meta.id_cols.join(","),
             all_placeholders.join(",")
         );
 
@@ -87,14 +105,14 @@ impl SqlUtil<'_> {
         for i in start_index..start_index + batch_size {
             let row_data = &data[i];
             let before = row_data.before.as_ref().unwrap();
-            for col in self.where_cols.iter() {
+            for col in self.rdb_tb_meta.id_cols.iter() {
                 cols.push(col.clone());
                 let col_value = before.get(col);
                 if *col_value.unwrap() == ColValue::None {
                     return Err(Error::Unexpected {
                         error: format!(
                             "db: {}, tb: {}, where col: {} is NULL, which should not happen in batch delete",
-                            self.schema, self.tb, col
+                            self.rdb_tb_meta.schema, self.rdb_tb_meta.tb, col
                         ),
                     });
                 }
@@ -114,7 +132,7 @@ impl SqlUtil<'_> {
         let mut row_values = Vec::new();
         for _ in 0..batch_size {
             let mut col_values = Vec::new();
-            for col in self.cols.iter() {
+            for col in self.rdb_tb_meta.cols.iter() {
                 col_values.push(self.get_placeholder(placeholder_index, col));
                 placeholder_index += 1;
             }
@@ -123,9 +141,9 @@ impl SqlUtil<'_> {
 
         let sql = format!(
             "INSERT INTO {}.{}({}) VALUES{}",
-            self.schema,
-            self.tb,
-            self.cols.join(","),
+            self.rdb_tb_meta.schema,
+            self.rdb_tb_meta.tb,
+            self.rdb_tb_meta.cols.join(","),
             row_values.join(",")
         );
 
@@ -134,7 +152,7 @@ impl SqlUtil<'_> {
         for i in start_index..start_index + batch_size {
             let row_data = &data[i];
             let after = row_data.after.as_ref().unwrap();
-            for col_name in self.cols.iter() {
+            for col_name in self.rdb_tb_meta.cols.iter() {
                 cols.push(col_name.clone());
                 binds.push(after.get(col_name));
             }
@@ -147,22 +165,22 @@ impl SqlUtil<'_> {
         row_data: &'a RowData,
     ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
         let mut col_values = Vec::new();
-        for i in 0..self.cols.len() {
-            col_values.push(self.get_placeholder(i + 1, &self.cols[i]));
+        for i in 0..self.rdb_tb_meta.cols.len() {
+            col_values.push(self.get_placeholder(i + 1, &self.rdb_tb_meta.cols[i]));
         }
 
         let sql = format!(
             "INSERT INTO {}.{}({}) VALUES({})",
-            self.schema,
-            self.tb,
-            self.cols.join(","),
+            self.rdb_tb_meta.schema,
+            self.rdb_tb_meta.tb,
+            self.rdb_tb_meta.cols.join(","),
             col_values.join(",")
         );
 
         let mut cols = Vec::new();
         let mut binds = Vec::new();
         let after = row_data.after.as_ref().unwrap();
-        for col_name in self.cols.iter() {
+        for col_name in self.rdb_tb_meta.cols.iter() {
             cols.push(col_name.clone());
             binds.push(after.get(col_name));
         }
@@ -177,9 +195,9 @@ impl SqlUtil<'_> {
         let (where_sql, not_null_cols) = self.get_where_info(1, &before)?;
         let mut sql = format!(
             "DELETE FROM {}.{} WHERE {}",
-            self.schema, self.tb, where_sql
+            self.rdb_tb_meta.schema, self.rdb_tb_meta.tb, where_sql
         );
-        if self.key_map.is_empty() {
+        if self.rdb_tb_meta.key_map.is_empty() {
             sql += " LIMIT 1";
         }
 
@@ -216,7 +234,7 @@ impl SqlUtil<'_> {
             return Err(Error::Unexpected {
                 error: format!(
                     "db: {}, tb: {}, no cols in after, which should not happen in update",
-                    self.schema, self.tb
+                    self.rdb_tb_meta.schema, self.rdb_tb_meta.tb
                 ),
             });
         }
@@ -224,12 +242,12 @@ impl SqlUtil<'_> {
         let (where_sql, not_null_cols) = self.get_where_info(placeholder_index, &before)?;
         let mut sql = format!(
             "UPDATE {}.{} SET {} WHERE {}",
-            self.schema,
-            self.tb,
+            self.rdb_tb_meta.schema,
+            self.rdb_tb_meta.tb,
             set_pairs.join(","),
             where_sql,
         );
-        if self.key_map.is_empty() {
+        if self.rdb_tb_meta.key_map.is_empty() {
             sql += " LIMIT 1";
         }
 
@@ -254,12 +272,12 @@ impl SqlUtil<'_> {
         let mut sql = format!(
             "SELECT {} FROM {}.{} WHERE {}",
             self.build_extract_cols_str()?,
-            self.schema,
-            self.tb,
+            self.rdb_tb_meta.schema,
+            self.rdb_tb_meta.tb,
             where_sql,
         );
 
-        if self.key_map.is_empty() {
+        if self.rdb_tb_meta.key_map.is_empty() {
             sql += " LIMIT 1";
         }
 
@@ -282,8 +300,8 @@ impl SqlUtil<'_> {
         let sql = format!(
             "SELECT {} FROM {}.{} WHERE {}",
             self.build_extract_cols_str()?,
-            self.schema,
-            self.tb,
+            self.rdb_tb_meta.schema,
+            self.rdb_tb_meta.tb,
             where_sql,
         );
 
@@ -292,14 +310,14 @@ impl SqlUtil<'_> {
         for i in start_index..start_index + batch_size {
             let row_data = &data[i];
             let after = row_data.after.as_ref().unwrap();
-            for col in self.where_cols.iter() {
+            for col in self.rdb_tb_meta.id_cols.iter() {
                 cols.push(col.clone());
                 let col_value = after.get(col);
                 if *col_value.unwrap() == ColValue::None {
                     return Err(Error::Unexpected {
                         error: format!(
                             "db: {}, tb: {}, where col: {} is NULL, which should not happen in batch delete",
-                            self.schema, self.tb, col
+                            self.rdb_tb_meta.schema, self.rdb_tb_meta.tb, col
                         ),
                     });
                 }
@@ -312,7 +330,7 @@ impl SqlUtil<'_> {
     fn build_extract_cols_str(&self) -> Result<String, Error> {
         if let Some(tb_meta) = self.pg_tb_meta {
             let mut extract_cols = Vec::new();
-            for col in self.cols.iter() {
+            for col in self.rdb_tb_meta.cols.iter() {
                 let col_type = tb_meta.col_type_map.get(col).unwrap();
                 let extract_type = PgColValueConvertor::get_extract_type(col_type);
                 let extract_col = if extract_type.is_empty() {
@@ -335,7 +353,7 @@ impl SqlUtil<'_> {
         let mut where_sql = "".to_string();
         let mut not_null_cols = Vec::new();
 
-        for col in self.where_cols.iter() {
+        for col in self.rdb_tb_meta.id_cols.iter() {
             if !where_sql.is_empty() {
                 where_sql += " AND";
             }
@@ -367,7 +385,7 @@ impl SqlUtil<'_> {
         let mut placeholder_index = 1;
         for _ in 0..batch_size {
             let mut placeholders = Vec::new();
-            for col in self.where_cols.iter() {
+            for col in self.rdb_tb_meta.id_cols.iter() {
                 placeholders.push(self.get_placeholder(placeholder_index, col));
                 placeholder_index += 1;
             }
@@ -376,7 +394,7 @@ impl SqlUtil<'_> {
 
         Ok(format!(
             "({}) IN ({})",
-            self.where_cols.join(","),
+            self.rdb_tb_meta.id_cols.join(","),
             all_placeholders.join(",")
         ))
     }
@@ -395,25 +413,5 @@ impl SqlUtil<'_> {
         }
 
         "?".to_string()
-    }
-
-    #[inline(always)]
-    pub fn check_result(
-        &self,
-        actual_rows_affected: u64,
-        expect_rows_affected: u64,
-        sql: &str,
-        row_data: &RowData,
-    ) -> Result<(), Error> {
-        if actual_rows_affected != expect_rows_affected {
-            info!(
-                "sql: {}\nrows_affected: {},rows_affected_expected: {}\n{}",
-                sql,
-                actual_rows_affected,
-                expect_rows_affected,
-                row_data.to_string(&self.cols)
-            );
-        }
-        Ok(())
     }
 }

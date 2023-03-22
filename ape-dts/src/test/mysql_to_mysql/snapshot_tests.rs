@@ -16,7 +16,7 @@ mod test {
         let runner = rt
             .block_on(TestRunner::new("mysql_to_mysql/snapshot_basic_test"))
             .unwrap();
-        rt.block_on(runner.run_snapshot_test(false)).unwrap();
+        rt.block_on(runner.run_snapshot_test()).unwrap();
     }
 
     #[test]
@@ -26,6 +26,6 @@ mod test {
         let runner = rt
             .block_on(TestRunner::new("mysql_to_mysql/snapshot_on_duplicate_test"))
             .unwrap();
-        rt.block_on(runner.run_snapshot_test(false)).unwrap();
+        rt.block_on(runner.run_snapshot_test()).unwrap();
     }
 }

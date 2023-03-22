@@ -11,6 +11,6 @@ mod test {
         let runner = rt
             .block_on(TestRunner::new("mysql_to_mysql/revise_basic_test"))
             .unwrap();
-        rt.block_on(runner.run_check_test(true)).unwrap();
+        rt.block_on(runner.run_revise_test()).unwrap();
     }
 }

@@ -1,5 +1,4 @@
 use crate::{
-    adaptor::sqlx_ext::SqlxPgExt,
     common::sql_util::SqlUtil,
     error::Error,
     meta::{
@@ -8,7 +7,7 @@ use crate::{
         row_data::RowData,
         row_type::RowType,
     },
-    sinker::rdb_router::RdbRouter,
+    sinker::{rdb_router::RdbRouter, sinker_util::SinkerUtil},
     traits::Sinker,
 };
 use log::error;
@@ -62,17 +61,10 @@ impl PgSinker {
             let (sql, cols, binds) = if row_data.row_type == RowType::Insert {
                 self.get_insert_query(&sql_util, &tb_meta, row_data)?
             } else {
-                sql_util.get_query(&row_data)?
+                sql_util.get_query_info(&row_data)?
             };
-
-            let mut query = sqlx::query(&sql);
-            for i in 0..binds.len() {
-                let col_type = tb_meta.col_type_map.get(&cols[i]).unwrap();
-                query = query.bind_col_value(binds[i], col_type);
-            }
-
-            let result = query.execute(&self.conn_pool).await;
-            sql_util.check_result(result.unwrap().rows_affected(), 1, &sql, row_data)?;
+            let query = SqlUtil::create_pg_query(&sql, &cols, &binds, &tb_meta);
+            query.execute(&self.conn_pool).await.unwrap();
         }
         Ok(())
     }
@@ -91,13 +83,9 @@ impl PgSinker {
 
             let (sql, cols, binds) =
                 sql_util.get_batch_delete_query(&data, sinked_count, batch_size)?;
-            let mut query = sqlx::query(&sql);
-            for i in 0..binds.len() {
-                let col_type = tb_meta.col_type_map.get(&cols[i]).unwrap();
-                query = query.bind_col_value(binds[i], col_type);
-            }
-
+            let query = SqlUtil::create_pg_query(&sql, &cols, &binds, &tb_meta);
             query.execute(&self.conn_pool).await.unwrap();
+
             sinked_count += batch_size;
             if sinked_count == all_count {
                 break;
@@ -120,18 +108,14 @@ impl PgSinker {
 
             let (sql, cols, binds) =
                 sql_util.get_batch_insert_query(&data, sinked_count, batch_size)?;
-            let mut query = sqlx::query(&sql);
-            for i in 0..binds.len() {
-                let col_type = tb_meta.col_type_map.get(&cols[i]).unwrap();
-                query = query.bind_col_value(binds[i], col_type);
-            }
+            let query = SqlUtil::create_pg_query(&sql, &cols, &binds, &tb_meta);
 
             let result = query.execute(&self.conn_pool).await;
             if let Err(error) = result {
                 error!(
                     "batch insert failed, will insert one by one, schema: {}, tb: {}, error: {}",
-                    tb_meta.schema,
-                    tb_meta.tb,
+                    tb_meta.basic.schema,
+                    tb_meta.basic.tb,
                     error.to_string()
                 );
                 let sub_data = &data[sinked_count..sinked_count + batch_size];
@@ -157,7 +141,7 @@ impl PgSinker {
         let mut placeholder_index = cols.len() + 1;
         let after = row_data.after.as_ref().unwrap();
         let mut set_pairs = Vec::new();
-        for col in &tb_meta.cols {
+        for col in tb_meta.basic.cols.iter() {
             let set_pair = format!(
                 "{}={}",
                 col,
@@ -172,7 +156,7 @@ impl PgSinker {
         sql = format!(
             "{} ON CONFLICT ({}) DO UPDATE SET {}",
             sql,
-            tb_meta.where_cols.join(","),
+            tb_meta.basic.id_cols.join(","),
             set_pairs.join(",")
         );
         Ok((sql, cols, binds))
@@ -180,8 +164,6 @@ impl PgSinker {
 
     #[inline(always)]
     async fn get_tb_meta(&mut self, row_data: &RowData) -> Result<PgTbMeta, Error> {
-        let (db, tb) = self.router.get_route(&row_data.db, &row_data.tb);
-        let tb_meta = self.meta_manager.get_tb_meta(&db, &tb).await?;
-        return Ok(tb_meta);
+        SinkerUtil::get_pg_tb_meta(&mut self.meta_manager, &mut self.router, row_data).await
     }
 }

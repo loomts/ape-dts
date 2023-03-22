@@ -1,4 +1,8 @@
-use std::{fs::File, io::Read};
+use std::{
+    fs::{self, File},
+    io::Read,
+    path::Path,
+};
 
 use configparser::ini::Ini;
 
@@ -8,6 +12,14 @@ pub struct TestConfigUtil {}
 
 #[allow(dead_code)]
 impl TestConfigUtil {
+    pub fn get_project_root() -> String {
+        project_root::get_project_root()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string()
+    }
+
     pub fn get_absolute_dir(relative_dir: &str) -> String {
         format!(
             "{}/ape-dts/src/test/{}",
@@ -56,9 +68,13 @@ impl TestConfigUtil {
         ])
     }
 
-    pub fn update_task_config(task_config_file: &str, config: &Vec<(String, String, String)>) {
+    pub fn update_task_config(
+        src_task_config: &str,
+        dst_task_config: &str,
+        config: &Vec<(String, String, String)>,
+    ) {
         let mut config_str = String::new();
-        File::open(task_config_file)
+        File::open(src_task_config)
             .unwrap()
             .read_to_string(&mut config_str)
             .unwrap();
@@ -68,6 +84,10 @@ impl TestConfigUtil {
         for (section, key, value) in config.iter() {
             ini.set(section, key, Some(value.to_string()));
         }
-        ini.write(task_config_file).unwrap();
+
+        let path = Path::new(&dst_task_config);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        File::create(&dst_task_config).unwrap().set_len(0).unwrap();
+        ini.write(dst_task_config).unwrap();
     }
 }

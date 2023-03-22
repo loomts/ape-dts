@@ -1,3 +1,5 @@
+use crate::error::Error;
+
 pub struct PipelineConfig {
     // 1, parallel, 2, rdb_merge
     pub pipeline_type: PipelineType,
@@ -23,13 +25,15 @@ impl PipelineType {
         }
     }
 
-    pub fn from_str(type_str: &str) -> Self {
+    pub fn from_str(type_str: &str) -> Result<Self, Error> {
         match type_str {
-            "snapshot" => Self::Snapshot,
-            "rdb_merge" => Self::RdbMerge,
-            "rdb_check" => Self::RdbCheck,
-            "rdb_partition" => Self::RdbPartition,
-            _ => Self::RdbPartition,
+            "snapshot" => Ok(Self::Snapshot),
+            "rdb_merge" => Ok(Self::RdbMerge),
+            "rdb_check" => Ok(Self::RdbCheck),
+            "rdb_partition" => Ok(Self::RdbPartition),
+            _ => Err(Error::Unexpected {
+                error: "unexpected sinker type".to_string(),
+            }),
         }
     }
 }

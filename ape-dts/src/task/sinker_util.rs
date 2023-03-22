@@ -69,7 +69,7 @@ impl SinkerUtil {
         Ok(sinkers)
     }
 
-    pub async fn create_mysql_sinker<'a>(
+    async fn create_mysql_sinker<'a>(
         url: &str,
         router: &RdbRouter,
         log_level: &str,
@@ -95,7 +95,7 @@ impl SinkerUtil {
         Ok(sub_sinkers)
     }
 
-    pub async fn create_mysql_checker<'a>(
+    async fn create_mysql_checker<'a>(
         url: &str,
         router: &RdbRouter,
         log_level: &str,
@@ -121,7 +121,7 @@ impl SinkerUtil {
         Ok(sub_sinkers)
     }
 
-    pub async fn create_pg_sinker<'a>(
+    async fn create_pg_sinker<'a>(
         url: &str,
         router: &RdbRouter,
         log_level: &str,
@@ -146,7 +146,7 @@ impl SinkerUtil {
         Ok(sub_sinkers)
     }
 
-    pub async fn create_pg_checker<'a>(
+    async fn create_pg_checker<'a>(
         url: &str,
         router: &RdbRouter,
         log_level: &str,

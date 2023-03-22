@@ -1,13 +1,13 @@
-use crate::meta::row_data::RowData;
+use crate::meta::{rdb_tb_meta::RdbTbMeta, row_data::RowData};
 
-pub struct CheckLogLine {
+pub struct CheckLog {
     pub schema: String,
     pub tb: String,
     pub cols: Vec<String>,
     pub col_values: Vec<String>,
 }
 
-impl CheckLogLine {
+impl CheckLog {
     pub fn to_string(&self) -> String {
         let mut str = format!("{},{}", self.schema, self.tb);
         for i in 0..self.cols.len() {
@@ -22,17 +22,17 @@ impl CheckLogLine {
         str
     }
 
-    pub fn from_row_data(row_data: &RowData, id_cols: &Vec<String>) -> Self {
+    pub fn from_row_data(row_data: &RowData, tb_meta: &RdbTbMeta) -> Self {
         let after = row_data.after.as_ref().unwrap();
         let mut col_values = Vec::new();
-        for col in id_cols {
+        for col in tb_meta.id_cols.iter() {
             col_values.push(after.get(col).unwrap().to_string());
         }
 
         Self {
             schema: row_data.db.clone(),
             tb: row_data.tb.clone(),
-            cols: id_cols.clone(),
+            cols: tb_meta.id_cols.clone(),
             col_values,
         }
     }

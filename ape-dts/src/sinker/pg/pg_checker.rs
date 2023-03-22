@@ -2,16 +2,14 @@ use std::collections::HashMap;
 
 use async_trait::async_trait;
 use futures::TryStreamExt;
-use sqlx::{postgres::PgRow, Pool, Postgres};
+use sqlx::{Pool, Postgres};
 
 use crate::{
-    adaptor::{pg_col_value_convertor::PgColValueConvertor, sqlx_ext::SqlxPgExt},
     common::sql_util::SqlUtil,
     error::Error,
     meta::{
         pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
         row_data::RowData,
-        row_type::RowType,
     },
     sinker::{rdb_router::RdbRouter, sinker_util::SinkerUtil},
     traits::Sinker,
@@ -56,20 +54,16 @@ impl PgChecker {
             let sql_util = SqlUtil::new_for_pg(&tb_meta);
 
             let (sql, cols, binds) = sql_util.get_select_query(row_data_src)?;
-            let mut query = sqlx::query(&sql);
-            for i in 0..binds.len() {
-                let col_type = tb_meta.col_type_map.get(&cols[i]).unwrap();
-                query = query.bind_col_value(binds[i], col_type);
-            }
+            let query = SqlUtil::create_pg_query(&sql, &cols, &binds, &tb_meta);
 
             let mut rows = query.fetch(&self.conn_pool);
             if let Some(row) = rows.try_next().await.unwrap() {
-                let row_data_dst = Self::build_row_data(&row, &tb_meta)?;
+                let row_data_dst = RowData::from_pg_row(&row, &tb_meta);
                 if !SinkerUtil::compare_row_data(row_data_src, &row_data_dst) {
-                    SinkerUtil::log_diff(&row_data_src, &tb_meta.where_cols);
+                    SinkerUtil::log_diff(&row_data_src, &tb_meta.basic);
                 }
             } else {
-                SinkerUtil::log_miss(&row_data_src, &tb_meta.where_cols);
+                SinkerUtil::log_miss(&row_data_src, &tb_meta.basic);
             }
         }
         Ok(())
@@ -90,25 +84,21 @@ impl PgChecker {
             // build fetch dst sql
             let (sql, cols, binds) =
                 sql_util.get_batch_select_query(&data, sinked_count, batch_size)?;
-            let mut query = sqlx::query(&sql);
-            for i in 0..binds.len() {
-                let col_type = tb_meta.col_type_map.get(&cols[i]).unwrap();
-                query = query.bind_col_value(binds[i], col_type);
-            }
+            let query = SqlUtil::create_pg_query(&sql, &cols, &binds, &tb_meta);
 
             // fetch dst
             let mut dst_row_data_map = HashMap::new();
             let mut rows = query.fetch(&self.conn_pool);
             while let Some(row) = rows.try_next().await.unwrap() {
-                let row_data = Self::build_row_data(&row, &tb_meta)?;
-                let hash_code = row_data.get_hash_code(&tb_meta.where_cols);
+                let row_data = RowData::from_pg_row(&row, &tb_meta);
+                let hash_code = row_data.get_hash_code(&tb_meta.basic);
                 dst_row_data_map.insert(hash_code, row_data);
             }
 
             SinkerUtil::batch_compare_row_datas(
                 &data,
                 &dst_row_data_map,
-                &tb_meta.where_cols,
+                &tb_meta.basic,
                 sinked_count,
                 batch_size,
             );
@@ -123,27 +113,6 @@ impl PgChecker {
 
     #[inline(always)]
     async fn get_tb_meta(&mut self, row_data: &RowData) -> Result<PgTbMeta, Error> {
-        let (db, tb) = self.router.get_route(&row_data.db, &row_data.tb);
-        let tb_meta = self.meta_manager.get_tb_meta(&db, &tb).await?;
-        return Ok(tb_meta);
-    }
-
-    fn build_row_data(row: &PgRow, tb_meta: &PgTbMeta) -> Result<RowData, Error> {
-        let mut after = HashMap::new();
-        for (col_name, col_type) in &tb_meta.col_type_map {
-            let col_value = PgColValueConvertor::from_query(row, &col_name, &col_type)?;
-            after.insert(col_name.to_string(), col_value);
-        }
-
-        let row_data = RowData {
-            db: tb_meta.schema.clone(),
-            tb: tb_meta.tb.clone(),
-            before: None,
-            after: Some(after),
-            row_type: RowType::Insert,
-            current_position: "".to_string(),
-            checkpoint_position: "".to_string(),
-        };
-        Ok(row_data)
+        SinkerUtil::get_pg_tb_meta(&mut self.meta_manager, &mut self.router, row_data).await
     }
 }

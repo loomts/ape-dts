@@ -124,7 +124,7 @@ impl TaskConfig {
         PipelineConfig {
             buffer_size: ini.getuint("pipeline", "buffer_size").unwrap().unwrap() as usize,
             parallel_size: ini.getuint("pipeline", "parallel_size").unwrap().unwrap() as usize,
-            pipeline_type: PipelineType::from_str(&ini.get("pipeline", "type").unwrap()),
+            pipeline_type: PipelineType::from_str(&ini.get("pipeline", "type").unwrap()).unwrap(),
             checkpoint_interval_secs: ini
                 .getuint("pipeline", "checkpoint_interval_secs")
                 .unwrap()

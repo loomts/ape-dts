@@ -1,2 +1,2 @@
-mod check_log_line_tests;
+mod check_log_tests;
 mod log_reader_tests;

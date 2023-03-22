@@ -203,7 +203,7 @@ impl PgCdcExtractor<'_> {
         }
 
         // align the column order of tb_meta to that of the wal log
-        tb_meta.cols = col_names;
+        tb_meta.basic.cols = col_names;
         self.meta_manager
             .update_tb_meta_by_oid(event.rel_id() as i32, tb_meta)?;
         Ok(())
@@ -216,8 +216,8 @@ impl PgCdcExtractor<'_> {
         let col_values = self.parse_row_data(&tb_meta, event.tuple().tuple_data())?;
 
         let row_data = RowData {
-            db: tb_meta.schema,
-            tb: tb_meta.tb,
+            db: tb_meta.basic.schema,
+            tb: tb_meta.basic.tb,
             row_type: RowType::Insert,
             before: Option::None,
             after: Some(col_values),
@@ -231,6 +231,7 @@ impl PgCdcExtractor<'_> {
         let tb_meta = self
             .meta_manager
             .get_tb_meta_by_oid(event.rel_id() as i32)?;
+        let basic = &tb_meta.basic;
 
         let col_values_after = self.parse_row_data(&tb_meta, event.new_tuple().tuple_data())?;
 
@@ -238,9 +239,9 @@ impl PgCdcExtractor<'_> {
             self.parse_row_data(&tb_meta, old_tuple.tuple_data())?
         } else if let Some(key_tuple) = event.key_tuple() {
             self.parse_row_data(&tb_meta, key_tuple.tuple_data())?
-        } else if !tb_meta.where_cols.is_empty() {
+        } else if !basic.id_cols.is_empty() {
             let mut col_values_tmp = HashMap::new();
-            for col in tb_meta.where_cols.iter() {
+            for col in basic.id_cols.iter() {
                 col_values_tmp.insert(col.to_string(), col_values_after.get(col).unwrap().clone());
             }
             col_values_tmp
@@ -249,8 +250,8 @@ impl PgCdcExtractor<'_> {
         };
 
         let row_data = RowData {
-            db: tb_meta.schema,
-            tb: tb_meta.tb,
+            db: basic.schema.clone(),
+            tb: basic.tb.clone(),
             row_type: RowType::Update,
             before: Some(col_values_before),
             after: Some(col_values_after),
@@ -274,8 +275,8 @@ impl PgCdcExtractor<'_> {
         };
 
         let row_data = RowData {
-            db: tb_meta.schema,
-            tb: tb_meta.tb,
+            db: tb_meta.basic.schema,
+            tb: tb_meta.basic.tb,
             row_type: RowType::Delete,
             before: Some(col_values),
             after: None,
@@ -293,7 +294,7 @@ impl PgCdcExtractor<'_> {
         let mut col_values: HashMap<String, ColValue> = HashMap::new();
         for i in 0..tuple_data.len() {
             let tuple_data = &tuple_data[i];
-            let col = &tb_meta.cols[i];
+            let col = &tb_meta.basic.cols[i];
             let col_type = tb_meta.col_type_map.get(col).unwrap();
 
             match tuple_data {

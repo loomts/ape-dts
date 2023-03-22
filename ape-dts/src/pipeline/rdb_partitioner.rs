@@ -1,18 +1,12 @@
-use std::collections::HashMap;
-
 use log::debug;
 
 use crate::{
     error::Error,
-    meta::{
-        mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
-        row_data::RowData, row_type::RowType,
-    },
+    meta::{rdb_meta_manager::RdbMetaManager, row_data::RowData, row_type::RowType},
 };
 
 pub struct RdbPartitioner {
-    mysql_meta_manager: Option<MysqlMetaManager>,
-    pg_meta_manager: Option<PgMetaManager>,
+    pub meta_manager: RdbMetaManager,
 }
 
 impl RdbPartitioner {
@@ -44,7 +38,10 @@ impl RdbPartitioner {
             return Ok(true);
         }
 
-        let (partition_col, key_map, _) = self.get_tb_meta_info(&row_data.db, &row_data.tb).await?;
+        let tb_meta = self
+            .meta_manager
+            .get_tb_meta(&row_data.db, &row_data.tb)
+            .await?;
         let before = row_data.before.as_ref().unwrap();
         let after = row_data.after.as_ref().unwrap();
         // if any col of pk & uk has changed, partition should not happen
@@ -60,7 +57,7 @@ impl RdbPartitioner {
         // partition 2 sinked: [insert (2, 2)]
         // if partition 2 sinking: [update((2, 2) -> (2, 1))] happens before
         //    partition 1 sinking: [update((1, 1) -> (1, 3))], it would fail
-        for key_cols in key_map.values() {
+        for key_cols in tb_meta.key_map.values() {
             for col in key_cols {
                 let col_value_before = before.get(col);
                 let col_value_after = after.get(col);
@@ -79,27 +76,13 @@ impl RdbPartitioner {
         }
         // no need to check parition_col if key_map is not empty,
         // in which case partition_col is one of the key cols and has been checked
-        if key_map.is_empty() {
-            if before.get(&partition_col) != after.get(&partition_col) {
+        if tb_meta.key_map.is_empty() {
+            if before.get(&tb_meta.partition_col) != after.get(&tb_meta.partition_col) {
                 return Ok(false);
             }
         }
 
         Ok(true)
-    }
-
-    pub fn new_for_mysql(meta_manager: MysqlMetaManager) -> RdbPartitioner {
-        Self {
-            mysql_meta_manager: Some(meta_manager),
-            pg_meta_manager: Option::None,
-        }
-    }
-
-    pub fn new_for_pg(meta_manager: PgMetaManager) -> RdbPartitioner {
-        Self {
-            mysql_meta_manager: Option::None,
-            pg_meta_manager: Some(meta_manager),
-        }
     }
 
     async fn get_partition_index(
@@ -116,31 +99,14 @@ impl RdbPartitioner {
             _ => row_data.before.as_ref().unwrap(),
         };
 
-        let (partition_col, _, _) = self.get_tb_meta_info(&row_data.db, &row_data.tb).await?;
-        if let Some(partition_col_value) = col_values.get(&partition_col) {
+        let tb_meta = self
+            .meta_manager
+            .get_tb_meta(&row_data.db, &row_data.tb)
+            .await?;
+        if let Some(partition_col_value) = col_values.get(&tb_meta.partition_col) {
             Ok(partition_col_value.hash_code() as usize % slice_count)
         } else {
             Ok(0)
         }
-    }
-
-    pub async fn get_tb_meta_info(
-        &mut self,
-        schema: &str,
-        tb: &str,
-    ) -> Result<(String, HashMap<String, Vec<String>>, Vec<String>), Error> {
-        if let Some(mysql_meta_manager) = self.mysql_meta_manager.as_mut() {
-            let tb_meta = mysql_meta_manager.get_tb_meta(schema, tb).await?;
-            return Ok((tb_meta.partition_col, tb_meta.key_map, tb_meta.where_cols));
-        }
-
-        if let Some(pg_meta_manager) = self.pg_meta_manager.as_mut() {
-            let tb_meta = pg_meta_manager.get_tb_meta(schema, tb).await?;
-            return Ok((tb_meta.partition_col, tb_meta.key_map, tb_meta.where_cols));
-        }
-
-        Err(Error::Unexpected {
-            error: "no available meta_manager in partitioner".to_string(),
-        })
     }
 }

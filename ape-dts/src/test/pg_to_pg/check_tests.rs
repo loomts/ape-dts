@@ -11,6 +11,6 @@ mod test {
         let runner = rt
             .block_on(TestRunner::new("pg_to_pg/check_basic_test"))
             .unwrap();
-        rt.block_on(runner.run_check_test(true)).unwrap();
+        rt.block_on(runner.run_check_test()).unwrap();
     }
 }

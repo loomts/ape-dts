@@ -7,17 +7,14 @@ use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 use futures::TryStreamExt;
 use log::info;
-use sqlx::{mysql::MySqlRow, MySql, Pool};
+use sqlx::{MySql, Pool};
 
 use crate::{
-    adaptor::{mysql_col_value_convertor::MysqlColValueConvertor, sqlx_ext::SqlxMysqlExt},
-    common::{check_log_line::CheckLogLine, log_reader::LogReader, sql_util::SqlUtil},
+    adaptor::mysql_col_value_convertor::MysqlColValueConvertor,
+    common::{check_log::CheckLog, log_reader::LogReader, sql_util::SqlUtil},
     error::Error,
-    meta::{
-        mysql::{mysql_meta_manager::MysqlMetaManager, mysql_tb_meta::MysqlTbMeta},
-        row_data::RowData,
-        row_type::RowType,
-    },
+    extractor::extractor_util::ExtractorUtil,
+    meta::{mysql::mysql_meta_manager::MysqlMetaManager, row_data::RowData},
     task::task_util::TaskUtil,
     traits::Extractor,
 };
@@ -54,43 +51,32 @@ impl MysqlCheckExtractor<'_> {
                 continue;
             }
 
-            let check_log_line = CheckLogLine::from_string(log);
+            let check_log = CheckLog::from_string(log);
             let tb_meta = self
                 .meta_manager
-                .get_tb_meta(&check_log_line.schema, &check_log_line.tb)
+                .get_tb_meta(&check_log.schema, &check_log.tb)
                 .await?;
 
             let mut after = HashMap::new();
-            for i in 0..check_log_line.cols.len() {
-                let col = &check_log_line.cols[i];
-                let value = &check_log_line.col_values[i];
-                let col_meta = tb_meta.col_meta_map.get(col).unwrap();
-                let col_value = MysqlColValueConvertor::from_str(col_meta, value)?;
+            for i in 0..check_log.cols.len() {
+                let col = &check_log.cols[i];
+                let value = &check_log.col_values[i];
+                let col_type = tb_meta.col_type_map.get(col).unwrap();
+                let col_value = MysqlColValueConvertor::from_str(col_type, value)?;
                 after.insert(col.to_string(), col_value);
             }
-
-            let row_data = RowData {
-                db: tb_meta.db.clone(),
-                tb: tb_meta.tb.clone(),
-                before: None,
-                after: Some(after),
-                row_type: RowType::Insert,
-                current_position: "".to_string(),
-                checkpoint_position: "".to_string(),
-            };
-            // Self::push_row_to_map(&mut row_data_map, row_data);
-            // count += 1;
+            let check_row_data = RowData::build_insert_row_data(after, &tb_meta.basic);
 
             let sql_util = SqlUtil::new_for_mysql(&tb_meta);
-            let (sql, _cols, binds) = sql_util.get_select_query(&row_data)?;
-            let mut query = sqlx::query(&sql);
-            for i in 0..binds.len() {
-                query = query.bind_col_value(binds[i]);
-            }
+            let (sql, _cols, binds) = sql_util.get_select_query(&check_row_data)?;
+            let query = SqlUtil::create_mysql_query(&sql, &binds);
 
             let mut rows = query.fetch(&self.conn_pool);
             while let Some(row) = rows.try_next().await.unwrap() {
-                self.push_row_to_buffer(&row, &tb_meta).await.unwrap();
+                let row_data = RowData::from_mysql_row(&row, &tb_meta);
+                ExtractorUtil::push_row(self.buffer, row_data)
+                    .await
+                    .unwrap();
             }
         }
 
@@ -102,42 +88,4 @@ impl MysqlCheckExtractor<'_> {
         self.shut_down.store(true, Ordering::Release);
         Ok(())
     }
-
-    async fn push_row_to_buffer(
-        &mut self,
-        row: &MySqlRow,
-        tb_meta: &MysqlTbMeta,
-    ) -> Result<(), Error> {
-        let mut after = HashMap::new();
-        for (col_name, col_meta) in &tb_meta.col_meta_map {
-            let col_val = MysqlColValueConvertor::from_query(row, &col_meta)?;
-            after.insert(col_name.to_string(), col_val);
-        }
-
-        while self.buffer.is_full() {
-            TaskUtil::sleep_millis(1).await;
-        }
-
-        let row_data = RowData {
-            db: tb_meta.db.clone(),
-            tb: tb_meta.tb.clone(),
-            before: None,
-            after: Some(after),
-            row_type: RowType::Insert,
-            current_position: "".to_string(),
-            checkpoint_position: "".to_string(),
-        };
-        let _ = self.buffer.push(row_data);
-        Ok(())
-    }
-
-    // fn push_row_to_map(map: &mut HashMap<String, Vec<RowData>>, row_data: RowData) {
-    //     let full_tb = format!("{}.{}", row_data.db, row_data.tb);
-    //     if let Some(vec) = map.get(&full_tb) {
-    //         vec.push(row_data);
-    //     } else {
-    //         let mut vec = vec![row_data];
-    //         map.insert(full_tb, vec);
-    //     }
-    // }
 }

@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use futures::TryStreamExt;
 use sqlx::{Pool, Postgres, Row};
 
-use crate::{error::Error, meta::meta_util::MetaUtil};
+use crate::{
+    error::Error,
+    meta::{meta_util::MetaUtil, rdb_tb_meta::RdbTbMeta},
+};
 
 use super::{pg_col_type::PgColType, pg_tb_meta::PgTbMeta, type_registry::TypeRegistry};
 
@@ -37,7 +40,7 @@ impl PgMetaManager {
 
     pub fn update_tb_meta_by_oid(&mut self, oid: i32, tb_meta: PgTbMeta) -> Result<(), Error> {
         self.oid_to_tb_meta.insert(oid, tb_meta.clone());
-        let full_name = format!("{}.{}", tb_meta.schema.clone(), tb_meta.tb.clone());
+        let full_name = format!("{}.{}", &tb_meta.basic.schema, &tb_meta.basic.tb);
         self.name_to_tb_meta.insert(full_name, tb_meta);
         Ok(())
     }
@@ -55,17 +58,21 @@ impl PgMetaManager {
         let oid = self.get_oid(schema, tb).await?;
         let (cols, col_type_map) = self.parse_cols(schema, tb).await?;
         let key_map = self.parse_keys(schema, tb).await?;
-        let (order_col, partition_col, where_cols) = MetaUtil::parse_rdb_cols(&key_map, &cols)?;
-        let tb_meta = PgTbMeta {
-            oid,
+        let (order_col, partition_col, id_cols) = MetaUtil::parse_rdb_cols(&key_map, &cols)?;
+
+        let basic = RdbTbMeta {
             schema: schema.to_string(),
             tb: tb.to_string(),
             cols,
-            col_type_map,
             key_map,
             order_col,
             partition_col,
-            where_cols,
+            id_cols,
+        };
+        let tb_meta = PgTbMeta {
+            oid,
+            col_type_map,
+            basic,
         };
 
         self.name_to_tb_meta.insert(full_name, tb_meta.clone());

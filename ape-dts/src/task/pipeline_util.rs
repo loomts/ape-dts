@@ -1,5 +1,5 @@
 use crate::{
-    config::{pipeline_config::PipelineType, sinker_config::SinkerConfig, task_config::TaskConfig},
+    config::{pipeline_config::PipelineType, task_config::TaskConfig},
     error::Error,
     pipeline::{
         check_parallelizer::CheckParallelizer, merge_parallelizer::MergeParallelizer,
@@ -51,34 +51,12 @@ impl PipelineUtil {
     }
 
     pub async fn create_rdb_merger(config: &TaskConfig) -> Result<RdbMerger, Error> {
-        let log_level = &config.runtime.log_level;
-        let merger = match &config.sinker {
-            SinkerConfig::Mysql { url, .. } | SinkerConfig::MysqlCheck { url, .. } => {
-                let meta_manager = TaskUtil::create_mysql_meta_manager(&url, log_level).await?;
-                RdbMerger::new_for_mysql(meta_manager)
-            }
-
-            SinkerConfig::Pg { url, .. } | SinkerConfig::PgCheck { url, .. } => {
-                let meta_manager = TaskUtil::create_pg_meta_manager(&url, log_level).await?;
-                RdbMerger::new_for_pg(meta_manager)
-            }
-        };
-        Ok(merger)
+        let meta_manager = TaskUtil::create_rdb_meta_manager(config).await?;
+        Ok(RdbMerger { meta_manager })
     }
 
     pub async fn create_rdb_partitioner(config: &TaskConfig) -> Result<RdbPartitioner, Error> {
-        let log_level = &config.runtime.log_level;
-        let merger = match &config.sinker {
-            SinkerConfig::Mysql { url, .. } | SinkerConfig::MysqlCheck { url, .. } => {
-                let meta_manager = TaskUtil::create_mysql_meta_manager(&url, log_level).await?;
-                RdbPartitioner::new_for_mysql(meta_manager)
-            }
-
-            SinkerConfig::Pg { url, .. } | SinkerConfig::PgCheck { url, .. } => {
-                let meta_manager = TaskUtil::create_pg_meta_manager(&url, log_level).await?;
-                RdbPartitioner::new_for_pg(meta_manager)
-            }
-        };
-        Ok(merger)
+        let meta_manager = TaskUtil::create_rdb_meta_manager(config).await?;
+        Ok(RdbPartitioner { meta_manager })
     }
 }
