@@ -1,10 +1,10 @@
-use crate::meta::db_enum::DatabaseType;
+use crate::meta::db_enums::DbType;
 
 #[derive(Clone)]
 pub enum ExtractorConfig {
     BasicStruct {
         url: String,
-        db_type: DatabaseType,
+        db_type: DbType,
     },
 
     MysqlSnapshot {
@@ -19,6 +19,11 @@ pub enum ExtractorConfig {
         server_id: u64,
     },
 
+    MysqlCheck {
+        url: String,
+        check_log_dir: String,
+    },
+
     PgSnapshot {
         url: String,
         do_tb: String,
@@ -29,5 +34,10 @@ pub enum ExtractorConfig {
         slot_name: String,
         start_lsn: String,
         heartbeat_interval_secs: u64,
+    },
+
+    PgCheck {
+        url: String,
+        check_log_dir: String,
     },
 }

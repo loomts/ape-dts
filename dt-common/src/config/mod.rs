@@ -1,3 +1,4 @@
+pub mod config_enums;
 pub mod extractor_config;
 pub mod filter_config;
 pub mod pipeline_config;

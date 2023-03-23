@@ -5,17 +5,13 @@ use std::{
 };
 
 use concurrent_queue::ConcurrentQueue;
+use dt_common::config::{extractor_config::ExtractorConfig, task_config::TaskConfig};
 use futures::future::join;
 use log4rs::config::RawConfig;
 
 use crate::{
-    config::{extractor_config::ExtractorConfig, task_config::TaskConfig},
-    error::Error,
-    extractor::rdb_filter::RdbFilter,
-    meta::row_data::RowData,
-    metric::Metric,
-    pipeline::pipeline::Pipeline,
-    traits::Extractor,
+    error::Error, extractor::rdb_filter::RdbFilter, meta::row_data::RowData, metric::Metric,
+    pipeline::pipeline::Pipeline, traits::Extractor,
 };
 
 use super::{extractor_util::ExtractorUtil, pipeline_util::PipelineUtil, sinker_util::SinkerUtil};
@@ -210,6 +206,12 @@ impl TaskRunner {
                 )
                 .await?;
                 Box::new(extractor)
+            }
+
+            _ => {
+                return Err(Error::Unexpected {
+                    error: "unexpected extractor type".to_string(),
+                });
             }
         };
         Ok(extractor)

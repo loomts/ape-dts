@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use crate::{config::router_config::RouterConfig, error::Error};
+use dt_common::config::router_config::RouterConfig;
+
+use crate::error::Error;
 
 #[derive(Debug, Clone)]
 pub struct RdbRouter {

@@ -37,7 +37,7 @@ impl CheckLog {
         }
     }
 
-    pub fn from_string(line: String) -> Self {
+    pub fn from_str(line: &str) -> Self {
         // schema,tb,[col1 name],[col1 value length],[col1 value],[col2 name],[col2 value length],[col2 value]
         // example: db1,tb1,col1,4,1112,col2,5,abcde
         let chars: Vec<char> = line.chars().collect();

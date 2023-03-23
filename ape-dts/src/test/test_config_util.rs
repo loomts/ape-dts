@@ -5,10 +5,16 @@ use std::{
 };
 
 use configparser::ini::Ini;
-
-use crate::config::pipeline_config::PipelineType;
+use dt_common::config::config_enums::ParallelType;
+use strum::AsStaticRef;
 
 pub struct TestConfigUtil {}
+
+const PIPELINE: &str = "pipeline";
+const SINKER: &str = "sinker";
+const PARALLEL_TYPE: &str = "parallel_type";
+const PARALLEL_SIZE: &str = "parallel_size";
+const BATCH_SIZE: &str = "batch_size";
 
 #[allow(dead_code)]
 impl TestConfigUtil {
@@ -46,25 +52,33 @@ impl TestConfigUtil {
 
     pub fn get_default_serial_config() -> Vec<(String, String, String)> {
         Self::transfer_config(vec![
-            ("pipeline", "type", &PipelineType::RdbPartition.to_string()),
-            ("pipeline", "parallel_size", "1"),
-            ("sinker", "batch_size", "1"),
+            (
+                PIPELINE,
+                PARALLEL_TYPE,
+                ParallelType::RdbPartition.as_static(),
+            ),
+            (PIPELINE, PARALLEL_SIZE, "1"),
+            (SINKER, BATCH_SIZE, "1"),
         ])
     }
 
     pub fn get_default_parallel_config() -> Vec<(String, String, String)> {
         Self::transfer_config(vec![
-            ("pipeline", "type", &PipelineType::RdbPartition.to_string()),
-            ("pipeline", "parallel_size", "2"),
-            ("sinker", "batch_size", "1"),
+            (
+                PIPELINE,
+                PARALLEL_TYPE,
+                ParallelType::RdbPartition.as_static(),
+            ),
+            (PIPELINE, PARALLEL_SIZE, "2"),
+            (SINKER, BATCH_SIZE, "1"),
         ])
     }
 
     pub fn get_default_rdb_merge_config() -> Vec<(String, String, String)> {
         Self::transfer_config(vec![
-            ("pipeline", "type", &PipelineType::RdbMerge.to_string()),
-            ("pipeline", "parallel_size", "2"),
-            ("sinker", "batch_size", "2"),
+            (PIPELINE, PARALLEL_TYPE, ParallelType::RdbMerge.as_static()),
+            (PIPELINE, PARALLEL_SIZE, "2"),
+            (SINKER, BATCH_SIZE, "2"),
         ])
     }
 

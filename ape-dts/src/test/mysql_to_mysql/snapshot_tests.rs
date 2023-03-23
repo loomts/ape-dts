@@ -7,11 +7,6 @@ mod test {
     #[test]
     #[serial]
     fn snapshot_basic_test() {
-        match project_root::get_project_root() {
-            Ok(p) => println!("Current project root is {:?}", p),
-            Err(e) => println!("Error obtaining project root {:?}", e),
-        };
-
         let rt = Runtime::new().unwrap();
         let runner = rt
             .block_on(TestRunner::new("mysql_to_mysql/snapshot_basic_test"))

@@ -51,7 +51,7 @@ impl MysqlCheckExtractor<'_> {
                 continue;
             }
 
-            let check_log = CheckLog::from_string(log);
+            let check_log = CheckLog::from_str(&log);
             let tb_meta = self
                 .meta_manager
                 .get_tb_meta(&check_log.schema, &check_log.tb)

@@ -1,5 +1,6 @@
 use std::{str::FromStr, time::Duration};
 
+use dt_common::config::{sinker_config::SinkerConfig, task_config::TaskConfig};
 use sqlx::{
     mysql::{MySqlConnectOptions, MySqlPoolOptions},
     postgres::{PgConnectOptions, PgPoolOptions},
@@ -7,7 +8,6 @@ use sqlx::{
 };
 
 use crate::{
-    config::{sinker_config::SinkerConfig, task_config::TaskConfig},
     error::Error,
     meta::{
         mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
@@ -71,6 +71,12 @@ impl TaskUtil {
             SinkerConfig::Pg { url, .. } | SinkerConfig::PgCheck { url, .. } => {
                 let pg_meta_manager = Self::create_pg_meta_manager(&url, &log_level).await?;
                 RdbMetaManager::from_pg(pg_meta_manager)
+            }
+
+            _ => {
+                return Err(Error::Unexpected {
+                    error: "unexpected sinker type".to_string(),
+                });
             }
         };
         Ok(meta_manager)

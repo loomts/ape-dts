@@ -3,7 +3,6 @@ use std::env;
 
 mod adaptor;
 mod common;
-mod config;
 mod error;
 mod extractor;
 mod meta;

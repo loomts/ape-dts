@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
+use dt_common::config::{sinker_config::SinkerConfig, task_config::TaskConfig};
+
 use crate::{
-    config::{sinker_config::SinkerConfig, task_config::TaskConfig},
     error::Error,
     meta::{mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager},
     sinker::{
@@ -64,6 +65,12 @@ impl SinkerUtil {
                     *batch_size,
                 )
                 .await?
+            }
+
+            _ => {
+                return Err(Error::Unexpected {
+                    error: "unexpected sinker type".to_string(),
+                });
             }
         };
         Ok(sinkers)

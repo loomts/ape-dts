@@ -1,3 +1,6 @@
+use dt_common::config::{
+    extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
+};
 use futures::TryStreamExt;
 use sqlx::{MySql, Pool, Postgres, Row};
 use std::{
@@ -9,9 +12,6 @@ use std::{
 };
 
 use crate::{
-    config::{
-        extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
-    },
     error::Error,
     task::{task_runner::TaskRunner, task_util::TaskUtil},
 };
@@ -83,6 +83,12 @@ impl TestRunner {
             | ExtractorConfig::PgCheck { url, .. } => {
                 src_conn_pool_pg = Some(TaskUtil::create_pg_conn_pool(&url, 1, true).await?);
             }
+
+            _ => {
+                return Err(Error::Unexpected {
+                    error: "unexpected extractor type".to_string(),
+                });
+            }
         }
 
         match config.sinker {
@@ -92,6 +98,12 @@ impl TestRunner {
 
             SinkerConfig::Pg { url, .. } | SinkerConfig::PgCheck { url, .. } => {
                 dst_conn_pool_pg = Some(TaskUtil::create_pg_conn_pool(&url, 1, true).await?);
+            }
+
+            _ => {
+                return Err(Error::Unexpected {
+                    error: "unexpected sinker type".to_string(),
+                });
             }
         }
 

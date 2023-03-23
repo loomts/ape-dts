@@ -1,5 +1,6 @@
+use dt_common::config::{config_enums::ParallelType, task_config::TaskConfig};
+
 use crate::{
-    config::{pipeline_config::PipelineType, task_config::TaskConfig},
     error::Error,
     pipeline::{
         check_parallelizer::CheckParallelizer, merge_parallelizer::MergeParallelizer,
@@ -18,12 +19,12 @@ impl PipelineUtil {
         config: &TaskConfig,
     ) -> Result<Box<dyn Parallelizer + Send>, Error> {
         let parallel_size = config.pipeline.parallel_size;
-        let parallelizer_type = &config.pipeline.pipeline_type;
+        let parallel_type = &config.pipeline.parallel_type;
 
-        let parallelizer: Box<dyn Parallelizer + Send> = match parallelizer_type {
-            PipelineType::Snapshot => Box::new(SnapshotParallelizer { parallel_size }),
+        let parallelizer: Box<dyn Parallelizer + Send> = match parallel_type {
+            ParallelType::Snapshot => Box::new(SnapshotParallelizer { parallel_size }),
 
-            PipelineType::RdbPartition => {
+            ParallelType::RdbPartition => {
                 let partitioner = Self::create_rdb_partitioner(config).await?;
                 Box::new(PartitionParallelizer {
                     partitioner,
@@ -31,7 +32,7 @@ impl PipelineUtil {
                 })
             }
 
-            PipelineType::RdbMerge => {
+            ParallelType::RdbMerge => {
                 let merger = Self::create_rdb_merger(config).await?;
                 Box::new(MergeParallelizer {
                     merger,
@@ -39,7 +40,7 @@ impl PipelineUtil {
                 })
             }
 
-            PipelineType::RdbCheck => {
+            ParallelType::RdbCheck => {
                 let merger = Self::create_rdb_merger(config).await?;
                 Box::new(CheckParallelizer {
                     merger,

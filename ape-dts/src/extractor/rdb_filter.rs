@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::{config::filter_config::FilterConfig, error::Error, meta::row_type::RowType};
+use dt_common::config::filter_config::FilterConfig;
+
+use crate::{error::Error, meta::row_type::RowType};
 
 #[derive(Debug, Clone)]
 pub struct RdbFilter {

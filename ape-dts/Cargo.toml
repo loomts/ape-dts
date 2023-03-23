@@ -6,10 +6,11 @@ edition = "2021"
 
 
 [dependencies]
+dt-common = {path = "../dt-common", version = "0.1.0"}
 sqlx = {version = "0.6.2", features = ["runtime-async-std-rustls", "mysql", "postgres", "decimal", "bigdecimal", "ipnetwork", "mac_address", "bit-vec", "time", "chrono", "json", "uuid"]}
 futures = "0.3.25"
-# mysql-binlog-connector-rust = { path = "/Users/xushicai/Documents/projects/mysql-binlog-connector-rust2/mysql-binlog-connector-rust" }
-mysql-binlog-connector-rust = { path = "/Users/caiqinyu/Desktop/Project/rust/mysql-binlog-connector-rust" }
+mysql-binlog-connector-rust = { path = "/Users/xushicai/Documents/projects/mysql-binlog-connector-rust2/mysql-binlog-connector-rust" }
+# mysql-binlog-connector-rust = { path = "/Users/caiqinyu/Desktop/Project/rust/mysql-binlog-connector-rust" }
 serde = {version = "1", features = ["derive"]}
 serde_json = "1.0.87"
 chrono = "0.4.23"
@@ -30,6 +31,7 @@ bytes = "1.0"
 configparser = "3.0.2"
 async-mutex = "1.4.0"
 project-root = "0.2.2"
+strum = { version = "0.21.0", features = ["derive"] }
 
 [features]
 
