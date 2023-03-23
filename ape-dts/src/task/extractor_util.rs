@@ -128,7 +128,7 @@ impl ExtractorUtil {
         })
     }
 
-    pub async fn create_pg_snapshot_extractor<'a>(
+    pub async fn create_pg_check_extractor<'a>(
         url: &str,
         check_log_dir: &str,
         slice_size: usize,
@@ -150,7 +150,7 @@ impl ExtractorUtil {
         })
     }
 
-    pub async fn create_pg_check_extractor<'a>(
+    pub async fn create_pg_snapshot_extractor<'a>(
         url: &str,
         do_tb: &str,
         slice_size: usize,

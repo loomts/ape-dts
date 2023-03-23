@@ -132,6 +132,8 @@ impl TestRunner {
     pub async fn run_check_test(&self) -> Result<(), Error> {
         // clear existed check logs
         Self::clear_check_log(&self.log_dir);
+
+        // prepare src and dst tables
         self.run_test_ddl_sqls().await?;
         self.run_test_dml_sqls().await?;
 

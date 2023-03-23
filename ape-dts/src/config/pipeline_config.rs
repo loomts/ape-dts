@@ -32,7 +32,7 @@ impl PipelineType {
             "rdb_check" => Ok(Self::RdbCheck),
             "rdb_partition" => Ok(Self::RdbPartition),
             _ => Err(Error::Unexpected {
-                error: "unexpected sinker type".to_string(),
+                error: "unexpected pipeline type".to_string(),
             }),
         }
     }
