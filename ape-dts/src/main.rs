@@ -1,7 +1,8 @@
 use crate::task::task_runner::TaskRunner;
 use std::env;
 
-mod config;
+mod adaptor;
+mod common;
 mod error;
 mod extractor;
 mod meta;
@@ -9,7 +10,6 @@ mod metric;
 mod monitor;
 mod pipeline;
 mod sinker;
-mod sqlx_ext;
 mod task;
 mod test;
 mod traits;

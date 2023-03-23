@@ -10,7 +10,7 @@ use dt_common::{
         router_config::RouterConfig, sinker_config::SinkerConfig,
     },
     error::Error,
-    meta::db_enum::DatabaseType,
+    meta::db_enums::DbType,
 };
 
 use crate::{
@@ -85,14 +85,14 @@ impl StructBuilder {
     ) -> Result<Box<dyn StructExtrator + 'a + Send>, Error> {
         let extractor: Box<dyn StructExtrator + Send> = match &self.extractor_config {
             ExtractorConfig::BasicStruct { url: _, db_type } => match db_type {
-                DatabaseType::MySQL => Box::new(MySqlStructExtractor {
+                DbType::Mysql => Box::new(MySqlStructExtractor {
                     pool: Option::None,
                     struct_obj_queue: queue,
                     source_config: self.extractor_config.clone(),
                     filter_config: self.filter_config.clone(),
                     is_finished: finished_flag,
                 }),
-                DatabaseType::PostgresSQL => Box::new(PgStructExtractor {
+                DbType::Pg => Box::new(PgStructExtractor {
                     pool: Option::None,
                     struct_obj_queue: queue,
                     source_config: self.extractor_config.clone(),
@@ -111,12 +111,12 @@ impl StructBuilder {
     pub async fn build_sinker(&self) -> Result<Box<dyn StructSinker + Send>, Error> {
         let sinker: Box<dyn StructSinker + Send> = match &self.sinker_config {
             SinkerConfig::BasicStruct { url: _, db_type } => match db_type {
-                DatabaseType::MySQL => Box::new(MySqlStructSinker {
+                DbType::Mysql => Box::new(MySqlStructSinker {
                     pool: Option::None,
                     sinker_config: self.sinker_config.clone(),
                     router_config: self.router_config.clone(),
                 }),
-                DatabaseType::PostgresSQL => Box::new(PgStructSinker {
+                DbType::Pg => Box::new(PgStructSinker {
                     pool: Option::None,
                     sinker_config: self.sinker_config.clone(),
                     router_config: self.router_config.clone(),

@@ -2,31 +2,14 @@ use std::collections::HashMap;
 
 use crate::{
     error::Error,
-    meta::{
-        mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
-        row_data::RowData, row_type::RowType,
-    },
+    meta::{rdb_meta_manager::RdbMetaManager, row_data::RowData, row_type::RowType},
 };
 
-use super::rdb_partitioner::RdbPartitioner;
-
 pub struct RdbMerger {
-    rdb_partitioner: RdbPartitioner,
+    pub meta_manager: RdbMetaManager,
 }
 
 impl RdbMerger {
-    pub fn new_for_mysql(meta_manager: MysqlMetaManager) -> RdbMerger {
-        Self {
-            rdb_partitioner: RdbPartitioner::new_for_mysql(meta_manager),
-        }
-    }
-
-    pub fn new_for_pg(meta_manager: PgMetaManager) -> RdbMerger {
-        Self {
-            rdb_partitioner: RdbPartitioner::new_for_pg(meta_manager),
-        }
-    }
-
     pub async fn merge(
         &mut self,
         data: Vec<RowData>,
@@ -65,14 +48,19 @@ impl RdbMerger {
             return Ok(());
         }
 
-        let (_, _, where_cols) = self
-            .rdb_partitioner
-            .get_tb_meta_info(&row_data.db, &row_data.tb)
+        let tb_meta = self
+            .meta_manager
+            .get_tb_meta(&row_data.db, &row_data.tb)
             .await?;
         match row_data.row_type {
             RowType::Delete => {
-                if self.check_collision(&merged.insert_rows, &where_cols, &row_data, hash_code)
-                    || self.check_collision(&merged.delete_rows, &where_cols, &row_data, hash_code)
+                if self.check_collision(&merged.insert_rows, &tb_meta.id_cols, &row_data, hash_code)
+                    || self.check_collision(
+                        &merged.delete_rows,
+                        &tb_meta.id_cols,
+                        &row_data,
+                        hash_code,
+                    )
                 {
                     merged.unmerged_rows.push(row_data);
                     return Ok(());
@@ -85,9 +73,17 @@ impl RdbMerger {
                 let (delete, insert) = self.split_update_row_data(row_data).await?;
                 let insert_hash_code = self.get_hash_code(&insert).await?;
 
-                if self.check_collision(&merged.insert_rows, &where_cols, &insert, insert_hash_code)
-                    || self.check_collision(&merged.delete_rows, &where_cols, &delete, hash_code)
-                {
+                if self.check_collision(
+                    &merged.insert_rows,
+                    &tb_meta.id_cols,
+                    &insert,
+                    insert_hash_code,
+                ) || self.check_collision(
+                    &merged.delete_rows,
+                    &tb_meta.id_cols,
+                    &delete,
+                    hash_code,
+                ) {
                     let row_data = RowData {
                         row_type: RowType::Update,
                         db: delete.db,
@@ -105,7 +101,8 @@ impl RdbMerger {
             }
 
             RowType::Insert => {
-                if self.check_collision(&merged.insert_rows, &where_cols, &row_data, hash_code) {
+                if self.check_collision(&merged.insert_rows, &tb_meta.id_cols, &row_data, hash_code)
+                {
                     merged.unmerged_rows.push(row_data);
                     return Ok(());
                 }
@@ -170,38 +167,14 @@ impl RdbMerger {
     }
 
     async fn get_hash_code(&mut self, row_data: &RowData) -> Result<u128, Error> {
-        let col_values = match row_data.row_type {
-            RowType::Insert => row_data.after.as_ref().unwrap(),
-            _ => row_data.before.as_ref().unwrap(),
-        };
-
-        let (_, key_map, where_cols) = self
-            .rdb_partitioner
-            .get_tb_meta_info(&row_data.db, &row_data.tb)
+        let tb_meta = self
+            .meta_manager
+            .get_tb_meta(&row_data.db, &row_data.tb)
             .await?;
-        if key_map.is_empty() {
+        if tb_meta.key_map.is_empty() {
             return Ok(0);
         }
-
-        // refer to: https://docs.oracle.com/javase/6/docs/api/java/util/List.html#hashCode%28%29
-        let mut hash_code = 1u128;
-        let mut key_col_hash_codes = Vec::new();
-        for col in where_cols {
-            let col_hash_code = col_values.get(&col).unwrap().hash_code();
-            // col_hash_code is 0 if col_value is ColValue::None,
-            // consider fowlling case,
-            // create table a(id int, value int, unique key(id, value));
-            // insert into a values(1, NULL);
-            // delete from a where (id, value) in ((1, NULL));  // this won't work
-            // delete from a where id=1 and value is NULL;  // this works
-            // so here return 0 to stop merging to avoid batch deleting
-            if col_hash_code == 0 {
-                return Ok(0);
-            }
-            hash_code = 31 * hash_code + col_hash_code as u128;
-            key_col_hash_codes.push(col_hash_code);
-        }
-        Ok(hash_code)
+        Ok(row_data.get_hash_code(&tb_meta))
     }
 }
 

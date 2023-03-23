@@ -14,6 +14,7 @@ use mysql_binlog_connector_rust::{
 };
 
 use crate::{
+    adaptor::mysql_col_value_convertor::MysqlColValueConvertor,
     error::Error,
     extractor::rdb_filter::RdbFilter,
     meta::{
@@ -23,8 +24,6 @@ use crate::{
     task::task_util::TaskUtil,
     traits::Extractor,
 };
-
-use super::mysql_col_value_convertor::MysqlColValueConvertor;
 
 pub struct MysqlCdcExtractor<'a> {
     pub meta_manager: MysqlMetaManager,
@@ -235,16 +234,16 @@ impl MysqlCdcExtractor<'_> {
         }
 
         let mut data = HashMap::new();
-        for i in (0..tb_meta.cols.len()).rev() {
-            let key = tb_meta.cols.get(i).unwrap();
+        for i in (0..tb_meta.basic.cols.len()).rev() {
+            let key = tb_meta.basic.cols.get(i).unwrap();
             if let Some(false) = included_columns.get(i) {
                 data.insert(key.clone(), ColValue::None);
                 continue;
             }
 
-            let meta = tb_meta.col_meta_map.get(key);
+            let col_type = tb_meta.col_type_map.get(key).unwrap();
             let raw_value = event.column_values.remove(i);
-            let value = MysqlColValueConvertor::from_binlog(&meta.unwrap(), raw_value);
+            let value = MysqlColValueConvertor::from_binlog(col_type, raw_value);
             data.insert(key.clone(), value);
         }
         Ok(data)

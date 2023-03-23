@@ -1,28 +1,23 @@
-use std::{
-    collections::HashMap,
-    sync::atomic::{AtomicBool, Ordering},
-};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 use futures::TryStreamExt;
 use log::info;
-use sqlx::{postgres::PgRow, Pool, Postgres};
+use sqlx::{Pool, Postgres};
 
 use crate::{
+    adaptor::{pg_col_value_convertor::PgColValueConvertor, sqlx_ext::SqlxPgExt},
     error::Error,
+    extractor::extractor_util::ExtractorUtil,
     meta::{
         col_value::ColValue,
         pg::{pg_col_type::PgColType, pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
         row_data::RowData,
-        row_type::RowType,
     },
-    sqlx_ext::SqlxPg,
     task::task_util::TaskUtil,
     traits::Extractor,
 };
-
-use super::pg_col_value_convertor::PgColValueConvertor;
 
 pub struct PgSnapshotExtractor<'a> {
     pub conn_pool: Pool<Postgres>,
@@ -59,7 +54,7 @@ impl PgSnapshotExtractor<'_> {
             .get_tb_meta(&self.schema, &self.tb)
             .await?;
 
-        if let Some(order_col) = &tb_meta.order_col {
+        if let Some(order_col) = &tb_meta.basic.order_col {
             let order_col_type = tb_meta.col_type_map.get(order_col);
             self.extract_by_slices(
                 &tb_meta,
@@ -91,7 +86,10 @@ impl PgSnapshotExtractor<'_> {
         let sql = self.build_extract_sql(tb_meta, false);
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
-            self.push_row_to_buffer(&row, tb_meta).await.unwrap();
+            let row_data = RowData::from_pg_row(&row, &tb_meta);
+            ExtractorUtil::push_row(self.buffer, row_data)
+                .await
+                .unwrap();
             all_count += 1;
         }
 
@@ -129,7 +127,11 @@ impl PgSnapshotExtractor<'_> {
             let mut rows = query.fetch(&self.conn_pool);
             let mut slice_count = 0usize;
             while let Some(row) = rows.try_next().await.unwrap() {
-                self.push_row_to_buffer(&row, tb_meta).await.unwrap();
+                let row_data = RowData::from_pg_row(&row, &tb_meta);
+                ExtractorUtil::push_row(self.buffer, row_data)
+                    .await
+                    .unwrap();
+
                 start_value =
                     PgColValueConvertor::from_query(&row, order_col, order_col_type).unwrap();
                 slice_count += 1;
@@ -151,14 +153,14 @@ impl PgSnapshotExtractor<'_> {
 
     fn build_extract_sql(&mut self, tb_meta: &PgTbMeta, has_start_value: bool) -> String {
         let mut cols = Vec::new();
-        for col in &tb_meta.cols {
+        for col in &tb_meta.basic.cols {
             let extract_col = Self::build_extract_col(&col, tb_meta);
             cols.push(extract_col);
         }
         let cols_str = cols.join(",");
 
         // SELECT col_1, col_2::text FROM tb_1 WHERE col_1 > $1 ORDER BY col_1;
-        if let Some(order_col) = &tb_meta.order_col {
+        if let Some(order_col) = &tb_meta.basic.order_col {
             if has_start_value {
                 let order_col_type = tb_meta.col_type_map.get(order_col).unwrap();
                 return format!(
@@ -190,29 +192,5 @@ impl PgSnapshotExtractor<'_> {
         } else {
             format!("{}::{}", col, extract_type)
         }
-    }
-
-    async fn push_row_to_buffer(&mut self, row: &PgRow, tb_meta: &PgTbMeta) -> Result<(), Error> {
-        let mut after = HashMap::new();
-        for (col_name, col_type) in &tb_meta.col_type_map {
-            let col_value = PgColValueConvertor::from_query(row, &col_name, &col_type)?;
-            after.insert(col_name.to_string(), col_value);
-        }
-
-        while self.buffer.is_full() {
-            TaskUtil::sleep_millis(1).await;
-        }
-
-        let row_data = RowData {
-            db: tb_meta.schema.clone(),
-            tb: tb_meta.tb.clone(),
-            before: None,
-            after: Some(after),
-            row_type: RowType::Insert,
-            current_position: "".to_string(),
-            checkpoint_position: "".to_string(),
-        };
-        let _ = self.buffer.push(row_data);
-        Ok(())
     }
 }

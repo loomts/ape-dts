@@ -1,5 +1,8 @@
+use std::sync::Arc;
+
 use crate::{error::Error, meta::row_data::RowData};
 use async_trait::async_trait;
+use concurrent_queue::ConcurrentQueue;
 
 #[async_trait]
 pub trait Sinker {
@@ -11,10 +14,16 @@ pub trait Sinker {
 }
 
 #[async_trait]
-pub trait Pipeline {
-    async fn start(&mut self) -> Result<(), Error>;
+pub trait Parallelizer {
+    fn get_name(&self) -> String;
 
-    async fn stop(&mut self) -> Result<(), Error>;
+    async fn drain(&mut self, buffer: &ConcurrentQueue<RowData>) -> Result<Vec<RowData>, Error>;
+
+    async fn sink(
+        &mut self,
+        data: Vec<RowData>,
+        sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
+    ) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -22,15 +31,4 @@ pub trait Extractor {
     async fn extract(&mut self) -> Result<(), Error>;
 
     async fn close(&mut self) -> Result<(), Error>;
-}
-
-#[async_trait]
-pub trait Partitioner {
-    async fn partition(
-        &mut self,
-        data: Vec<RowData>,
-        slice_count: usize,
-    ) -> Result<Vec<Vec<RowData>>, Error>;
-
-    async fn can_be_partitioned<'a>(&mut self, row_data: &'a RowData) -> Result<bool, Error>;
 }

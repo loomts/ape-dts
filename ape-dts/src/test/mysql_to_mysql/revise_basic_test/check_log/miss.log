@@ -1,0 +1,12 @@
+test_db_1,no_pk_one_uk,f_1,1,7,f_2,1,1
+test_db_1,no_pk_one_uk,f_1,1,8,f_2,1,1
+test_db_1,no_pk_one_uk,f_1,4,null,f_2,4,null
+test_db_1,one_pk_multi_uk,f_0,1,7
+test_db_1,one_pk_multi_uk,f_0,1,8
+test_db_1,one_pk_multi_uk,f_0,1,9
+test_db_1,one_pk_no_uk,f_0,1,7
+test_db_1,one_pk_no_uk,f_0,1,8
+test_db_1,one_pk_no_uk,f_0,1,9
+test_db_1,no_pk_multi_uk,f_1,1,7,f_2,1,1
+test_db_1,no_pk_multi_uk,f_1,1,8,f_2,1,1
+test_db_1,no_pk_multi_uk,f_1,4,null,f_2,4,null

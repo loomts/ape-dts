@@ -11,7 +11,7 @@ mod test {
         let runner = rt
             .block_on(TestRunner::new("pg_to_pg/snapshot_basic_test"))
             .unwrap();
-        rt.block_on(runner.run_snapshot_test(false)).unwrap();
+        rt.block_on(runner.run_snapshot_test()).unwrap();
     }
 
     /// dst table already has records with same primary keys of src table,
@@ -23,6 +23,6 @@ mod test {
         let runner = rt
             .block_on(TestRunner::new("pg_to_pg/snapshot_on_duplicate_test"))
             .unwrap();
-        rt.block_on(runner.run_snapshot_test(false)).unwrap();
+        rt.block_on(runner.run_snapshot_test()).unwrap();
     }
 }

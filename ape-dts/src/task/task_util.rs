@@ -1,5 +1,6 @@
 use std::{str::FromStr, time::Duration};
 
+use dt_common::config::{sinker_config::SinkerConfig, task_config::TaskConfig};
 use sqlx::{
     mysql::{MySqlConnectOptions, MySqlPoolOptions},
     postgres::{PgConnectOptions, PgPoolOptions},
@@ -8,7 +9,10 @@ use sqlx::{
 
 use crate::{
     error::Error,
-    meta::{mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager},
+    meta::{
+        mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
+        rdb_meta_manager::RdbMetaManager,
+    },
 };
 
 pub struct TaskUtil {}
@@ -54,6 +58,28 @@ impl TaskUtil {
             .connect_with(conn_options)
             .await?;
         Ok(conn_pool)
+    }
+
+    pub async fn create_rdb_meta_manager(config: &TaskConfig) -> Result<RdbMetaManager, Error> {
+        let log_level = &config.runtime.log_level;
+        let meta_manager = match &config.sinker {
+            SinkerConfig::Mysql { url, .. } | SinkerConfig::MysqlCheck { url, .. } => {
+                let mysql_meta_manager = Self::create_mysql_meta_manager(&url, &log_level).await?;
+                RdbMetaManager::from_mysql(mysql_meta_manager)
+            }
+
+            SinkerConfig::Pg { url, .. } | SinkerConfig::PgCheck { url, .. } => {
+                let pg_meta_manager = Self::create_pg_meta_manager(&url, &log_level).await?;
+                RdbMetaManager::from_pg(pg_meta_manager)
+            }
+
+            _ => {
+                return Err(Error::Unexpected {
+                    error: "unexpected sinker type".to_string(),
+                });
+            }
+        };
+        Ok(meta_manager)
     }
 
     pub async fn create_mysql_meta_manager(
