@@ -19,6 +19,7 @@ Session.vim
 ## Build
 /target
 /images/ape-dts
+/images/dt-struct
 /logs
 /tmp
 

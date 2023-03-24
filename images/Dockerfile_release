@@ -1,9 +1,0 @@
-FROM rust:1.67.0 as builder
-
-ARG LOCAL_CONFIG_PATH="./example/mysql_snapshot_sample.yaml"
-ENV CONFIG_PATH=config_example 
-
-COPY ${LOCAL_CONFIG_PATH} ${CONFIG_PATH}
-COPY ape-dts ape-dts
-
-CMD [ "sh", "-c", "/ape-dts ${CONFIG_PATH} ${TASK_TYPE}" ]
