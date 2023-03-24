@@ -17,11 +17,12 @@ impl PgCdcClient {
         let url_info = Url::parse(&self.url).unwrap();
         let host = url_info.host_str().unwrap().to_string();
         let port = format!("{}", url_info.port().unwrap());
+        let dbname = url_info.path().trim_start_matches('/');
         let username = url_info.username().to_string();
         let password = url_info.password().unwrap().to_string();
         let conn_info = format!(
-            "host={} port={} user={} password={} replication=database",
-            host, port, username, password
+            "host={} port={} dbname={} user={} password={} replication=database",
+            host, port, dbname, username, password
         );
 
         let (client, connection) = tokio_postgres::connect(&conn_info, NoTls).await.unwrap();
