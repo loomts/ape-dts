@@ -119,12 +119,16 @@ impl TaskConfig {
                 SinkType::Write => Ok(SinkerConfig::Mysql { url, batch_size }),
 
                 SinkType::Check => Ok(SinkerConfig::MysqlCheck { url, batch_size }),
+
+                SinkType::Struct => Ok(SinkerConfig::BasicStruct { url, db_type }),
             },
 
             DbType::Pg => match sink_type {
                 SinkType::Write => Ok(SinkerConfig::Pg { url, batch_size }),
 
                 SinkType::Check => Ok(SinkerConfig::PgCheck { url, batch_size }),
+
+                SinkType::Struct => Ok(SinkerConfig::BasicStruct { url, db_type }),
             },
         }
     }

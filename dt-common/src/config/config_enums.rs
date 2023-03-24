@@ -18,6 +18,8 @@ pub enum SinkType {
     Write,
     #[strum(serialize = "check")]
     Check,
+    #[strum(serialize = "struct")]
+    Struct,
 }
 
 #[derive(EnumString, AsStaticStr)]
