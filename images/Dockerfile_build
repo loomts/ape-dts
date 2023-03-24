@@ -9,7 +9,7 @@ RUN if [ -n "${GIT_BRANCH}" ]; \
     else git clone https://${GIT_TOKEN}@github.com/apecloud/ape-dts.git; \
     fi
 RUN git clone https://${GIT_TOKEN}@github.com/apecloud/mysql-binlog-connector-rust.git
-RUN sed -i '/mysql-binlog-connector-rust/s/^mysql-binlog-connector-rust.*$/mysql-binlog-connector-rust = \{ path = "\/mysql-binlog-connector-rust" \}/g' /ape-dts/Cargo.toml \
+RUN sed -i '/mysql-binlog-connector-rust/s/^mysql-binlog-connector-rust.*$/mysql-binlog-connector-rust = \{ path = "\/mysql-binlog-connector-rust" \}/g' /ape-dts/ape-dts/Cargo.toml \
     && cd /ape-dts \
     && cargo build --release   
 
