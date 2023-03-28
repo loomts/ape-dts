@@ -63,7 +63,8 @@ impl TaskConfig {
             DbType::Mysql => match extract_type {
                 ExtractType::Snapshot => Ok(ExtractorConfig::MysqlSnapshot {
                     url,
-                    do_tb: "".to_string(),
+                    db: "".to_string(),
+                    tb: "".to_string(),
                 }),
 
                 ExtractType::Cdc => Ok(ExtractorConfig::MysqlCdc {
@@ -85,7 +86,8 @@ impl TaskConfig {
             DbType::Pg => match extract_type {
                 ExtractType::Snapshot => Ok(ExtractorConfig::PgSnapshot {
                     url,
-                    do_tb: "".to_string(),
+                    db: "".to_string(),
+                    tb: "".to_string(),
                 }),
 
                 ExtractType::Cdc => Ok(ExtractorConfig::PgCdc {

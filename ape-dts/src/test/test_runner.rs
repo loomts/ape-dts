@@ -490,44 +490,46 @@ impl TestRunner {
         Ok(())
     }
 
-    async fn compare_data_for_tbs(
+    pub async fn compare_data_for_tbs(
         &self,
         src_tbs: &Vec<String>,
         dst_tbs: &Vec<String>,
         cols_list: &Vec<Vec<String>>,
     ) -> Result<bool, Error> {
+        let filtered_tbs_file = format!("{}/filtered_tbs.txt", &self.test_dir);
+        let filtered_tbs = if fs::metadata(&filtered_tbs_file).is_ok() {
+            Self::load_file(&filtered_tbs_file)
+        } else {
+            Vec::new()
+        };
+
         for i in 0..src_tbs.len() {
             let src_tb = &src_tbs[i];
             let dst_tb = &dst_tbs[i];
-            if !self.compare_tb_data(src_tb, dst_tb, &cols_list[i]).await? {
-                return Ok(false);
+            let cols = &cols_list[i];
+
+            if filtered_tbs.contains(src_tb) {
+                let dst_data = self.fetch_data(&dst_tb, cols, "dst").await?;
+                if dst_data.len() > 0 {
+                    return Ok(false);
+                }
+            } else {
+                if !self.compare_tb_data(src_tb, dst_tb, &cols_list[i]).await? {
+                    return Ok(false);
+                }
             }
         }
         Ok(true)
     }
 
-    async fn compare_tb_data(
+    pub async fn compare_tb_data(
         &self,
         src_tb: &str,
         dst_tb: &str,
         cols: &Vec<String>,
     ) -> Result<bool, Error> {
-        let src_data = if let Some(pool) = &self.src_conn_pool_mysql {
-            self.fetch_data_mysql(src_tb, cols, pool).await?
-        } else if let Some(pool) = &self.src_conn_pool_pg {
-            self.fetch_data_pg(src_tb, cols, pool).await?
-        } else {
-            Vec::new()
-        };
-
-        let dst_data = if let Some(pool) = &self.dst_conn_pool_mysql {
-            self.fetch_data_mysql(dst_tb, cols, pool).await?
-        } else if let Some(pool) = &self.dst_conn_pool_pg {
-            self.fetch_data_pg(dst_tb, cols, pool).await?
-        } else {
-            Vec::new()
-        };
-
+        let src_data = self.fetch_data(src_tb, cols, "src").await?;
+        let dst_data = self.fetch_data(dst_tb, cols, "dst").await?;
         println!(
             "comparing row data for src_tb: {}, src_data count: {}",
             src_tb,
@@ -542,6 +544,49 @@ impl TestRunner {
             return Ok(false);
         }
         Ok(true)
+    }
+
+    async fn fetch_data(
+        &self,
+        tb: &str,
+        cols: &Vec<String>,
+        from: &str,
+    ) -> Result<Vec<Vec<Option<Vec<u8>>>>, Error> {
+        let conn_pool_mysql = if from == "src" {
+            &self.src_conn_pool_mysql
+        } else {
+            &self.dst_conn_pool_mysql
+        };
+
+        let conn_pool_pg = if from == "src" {
+            &self.src_conn_pool_pg
+        } else {
+            &self.dst_conn_pool_pg
+        };
+
+        let data = if let Some(pool) = conn_pool_mysql {
+            self.fetch_data_mysql(tb, cols, pool).await?
+        } else if let Some(pool) = conn_pool_pg {
+            self.fetch_data_pg(tb, cols, pool).await?
+        } else {
+            Vec::new()
+        };
+        Ok(data)
+    }
+
+    async fn fetch_dst_data(
+        &self,
+        tb: &str,
+        cols: &Vec<String>,
+    ) -> Result<Vec<Vec<Option<Vec<u8>>>>, Error> {
+        let data = if let Some(pool) = &self.dst_conn_pool_mysql {
+            self.fetch_data_mysql(tb, cols, pool).await?
+        } else if let Some(pool) = &self.dst_conn_pool_pg {
+            self.fetch_data_pg(tb, cols, pool).await?
+        } else {
+            Vec::new()
+        };
+        Ok(data)
     }
 
     async fn fetch_data_mysql(

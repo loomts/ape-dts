@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use sqlx::{mysql::MySqlRow, postgres::PgRow};
+use strum::AsStaticRef;
 
 use crate::adaptor::{
     mysql_col_value_convertor::MysqlColValueConvertor, pg_col_value_convertor::PgColValueConvertor,
@@ -63,7 +64,7 @@ impl RowData {
             "db: {}, tb: {}, row_type: {}",
             self.db,
             self.tb,
-            self.row_type.to_str()
+            self.row_type.as_static()
         ));
         result.push(format!(
             "before: {}",

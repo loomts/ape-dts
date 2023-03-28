@@ -4,14 +4,14 @@ mod test {
 
     #[test]
     fn log_reader_empty_test() {
-        let dir = TestConfigUtil::get_absolute_dir("unit_tests/log_reader_empty_test");
+        let dir = TestConfigUtil::get_absolute_dir("log_reader/log_reader_empty_test");
         let mut reader = LogReader::new(&dir);
         assert_eq!(reader.next(), None);
     }
 
     #[test]
     fn log_reader_one_log_test() {
-        let dir = TestConfigUtil::get_absolute_dir("unit_tests/log_reader_one_log_test");
+        let dir = TestConfigUtil::get_absolute_dir("log_reader/log_reader_one_log_test");
         let mut reader = LogReader::new(&dir);
         assert_eq!(reader.next().unwrap(), "log1.line1");
         assert_eq!(reader.next().unwrap(), "");
@@ -21,7 +21,7 @@ mod test {
 
     #[test]
     fn log_reader_multi_log_test() {
-        let dir = TestConfigUtil::get_absolute_dir("unit_tests/log_reader_multi_log_test");
+        let dir = TestConfigUtil::get_absolute_dir("log_reader/log_reader_multi_log_test");
         let mut reader = LogReader::new(&dir);
         assert_eq!(reader.next().unwrap(), "log1.line1");
         assert_eq!(reader.next().unwrap(), "");

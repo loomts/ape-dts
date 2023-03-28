@@ -32,6 +32,8 @@ configparser = "3.0.2"
 async-mutex = "1.4.0"
 project-root = "0.2.2"
 strum = { version = "0.21.0", features = ["derive"] }
+regex = "1.5.4"
+
 
 [features]
 
