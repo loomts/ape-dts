@@ -1,16 +1,11 @@
-#[derive(Debug, Clone, PartialEq)]
-pub enum RowType {
-    Insert,
-    Update,
-    Delete,
-}
+use strum::{AsStaticStr, Display, EnumString};
 
-impl RowType {
-    pub fn to_str(&self) -> &str {
-        match self {
-            RowType::Insert => "insert",
-            RowType::Update => "update",
-            RowType::Delete => "delete",
-        }
-    }
+#[derive(Debug, Clone, PartialEq, Display, EnumString, AsStaticStr)]
+pub enum RowType {
+    #[strum(serialize = "insert")]
+    Insert,
+    #[strum(serialize = "update")]
+    Update,
+    #[strum(serialize = "delete")]
+    Delete,
 }

@@ -5,13 +5,20 @@ use std::{
 };
 
 use concurrent_queue::ConcurrentQueue;
-use dt_common::config::{extractor_config::ExtractorConfig, task_config::TaskConfig};
+use dt_common::{
+    config::{extractor_config::ExtractorConfig, task_config::TaskConfig},
+    meta::db_enums::DbType,
+};
 use futures::future::join;
 use log4rs::config::RawConfig;
 
 use crate::{
-    error::Error, extractor::rdb_filter::RdbFilter, meta::row_data::RowData, metric::Metric,
-    pipeline::pipeline::Pipeline, traits::Extractor,
+    error::Error,
+    extractor::rdb_filter::RdbFilter,
+    meta::{row_data::RowData, row_type::RowType},
+    metric::Metric,
+    pipeline::pipeline::Pipeline,
+    traits::Extractor,
 };
 
 use super::{extractor_util::ExtractorUtil, pipeline_util::PipelineUtil, sinker_util::SinkerUtil};
@@ -37,8 +44,12 @@ impl TaskRunner {
         }
 
         match &self.config.extractor {
-            ExtractorConfig::MysqlSnapshot { .. } | ExtractorConfig::PgSnapshot { .. } => {
-                self.start_multi_task().await?
+            ExtractorConfig::MysqlSnapshot { url, .. } => {
+                self.start_multi_task(url, &DbType::Mysql).await?
+            }
+
+            ExtractorConfig::PgSnapshot { url, .. } => {
+                self.start_multi_task(url, &DbType::Pg).await?
             }
 
             _ => self.start_single_task(&self.config.extractor).await?,
@@ -47,30 +58,44 @@ impl TaskRunner {
         Ok(())
     }
 
-    async fn start_multi_task(&self) -> Result<(), Error> {
-        let filter = RdbFilter::from_config(&self.config.filter)?;
-        for do_tb in filter.do_tbs.iter() {
-            let single_extractor_config = match &self.config.extractor {
-                ExtractorConfig::MysqlSnapshot { url, .. } => ExtractorConfig::MysqlSnapshot {
-                    url: url.clone(),
-                    do_tb: do_tb.clone(),
-                },
+    async fn start_multi_task(&self, url: &str, db_type: &DbType) -> Result<(), Error> {
+        let mut filter = RdbFilter::from_config(&self.config.filter)?;
+        let dbs = ExtractorUtil::list_dbs(url, db_type).await?;
+        for db in dbs.iter() {
+            if filter.filter_db(db) {
+                continue;
+            }
 
-                ExtractorConfig::PgSnapshot { url, .. } => ExtractorConfig::PgSnapshot {
-                    url: url.clone(),
-                    do_tb: do_tb.clone(),
-                },
-
-                _ => {
-                    return Err(Error::Unexpected {
-                        error: "unexpected extractor config type for rdb snapshot task".to_string(),
-                    });
+            let tbs = ExtractorUtil::list_tbs(url, db, db_type).await?;
+            for tb in tbs.iter() {
+                if filter.filter(db, tb, &RowType::Insert) {
+                    continue;
                 }
-            };
 
-            self.start_single_task(&single_extractor_config).await?;
+                let single_extractor_config = match &self.config.extractor {
+                    ExtractorConfig::MysqlSnapshot { url, .. } => ExtractorConfig::MysqlSnapshot {
+                        url: url.clone(),
+                        db: db.clone(),
+                        tb: tb.clone(),
+                    },
+
+                    ExtractorConfig::PgSnapshot { url, .. } => ExtractorConfig::PgSnapshot {
+                        url: url.clone(),
+                        db: db.clone(),
+                        tb: tb.clone(),
+                    },
+
+                    _ => {
+                        return Err(Error::Unexpected {
+                            error: "unexpected extractor config type for rdb snapshot task"
+                                .to_string(),
+                        });
+                    }
+                };
+
+                self.start_single_task(&single_extractor_config).await?;
+            }
         }
-
         Ok(())
     }
 
@@ -113,10 +138,11 @@ impl TaskRunner {
         metric: Arc<Mutex<Metric>>,
     ) -> Result<Box<dyn Extractor + 'a + Send>, Error> {
         let extractor: Box<dyn Extractor + Send> = match extractor_config {
-            ExtractorConfig::MysqlSnapshot { url, do_tb } => {
+            ExtractorConfig::MysqlSnapshot { url, db, tb } => {
                 let extractor = ExtractorUtil::create_mysql_snapshot_extractor(
-                    &url,
-                    &do_tb,
+                    url,
+                    db,
+                    tb,
                     self.config.pipeline.buffer_size,
                     &buffer,
                     &self.config.runtime.log_level,
@@ -160,10 +186,11 @@ impl TaskRunner {
                 Box::new(extractor)
             }
 
-            ExtractorConfig::PgSnapshot { url, do_tb } => {
+            ExtractorConfig::PgSnapshot { url, db, tb } => {
                 let extractor = ExtractorUtil::create_pg_snapshot_extractor(
-                    &url,
-                    &do_tb,
+                    url,
+                    db,
+                    tb,
                     self.config.pipeline.buffer_size,
                     &buffer,
                     &self.config.runtime.log_level,

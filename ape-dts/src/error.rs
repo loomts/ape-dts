@@ -1,5 +1,9 @@
 #[derive(Debug)]
 pub enum Error {
+    ConfigError {
+        error: String,
+    },
+
     BinlogError {
         error: mysql_binlog_connector_rust::binlog_error::BinlogError,
     },

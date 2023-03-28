@@ -9,7 +9,8 @@ pub enum ExtractorConfig {
 
     MysqlSnapshot {
         url: String,
-        do_tb: String,
+        db: String,
+        tb: String,
     },
 
     MysqlCdc {
@@ -26,7 +27,8 @@ pub enum ExtractorConfig {
 
     PgSnapshot {
         url: String,
-        do_tb: String,
+        db: String,
+        tb: String,
     },
 
     PgCdc {
