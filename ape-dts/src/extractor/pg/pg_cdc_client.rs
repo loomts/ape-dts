@@ -9,7 +9,7 @@ use crate::error::Error;
 pub struct PgCdcClient {
     pub url: String,
     pub slot_name: String,
-    pub start_sln: String,
+    pub start_lsn: String,
 }
 
 impl PgCdcClient {
@@ -39,7 +39,7 @@ impl PgCdcClient {
         &mut self,
         client: &Client,
     ) -> Result<(LogicalReplicationStream, String), Error> {
-        let mut start_lsn = self.start_sln.clone();
+        let mut start_lsn = self.start_lsn.clone();
 
         // create publication for all tables if not exists
         let pub_name = format!("{}_publication_for_all_tables", self.slot_name);

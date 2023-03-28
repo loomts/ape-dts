@@ -6,7 +6,6 @@ mod common;
 mod error;
 mod extractor;
 mod meta;
-mod metric;
 mod monitor;
 mod pipeline;
 mod sinker;

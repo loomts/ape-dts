@@ -10,9 +10,9 @@ use concurrent_queue::ConcurrentQueue;
 use log::info;
 
 use crate::{
+    common::syncer::Syncer,
     error::Error,
     meta::row_data::RowData,
-    metric::Metric,
     monitor::{counter::Counter, statistic_counter::StatisticCounter},
     task::task_util::TaskUtil,
     traits::{Parallelizer, Sinker},
@@ -24,7 +24,7 @@ pub struct Pipeline<'a> {
     pub sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
     pub shut_down: &'a AtomicBool,
     pub checkpoint_interval_secs: u64,
-    pub metric: Arc<Mutex<Metric>>,
+    pub syncer: Arc<Mutex<Syncer>>,
 }
 
 const POSITION_FILE_LOGGER: &str = "position_file_logger";
@@ -64,7 +64,6 @@ impl Pipeline<'_> {
             last_checkpoint_time = self.record_checkpoint(
                 last_checkpoint_time,
                 &last_row_data,
-                &self.metric,
                 &mut tps_counter,
                 &mut count_counter,
                 count,
@@ -83,7 +82,6 @@ impl Pipeline<'_> {
         &self,
         last_checkpoint_time: Instant,
         last_row_data: &Option<RowData>,
-        metric: &Arc<Mutex<Metric>>,
         tps_counter: &mut StatisticCounter,
         count_counter: &mut Counter,
         count: u64,
@@ -117,7 +115,7 @@ impl Pipeline<'_> {
                 "sinked count: {}", count_counter.value
             );
 
-            metric.lock().unwrap().position = row_data.current_position.clone();
+            self.syncer.lock().unwrap().position = row_data.current_position.clone();
         }
 
         Instant::now()

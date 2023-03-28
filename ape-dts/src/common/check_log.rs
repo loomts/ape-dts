@@ -93,10 +93,10 @@ impl CheckLog {
 
 #[cfg(test)]
 mod test {
-    use crate::common::check_log::CheckLog;
+    use super::*;
 
     #[test]
-    fn check_log_test() {
+    fn test_check_log() {
         let str = "db1,tb1,col1,4,1234,col2,5,abcde";
         let log = CheckLog::from_str(str);
         assert_eq!(log.schema, "db1");

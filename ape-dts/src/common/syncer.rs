@@ -1,3 +1,3 @@
-pub struct Metric {
+pub struct Syncer {
     pub position: String,
 }
