@@ -13,10 +13,10 @@ use futures::future::join;
 use log4rs::config::RawConfig;
 
 use crate::{
+    common::syncer::Syncer,
     error::Error,
     extractor::rdb_filter::RdbFilter,
     meta::{row_data::RowData, row_type::RowType},
-    metric::Metric,
     pipeline::pipeline::Pipeline,
     traits::Extractor,
 };
@@ -102,12 +102,12 @@ impl TaskRunner {
     async fn start_single_task(&self, extractor_config: &ExtractorConfig) -> Result<(), Error> {
         let buffer = ConcurrentQueue::bounded(self.config.pipeline.buffer_size);
         let shut_down = AtomicBool::new(false);
-        let metric = Arc::new(Mutex::new(Metric {
+        let syncer = Arc::new(Mutex::new(Syncer {
             position: "".to_string(),
         }));
 
         let mut extractor = self
-            .create_extractor(&extractor_config, &buffer, &shut_down, metric.clone())
+            .create_extractor(&extractor_config, &buffer, &shut_down, syncer.clone())
             .await?;
 
         let sinkers = SinkerUtil::create_sinkers(&self.config).await?;
@@ -118,7 +118,7 @@ impl TaskRunner {
             sinkers,
             shut_down: &shut_down,
             checkpoint_interval_secs: self.config.pipeline.checkpoint_interval_secs,
-            metric,
+            syncer,
         };
 
         let result = join(extractor.extract(), pipeline.start()).await;
@@ -135,7 +135,7 @@ impl TaskRunner {
         extractor_config: &ExtractorConfig,
         buffer: &'a ConcurrentQueue<RowData>,
         shut_down: &'a AtomicBool,
-        metric: Arc<Mutex<Metric>>,
+        syncer: Arc<Mutex<Syncer>>,
     ) -> Result<Box<dyn Extractor + 'a + Send>, Error> {
         let extractor: Box<dyn Extractor + Send> = match extractor_config {
             ExtractorConfig::MysqlSnapshot { url, db, tb } => {
@@ -229,7 +229,7 @@ impl TaskRunner {
                     filter,
                     &self.config.runtime.log_level,
                     &shut_down,
-                    metric,
+                    syncer,
                 )
                 .await?;
                 Box::new(extractor)

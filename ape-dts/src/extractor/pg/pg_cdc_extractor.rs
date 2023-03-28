@@ -26,6 +26,7 @@ use tokio_postgres::replication::LogicalReplicationStream;
 
 use crate::{
     adaptor::pg_col_value_convertor::PgColValueConvertor,
+    common::{position_util::PositionUtil, syncer::Syncer},
     error::Error,
     extractor::{pg::pg_cdc_client::PgCdcClient, rdb_filter::RdbFilter},
     meta::{
@@ -34,7 +35,6 @@ use crate::{
         row_data::RowData,
         row_type::RowType,
     },
-    metric::Metric,
     task::task_util::TaskUtil,
     traits::Extractor,
 };
@@ -47,18 +47,20 @@ pub struct PgCdcExtractor<'a> {
     pub filter: RdbFilter,
     pub url: String,
     pub slot_name: String,
-    pub start_sln: String,
+    pub start_lsn: String,
     pub heartbeat_interval_secs: u64,
     pub shut_down: &'a AtomicBool,
-    pub metric: Arc<Mutex<Metric>>,
+    pub syncer: Arc<Mutex<Syncer>>,
 }
+
+const SECS_FROM_1970_TO_2000: i64 = 946_684_800;
 
 #[async_trait]
 impl Extractor for PgCdcExtractor<'_> {
     async fn extract(&mut self) -> Result<(), Error> {
         info!(
-            "PgCdcExtractor starts, slot_name: {}, start_sln: {}, heartbeat_interval_secs: {}",
-            self.slot_name, self.start_sln, self.heartbeat_interval_secs
+            "PgCdcExtractor starts, slot_name: {}, start_lsn: {}, heartbeat_interval_secs: {}",
+            self.slot_name, self.start_lsn, self.heartbeat_interval_secs
         );
         Ok(self.extract_internal().await.unwrap())
     }
@@ -73,14 +75,15 @@ impl PgCdcExtractor<'_> {
         let mut cdc_client = PgCdcClient {
             url: self.url.clone(),
             slot_name: self.slot_name.clone(),
-            start_sln: self.start_sln.clone(),
+            start_lsn: self.start_lsn.clone(),
         };
         let (stream, actual_start_lsn) = cdc_client.connect().await?;
         tokio::pin!(stream);
 
-        // refer: https://www.postgresql.org/docs/10/protocol-replication.html to get WAL data details
         let mut commited_lsn = actual_start_lsn.clone();
+        let mut timestamp = 0;
         let mut start_time = Instant::now();
+        // refer: https://www.postgresql.org/docs/10/protocol-replication.html to get WAL data details
         loop {
             // send a heartbeat to keep alive
             if start_time.elapsed().as_secs() > self.heartbeat_interval_secs {
@@ -95,6 +98,18 @@ impl PgCdcExtractor<'_> {
 
             match stream.next().await {
                 Some(Ok(XLogData(body))) => {
+                    if timestamp == 0 {
+                        timestamp = body.timestamp();
+                    }
+
+                    let position = format!(
+                        "lsn:{},timestamp:{}",
+                        commited_lsn,
+                        PositionUtil::format_timestamp_millis(
+                            timestamp / 1000 + SECS_FROM_1970_TO_2000 * 1000,
+                        )
+                    );
+
                     let data = body.into_data();
                     match data {
                         Relation(relation) => {
@@ -106,6 +121,7 @@ impl PgCdcExtractor<'_> {
 
                         Commit(commit) => {
                             commited_lsn = PgLsn::from(commit.commit_lsn()).to_string();
+                            timestamp = commit.timestamp();
                         }
 
                         Origin(_origin) => {}
@@ -115,15 +131,15 @@ impl PgCdcExtractor<'_> {
                         Type(_typee) => {}
 
                         Insert(insert) => {
-                            self.decode_insert(&insert, &commited_lsn).await?;
+                            self.decode_insert(&insert, &position).await?;
                         }
 
                         Update(update) => {
-                            self.decode_update(&update, &commited_lsn).await?;
+                            self.decode_update(&update, &position).await?;
                         }
 
                         Delete(delete) => {
-                            self.decode_delete(&delete, &commited_lsn).await?;
+                            self.decode_delete(&delete, &position).await?;
                         }
 
                         _ => {}
@@ -152,17 +168,18 @@ impl PgCdcExtractor<'_> {
     async fn heartbeat(
         &mut self,
         stream: &mut Pin<&mut LogicalReplicationStream>,
-        start_sln: &str,
+        start_lsn: &str,
     ) -> Result<(), Error> {
-        let position = self.metric.lock().unwrap().position.clone();
+        let position = self.syncer.lock().unwrap().position.clone();
         let lsn = if position.is_empty() {
-            start_sln.parse().unwrap()
+            start_lsn.parse().unwrap()
         } else {
-            position.as_str().parse().unwrap()
+            let position_info = PositionUtil::parse(position.as_str());
+            position_info.get("lsn").unwrap().parse().unwrap()
         };
 
         // Postgres epoch is 2000-01-01T00:00:00Z
-        let pg_epoch = UNIX_EPOCH + Duration::from_secs(946_684_800);
+        let pg_epoch = UNIX_EPOCH + Duration::from_secs(SECS_FROM_1970_TO_2000 as u64);
         let ts = pg_epoch.elapsed().unwrap().as_micros() as i64;
         let result = stream
             .as_mut()
@@ -209,7 +226,7 @@ impl PgCdcExtractor<'_> {
         Ok(())
     }
 
-    async fn decode_insert(&mut self, event: &InsertBody, commited_sln: &str) -> Result<(), Error> {
+    async fn decode_insert(&mut self, event: &InsertBody, position: &str) -> Result<(), Error> {
         let tb_meta = self
             .meta_manager
             .get_tb_meta_by_oid(event.rel_id() as i32)?;
@@ -221,13 +238,13 @@ impl PgCdcExtractor<'_> {
             row_type: RowType::Insert,
             before: Option::None,
             after: Some(col_values),
-            current_position: "".to_string(),
-            checkpoint_position: commited_sln.to_string(),
+            current_position: position.to_string(),
+            checkpoint_position: position.to_string(),
         };
         self.push_row_to_buf(row_data).await
     }
 
-    async fn decode_update(&mut self, event: &UpdateBody, commited_sln: &str) -> Result<(), Error> {
+    async fn decode_update(&mut self, event: &UpdateBody, position: &str) -> Result<(), Error> {
         let tb_meta = self
             .meta_manager
             .get_tb_meta_by_oid(event.rel_id() as i32)?;
@@ -255,13 +272,13 @@ impl PgCdcExtractor<'_> {
             row_type: RowType::Update,
             before: Some(col_values_before),
             after: Some(col_values_after),
-            current_position: "".to_string(),
-            checkpoint_position: commited_sln.to_string(),
+            current_position: position.to_string(),
+            checkpoint_position: position.to_string(),
         };
         self.push_row_to_buf(row_data).await
     }
 
-    async fn decode_delete(&mut self, event: &DeleteBody, commited_sln: &str) -> Result<(), Error> {
+    async fn decode_delete(&mut self, event: &DeleteBody, position: &str) -> Result<(), Error> {
         let tb_meta = self
             .meta_manager
             .get_tb_meta_by_oid(event.rel_id() as i32)?;
@@ -280,8 +297,8 @@ impl PgCdcExtractor<'_> {
             row_type: RowType::Delete,
             before: Some(col_values),
             after: None,
-            current_position: "".to_string(),
-            checkpoint_position: commited_sln.to_string(),
+            current_position: position.to_string(),
+            checkpoint_position: position.to_string(),
         };
         self.push_row_to_buf(row_data).await
     }

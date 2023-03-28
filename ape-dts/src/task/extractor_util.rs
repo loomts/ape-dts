@@ -6,6 +6,7 @@ use futures::TryStreamExt;
 use sqlx::Row;
 
 use crate::{
+    common::syncer::Syncer,
     error::Error,
     extractor::{
         mysql::{
@@ -22,7 +23,6 @@ use crate::{
         mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
         row_data::RowData,
     },
-    metric::Metric,
 };
 
 use super::task_util::TaskUtil;
@@ -146,13 +146,13 @@ impl ExtractorUtil {
     pub async fn create_pg_cdc_extractor<'a>(
         url: &str,
         slot_name: &str,
-        start_sln: &str,
+        start_lsn: &str,
         heartbeat_interval_secs: u64,
         buffer: &'a ConcurrentQueue<RowData>,
         filter: RdbFilter,
         log_level: &str,
         shut_down: &'a AtomicBool,
-        metric: Arc<Mutex<Metric>>,
+        syncer: Arc<Mutex<Syncer>>,
     ) -> Result<PgCdcExtractor<'a>, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool = TaskUtil::create_pg_conn_pool(url, 2, enable_sqlx_log).await?;
@@ -164,9 +164,9 @@ impl ExtractorUtil {
             filter,
             url: url.to_string(),
             slot_name: slot_name.to_string(),
-            start_sln: start_sln.to_string(),
+            start_lsn: start_lsn.to_string(),
             shut_down: &shut_down,
-            metric,
+            syncer,
             heartbeat_interval_secs,
         })
     }

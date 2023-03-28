@@ -15,6 +15,7 @@ use mysql_binlog_connector_rust::{
 
 use crate::{
     adaptor::mysql_col_value_convertor::MysqlColValueConvertor,
+    common::position_util::PositionUtil,
     error::Error,
     extractor::rdb_filter::RdbFilter,
     meta::{
@@ -103,11 +104,15 @@ impl MysqlCdcExtractor<'_> {
     ) -> Result<(u32, u32), Error> {
         let current_position = format!(
             "binlog_filename:{},next_event_position:{},timestamp:{}",
-            binlog_filename, header.next_event_position, header.timestamp
+            binlog_filename,
+            header.next_event_position,
+            PositionUtil::format_timestamp_millis(header.timestamp as i64 * 1000)
         );
         let checkpoint_position = format!(
             "binlog_filename:{},last_xid_position:{},timestamp:{}",
-            binlog_filename, last_xid_position, last_xid_timestamp
+            binlog_filename,
+            last_xid_position,
+            PositionUtil::format_timestamp_millis(last_xid_timestamp as i64 * 1000)
         );
         let mut last_xid_position = last_xid_position;
         let mut last_xid_timestamp = last_xid_timestamp;
