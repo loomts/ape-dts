@@ -5,7 +5,7 @@ use concurrent_queue::ConcurrentQueue;
 
 use crate::{
     error::Error,
-    meta::row_data::RowData,
+    meta::{dt_data::DtData,row_data::RowData},
     traits::{Parallelizer, Sinker},
 };
 
@@ -21,7 +21,7 @@ impl Parallelizer for SnapshotParallelizer {
         "SnapshotParallelizer".to_string()
     }
 
-    async fn drain(&mut self, buffer: &ConcurrentQueue<RowData>) -> Result<Vec<RowData>, Error> {
+    async fn drain(&mut self, buffer: &ConcurrentQueue<DtData>) -> Result<Vec<DtData>, Error> {
         ParallelizerUtil::drain(buffer)
     }
 
@@ -36,10 +36,7 @@ impl Parallelizer for SnapshotParallelizer {
 }
 
 impl SnapshotParallelizer {
-    pub fn partition(
-        data: Vec<RowData>,
-        parallele_size: usize,
-    ) -> Result<Vec<Vec<RowData>>, Error> {
+    pub fn partition(data: Vec<RowData>, parallele_size: usize) -> Result<Vec<Vec<RowData>>, Error> {
         let mut sub_datas = Vec::new();
         if parallele_size <= 1 {
             sub_datas.push(data);

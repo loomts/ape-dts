@@ -5,7 +5,7 @@ use concurrent_queue::ConcurrentQueue;
 
 use crate::{
     error::Error,
-    meta::{row_data::RowData, row_type::RowType},
+    meta::{dt_data::DtData, row_data::RowData, row_type::RowType},
     traits::{Parallelizer, Sinker},
 };
 
@@ -25,7 +25,7 @@ impl Parallelizer for MergeParallelizer {
         "MergeParallelizer".to_string()
     }
 
-    async fn drain(&mut self, buffer: &ConcurrentQueue<RowData>) -> Result<Vec<RowData>, Error> {
+    async fn drain(&mut self, buffer: &ConcurrentQueue<DtData>) -> Result<Vec<DtData>, Error> {
         ParallelizerUtil::drain(buffer)
     }
 

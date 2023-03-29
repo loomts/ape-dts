@@ -12,6 +12,7 @@ use crate::{
     extractor::extractor_util::ExtractorUtil,
     meta::{
         col_value::ColValue,
+        dt_data::DtData,
         pg::{pg_col_type::PgColType, pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
         row_data::RowData,
     },
@@ -22,7 +23,7 @@ use crate::{
 pub struct PgSnapshotExtractor<'a> {
     pub conn_pool: Pool<Postgres>,
     pub meta_manager: PgMetaManager,
-    pub buffer: &'a ConcurrentQueue<RowData>,
+    pub buffer: &'a ConcurrentQueue<DtData>,
     pub slice_size: usize,
     pub schema: String,
     pub tb: String,

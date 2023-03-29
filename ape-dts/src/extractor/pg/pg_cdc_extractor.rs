@@ -31,6 +31,7 @@ use crate::{
     extractor::{pg::pg_cdc_client::PgCdcClient, rdb_filter::RdbFilter},
     meta::{
         col_value::ColValue,
+        dt_data::DtData,
         pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
         row_data::RowData,
         row_type::RowType,
@@ -43,7 +44,7 @@ use log::info;
 
 pub struct PgCdcExtractor<'a> {
     pub meta_manager: PgMetaManager,
-    pub buffer: &'a ConcurrentQueue<RowData>,
+    pub buffer: &'a ConcurrentQueue<DtData>,
     pub filter: RdbFilter,
     pub url: String,
     pub slot_name: String,
@@ -80,9 +81,21 @@ impl PgCdcExtractor<'_> {
         let (stream, actual_start_lsn) = cdc_client.connect().await?;
         tokio::pin!(stream);
 
-        let mut commited_lsn = actual_start_lsn.clone();
-        let mut timestamp = 0;
+        let mut last_tx_end_lsn = actual_start_lsn.clone();
+        let mut xid = String::new();
+        let mut position = String::new();
         let mut start_time = Instant::now();
+
+        let get_position = |lsn: &str, timestamp: i64| -> String {
+            format!(
+                "lsn:{},timestamp:{}",
+                lsn,
+                PositionUtil::format_timestamp_millis(
+                    timestamp / 1000 + SECS_FROM_1970_TO_2000 * 1000,
+                )
+            )
+        };
+
         // refer: https://www.postgresql.org/docs/10/protocol-replication.html to get WAL data details
         loop {
             // send a heartbeat to keep alive
@@ -98,18 +111,6 @@ impl PgCdcExtractor<'_> {
 
             match stream.next().await {
                 Some(Ok(XLogData(body))) => {
-                    if timestamp == 0 {
-                        timestamp = body.timestamp();
-                    }
-
-                    let position = format!(
-                        "lsn:{},timestamp:{}",
-                        commited_lsn,
-                        PositionUtil::format_timestamp_millis(
-                            timestamp / 1000 + SECS_FROM_1970_TO_2000 * 1000,
-                        )
-                    );
-
                     let data = body.into_data();
                     match data {
                         Relation(relation) => {
@@ -117,11 +118,19 @@ impl PgCdcExtractor<'_> {
                         }
 
                         // do not push Begin and Commit into buffer to accelerate sinking
-                        Begin(_begin) => {}
+                        Begin(begin) => {
+                            position = get_position(&last_tx_end_lsn, begin.timestamp());
+                            xid = begin.xid().to_string();
+                        }
 
                         Commit(commit) => {
-                            commited_lsn = PgLsn::from(commit.commit_lsn()).to_string();
-                            timestamp = commit.timestamp();
+                            last_tx_end_lsn = PgLsn::from(commit.end_lsn()).to_string();
+                            position = get_position(&last_tx_end_lsn, commit.timestamp());
+                            let commit = DtData::Commit {
+                                xid: xid.clone(),
+                                position: position.to_string(),
+                            };
+                            self.buffer.push(commit).unwrap();
                         }
 
                         Origin(_origin) => {}
@@ -170,7 +179,7 @@ impl PgCdcExtractor<'_> {
         stream: &mut Pin<&mut LogicalReplicationStream>,
         start_lsn: &str,
     ) -> Result<(), Error> {
-        let position = self.syncer.lock().unwrap().position.clone();
+        let position = self.syncer.lock().unwrap().checkpoint_position.clone();
         let lsn = if position.is_empty() {
             start_lsn.parse().unwrap()
         } else {
@@ -238,8 +247,7 @@ impl PgCdcExtractor<'_> {
             row_type: RowType::Insert,
             before: Option::None,
             after: Some(col_values),
-            current_position: position.to_string(),
-            checkpoint_position: position.to_string(),
+            position: position.to_string(),
         };
         self.push_row_to_buf(row_data).await
     }
@@ -272,8 +280,7 @@ impl PgCdcExtractor<'_> {
             row_type: RowType::Update,
             before: Some(col_values_before),
             after: Some(col_values_after),
-            current_position: position.to_string(),
-            checkpoint_position: position.to_string(),
+            position: position.to_string(),
         };
         self.push_row_to_buf(row_data).await
     }
@@ -297,8 +304,7 @@ impl PgCdcExtractor<'_> {
             row_type: RowType::Delete,
             before: Some(col_values),
             after: None,
-            current_position: position.to_string(),
-            checkpoint_position: position.to_string(),
+            position: position.to_string(),
         };
         self.push_row_to_buf(row_data).await
     }
@@ -342,7 +348,7 @@ impl PgCdcExtractor<'_> {
         {
             return Ok(());
         }
-        self.buffer.push(row_data).unwrap();
+        self.buffer.push(DtData::Dml { row_data }).unwrap();
         Ok(())
     }
 }

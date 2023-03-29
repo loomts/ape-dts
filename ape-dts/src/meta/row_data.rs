@@ -20,10 +20,7 @@ pub struct RowData {
     pub row_type: RowType,
     pub before: Option<HashMap<String, ColValue>>,
     pub after: Option<HashMap<String, ColValue>>,
-    pub current_position: String,
-    // for mysql, this is the binlog position of the last commited transaction
-    // for postgres, this is the lsn of the last commited commited transaction
-    pub checkpoint_position: String,
+    pub position: String,
 }
 
 #[allow(dead_code)]
@@ -53,8 +50,7 @@ impl RowData {
             before: None,
             after: Some(after),
             row_type: RowType::Insert,
-            current_position: "".to_string(),
-            checkpoint_position: "".to_string(),
+            position: "".to_string(),
         }
     }
 

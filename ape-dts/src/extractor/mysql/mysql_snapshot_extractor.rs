@@ -12,6 +12,7 @@ use crate::{
     extractor::extractor_util::ExtractorUtil,
     meta::{
         col_value::ColValue,
+        dt_data::DtData,
         mysql::{
             mysql_col_type::MysqlColType, mysql_meta_manager::MysqlMetaManager,
             mysql_tb_meta::MysqlTbMeta,
@@ -25,7 +26,7 @@ use crate::{
 pub struct MysqlSnapshotExtractor<'a> {
     pub conn_pool: Pool<MySql>,
     pub meta_manager: MysqlMetaManager,
-    pub buffer: &'a ConcurrentQueue<RowData>,
+    pub buffer: &'a ConcurrentQueue<DtData>,
     pub slice_size: usize,
     pub db: String,
     pub tb: String,

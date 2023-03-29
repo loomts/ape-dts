@@ -1,3 +1,3 @@
 pub struct Syncer {
-    pub position: String,
+    pub checkpoint_position: String,
 }

@@ -14,7 +14,7 @@ use crate::{
     common::{check_log::CheckLog, log_reader::LogReader, sql_util::SqlUtil},
     error::Error,
     extractor::extractor_util::ExtractorUtil,
-    meta::{mysql::mysql_meta_manager::MysqlMetaManager, row_data::RowData},
+    meta::{dt_data::DtData, mysql::mysql_meta_manager::MysqlMetaManager, row_data::RowData},
     task::task_util::TaskUtil,
     traits::Extractor,
 };
@@ -23,7 +23,7 @@ pub struct MysqlCheckExtractor<'a> {
     pub conn_pool: Pool<MySql>,
     pub meta_manager: MysqlMetaManager,
     pub check_log_dir: String,
-    pub buffer: &'a ConcurrentQueue<RowData>,
+    pub buffer: &'a ConcurrentQueue<DtData>,
     pub slice_size: usize,
     pub shut_down: &'a AtomicBool,
 }
