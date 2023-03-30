@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use crate::{error::Error, meta::row_data::RowData};
+use crate::{
+    error::Error,
+    meta::{dt_data::DtData, row_data::RowData},
+};
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 
@@ -17,7 +20,7 @@ pub trait Sinker {
 pub trait Parallelizer {
     fn get_name(&self) -> String;
 
-    async fn drain(&mut self, buffer: &ConcurrentQueue<RowData>) -> Result<Vec<RowData>, Error>;
+    async fn drain(&mut self, buffer: &ConcurrentQueue<DtData>) -> Result<Vec<DtData>, Error>;
 
     async fn sink(
         &mut self,

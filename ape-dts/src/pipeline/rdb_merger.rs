@@ -90,8 +90,7 @@ impl RdbMerger {
                         tb: delete.tb,
                         before: delete.before,
                         after: insert.after,
-                        current_position: delete.current_position,
-                        checkpoint_position: delete.checkpoint_position,
+                        position: delete.position,
                     };
                     merged.unmerged_rows.push(row_data);
                     return Ok(());
@@ -149,8 +148,7 @@ impl RdbMerger {
             tb: row_data.tb.clone(),
             before: row_data.before,
             after: Option::None,
-            current_position: row_data.current_position.clone(),
-            checkpoint_position: row_data.checkpoint_position.clone(),
+            position: row_data.position.clone(),
         };
 
         let insert_row = RowData {
@@ -159,8 +157,7 @@ impl RdbMerger {
             tb: row_data.tb,
             before: Option::None,
             after: row_data.after,
-            current_position: row_data.current_position,
-            checkpoint_position: row_data.checkpoint_position,
+            position: row_data.position,
         };
 
         Ok((delete_row, insert_row))

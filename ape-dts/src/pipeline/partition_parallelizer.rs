@@ -5,7 +5,7 @@ use concurrent_queue::ConcurrentQueue;
 
 use crate::{
     error::Error,
-    meta::row_data::RowData,
+    meta::{dt_data::DtData, row_data::RowData},
     traits::{Parallelizer, Sinker},
 };
 
@@ -22,15 +22,24 @@ impl Parallelizer for PartitionParallelizer {
         "DefaultParallelizer".to_string()
     }
 
-    async fn drain(&mut self, buffer: &ConcurrentQueue<RowData>) -> Result<Vec<RowData>, Error> {
+    async fn drain(&mut self, buffer: &ConcurrentQueue<DtData>) -> Result<Vec<DtData>, Error> {
         let mut data = Vec::new();
-        while let Ok(row_data) = buffer.pop() {
-            // if the row_data can not be partitioned, sink the pushed data immediately
-            if self.parallel_size > 1 && !self.partitioner.can_be_partitioned(&row_data).await? {
-                data.push(row_data);
-                break;
-            } else {
-                data.push(row_data);
+        while let Ok(dt_data) = buffer.pop() {
+            match &dt_data {
+                DtData::Dml { row_data } => {
+                    if self.parallel_size > 1
+                        && !self.partitioner.can_be_partitioned(&row_data).await?
+                    {
+                        data.push(dt_data);
+                        break;
+                    } else {
+                        data.push(dt_data);
+                    }
+                }
+
+                DtData::Commit { .. } => {
+                    data.push(dt_data);
+                }
             }
         }
         Ok(data)

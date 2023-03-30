@@ -16,7 +16,7 @@ use crate::{
     common::syncer::Syncer,
     error::Error,
     extractor::rdb_filter::RdbFilter,
-    meta::{row_data::RowData, row_type::RowType},
+    meta::{dt_data::DtData, row_type::RowType},
     pipeline::pipeline::Pipeline,
     traits::Extractor,
 };
@@ -103,7 +103,7 @@ impl TaskRunner {
         let buffer = ConcurrentQueue::bounded(self.config.pipeline.buffer_size);
         let shut_down = AtomicBool::new(false);
         let syncer = Arc::new(Mutex::new(Syncer {
-            position: "".to_string(),
+            checkpoint_position: "".to_string(),
         }));
 
         let mut extractor = self
@@ -133,7 +133,7 @@ impl TaskRunner {
     async fn create_extractor<'a>(
         &self,
         extractor_config: &ExtractorConfig,
-        buffer: &'a ConcurrentQueue<RowData>,
+        buffer: &'a ConcurrentQueue<DtData>,
         shut_down: &'a AtomicBool,
         syncer: Arc<Mutex<Syncer>>,
     ) -> Result<Box<dyn Extractor + 'a + Send>, Error> {

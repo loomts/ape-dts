@@ -2,15 +2,16 @@ use std::sync::Arc;
 
 use concurrent_queue::ConcurrentQueue;
 
-use crate::{error::Error, meta::row_data::RowData, traits::Sinker};
+use crate::meta::row_data::RowData;
+use crate::{error::Error, meta::dt_data::DtData, traits::Sinker};
 
 pub struct ParallelizerUtil {}
 
 impl ParallelizerUtil {
-    pub fn drain(buffer: &ConcurrentQueue<RowData>) -> Result<Vec<RowData>, Error> {
+    pub fn drain(buffer: &ConcurrentQueue<DtData>) -> Result<Vec<DtData>, Error> {
         let mut data = Vec::new();
-        while let Ok(row_data) = buffer.pop() {
-            data.push(row_data);
+        while let Ok(dt_data) = buffer.pop() {
+            data.push(dt_data);
         }
         Ok(data)
     }

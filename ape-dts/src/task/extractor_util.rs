@@ -20,8 +20,8 @@ use crate::{
         rdb_filter::RdbFilter,
     },
     meta::{
-        mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
-        row_data::RowData,
+        dt_data::DtData, mysql::mysql_meta_manager::MysqlMetaManager,
+        pg::pg_meta_manager::PgMetaManager,
     },
 };
 
@@ -122,7 +122,7 @@ impl ExtractorUtil {
         binlog_filename: &str,
         binlog_position: u32,
         server_id: u64,
-        buffer: &'a ConcurrentQueue<RowData>,
+        buffer: &'a ConcurrentQueue<DtData>,
         filter: RdbFilter,
         log_level: &str,
         shut_down: &'a AtomicBool,
@@ -148,7 +148,7 @@ impl ExtractorUtil {
         slot_name: &str,
         start_lsn: &str,
         heartbeat_interval_secs: u64,
-        buffer: &'a ConcurrentQueue<RowData>,
+        buffer: &'a ConcurrentQueue<DtData>,
         filter: RdbFilter,
         log_level: &str,
         shut_down: &'a AtomicBool,
@@ -176,7 +176,7 @@ impl ExtractorUtil {
         db: &str,
         tb: &str,
         slice_size: usize,
-        buffer: &'a ConcurrentQueue<RowData>,
+        buffer: &'a ConcurrentQueue<DtData>,
         log_level: &str,
         shut_down: &'a AtomicBool,
     ) -> Result<MysqlSnapshotExtractor<'a>, Error> {
@@ -200,7 +200,7 @@ impl ExtractorUtil {
         url: &str,
         check_log_dir: &str,
         slice_size: usize,
-        buffer: &'a ConcurrentQueue<RowData>,
+        buffer: &'a ConcurrentQueue<DtData>,
         log_level: &str,
         shut_down: &'a AtomicBool,
     ) -> Result<MysqlCheckExtractor<'a>, Error> {
@@ -222,7 +222,7 @@ impl ExtractorUtil {
         url: &str,
         check_log_dir: &str,
         slice_size: usize,
-        buffer: &'a ConcurrentQueue<RowData>,
+        buffer: &'a ConcurrentQueue<DtData>,
         log_level: &str,
         shut_down: &'a AtomicBool,
     ) -> Result<PgCheckExtractor<'a>, Error> {
@@ -245,7 +245,7 @@ impl ExtractorUtil {
         db: &str,
         tb: &str,
         slice_size: usize,
-        buffer: &'a ConcurrentQueue<RowData>,
+        buffer: &'a ConcurrentQueue<DtData>,
         log_level: &str,
         shut_down: &'a AtomicBool,
     ) -> Result<PgSnapshotExtractor<'a>, Error> {
