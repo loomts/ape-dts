@@ -15,4 +15,28 @@ mod test {
         rt.block_on(runner.run_cdc_test_with_different_configs(5000, 5000, &configs))
             .unwrap();
     }
+
+    #[test]
+    #[serial]
+    fn cdc_postgis_test() {
+        let rt = Runtime::new().unwrap();
+        let runner = rt
+            .block_on(TestRunner::new("pg_to_pg/cdc_postgis_test"))
+            .unwrap();
+        let configs = TestConfigUtil::get_default_configs();
+        rt.block_on(runner.run_cdc_test_with_different_configs(5000, 5000, &configs))
+            .unwrap();
+    }
+
+    #[test]
+    #[serial]
+    fn cdc_postgis_array_test() {
+        let rt = Runtime::new().unwrap();
+        let runner = rt
+            .block_on(TestRunner::new("pg_to_pg/cdc_postgis_array_test"))
+            .unwrap();
+        let configs = TestConfigUtil::get_default_configs();
+        rt.block_on(runner.run_cdc_test_with_different_configs(5000, 5000, &configs))
+            .unwrap();
+    }
 }

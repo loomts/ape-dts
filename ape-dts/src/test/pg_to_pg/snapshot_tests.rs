@@ -35,4 +35,24 @@ mod test {
             .unwrap();
         rt.block_on(runner.run_snapshot_test()).unwrap();
     }
+
+    #[test]
+    #[serial]
+    fn snapshot_postgis_test() {
+        let rt = Runtime::new().unwrap();
+        let runner = rt
+            .block_on(TestRunner::new("pg_to_pg/snapshot_postgis_test"))
+            .unwrap();
+        rt.block_on(runner.run_snapshot_test()).unwrap();
+    }
+
+    #[test]
+    #[serial]
+    fn snapshot_postgis_array_test() {
+        let rt = Runtime::new().unwrap();
+        let runner = rt
+            .block_on(TestRunner::new("pg_to_pg/snapshot_postgis_array_test"))
+            .unwrap();
+        rt.block_on(runner.run_snapshot_test()).unwrap();
+    }
 }
