@@ -24,6 +24,7 @@ impl TaskUtil {
         enable_sqlx_log: bool,
     ) -> Result<Pool<MySql>, Error> {
         let mut conn_options = MySqlConnectOptions::from_str(url)?;
+        // The default character set is `utf8mb4`
         conn_options
             .log_statements(log::LevelFilter::Info)
             .log_slow_statements(log::LevelFilter::Info, Duration::from_secs(1));

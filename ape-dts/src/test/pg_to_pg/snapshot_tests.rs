@@ -36,4 +36,16 @@ mod test {
     fn snapshot_postgis_array_test() {
         TestBase::run_snapshot_test("pg_to_pg/snapshot_postgis_array_test");
     }
+
+    #[test]
+    #[serial]
+    fn snapshot_charset_test() {
+        TestBase::run_snapshot_test("pg_to_pg/snapshot_charset_test");
+    }
+
+    #[test]
+    #[serial]
+    fn snapshot_charset_euc_cn_test() {
+        TestBase::run_snapshot_test("pg_to_pg/snapshot_charset_euc_cn_test");
+    }
 }

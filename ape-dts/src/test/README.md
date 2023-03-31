@@ -20,6 +20,16 @@ docker run --name some-postgres-2 \
 -d postgis/postgis:latest
 ```
 
+- create a test db for EUC_CN
+```
+CREATE DATABASE postgres_euc_cn
+  ENCODING 'EUC_CN'
+  LC_COLLATE='C'
+  LC_CTYPE='C'
+  TEMPLATE template0;
+```
+
+
 ## mysql
 - source
 ```

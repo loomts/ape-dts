@@ -22,4 +22,10 @@ mod test {
     fn snapshot_wildchar_test() {
         TestBase::run_snapshot_test("mysql_to_mysql/snapshot_wildchar_test");
     }
+
+    #[test]
+    #[serial]
+    fn snapshot_charset_test() {
+        TestBase::run_snapshot_test("mysql_to_mysql/snapshot_charset_test");
+    }
 }

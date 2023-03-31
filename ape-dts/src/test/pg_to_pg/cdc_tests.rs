@@ -20,4 +20,16 @@ mod test {
     fn cdc_postgis_array_test() {
         TestBase::run_cdc_test("pg_to_pg/cdc_postgis_array_test", 7000, 5000);
     }
+
+    #[test]
+    #[serial]
+    fn cdc_charset_test() {
+        TestBase::run_cdc_test("pg_to_pg/cdc_charset_test", 7000, 5000);
+    }
+
+    #[test]
+    #[serial]
+    fn cdc_charset_euc_cn_test() {
+        TestBase::run_cdc_test("pg_to_pg/cdc_charset_euc_cn_test", 7000, 5000);
+    }
 }

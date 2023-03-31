@@ -158,7 +158,7 @@ impl<'a> MysqlMetaManager {
                 }
             }
 
-            "varchar" | "char" => {
+            "varchar" | "char" | "tinytext" | "mediumtext" | "longtext" | "text" => {
                 let length = self.get_col_length(&row).await?;
                 MysqlColType::String {
                     length,
@@ -170,7 +170,6 @@ impl<'a> MysqlMetaManager {
                 timezone_diff_utc_seconds: self.timezone_diff_utc_seconds,
             },
 
-            "tinytext" | "mediumtext" | "longtext" | "text" => MysqlColType::Blob,
             "tinyblob" | "mediumblob" | "longblob" | "blob" => MysqlColType::Blob,
             "float" => MysqlColType::Float,
             "double" => MysqlColType::Double,

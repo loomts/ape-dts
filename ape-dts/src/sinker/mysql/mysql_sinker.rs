@@ -57,9 +57,9 @@ impl MysqlSinker {
             let tb_meta = self.get_tb_meta(&row_data).await?;
             let sql_util = SqlUtil::new_for_mysql(&tb_meta);
 
-            let (mut sql, _cols, binds) = sql_util.get_query_info(&row_data)?;
+            let (mut sql, cols, binds) = sql_util.get_query_info(&row_data)?;
             sql = self.handle_dialect(&sql);
-            let query = SqlUtil::create_mysql_query(&sql, &binds);
+            let query = SqlUtil::create_mysql_query(&sql, &cols, &binds, &tb_meta);
             query.execute(&self.conn_pool).await.unwrap();
         }
         Ok(())
@@ -77,9 +77,9 @@ impl MysqlSinker {
                 batch_size = all_count - sinked_count;
             }
 
-            let (sql, _cols, binds) =
+            let (sql, cols, binds) =
                 sql_util.get_batch_delete_query(&data, sinked_count, batch_size)?;
-            let query = SqlUtil::create_mysql_query(&sql, &binds);
+            let query = SqlUtil::create_mysql_query(&sql, &cols, &binds, &tb_meta);
             query.execute(&self.conn_pool).await.unwrap();
 
             sinked_count += batch_size;
@@ -102,10 +102,10 @@ impl MysqlSinker {
                 batch_size = all_count - sinked_count;
             }
 
-            let (mut sql, _cols, binds) =
+            let (mut sql, cols, binds) =
                 sql_util.get_batch_insert_query(&data, sinked_count, batch_size)?;
             sql = self.handle_dialect(&sql);
-            let query = SqlUtil::create_mysql_query(&sql, &binds);
+            let query = SqlUtil::create_mysql_query(&sql, &cols, &binds, &tb_meta);
 
             let result = query.execute(&self.conn_pool).await;
             if let Err(error) = result {
