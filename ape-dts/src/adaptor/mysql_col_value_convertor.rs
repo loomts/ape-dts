@@ -317,8 +317,8 @@ impl MysqlColValueConvertor {
                 length: _,
                 charset: _,
             } => {
-                let value: Vec<u8> = row.try_get(col)?;
-                return Ok(ColValue::Blob(value));
+                let value: String = row.try_get(col)?;
+                return Ok(ColValue::String(value));
             }
             MysqlColType::Binary { length: _ } => {
                 let value: Vec<u8> = row.try_get(col)?;

@@ -23,11 +23,14 @@ impl SqlUtil<'_> {
     #[inline(always)]
     pub fn create_mysql_query<'a>(
         sql: &'a str,
+        cols: &'a Vec<String>,
         binds: &'a Vec<Option<&ColValue>>,
+        tb_meta: &MysqlTbMeta,
     ) -> Query<'a, MySql, MySqlArguments> {
         let mut query: Query<MySql, MySqlArguments> = sqlx::query(&sql);
         for i in 0..binds.len() {
-            query = query.bind_col_value(binds[i]);
+            let col_type = tb_meta.col_type_map.get(&cols[i]).unwrap();
+            query = query.bind_col_value(binds[i], col_type);
         }
         query
     }

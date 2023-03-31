@@ -1,6 +1,8 @@
 use sqlx::{mysql::MySqlArguments, postgres::PgArguments, query::Query, MySql, Postgres};
 
-use crate::meta::{col_value::ColValue, pg::pg_col_type::PgColType};
+use crate::meta::{
+    col_value::ColValue, mysql::mysql_col_type::MysqlColType, pg::pg_col_type::PgColType,
+};
 
 pub trait SqlxPgExt<'q> {
     fn bind_col_value<'b: 'q>(self, col_value: Option<&'b ColValue>, col_type: &PgColType) -> Self;
@@ -72,11 +74,19 @@ impl<'q> SqlxPgExt<'q> for Query<'q, Postgres, PgArguments> {
 }
 
 pub trait SqlxMysqlExt<'q> {
-    fn bind_col_value<'b: 'q>(self, col_value: Option<&'b ColValue>) -> Self;
+    fn bind_col_value<'b: 'q>(
+        self,
+        col_value: Option<&'b ColValue>,
+        col_type: &MysqlColType,
+    ) -> Self;
 }
 
 impl<'q> SqlxMysqlExt<'q> for Query<'q, MySql, MySqlArguments> {
-    fn bind_col_value<'b: 'q>(self, col_value: Option<&'b ColValue>) -> Self {
+    fn bind_col_value<'b: 'q>(
+        self,
+        col_value: Option<&'b ColValue>,
+        _col_type: &MysqlColType,
+    ) -> Self {
         if let Some(value) = col_value {
             match value {
                 ColValue::Tiny(v) => self.bind(v),

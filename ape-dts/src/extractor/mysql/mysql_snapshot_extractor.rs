@@ -124,7 +124,7 @@ impl MysqlSnapshotExtractor<'_> {
             let query = if let ColValue::None = start_value {
                 sqlx::query(&sql1)
             } else {
-                sqlx::query(&sql2).bind_col_value(Some(&start_value_for_bind))
+                sqlx::query(&sql2).bind_col_value(Some(&start_value_for_bind), &order_col_type)
             };
 
             let mut rows = query.fetch(&self.conn_pool);

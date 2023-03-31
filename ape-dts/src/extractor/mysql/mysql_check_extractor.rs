@@ -68,8 +68,8 @@ impl MysqlCheckExtractor<'_> {
             let check_row_data = RowData::build_insert_row_data(after, &tb_meta.basic);
 
             let sql_util = SqlUtil::new_for_mysql(&tb_meta);
-            let (sql, _cols, binds) = sql_util.get_select_query(&check_row_data)?;
-            let query = SqlUtil::create_mysql_query(&sql, &binds);
+            let (sql, cols, binds) = sql_util.get_select_query(&check_row_data)?;
+            let query = SqlUtil::create_mysql_query(&sql, &cols, &binds, &tb_meta);
 
             let mut rows = query.fetch(&self.conn_pool);
             while let Some(row) = rows.try_next().await.unwrap() {

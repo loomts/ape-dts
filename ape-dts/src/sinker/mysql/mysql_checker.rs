@@ -53,8 +53,8 @@ impl MysqlChecker {
             let tb_meta = self.get_tb_meta(&row_data_src).await?;
             let sql_util = SqlUtil::new_for_mysql(&tb_meta);
 
-            let (sql, _cols, binds) = sql_util.get_select_query(row_data_src)?;
-            let query = SqlUtil::create_mysql_query(&sql, &binds);
+            let (sql, cols, binds) = sql_util.get_select_query(row_data_src)?;
+            let query = SqlUtil::create_mysql_query(&sql, &cols, &binds, &tb_meta);
 
             let mut rows = query.fetch(&self.conn_pool);
             if let Some(row) = rows.try_next().await.unwrap() {
@@ -82,9 +82,9 @@ impl MysqlChecker {
             }
 
             // build fetch dst sql
-            let (sql, _cols, binds) =
+            let (sql, cols, binds) =
                 sql_util.get_batch_select_query(&data, sinked_count, batch_size)?;
-            let query = SqlUtil::create_mysql_query(&sql, &binds);
+            let query = SqlUtil::create_mysql_query(&sql, &cols, &binds, &tb_meta);
 
             // fetch dst
             let mut dst_row_data_map = HashMap::new();
