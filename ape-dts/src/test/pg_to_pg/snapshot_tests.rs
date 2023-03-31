@@ -1,17 +1,14 @@
 #[cfg(test)]
 mod test {
-    use crate::test::test_runner::TestRunner;
+
     use serial_test::serial;
-    use tokio::runtime::Runtime;
+
+    use crate::test::test_base::TestBase;
 
     #[test]
     #[serial]
     fn snapshot_basic_test() {
-        let rt = Runtime::new().unwrap();
-        let runner = rt
-            .block_on(TestRunner::new("pg_to_pg/snapshot_basic_test"))
-            .unwrap();
-        rt.block_on(runner.run_snapshot_test()).unwrap();
+        TestBase::run_snapshot_test("pg_to_pg/snapshot_basic_test");
     }
 
     /// dst table already has records with same primary keys of src table,
@@ -19,40 +16,24 @@ mod test {
     #[test]
     #[serial]
     fn snapshot_on_duplicate_test() {
-        let rt = Runtime::new().unwrap();
-        let runner = rt
-            .block_on(TestRunner::new("pg_to_pg/snapshot_on_duplicate_test"))
-            .unwrap();
-        rt.block_on(runner.run_snapshot_test()).unwrap();
+        TestBase::run_snapshot_test("pg_to_pg/snapshot_on_duplicate_test");
     }
 
     #[test]
     #[serial]
     fn snapshot_wildchar_test() {
-        let rt = Runtime::new().unwrap();
-        let runner = rt
-            .block_on(TestRunner::new("pg_to_pg/snapshot_wildchar_test"))
-            .unwrap();
-        rt.block_on(runner.run_snapshot_test()).unwrap();
+        TestBase::run_snapshot_test("pg_to_pg/snapshot_wildchar_test");
     }
 
     #[test]
     #[serial]
     fn snapshot_postgis_test() {
-        let rt = Runtime::new().unwrap();
-        let runner = rt
-            .block_on(TestRunner::new("pg_to_pg/snapshot_postgis_test"))
-            .unwrap();
-        rt.block_on(runner.run_snapshot_test()).unwrap();
+        TestBase::run_snapshot_test("pg_to_pg/snapshot_postgis_test");
     }
 
     #[test]
     #[serial]
     fn snapshot_postgis_array_test() {
-        let rt = Runtime::new().unwrap();
-        let runner = rt
-            .block_on(TestRunner::new("pg_to_pg/snapshot_postgis_array_test"))
-            .unwrap();
-        rt.block_on(runner.run_snapshot_test()).unwrap();
+        TestBase::run_snapshot_test("pg_to_pg/snapshot_postgis_array_test");
     }
 }
