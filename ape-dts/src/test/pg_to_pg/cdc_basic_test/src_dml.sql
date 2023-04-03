@@ -143,3 +143,8 @@ INSERT INTO postgis_array_table (pk, ga, gann) VALUES (2, NULL, NULL);
 UPDATE postgis_array_table SET ga=ARRAY['GEOMETRYCOLLECTION EMPTY'::geometry], gann=ARRAY['GEOMETRYCOLLECTION EMPTY'::geometry, 'POLYGON((166.51 -46.64, 178.52 -46.64, 178.52 -34.45, 166.51 -34.45, 166.51 -46.64))'::geometry] WHERE pk=2;
 UPDATE postgis_array_table SET ga=NULL, gann=NULL WHERE pk=1;
 DELETE FROM postgis_array_table;
+
+INSERT INTO timezone_table VALUES(1, now(), now(), now(), now());
+INSERT INTO timezone_table VALUES(2, NULL, NULL, NULL, NULL);
+UPDATE timezone_table SET t1=NULL, t2=NULL, t3=NULL, t4=NULL WHERE pk=1;
+UPDATE timezone_table SET t1=now(), t2=now(), t3=now(), t4=now() WHERE pk=2;
