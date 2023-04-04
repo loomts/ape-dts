@@ -1,6 +1,5 @@
-use log::debug;
-
 use crate::{
+    debug,
     error::Error,
     meta::{rdb_meta_manager::RdbMetaManager, row_data::RowData, row_type::RowType},
 };
@@ -63,7 +62,7 @@ impl RdbPartitioner {
                 let col_value_after = after.get(col);
                 if col_value_before != col_value_after {
                     debug!(
-                        "{}.{}.{} changed from {} to {}",
+                        "{}.{}.{} changed from {:?} to {:?}",
                         &row_data.db,
                         &row_data.tb,
                         col,

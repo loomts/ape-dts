@@ -1,4 +1,5 @@
 pub struct RuntimeConfig {
     pub log_level: String,
     pub log_dir: String,
+    pub log4rs_file: String,
 }

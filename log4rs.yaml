@@ -1,11 +1,8 @@
 appenders:
-  console_appender:
+  stdout:
     kind: console
-    encoder:
-      kind: pattern
-      pattern: "{h({d(%H:%M:%S)})} - {level} - {tid} - {m}{n}"
 
-  default_file_appender:
+  default_appender:
     kind: rolling_file
     append: true
     path: "LOG_DIR_PLACEHODLER/default.log"
@@ -22,7 +19,7 @@ appenders:
         count: 10
         pattern: "LOG_DIR_PLACEHODLER/default{}.log"
 
-  commit_file_appender:
+  commit_appender:
     kind: rolling_file
     append: true
     path: "LOG_DIR_PLACEHODLER/commit.log"
@@ -39,7 +36,7 @@ appenders:
         count: 10
         pattern: "LOG_DIR_PLACEHODLER/commit{}.log"
 
-  position_file_appender:
+  position_appender:
     kind: rolling_file
     append: true
     path: "LOG_DIR_PLACEHODLER/position.log"
@@ -56,7 +53,7 @@ appenders:
         count: 10
         pattern: "LOG_DIR_PLACEHODLER/position{}.log"
 
-  monitor_file_appender:
+  monitor_appender:
     kind: rolling_file
     append: true
     path: "LOG_DIR_PLACEHODLER/monitor.log"
@@ -73,10 +70,10 @@ appenders:
         count: 10
         pattern: "LOG_DIR_PLACEHODLER/monitor{}.log"
 
-  check_miss_file_appender:
+  miss_appender:
     kind: rolling_file
     append: true
-    path: "LOG_DIR_PLACEHODLER/check/miss.log"
+    path: "CHECK_LOG_DIR_PLACEHODLER/miss.log"
     encoder:
       pattern: "{m}{n}"
     policy:
@@ -88,12 +85,12 @@ appenders:
         kind: fixed_window
         base: 1
         count: 10
-        pattern: "LOG_DIR_PLACEHODLER/check/miss{}.log"
+        pattern: "CHECK_LOG_DIR_PLACEHODLER/miss{}.log"
 
-  check_diff_file_appender:
+  diff_appender:
     kind: rolling_file
     append: true
-    path: "LOG_DIR_PLACEHODLER/check/diff.log"
+    path: "CHECK_LOG_DIR_PLACEHODLER/diff.log"
     encoder:
       pattern: "{m}{n}"
     policy:
@@ -105,41 +102,40 @@ appenders:
         kind: fixed_window
         base: 1
         count: 10
-        pattern: "LOG_DIR_PLACEHODLER/check/diff{}.log"
+        pattern: "CHECK_LOG_DIR_PLACEHODLER/diff{}.log"
 
 loggers:
-  default_file_logger:
+  default_logger:
     level: LOG_LEVEL_PLACEHODLER
     appenders: 
-      - default_file_appender
+      - default_appender
 
-  commit_file_logger:
+  commit_logger:
     level: LOG_LEVEL_PLACEHODLER
     appenders: 
-      - commit_file_appender
+      - commit_appender
 
-  position_file_logger:
+  position_logger:
     level: LOG_LEVEL_PLACEHODLER
     appenders: 
-      - position_file_appender
+      - position_appender
 
-  monitor_file_logger:
+  monitor_logger:
     level: LOG_LEVEL_PLACEHODLER
     appenders: 
-      - monitor_file_appender
+      - monitor_appender
 
-  check_miss_file_logger: 
+  miss_logger: 
     level: LOG_LEVEL_PLACEHODLER
     appenders: 
-      - check_miss_file_appender
+      - miss_appender
 
-  check_diff_file_logger: 
+  diff_logger: 
     level: LOG_LEVEL_PLACEHODLER
     appenders: 
-      - check_diff_file_appender
+      - diff_appender
 
 root:
   level: LOG_LEVEL_PLACEHODLER
   appenders:
-    # - console
-    - default_file_appender
+    - stdout

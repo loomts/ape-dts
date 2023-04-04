@@ -19,6 +19,10 @@ pub struct MergeParallelizer {
     pub parallel_size: usize,
 }
 
+const INSERT: &str = "insert";
+const DELETE: &str = "delete";
+const UNMERGED: &str = "unmerged";
+
 #[async_trait]
 impl Parallelizer for MergeParallelizer {
     fn get_name(&self) -> String {
@@ -35,11 +39,11 @@ impl Parallelizer for MergeParallelizer {
         sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
     ) -> Result<(), Error> {
         let mut merged_datas = self.merger.merge(data).await?;
-        self.sink_internal(&mut merged_datas, sinkers, "delete")
+        self.sink_internal(&mut merged_datas, sinkers, DELETE)
             .await?;
-        self.sink_internal(&mut merged_datas, sinkers, "insert")
+        self.sink_internal(&mut merged_datas, sinkers, INSERT)
             .await?;
-        self.sink_internal(&mut merged_datas, sinkers, "unmerged")
+        self.sink_internal(&mut merged_datas, sinkers, UNMERGED)
             .await?;
         Ok(())
     }
@@ -58,8 +62,8 @@ impl MergeParallelizer {
         let mut futures = Vec::new();
         for (_full_tb, tb_merged_data) in merged_datas.iter_mut() {
             let data = match sink_type {
-                "delete" => tb_merged_data.get_delete_rows(),
-                "insert" => tb_merged_data.get_insert_rows(),
+                DELETE => tb_merged_data.get_delete_rows(),
+                INSERT => tb_merged_data.get_insert_rows(),
                 _ => tb_merged_data.get_unmerged_rows(),
             };
             if data.len() == 0 {
@@ -70,7 +74,7 @@ impl MergeParallelizer {
             let sinker = sinkers[i % parallel_size].clone();
             let future = tokio::spawn(async move {
                 match sinker_type_clone.as_str() {
-                    "delete" | "insert" => sinker.lock().await.batch_sink(data).await.unwrap(),
+                    DELETE | INSERT => sinker.lock().await.batch_sink(data).await.unwrap(),
                     _ => Self::sink_unmerged_rows(sinker, data).await.unwrap(),
                 };
             });

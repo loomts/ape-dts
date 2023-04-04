@@ -3,13 +3,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 use futures::TryStreamExt;
-use log::info;
+
 use sqlx::{Pool, Postgres};
 
 use crate::{
     adaptor::{pg_col_value_convertor::PgColValueConvertor, sqlx_ext::SqlxPgExt},
     error::Error,
     extractor::extractor_util::ExtractorUtil,
+    info,
     meta::{
         col_value::ColValue,
         dt_data::DtData,

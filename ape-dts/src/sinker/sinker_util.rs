@@ -1,10 +1,9 @@
 use std::collections::HashMap;
 
-use log::info;
-
 use crate::{
-    common::check_log::CheckLog,
     error::Error,
+    log::{check_log::CheckLog, log_type::LogType},
+    log_diff, log_miss,
     meta::{
         mysql::{mysql_meta_manager::MysqlMetaManager, mysql_tb_meta::MysqlTbMeta},
         pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
@@ -16,9 +15,6 @@ use crate::{
 use super::rdb_router::RdbRouter;
 
 pub struct SinkerUtil {}
-
-const CHECK_MISS_FILE_LOGGER: &str = "check_miss_file_logger";
-const CHECK_DIFF_FILE_LOGGER: &str = "check_diff_file_logger";
 
 impl SinkerUtil {
     #[inline(always)]
@@ -61,14 +57,14 @@ impl SinkerUtil {
     #[inline(always)]
     pub fn log_miss(row_data: &RowData, tb_meta: &RdbTbMeta) {
         // TODO, batch write
-        let check_log = CheckLog::from_row_data(row_data, tb_meta);
-        info!(target: CHECK_MISS_FILE_LOGGER, "{}", check_log.to_string());
+        let check_log = CheckLog::from_row_data(row_data, tb_meta, LogType::Miss);
+        log_miss!("{}", check_log.to_string());
     }
 
     #[inline(always)]
     pub fn log_diff(row_data: &RowData, tb_meta: &RdbTbMeta) {
-        let check_log = CheckLog::from_row_data(row_data, tb_meta);
-        info!(target: CHECK_DIFF_FILE_LOGGER, "{}", check_log.to_string());
+        let check_log = CheckLog::from_row_data(row_data, tb_meta, LogType::Diff);
+        log_diff!("{}", check_log.to_string());
     }
 
     #[inline(always)]

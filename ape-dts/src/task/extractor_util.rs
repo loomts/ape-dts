@@ -199,7 +199,7 @@ impl ExtractorUtil {
     pub async fn create_mysql_check_extractor<'a>(
         url: &str,
         check_log_dir: &str,
-        slice_size: usize,
+        batch_size: usize,
         buffer: &'a ConcurrentQueue<DtData>,
         log_level: &str,
         shut_down: &'a AtomicBool,
@@ -213,7 +213,7 @@ impl ExtractorUtil {
             meta_manager,
             buffer,
             check_log_dir: check_log_dir.to_string(),
-            slice_size,
+            batch_size,
             shut_down: &&shut_down,
         })
     }
@@ -221,7 +221,7 @@ impl ExtractorUtil {
     pub async fn create_pg_check_extractor<'a>(
         url: &str,
         check_log_dir: &str,
-        slice_size: usize,
+        batch_size: usize,
         buffer: &'a ConcurrentQueue<DtData>,
         log_level: &str,
         shut_down: &'a AtomicBool,
@@ -235,7 +235,7 @@ impl ExtractorUtil {
             meta_manager,
             check_log_dir: check_log_dir.to_string(),
             buffer,
-            slice_size,
+            batch_size,
             shut_down: &&shut_down,
         })
     }

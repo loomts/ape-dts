@@ -23,6 +23,7 @@ pub enum ExtractorConfig {
     MysqlCheck {
         url: String,
         check_log_dir: String,
+        batch_size: usize,
     },
 
     PgSnapshot {
@@ -41,5 +42,6 @@ pub enum ExtractorConfig {
     PgCheck {
         url: String,
         check_log_dir: String,
+        batch_size: usize,
     },
 }

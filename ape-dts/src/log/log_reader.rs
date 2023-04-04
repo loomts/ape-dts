@@ -5,7 +5,13 @@ use std::{
     time::SystemTime,
 };
 
+use super::log_type::LogType;
+
+const MISS_LOG: &str = "miss.log";
+const DIFF_LOG: &str = "diff.log";
+
 pub struct LogReader {
+    pub log_type: LogType,
     files: Vec<PathBuf>,
     file_index: usize,
     lines: Option<Lines<BufReader<File>>>,
@@ -18,6 +24,7 @@ impl LogReader {
             files,
             file_index: 0,
             lines: Option::None,
+            log_type: LogType::Unknown,
         }
     }
 
@@ -27,7 +34,18 @@ impl LogReader {
         }
 
         if self.lines.is_none() {
-            let file = File::open(&self.files[self.file_index]).unwrap();
+            let path = &self.files[self.file_index];
+
+            let path_str = path.to_str().unwrap();
+            self.log_type = if path_str.contains(MISS_LOG) {
+                LogType::Miss
+            } else if path_str.contains(DIFF_LOG) {
+                LogType::Diff
+            } else {
+                LogType::Unknown
+            };
+
+            let file = File::open(path).unwrap();
             self.lines = Some(BufReader::new(file).lines());
         }
 

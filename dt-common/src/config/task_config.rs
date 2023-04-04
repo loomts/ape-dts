@@ -32,6 +32,7 @@ const PIPELINE: &str = "pipeline";
 const RUNTIME: &str = "runtime";
 const FILTER: &str = "filter";
 const ROUTER: &str = "router";
+const BATCH_SIZE: &str = "batch_size";
 
 impl TaskConfig {
     pub fn new(task_config_file: &str) -> Self {
@@ -78,6 +79,7 @@ impl TaskConfig {
                 ExtractType::CheckLog => Ok(ExtractorConfig::MysqlCheck {
                     url,
                     check_log_dir: ini.get(EXTRACTOR, CHECK_LOG_DIR).unwrap(),
+                    batch_size: ini.getuint(EXTRACTOR, BATCH_SIZE).unwrap().unwrap() as usize,
                 }),
 
                 ExtractType::Struct => Ok(ExtractorConfig::BasicStruct { url, db_type }),
@@ -103,6 +105,7 @@ impl TaskConfig {
                 ExtractType::CheckLog => Ok(ExtractorConfig::PgCheck {
                     url,
                     check_log_dir: ini.get(EXTRACTOR, CHECK_LOG_DIR).unwrap(),
+                    batch_size: ini.getuint(EXTRACTOR, BATCH_SIZE).unwrap().unwrap() as usize,
                 }),
 
                 ExtractType::Struct => Ok(ExtractorConfig::BasicStruct { url, db_type }),
@@ -114,13 +117,17 @@ impl TaskConfig {
         let db_type = DbType::from_str(&ini.get(SINKER, DB_TYPE).unwrap()).unwrap();
         let sink_type = SinkType::from_str(&ini.get(SINKER, "sink_type").unwrap()).unwrap();
         let url = ini.get(SINKER, URL).unwrap();
-        let batch_size = ini.getuint(SINKER, "batch_size").unwrap().unwrap() as usize;
+        let batch_size = ini.getuint(SINKER, BATCH_SIZE).unwrap().unwrap() as usize;
 
         match db_type {
             DbType::Mysql => match sink_type {
                 SinkType::Write => Ok(SinkerConfig::Mysql { url, batch_size }),
 
-                SinkType::Check => Ok(SinkerConfig::MysqlCheck { url, batch_size }),
+                SinkType::Check => Ok(SinkerConfig::MysqlCheck {
+                    url,
+                    batch_size,
+                    check_log_dir: ini.get(SINKER, CHECK_LOG_DIR),
+                }),
 
                 SinkType::Struct => Ok(SinkerConfig::BasicStruct { url, db_type }),
             },
@@ -128,7 +135,11 @@ impl TaskConfig {
             DbType::Pg => match sink_type {
                 SinkType::Write => Ok(SinkerConfig::Pg { url, batch_size }),
 
-                SinkType::Check => Ok(SinkerConfig::PgCheck { url, batch_size }),
+                SinkType::Check => Ok(SinkerConfig::PgCheck {
+                    url,
+                    batch_size,
+                    check_log_dir: ini.get(SINKER, CHECK_LOG_DIR),
+                }),
 
                 SinkType::Struct => Ok(SinkerConfig::BasicStruct { url, db_type }),
             },
@@ -152,6 +163,7 @@ impl TaskConfig {
         Ok(RuntimeConfig {
             log_level: ini.get(RUNTIME, "log_level").unwrap(),
             log_dir: ini.get(RUNTIME, "log_dir").unwrap(),
+            log4rs_file: ini.get(RUNTIME, "log4rs_file").unwrap(),
         })
     }
 

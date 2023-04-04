@@ -1,22 +1,25 @@
-use std::{
-    collections::HashMap,
-    sync::atomic::{AtomicBool, Ordering},
-};
+use std::{collections::HashMap, sync::atomic::AtomicBool};
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 use futures::TryStreamExt;
-use log::info;
 use sqlx::{MySql, Pool};
 
 use crate::{
     adaptor::mysql_col_value_convertor::MysqlColValueConvertor,
-    common::{check_log::CheckLog, log_reader::LogReader, sql_util::SqlUtil},
+    common::sql_util::SqlUtil,
     error::Error,
-    extractor::extractor_util::ExtractorUtil,
-    meta::{dt_data::DtData, mysql::mysql_meta_manager::MysqlMetaManager, row_data::RowData},
-    task::task_util::TaskUtil,
-    traits::Extractor,
+    extractor::{base_check_extractor::BaseCheckExtractor, extractor_util::ExtractorUtil},
+    info,
+    log::{check_log::CheckLog, log_type::LogType},
+    meta::{
+        col_value::ColValue,
+        dt_data::DtData,
+        mysql::{mysql_meta_manager::MysqlMetaManager, mysql_tb_meta::MysqlTbMeta},
+        row_data::RowData,
+        row_type::RowType,
+    },
+    traits::{BatchCheckExtractor, Extractor},
 };
 
 pub struct MysqlCheckExtractor<'a> {
@@ -24,7 +27,7 @@ pub struct MysqlCheckExtractor<'a> {
     pub meta_manager: MysqlMetaManager,
     pub check_log_dir: String,
     pub buffer: &'a ConcurrentQueue<DtData>,
-    pub slice_size: usize,
+    pub batch_size: usize,
     pub shut_down: &'a AtomicBool,
 }
 
@@ -35,7 +38,16 @@ impl Extractor for MysqlCheckExtractor<'_> {
             "MysqlCheckExtractor starts, check_log_dir: {}",
             self.check_log_dir
         );
-        self.extract_internal().await
+
+        let mut base_check_extractor = BaseCheckExtractor {
+            check_log_dir: self.check_log_dir.clone(),
+            buffer: &self.buffer,
+            batch_size: self.batch_size,
+            shut_down: &self.shut_down,
+        };
+
+        let mut batch_extractor: Box<&mut (dyn BatchCheckExtractor + Send)> = Box::new(self);
+        base_check_extractor.extract(&mut batch_extractor).await
     }
 
     async fn close(&mut self) -> Result<(), Error> {
@@ -43,49 +55,68 @@ impl Extractor for MysqlCheckExtractor<'_> {
     }
 }
 
-impl MysqlCheckExtractor<'_> {
-    async fn extract_internal(&mut self) -> Result<(), Error> {
-        let mut log_reader = LogReader::new(&self.check_log_dir);
-        while let Some(log) = log_reader.next() {
-            if log.trim().is_empty() {
-                continue;
+#[async_trait]
+impl BatchCheckExtractor for MysqlCheckExtractor<'_> {
+    async fn batch_extract(&mut self, check_logs: &Vec<CheckLog>) -> Result<(), Error> {
+        if check_logs.len() == 0 {
+            return Ok(());
+        }
+
+        let log_type = &check_logs[0].log_type;
+        let tb_meta = self
+            .meta_manager
+            .get_tb_meta(&check_logs[0].schema, &check_logs[0].tb)
+            .await?;
+        let check_row_datas = Self::build_check_row_datas(check_logs, &tb_meta)?;
+
+        let sql_util = SqlUtil::new_for_mysql(&tb_meta);
+        let (sql, cols, binds) = if check_logs.len() == 1 {
+            sql_util.get_select_query(&check_row_datas[0])?
+        } else {
+            sql_util.get_batch_select_query(&check_row_datas, 0, check_row_datas.len())?
+        };
+        let query = SqlUtil::create_mysql_query(&sql, &cols, &binds, &tb_meta);
+
+        let mut rows = query.fetch(&self.conn_pool);
+        while let Some(row) = rows.try_next().await.unwrap() {
+            let mut row_data = RowData::from_mysql_row(&row, &tb_meta);
+
+            if log_type == &LogType::Diff {
+                row_data.row_type = RowType::Update;
+                row_data.before = row_data.after.clone();
             }
 
-            let check_log = CheckLog::from_str(&log);
-            let tb_meta = self
-                .meta_manager
-                .get_tb_meta(&check_log.schema, &check_log.tb)
-                .await?;
+            ExtractorUtil::push_row(self.buffer, row_data)
+                .await
+                .unwrap();
+        }
 
+        Ok(())
+    }
+}
+
+impl MysqlCheckExtractor<'_> {
+    fn build_check_row_datas(
+        check_logs: &Vec<CheckLog>,
+        tb_meta: &MysqlTbMeta,
+    ) -> Result<Vec<RowData>, Error> {
+        let mut result = Vec::new();
+        for check_log in check_logs.iter() {
             let mut after = HashMap::new();
             for i in 0..check_log.cols.len() {
                 let col = &check_log.cols[i];
                 let value = &check_log.col_values[i];
                 let col_type = tb_meta.col_type_map.get(col).unwrap();
-                let col_value = MysqlColValueConvertor::from_str(col_type, value)?;
+                let col_value = if let Some(str) = value {
+                    MysqlColValueConvertor::from_str(col_type, str)?
+                } else {
+                    ColValue::None
+                };
                 after.insert(col.to_string(), col_value);
             }
             let check_row_data = RowData::build_insert_row_data(after, &tb_meta.basic);
-
-            let sql_util = SqlUtil::new_for_mysql(&tb_meta);
-            let (sql, cols, binds) = sql_util.get_select_query(&check_row_data)?;
-            let query = SqlUtil::create_mysql_query(&sql, &cols, &binds, &tb_meta);
-
-            let mut rows = query.fetch(&self.conn_pool);
-            while let Some(row) = rows.try_next().await.unwrap() {
-                let row_data = RowData::from_mysql_row(&row, &tb_meta);
-                ExtractorUtil::push_row(self.buffer, row_data)
-                    .await
-                    .unwrap();
-            }
+            result.push(check_row_data);
         }
-
-        // wait all data to be transfered
-        while !self.buffer.is_empty() {
-            TaskUtil::sleep_millis(1).await;
-        }
-
-        self.shut_down.store(true, Ordering::Release);
-        Ok(())
+        Ok(result)
     }
 }

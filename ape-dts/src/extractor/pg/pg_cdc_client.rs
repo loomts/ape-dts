@@ -1,10 +1,10 @@
-use log::info;
 use tokio_postgres::NoTls;
 use tokio_postgres::SimpleQueryMessage::Row;
 use tokio_postgres::{replication::LogicalReplicationStream, Client};
 use url::Url;
 
 use crate::error::Error;
+use crate::info;
 
 pub struct PgCdcClient {
     pub url: String,

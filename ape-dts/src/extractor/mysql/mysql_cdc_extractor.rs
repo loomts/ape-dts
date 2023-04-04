@@ -4,7 +4,6 @@ use async_recursion::async_recursion;
 use async_trait::async_trait;
 
 use concurrent_queue::ConcurrentQueue;
-use log::info;
 use mysql_binlog_connector_rust::{
     binlog_client::BinlogClient,
     event::{
@@ -18,6 +17,7 @@ use crate::{
     common::position_util::PositionUtil,
     error::Error,
     extractor::{extractor_util::ExtractorUtil, rdb_filter::RdbFilter},
+    info,
     meta::{
         col_value::ColValue, dt_data::DtData, mysql::mysql_meta_manager::MysqlMetaManager,
         row_data::RowData, row_type::RowType,

@@ -19,7 +19,7 @@ mod test {
     #[test]
     #[serial]
     fn cdc_charset_test() {
-        TestBase::run_cdc_test("mysql_to_mysql/cdc_charset_test", 3000, 1000);
+        TestBase::run_cdc_test("mysql_to_mysql/cdc_charset_test", 3000, 2000);
     }
 
     #[test]

@@ -153,10 +153,6 @@ impl MysqlColValueConvertor {
 
     pub fn from_str(col_type: &MysqlColType, value_str: &str) -> Result<ColValue, Error> {
         let value_str = value_str.to_string();
-        if ColValue::None.to_string() == value_str {
-            return Ok(ColValue::None);
-        }
-
         let col_value = match *col_type {
             MysqlColType::Tiny => match value_str.parse::<i8>() {
                 Ok(value) => ColValue::Tiny(value),

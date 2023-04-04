@@ -319,7 +319,7 @@ impl SqlUtil<'_> {
                 if *col_value.unwrap() == ColValue::None {
                     return Err(Error::Unexpected {
                         error: format!(
-                            "db: {}, tb: {}, where col: {} is NULL, which should not happen in batch delete",
+                            "db: {}, tb: {}, where col: {} is NULL, which should not happen in batch select",
                             self.rdb_tb_meta.schema, self.rdb_tb_meta.tb, col
                         ),
                     });

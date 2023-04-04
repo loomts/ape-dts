@@ -27,8 +27,10 @@ use tokio_postgres::replication::LogicalReplicationStream;
 use crate::{
     adaptor::pg_col_value_convertor::PgColValueConvertor,
     common::{position_util::PositionUtil, syncer::Syncer},
+    error,
     error::Error,
     extractor::{pg::pg_cdc_client::PgCdcClient, rdb_filter::RdbFilter},
+    info,
     meta::{
         col_value::ColValue,
         dt_data::DtData,
@@ -39,8 +41,6 @@ use crate::{
     task::task_util::TaskUtil,
     traits::Extractor,
 };
-use log::error;
-use log::info;
 
 pub struct PgCdcExtractor<'a> {
     pub meta_manager: PgMetaManager,
