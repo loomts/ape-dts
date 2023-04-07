@@ -5,6 +5,7 @@ mod adaptor;
 mod common;
 mod error;
 mod extractor;
+mod log;
 mod meta;
 mod monitor;
 mod pipeline;

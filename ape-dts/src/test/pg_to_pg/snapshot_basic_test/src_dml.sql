@@ -70,3 +70,6 @@ INSERT INTO public.postgis_table (pk, p, ml) VALUES (2, NULL, NULL)
 
 INSERT INTO public.postgis_array_table (pk, ga, gann) VALUES (1, ARRAY['GEOMETRYCOLLECTION EMPTY'::geometry, 'POLYGON((166.51 -46.64, 178.52 -46.64, 178.52 -34.45, 166.51 -34.45, 166.51 -46.64))'::geometry], ARRAY['GEOMETRYCOLLECTION EMPTY'::geometry, 'POLYGON((166.51 -46.64, 178.52 -46.64, 178.52 -34.45, 166.51 -34.45, 166.51 -46.64))'::geometry])
 INSERT INTO public.postgis_array_table (pk, ga, gann) VALUES (2, NULL, NULL)
+
+INSERT INTO timezone_table VALUES(1, now(), now(), now(), now());
+INSERT INTO timezone_table VALUES(2, NULL, NULL, NULL, NULL);

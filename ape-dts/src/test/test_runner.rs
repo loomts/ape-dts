@@ -20,7 +20,7 @@ use super::test_config_util::TestConfigUtil;
 
 pub struct TestRunner {
     test_dir: String,
-    log_dir: String,
+    sinker_check_log_dir: String,
     task_config_file: String,
     src_conn_pool_mysql: Option<Pool<MySql>>,
     dst_conn_pool_mysql: Option<Pool<MySql>>,
@@ -44,27 +44,19 @@ impl TestRunner {
         let dst_task_config_file = format!("{}/task_config.ini", tmp_dir);
 
         // update relative path to absolute path in task_config.ini
-        let log_dir = format!("{}/logs", project_root);
-        let check_log_dir = format!("{}/check_log", test_dir);
-        let config = vec![
-            (
-                "extractor".to_string(),
-                "check_log_dir".to_string(),
-                check_log_dir,
-            ),
-            (
-                "runtime".to_string(),
-                "log_dir".to_string(),
-                log_dir.clone(),
-            ),
-        ];
-        TestConfigUtil::update_task_config(&src_task_config_file, &dst_task_config_file, &config);
+        let (_log_dir, _extractor_check_log_dir, sinker_check_log_dir) =
+            TestConfigUtil::update_task_config_log_dir(
+                &src_task_config_file,
+                &dst_task_config_file,
+                &project_root,
+            );
 
         let src_ddl_file = format!("{}/src_ddl.sql", test_dir);
         let dst_ddl_file = format!("{}/dst_ddl.sql", test_dir);
         let src_dml_file = format!("{}/src_dml.sql", test_dir);
         let dst_dml_file = format!("{}/dst_dml.sql", test_dir);
 
+        // prepare conn pools
         let mut src_conn_pool_mysql = None;
         let mut dst_conn_pool_mysql = None;
         let mut src_conn_pool_pg = None;
@@ -75,13 +67,13 @@ impl TestRunner {
             ExtractorConfig::MysqlCdc { url, .. }
             | ExtractorConfig::MysqlSnapshot { url, .. }
             | ExtractorConfig::MysqlCheck { url, .. } => {
-                src_conn_pool_mysql = Some(TaskUtil::create_mysql_conn_pool(&url, 1, true).await?);
+                src_conn_pool_mysql = Some(TaskUtil::create_mysql_conn_pool(&url, 1, false).await?);
             }
 
             ExtractorConfig::PgCdc { url, .. }
             | ExtractorConfig::PgSnapshot { url, .. }
             | ExtractorConfig::PgCheck { url, .. } => {
-                src_conn_pool_pg = Some(TaskUtil::create_pg_conn_pool(&url, 1, true).await?);
+                src_conn_pool_pg = Some(TaskUtil::create_pg_conn_pool(&url, 1, false).await?);
             }
 
             _ => {
@@ -93,11 +85,11 @@ impl TestRunner {
 
         match config.sinker {
             SinkerConfig::Mysql { url, .. } | SinkerConfig::MysqlCheck { url, .. } => {
-                dst_conn_pool_mysql = Some(TaskUtil::create_mysql_conn_pool(&url, 1, true).await?);
+                dst_conn_pool_mysql = Some(TaskUtil::create_mysql_conn_pool(&url, 1, false).await?);
             }
 
             SinkerConfig::Pg { url, .. } | SinkerConfig::PgCheck { url, .. } => {
-                dst_conn_pool_pg = Some(TaskUtil::create_pg_conn_pool(&url, 1, true).await?);
+                dst_conn_pool_pg = Some(TaskUtil::create_pg_conn_pool(&url, 1, false).await?);
             }
 
             _ => {
@@ -118,7 +110,7 @@ impl TestRunner {
             dst_dml_file,
             task_config_file: dst_task_config_file,
             test_dir,
-            log_dir,
+            sinker_check_log_dir,
         })
     }
 
@@ -126,13 +118,13 @@ impl TestRunner {
         &self,
         start_millis: u64,
         parse_millis: u64,
-        configs: &Vec<Vec<(String, String, String)>>,
     ) -> Result<(), Error> {
+        let configs = TestConfigUtil::get_default_configs();
         for config in configs {
             TestConfigUtil::update_task_config(
                 &self.task_config_file,
                 &self.task_config_file,
-                config,
+                &config,
             );
             println!("----------------------------------------");
             println!("running cdc test with config: {:?}", config);
@@ -143,7 +135,7 @@ impl TestRunner {
 
     pub async fn run_check_test(&self) -> Result<(), Error> {
         // clear existed check logs
-        Self::clear_check_log(&self.log_dir);
+        self.clear_check_log();
 
         // prepare src and dst tables
         self.run_test_ddl_sqls().await?;
@@ -154,11 +146,11 @@ impl TestRunner {
 
         // check result
         let expect_log_dir = format!("{}/expect_check_log", self.test_dir);
-        let actual_log_dir = format!("{}/check", self.log_dir);
+        let actual_log_dir = self.sinker_check_log_dir.clone();
         let (expect_miss_logs, expect_diff_logs) = Self::load_check_log(&expect_log_dir);
         let (actual_miss_logs, actual_diff_logs) = Self::load_check_log(&actual_log_dir);
 
-        assert_eq!(expect_diff_logs.len(), actual_miss_logs.len());
+        assert_eq!(expect_diff_logs.len(), actual_diff_logs.len());
         assert_eq!(expect_miss_logs.len(), actual_miss_logs.len());
         for log in expect_diff_logs {
             assert!(actual_diff_logs.contains(&log))
@@ -171,12 +163,12 @@ impl TestRunner {
     }
 
     pub async fn run_revise_test(&self) -> Result<(), Error> {
-        Self::clear_check_log(&self.log_dir);
+        self.clear_check_log();
         self.run_snapshot_test().await
     }
 
     pub async fn run_review_test(&self) -> Result<(), Error> {
-        Self::clear_check_log(&self.log_dir);
+        self.clear_check_log();
         self.run_check_test().await
     }
 
@@ -379,9 +371,9 @@ impl TestRunner {
         (miss_logs, diff_logs)
     }
 
-    fn clear_check_log(log_dir: &str) {
-        let miss_log_file = format!("{}/check/miss.log", log_dir);
-        let diff_log_file = format!("{}/check/diff.log", log_dir);
+    fn clear_check_log(&self) {
+        let miss_log_file = format!("{}/miss.log", self.sinker_check_log_dir);
+        let diff_log_file = format!("{}/diff.log", self.sinker_check_log_dir);
         if fs::metadata(&miss_log_file).is_ok() {
             File::create(&miss_log_file).unwrap().set_len(0).unwrap();
         }

@@ -34,7 +34,9 @@ impl SinkerUtil {
                 .await?
             }
 
-            SinkerConfig::MysqlCheck { url, batch_size } => {
+            SinkerConfig::MysqlCheck {
+                url, batch_size, ..
+            } => {
                 SinkerUtil::create_mysql_checker(
                     &url,
                     &router,
@@ -56,7 +58,9 @@ impl SinkerUtil {
                 .await?
             }
 
-            SinkerConfig::PgCheck { url, batch_size } => {
+            SinkerConfig::PgCheck {
+                url, batch_size, ..
+            } => {
                 SinkerUtil::create_pg_checker(
                     &url,
                     &router,

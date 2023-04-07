@@ -1,5 +1,6 @@
 use crate::{
     common::sql_util::SqlUtil,
+    error,
     error::Error,
     meta::{
         col_value::ColValue,
@@ -10,7 +11,7 @@ use crate::{
     sinker::{rdb_router::RdbRouter, sinker_util::SinkerUtil},
     traits::Sinker,
 };
-use log::error;
+
 use sqlx::{Pool, Postgres};
 
 use async_trait::async_trait;

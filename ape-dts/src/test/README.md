@@ -6,6 +6,7 @@
 docker run --name some-postgres-1 \
 -p 5433:5432 \
 -e POSTGRES_PASSWORD=postgres \
+-e TZ=Etc/GMT-8 \
 -d postgis/postgis:latest 
 
 run `ALTER SYSTEM SET wal_level = logical;` and restart
@@ -17,10 +18,11 @@ run `ALTER SYSTEM SET wal_level = logical;` and restart
 docker run --name some-postgres-2 \
 -p 5434:5432 \
 -e POSTGRES_PASSWORD=postgres \
+-e TZ=Etc/GMT-7 \
 -d postgis/postgis:latest
 ```
 
-- create a test db for EUC_CN
+- create a test db for EUC_CN in both source and target
 ```
 CREATE DATABASE postgres_euc_cn
   ENCODING 'EUC_CN'

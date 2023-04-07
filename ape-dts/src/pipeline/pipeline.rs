@@ -7,11 +7,11 @@ use std::{
 };
 
 use concurrent_queue::ConcurrentQueue;
-use log::info;
 
 use crate::{
     common::syncer::Syncer,
     error::Error,
+    info, log_monitor, log_position,
     meta::{dt_data::DtData, row_data::RowData},
     monitor::{counter::Counter, statistic_counter::StatisticCounter},
     task::task_util::TaskUtil,
@@ -26,9 +26,6 @@ pub struct Pipeline<'a> {
     pub checkpoint_interval_secs: u64,
     pub syncer: Arc<Mutex<Syncer>>,
 }
-
-const POSITION_FILE_LOGGER: &str = "position_file_logger";
-const MONITOR_FILE_LOGGER: &str = "monitor_file_logger";
 
 impl Pipeline<'_> {
     pub async fn stop(&mut self) -> Result<(), Error> {
@@ -127,30 +124,16 @@ impl Pipeline<'_> {
         }
 
         if let Some(position) = last_received {
-            info!(
-                target: POSITION_FILE_LOGGER,
-                "current_position | {}", position
-            );
+            log_position!("current_position | {}", position);
         }
 
         if let Some(position) = last_commit {
-            info!(
-                target: POSITION_FILE_LOGGER,
-                "checkpoint_position | {}", position
-            );
+            log_position!("checkpoint_position | {}", position);
             self.syncer.lock().unwrap().checkpoint_position = position.clone();
         }
 
-        info!(
-            target: MONITOR_FILE_LOGGER,
-            "avg tps: {}",
-            tps_counter.avg(),
-        );
-
-        info!(
-            target: MONITOR_FILE_LOGGER,
-            "sinked count: {}", count_counter.value
-        );
+        log_monitor!("avg tps: {}", tps_counter.avg(),);
+        log_monitor!("sinked count: {}", count_counter.value);
 
         Instant::now()
     }

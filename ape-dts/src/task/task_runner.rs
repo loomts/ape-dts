@@ -1,12 +1,14 @@
 use std::{
-    fs::File,
+    fs::{self, File},
     io::Read,
     sync::{atomic::AtomicBool, Arc, Mutex},
 };
 
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
-    config::{extractor_config::ExtractorConfig, task_config::TaskConfig},
+    config::{
+        extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
+    },
     meta::db_enums::DbType,
 };
 use futures::future::join;
@@ -27,9 +29,10 @@ pub struct TaskRunner {
     config: TaskConfig,
 }
 
+const CHECK_LOG_DIR_PLACEHODLER: &str = "CHECK_LOG_DIR_PLACEHODLER";
 const LOG_LEVEL_PLACEHODLER: &str = "LOG_LEVEL_PLACEHODLER";
 const LOG_DIR_PLACEHODLER: &str = "LOG_DIR_PLACEHODLER";
-const LOG4RS_YAML: &str = "log4rs.yaml";
+const DEFAULT_CHECK_LOG_DIR_PLACEHODLER: &str = "LOG_DIR_PLACEHODLER/check";
 
 impl TaskRunner {
     pub async fn new(task_config_file: String) -> Self {
@@ -152,11 +155,15 @@ impl TaskRunner {
                 Box::new(extractor)
             }
 
-            ExtractorConfig::MysqlCheck { url, check_log_dir } => {
+            ExtractorConfig::MysqlCheck {
+                url,
+                check_log_dir,
+                batch_size,
+            } => {
                 let extractor = ExtractorUtil::create_mysql_check_extractor(
                     &url,
                     &check_log_dir,
-                    self.config.pipeline.buffer_size,
+                    *batch_size,
                     &buffer,
                     &self.config.runtime.log_level,
                     &shut_down,
@@ -200,11 +207,15 @@ impl TaskRunner {
                 Box::new(extractor)
             }
 
-            ExtractorConfig::PgCheck { url, check_log_dir } => {
+            ExtractorConfig::PgCheck {
+                url,
+                check_log_dir,
+                batch_size,
+            } => {
                 let extractor = ExtractorUtil::create_pg_check_extractor(
                     &url,
                     &check_log_dir,
-                    self.config.pipeline.buffer_size,
+                    *batch_size,
                     &buffer,
                     &self.config.runtime.log_level,
                     &shut_down,
@@ -245,9 +256,28 @@ impl TaskRunner {
     }
 
     fn init_log4rs(&self) -> Result<(), Error> {
+        let log4rs_file = &self.config.runtime.log4rs_file;
+        if !fs::metadata(log4rs_file).is_ok() {
+            return Ok(());
+        }
+
         let mut config_str = String::new();
-        File::open(LOG4RS_YAML)?.read_to_string(&mut config_str)?;
+        File::open(log4rs_file)?.read_to_string(&mut config_str)?;
+
+        match &self.config.sinker {
+            SinkerConfig::MysqlCheck { check_log_dir, .. }
+            | SinkerConfig::PgCheck { check_log_dir, .. } => {
+                if let Some(dir) = check_log_dir {
+                    if !dir.is_empty() {
+                        config_str = config_str.replace(CHECK_LOG_DIR_PLACEHODLER, dir);
+                    }
+                }
+            }
+            _ => {}
+        }
+
         config_str = config_str
+            .replace(CHECK_LOG_DIR_PLACEHODLER, DEFAULT_CHECK_LOG_DIR_PLACEHODLER)
             .replace(LOG_DIR_PLACEHODLER, &self.config.runtime.log_dir)
             .replace(LOG_LEVEL_PLACEHODLER, &self.config.runtime.log_level);
 

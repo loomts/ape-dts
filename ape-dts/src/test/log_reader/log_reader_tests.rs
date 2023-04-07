@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test {
-    use crate::{common::log_reader::LogReader, test::test_config_util::TestConfigUtil};
+    use crate::{log::log_reader::LogReader, test::test_config_util::TestConfigUtil};
 
     #[test]
     fn log_reader_empty_test() {

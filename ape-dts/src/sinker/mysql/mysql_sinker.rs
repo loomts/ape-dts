@@ -1,5 +1,6 @@
 use crate::{
     common::sql_util::SqlUtil,
+    error,
     error::Error,
     meta::{
         mysql::{mysql_meta_manager::MysqlMetaManager, mysql_tb_meta::MysqlTbMeta},
@@ -9,7 +10,7 @@ use crate::{
     sinker::{rdb_router::RdbRouter, sinker_util::SinkerUtil},
     traits::Sinker,
 };
-use log::error;
+
 use sqlx::{MySql, Pool};
 
 use async_trait::async_trait;

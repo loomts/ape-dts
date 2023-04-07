@@ -5,7 +5,10 @@ use std::{
 };
 
 use configparser::ini::Ini;
-use dt_common::config::config_enums::ParallelType;
+use dt_common::config::{
+    config_enums::ParallelType, extractor_config::ExtractorConfig, sinker_config::SinkerConfig,
+    task_config::TaskConfig,
+};
 use strum::AsStaticRef;
 
 pub struct TestConfigUtil {}
@@ -80,6 +83,81 @@ impl TestConfigUtil {
             (PIPELINE, PARALLEL_SIZE, "2"),
             (SINKER, BATCH_SIZE, "2"),
         ])
+    }
+
+    pub fn update_task_config_log_dir(
+        src_task_config_file: &str,
+        dst_task_config_file: &str,
+        project_root: &str,
+    ) -> (String, String, String) {
+        let config = TaskConfig::new(&src_task_config_file);
+        let mut update_configs = Vec::new();
+
+        // runtime/log4rs_file
+        let log4rs_file = format!("{}/{}", project_root, config.runtime.log4rs_file);
+        update_configs.push((
+            "runtime".to_string(),
+            "log4rs_file".to_string(),
+            log4rs_file,
+        ));
+
+        // runtime/log_dir
+        let log_dir = format!("{}/{}", project_root, config.runtime.log_dir);
+        update_configs.push((
+            "runtime".to_string(),
+            "log_dir".to_string(),
+            log_dir.clone(),
+        ));
+
+        // extractor/check_log_dir
+        let mut extractor_check_log_dir = String::new();
+        match config.extractor {
+            ExtractorConfig::MysqlCheck { check_log_dir, .. }
+            | ExtractorConfig::PgCheck { check_log_dir, .. } => {
+                extractor_check_log_dir = format!("{}/{}", project_root, check_log_dir);
+                update_configs.push((
+                    "extractor".to_string(),
+                    "check_log_dir".to_string(),
+                    extractor_check_log_dir.clone(),
+                ));
+            }
+            _ => {}
+        }
+
+        // sinker/check_log_dir
+        let mut sinker_check_log_dir = String::new();
+        match config.sinker {
+            SinkerConfig::MysqlCheck { check_log_dir, .. }
+            | SinkerConfig::PgCheck { check_log_dir, .. } => {
+                if let Some(dir) = check_log_dir {
+                    if !dir.is_empty() {
+                        sinker_check_log_dir = format!("{}/{}", project_root, dir);
+                        update_configs.push((
+                            "sinker".to_string(),
+                            "check_log_dir".to_string(),
+                            sinker_check_log_dir.clone(),
+                        ));
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        if sinker_check_log_dir.is_empty() {
+            sinker_check_log_dir = format!("{}/check", log_dir);
+        }
+
+        TestConfigUtil::update_task_config(
+            &src_task_config_file,
+            &dst_task_config_file,
+            &update_configs,
+        );
+
+        (
+            log_dir.clone(),
+            extractor_check_log_dir.clone(),
+            sinker_check_log_dir.clone(),
+        )
     }
 
     pub fn update_task_config(

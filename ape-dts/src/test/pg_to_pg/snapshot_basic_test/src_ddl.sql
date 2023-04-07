@@ -73,3 +73,6 @@ CREATE TABLE postgis_table (pk SERIAL, p GEOMETRY(POINT,3187), ml GEOGRAPHY(MULT
 
 DROP TABLE IF EXISTS postgis_array_table;
 CREATE TABLE postgis_array_table (pk SERIAL, ga GEOMETRY[], gann GEOMETRY[] , PRIMARY KEY(pk));
+
+DROP TABLE IF EXISTS timezone_table;
+CREATE TABLE timezone_table (pk SERIAL, t1 time, t2 timetz, t3 timestamp, t4 timestamptz, PRIMARY KEY(pk));

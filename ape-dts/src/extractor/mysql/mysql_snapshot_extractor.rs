@@ -3,13 +3,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 use futures::TryStreamExt;
-use log::info;
+
 use sqlx::{MySql, Pool};
 
 use crate::{
     adaptor::{mysql_col_value_convertor::MysqlColValueConvertor, sqlx_ext::SqlxMysqlExt},
     error::Error,
     extractor::extractor_util::ExtractorUtil,
+    info,
     meta::{
         col_value::ColValue,
         dt_data::DtData,

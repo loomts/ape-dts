@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     error::Error,
+    log::check_log::CheckLog,
     meta::{dt_data::DtData, row_data::RowData},
 };
 use async_trait::async_trait;
@@ -34,4 +35,9 @@ pub trait Extractor {
     async fn extract(&mut self) -> Result<(), Error>;
 
     async fn close(&mut self) -> Result<(), Error>;
+}
+
+#[async_trait]
+pub trait BatchCheckExtractor {
+    async fn batch_extract(&mut self, check_logs: &Vec<CheckLog>) -> Result<(), Error>;
 }
