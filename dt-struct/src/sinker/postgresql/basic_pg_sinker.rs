@@ -1,12 +1,13 @@
 use async_trait::async_trait;
-use dt_common::config::{router_config::RouterConfig, sinker_config::SinkerConfig};
-use sqlx::{postgres::PgPoolOptions, query, Error, Pool, Postgres};
+use dt_common::{
+    config::{router_config::RouterConfig, sinker_config::SinkerConfig},
+    meta::postgresql::pg_enums::ConstraintTypeEnum,
+};
+use sqlx::{postgres::PgPoolOptions, query, Pool, Postgres};
 
 use crate::{
-    meta::{
-        common::database_model::{Column, StructModel},
-        postgresql::pg_enums::ConstraintTypeEnum,
-    },
+    error::Error,
+    meta::common::database_model::{Column, StructModel},
     traits::StructSinker,
 };
 
@@ -23,7 +24,7 @@ impl StructSinker for PgStructSinker {
 
     async fn build_connection(&mut self) -> Result<(), Error> {
         match &self.sinker_config {
-            SinkerConfig::BasicStruct { url, db_type: _ } => {
+            SinkerConfig::BasicConfig { url, db_type: _ } => {
                 let db_pool = PgPoolOptions::new().connect(&url).await?;
                 self.pool = Option::Some(db_pool);
             }
@@ -36,7 +37,7 @@ impl StructSinker for PgStructSinker {
         let pg_pool: &Pool<Postgres>;
         match &self.pool {
             Some(p) => pg_pool = &p,
-            None => return Err(Error::PoolClosed),
+            None => return Err(Error::from(sqlx::Error::PoolClosed)),
         }
         match model {
             StructModel::TableModel {
@@ -63,7 +64,7 @@ impl StructSinker for PgStructSinker {
                                 sql,
                                 e.to_string()
                             );
-                            Err(e)
+                            Err(Error::from(e))
                         }
                     }
                 }
@@ -97,7 +98,7 @@ impl StructSinker for PgStructSinker {
                     Err(e) => {
                         return {
                             println!("add index sql:[{}],execute failed:{}", sql, e.to_string());
-                            Err(e)
+                            Err(Error::from(e))
                         }
                     }
                 }
@@ -132,7 +133,7 @@ impl StructSinker for PgStructSinker {
                                 sql,
                                 e.to_string()
                             );
-                            Err(e)
+                            Err(Error::from(e))
                         }
                     }
                 }

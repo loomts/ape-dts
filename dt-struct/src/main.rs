@@ -3,6 +3,7 @@ use factory::database_worker_builder::StructBuilder;
 use meta::common::database_model::StructModel;
 use std::env;
 
+mod error;
 mod extractor;
 mod factory;
 mod meta;
@@ -15,11 +16,9 @@ fn main() {
     if args.len() < 2 {
         panic!("no task_config provided in args");
     }
-    let task_config = args[1].clone();
-    // let task_config = String::from(
-    //     "/Users/caiqinyu/Desktop/Project/rust/ape-dts/dt-struct/src/test/task_config.ini",
-    // );
-    let task_config = TaskConfig::new(&task_config);
+    let config = args[1].clone();
+
+    let task_config = TaskConfig::new(&config);
 
     let builder = StructBuilder {
         extractor_config: task_config.extractor,

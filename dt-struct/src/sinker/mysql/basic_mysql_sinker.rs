@@ -1,8 +1,9 @@
 use async_trait::async_trait;
 use dt_common::config::{router_config::RouterConfig, sinker_config::SinkerConfig};
-use sqlx::{mysql::MySqlPoolOptions, query, Error, MySql, Pool};
+use sqlx::{mysql::MySqlPoolOptions, query, MySql, Pool};
 
 use crate::{
+    error::Error,
     meta::common::database_model::{Column, IndexKind, StructModel},
     traits::StructSinker,
 };
@@ -20,7 +21,7 @@ impl StructSinker for MySqlStructSinker {
 
     async fn build_connection(&mut self) -> Result<(), Error> {
         match &self.sinker_config {
-            SinkerConfig::BasicStruct { url, db_type: _ } => {
+            SinkerConfig::BasicConfig { url, db_type: _ } => {
                 let db_pool = MySqlPoolOptions::new().connect(&url).await?;
                 self.pool = Option::Some(db_pool);
             }
@@ -33,7 +34,7 @@ impl StructSinker for MySqlStructSinker {
         let mysql_pool: &Pool<MySql>;
         match &self.pool {
             Some(p) => mysql_pool = &p,
-            None => return Err(Error::PoolClosed),
+            None => return Err(Error::from(sqlx::Error::PoolClosed)),
         }
         match model {
             StructModel::TableModel {
@@ -85,7 +86,7 @@ impl StructSinker for MySqlStructSinker {
                                 sql,
                                 e.to_string()
                             );
-                            Err(e)
+                            Err(Error::from(e))
                         }
                     }
                 }
@@ -165,7 +166,7 @@ impl StructSinker for MySqlStructSinker {
                                 sql,
                                 e.to_string()
                             );
-                            Err(e)
+                            Err(Error::from(e))
                         }
                     }
                 }
@@ -206,7 +207,7 @@ impl StructSinker for MySqlStructSinker {
                                 sql,
                                 e.to_string()
                             );
-                            Err(e)
+                            Err(Error::from(e))
                         }
                     }
                 }

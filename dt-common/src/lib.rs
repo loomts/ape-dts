@@ -1,6 +1,7 @@
 pub mod config;
 pub mod error;
 pub mod meta;
+pub mod utils;
 
 pub fn add(left: usize, right: usize) -> usize {
     left + right

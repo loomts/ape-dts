@@ -49,10 +49,12 @@ impl StructBuilder {
         sinker.build_connection().await.unwrap();
         tokio::join!(
             async {
+                extractor.get_sequence().await.unwrap();
                 extractor.get_table().await.unwrap();
                 extractor.get_constraint().await.unwrap();
                 extractor.get_index().await.unwrap();
                 extractor.get_comment().await.unwrap();
+
                 extractor.set_finished().unwrap();
             },
             async {
@@ -84,7 +86,7 @@ impl StructBuilder {
         finished_flag: Arc<AtomicBool>,
     ) -> Result<Box<dyn StructExtrator + 'a + Send>, Error> {
         let extractor: Box<dyn StructExtrator + Send> = match &self.extractor_config {
-            ExtractorConfig::BasicStruct { url: _, db_type } => match db_type {
+            ExtractorConfig::BasicConfig { url: _, db_type } => match db_type {
                 DbType::Mysql => Box::new(MySqlStructExtractor {
                     pool: Option::None,
                     struct_obj_queue: queue,
@@ -110,7 +112,7 @@ impl StructBuilder {
 
     pub async fn build_sinker(&self) -> Result<Box<dyn StructSinker + Send>, Error> {
         let sinker: Box<dyn StructSinker + Send> = match &self.sinker_config {
-            SinkerConfig::BasicStruct { url: _, db_type } => match db_type {
+            SinkerConfig::BasicConfig { url: _, db_type } => match db_type {
                 DbType::Mysql => Box::new(MySqlStructSinker {
                     pool: Option::None,
                     sinker_config: self.sinker_config.clone(),
