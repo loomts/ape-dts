@@ -8,6 +8,7 @@ use sqlx::{Pool, Postgres};
 
 use crate::{
     adaptor::{pg_col_value_convertor::PgColValueConvertor, sqlx_ext::SqlxPgExt},
+    common::sql_util::SqlUtil,
     error::Error,
     extractor::extractor_util::ExtractorUtil,
     info,
@@ -154,12 +155,8 @@ impl PgSnapshotExtractor<'_> {
     }
 
     fn build_extract_sql(&mut self, tb_meta: &PgTbMeta, has_start_value: bool) -> String {
-        let mut cols = Vec::new();
-        for col in &tb_meta.basic.cols {
-            let extract_col = Self::build_extract_col(&col, tb_meta);
-            cols.push(extract_col);
-        }
-        let cols_str = cols.join(",");
+        let sql_util = SqlUtil::new_for_pg(tb_meta);
+        let cols_str = sql_util.build_extract_cols_str().unwrap();
 
         // SELECT col_1, col_2::text FROM tb_1 WHERE col_1 > $1 ORDER BY col_1;
         if let Some(order_col) = &tb_meta.basic.order_col {
@@ -183,16 +180,6 @@ impl PgSnapshotExtractor<'_> {
             }
         } else {
             return format!("SELECT {} FROM {}.{}", cols_str, self.schema, self.tb);
-        }
-    }
-
-    fn build_extract_col(col: &str, tb_meta: &PgTbMeta) -> String {
-        let col_type = tb_meta.col_type_map.get(col).unwrap();
-        let extract_type = PgColValueConvertor::get_extract_type(col_type);
-        if extract_type.is_empty() {
-            col.to_string()
-        } else {
-            format!("{}::{}", col, extract_type)
         }
     }
 }
