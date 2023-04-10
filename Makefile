@@ -1,6 +1,6 @@
 # IMG ?= apecloud/ape-dts
-BUILD_IMG ?= caiqynb/ape-dts-env
-RELASE_IMG ?= caiqynb/ape-dts
+BUILD_IMG ?= apecloud/ape-dts-env
+RELASE_IMG ?= apecloud/ape-dts
 VERSION ?= 0.1
 CONFIG_PATH ?= ./images/example/mysql_snapshot_sample.yaml
 MODULE_NAME ?= ape-dts
