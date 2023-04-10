@@ -3,5 +3,6 @@
 members = [
     "ape-dts",
     "dt-common",
-    "dt-struct"
+    "dt-struct",
+    "dt-precheck"
 ]

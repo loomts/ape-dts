@@ -82,7 +82,7 @@ impl TaskConfig {
                     batch_size: ini.getuint(EXTRACTOR, BATCH_SIZE).unwrap().unwrap() as usize,
                 }),
 
-                ExtractType::Struct => Ok(ExtractorConfig::BasicStruct { url, db_type }),
+                ExtractType::Basic => Ok(ExtractorConfig::BasicConfig { url, db_type }),
             },
 
             DbType::Pg => match extract_type {
@@ -108,7 +108,7 @@ impl TaskConfig {
                     batch_size: ini.getuint(EXTRACTOR, BATCH_SIZE).unwrap().unwrap() as usize,
                 }),
 
-                ExtractType::Struct => Ok(ExtractorConfig::BasicStruct { url, db_type }),
+                ExtractType::Basic => Ok(ExtractorConfig::BasicConfig { url, db_type }),
             },
         }
     }
@@ -129,7 +129,7 @@ impl TaskConfig {
                     check_log_dir: ini.get(SINKER, CHECK_LOG_DIR),
                 }),
 
-                SinkType::Struct => Ok(SinkerConfig::BasicStruct { url, db_type }),
+                SinkType::Basic => Ok(SinkerConfig::BasicConfig { url, db_type }),
             },
 
             DbType::Pg => match sink_type {
@@ -141,7 +141,7 @@ impl TaskConfig {
                     check_log_dir: ini.get(SINKER, CHECK_LOG_DIR),
                 }),
 
-                SinkType::Struct => Ok(SinkerConfig::BasicStruct { url, db_type }),
+                SinkType::Basic => Ok(SinkerConfig::BasicConfig { url, db_type }),
             },
         }
     }

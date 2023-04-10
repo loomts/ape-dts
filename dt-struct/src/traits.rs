@@ -1,7 +1,6 @@
 use async_trait::async_trait;
-use sqlx::Error;
 
-use crate::meta::common::database_model::StructModel;
+use crate::{error::Error, meta::common::database_model::StructModel};
 
 #[async_trait]
 pub trait StructExtrator {
@@ -9,6 +8,7 @@ pub trait StructExtrator {
     fn is_finished(&self) -> Result<bool, Error>;
 
     async fn build_connection(&mut self) -> Result<(), Error>;
+    async fn get_sequence(&self) -> Result<(), Error>;
     async fn get_table(&self) -> Result<(), Error>;
     async fn get_constraint(&self) -> Result<(), Error>;
     async fn get_index(&self) -> Result<(), Error>;

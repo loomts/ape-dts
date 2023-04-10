@@ -4,6 +4,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
+    time::Duration,
 };
 
 use async_trait::async_trait;
@@ -15,10 +16,11 @@ use dt_common::{
 use futures::TryStreamExt;
 use sqlx::{
     postgres::{PgPoolOptions, PgRow},
-    query, Error, Pool, Postgres, Row,
+    query, Pool, Postgres, Row,
 };
 
 use crate::{
+    error::Error,
     meta::common::{
         col_model::ColType,
         database_model::{Column, IndexKind, StructModel},
@@ -54,8 +56,12 @@ impl StructExtrator for PgStructExtractor<'_> {
 
     async fn build_connection(&mut self) -> Result<(), Error> {
         match &self.source_config {
-            ExtractorConfig::BasicStruct { url, db_type: _ } => {
-                let db_pool = PgPoolOptions::new().max_connections(8).connect(url).await?;
+            ExtractorConfig::BasicConfig { url, db_type: _ } => {
+                let db_pool = PgPoolOptions::new()
+                    .max_connections(8)
+                    .acquire_timeout(Duration::from_secs(5))
+                    .connect(url)
+                    .await?;
                 self.pool = Option::Some(db_pool);
             }
             _ => {}
@@ -63,11 +69,17 @@ impl StructExtrator for PgStructExtractor<'_> {
         Ok(())
     }
 
+    async fn get_sequence(&self) -> Result<(), Error> {
+        // Todo: support Serial
+
+        Ok(())
+    }
+
     async fn get_table(&self) -> Result<(), Error> {
         let pg_pool: &Pool<Postgres>;
         match &self.pool {
             Some(pool) => pg_pool = pool,
-            None => return Err(Error::PoolClosed),
+            None => return Err(Error::from(sqlx::Error::PoolClosed)),
         }
         let mut db_tables: Vec<DbTable> = Vec::new();
         match &self.filter_config {
@@ -206,7 +218,7 @@ impl StructExtrator for PgStructExtractor<'_> {
         let pg_pool: &Pool<Postgres>;
         match &self.pool {
             Some(pool) => pg_pool = pool,
-            None => return Err(Error::PoolClosed),
+            None => return Err(Error::from(sqlx::Error::PoolClosed)),
         }
         let mut db_tables: Vec<DbTable> = Vec::new();
         match &self.filter_config {
@@ -280,7 +292,7 @@ impl StructExtrator for PgStructExtractor<'_> {
         let pg_pool: &Pool<Postgres>;
         match &self.pool {
             Some(pool) => pg_pool = pool,
-            None => return Err(Error::PoolClosed),
+            None => return Err(Error::from(sqlx::Error::PoolClosed)),
         }
         let mut db_tables: Vec<DbTable> = Vec::new();
         match &self.filter_config {
@@ -349,7 +361,7 @@ impl StructExtrator for PgStructExtractor<'_> {
         let pg_pool: &Pool<Postgres>;
         match &self.pool {
             Some(pool) => pg_pool = pool,
-            None => return Err(Error::PoolClosed),
+            None => return Err(Error::from(sqlx::Error::PoolClosed)),
         }
         let mut db_tables: Vec<DbTable> = Vec::new();
         match &self.filter_config {

@@ -2,7 +2,7 @@ use crate::meta::db_enums::DbType;
 
 #[derive(Clone)]
 pub enum ExtractorConfig {
-    BasicStruct {
+    BasicConfig {
         url: String,
         db_type: DbType,
     },

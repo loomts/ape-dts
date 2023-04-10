@@ -8,8 +8,8 @@ pub enum ExtractType {
     Cdc,
     #[strum(serialize = "check_log")]
     CheckLog,
-    #[strum(serialize = "struct")]
-    Struct,
+    #[strum(serialize = "basic")]
+    Basic,
 }
 
 #[derive(EnumString, AsStaticStr)]
@@ -18,8 +18,8 @@ pub enum SinkType {
     Write,
     #[strum(serialize = "check")]
     Check,
-    #[strum(serialize = "struct")]
-    Struct,
+    #[strum(serialize = "basic")]
+    Basic,
 }
 
 #[derive(EnumString, AsStaticStr)]

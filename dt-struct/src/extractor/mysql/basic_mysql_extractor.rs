@@ -4,6 +4,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
+    time::Duration,
 };
 
 use concurrent_queue::ConcurrentQueue;
@@ -12,11 +13,12 @@ use dt_common::{
     meta::db_table_model::DbTable,
 };
 use futures::TryStreamExt;
-use sqlx::{error::Error, mysql::*, query, Pool, Row};
+use sqlx::{mysql::*, query, Pool, Row};
 
 use async_trait::async_trait;
 
 use crate::{
+    error::Error,
     meta::common::database_model::{Column, IndexColumn, IndexKind, StructModel},
     traits::StructExtrator,
     utils::queue_operator::QueueOperator,
@@ -50,9 +52,10 @@ impl StructExtrator for MySqlStructExtractor<'_> {
 
     async fn build_connection(&mut self) -> Result<(), Error> {
         match &self.source_config {
-            ExtractorConfig::BasicStruct { url, db_type: _ } => {
+            ExtractorConfig::BasicConfig { url, db_type: _ } => {
                 let db_pool = MySqlPoolOptions::new()
                     .max_connections(8)
+                    .acquire_timeout(Duration::from_secs(5))
                     .connect(&url)
                     .await?;
                 self.pool = Option::Some(db_pool);
@@ -62,12 +65,16 @@ impl StructExtrator for MySqlStructExtractor<'_> {
         Ok(())
     }
 
+    async fn get_sequence(&self) -> Result<(), Error> {
+        Ok(())
+    }
+
     // Create Table: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
     async fn get_table(&self) -> Result<(), Error> {
         let mysql_pool: &Pool<MySql>;
         match &self.pool {
             Some(pool) => mysql_pool = pool,
-            None => return Err(Error::PoolClosed),
+            None => return Err(Error::from(sqlx::Error::PoolClosed)),
         }
         let mut models: Vec<DbTable> = Vec::new();
         match &self.filter_config {
@@ -220,7 +227,7 @@ impl StructExtrator for MySqlStructExtractor<'_> {
         let mysql_pool: &Pool<MySql>;
         match &self.pool {
             Some(pool) => mysql_pool = pool,
-            None => return Err(Error::PoolClosed),
+            None => return Err(Error::from(sqlx::Error::PoolClosed)),
         }
         let mut models: Vec<DbTable> = Vec::new();
         match &self.filter_config {
@@ -246,7 +253,7 @@ impl StructExtrator for MySqlStructExtractor<'_> {
         let sql = format!("select table_schema,table_name,non_unique,index_name, seq_in_index,column_name,index_type,is_visible,comment from information_schema.statistics 
          where index_name != 'PRIMARY' and table_schema in ({}) order by table_schema, table_name, index_name", 
             all_db_names.iter().map(|x| format!("'{}'",x)).collect::<Vec<_>>().join(","));
-        println!("get_index_sql:{}", sql);
+        println!("mysql get_index_sql:{}", sql);
         let mut rows = query(sql.as_str()).fetch(mysql_pool);
 
         let mut index_map: HashMap<String, StructModel> = HashMap::new();
