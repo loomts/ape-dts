@@ -330,7 +330,7 @@ impl SqlUtil<'_> {
         Ok((sql, cols, binds))
     }
 
-    fn build_extract_cols_str(&self) -> Result<String, Error> {
+    pub fn build_extract_cols_str(&self) -> Result<String, Error> {
         if let Some(tb_meta) = self.pg_tb_meta {
             let mut extract_cols = Vec::new();
             for col in self.rdb_tb_meta.cols.iter() {

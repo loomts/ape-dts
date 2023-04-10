@@ -12,7 +12,9 @@ use std::{
 };
 
 use crate::{
+    common::sql_util::SqlUtil,
     error::Error,
+    meta::pg::pg_meta_manager::PgMetaManager,
     task::{task_runner::TaskRunner, task_util::TaskUtil},
 };
 
@@ -610,17 +612,23 @@ impl TestRunner {
         cols: &Vec<String>,
         conn_pool: &Pool<Postgres>,
     ) -> Result<Vec<Vec<Option<Vec<u8>>>>, Error> {
-        let mut extract_cols = Vec::new();
-        for col in cols {
-            extract_cols.push(format!("{}::text", col));
+        let mut db = "public";
+        let mut tb = tb;
+        let tokens: Vec<&str> = tb.split(".").collect();
+        if tokens.len() > 1 {
+            db = tokens[0];
+            tb = tokens[1];
         }
-        let sql = format!(
-            "SELECT {} FROM {} ORDER BY {} ASC",
-            extract_cols.join(","),
-            tb,
-            cols[0]
-        );
 
+        let mut meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
+        let tb_meta = meta_manager.get_tb_meta(db, tb).await?;
+        let sql_util = SqlUtil::new_for_pg(&tb_meta);
+        let cols_str = sql_util.build_extract_cols_str().unwrap();
+
+        let sql = format!(
+            "SELECT {} FROM {}.{} ORDER BY {} ASC",
+            cols_str, db, tb, cols[0]
+        );
         let query = sqlx::query(&sql);
         let mut rows = query.fetch(conn_pool);
 
