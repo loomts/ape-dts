@@ -138,6 +138,45 @@ impl StructSinker for PgStructSinker {
                     }
                 }
             }
+            StructModel::SequenceModel {
+                sequence_name,
+                database_name: _,
+                schema_name,
+                data_type,
+                start_value,
+                increment,
+                min_value,
+                max_value,
+                is_circle,
+            } => {
+                let mut cycle_str = String::from("NO CYCLE");
+                if is_circle.to_lowercase() == "yes" {
+                    cycle_str = String::from("CYCLE");
+                }
+                let create_sql = format!("CREATE SEQUENCE {}.{} AS {} START {} INCREMENT by {} MINVALUE {} MAXVALUE {} {}", schema_name, sequence_name, data_type, start_value, increment, min_value, max_value, cycle_str);
+                match query(&create_sql).execute(pg_pool).await {
+                    Ok(_) => {
+                        return {
+                            println!(
+                                "add sequence:[{}], sql:[{}],execute success",
+                                sequence_name, create_sql
+                            );
+                            Ok(())
+                        }
+                    }
+                    Err(e) => {
+                        return {
+                            println!(
+                                "add sequence:[{}], sql:[{}],execute failed:{}",
+                                sequence_name,
+                                create_sql,
+                                e.to_string()
+                            );
+                            Err(Error::from(e))
+                        }
+                    }
+                }
+            }
             _ => {}
         }
         Ok(())

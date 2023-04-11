@@ -44,6 +44,17 @@ pub enum StructModel {
         column_name: String,
         comment: String,
     },
+    SequenceModel {
+        sequence_name: String,
+        database_name: String,
+        schema_name: String,
+        data_type: String,
+        start_value: String,
+        increment: String,
+        min_value: String,
+        max_value: String,
+        is_circle: String,
+    },
     ViewModel {},
 }
 
