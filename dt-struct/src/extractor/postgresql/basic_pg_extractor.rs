@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -31,7 +31,7 @@ use crate::{
 
 // Refer to: https://github.com/MichaelDBA/pg_get_tabledef/blob/main/pg_get_tabledef.sql
 // Todo: character_set, partition
-// not support column type: serial, text[][]
+// not support column type: text[][]
 pub struct PgStructExtractor<'a> {
     pub pool: Option<Pool<Postgres>>,
     pub struct_obj_queue: &'a ConcurrentQueue<StructModel>,
@@ -70,8 +70,104 @@ impl StructExtrator for PgStructExtractor<'_> {
     }
 
     async fn get_sequence(&self) -> Result<(), Error> {
-        // Todo: support Serial
+        let pg_pool: &Pool<Postgres>;
+        match &self.pool {
+            Some(pool) => pg_pool = pool,
+            None => return Err(Error::from(sqlx::Error::PoolClosed)),
+        }
+        let mut db_tables: Vec<DbTable> = Vec::new();
+        match &self.filter_config {
+            FilterConfig::Rdb {
+                do_dbs,
+                ignore_dbs: _,
+                do_tbs,
+                ignore_tbs: _,
+                do_events: _,
+            } => {
+                if !do_tbs.is_empty() {
+                    DbTable::from_str(do_tbs, &mut db_tables)
+                } else if !do_dbs.is_empty() {
+                    DbTable::from_str(do_dbs, &mut db_tables)
+                }
+            }
+        }
+        let (schemas, tb_schemas, tbs) = DbTable::get_config_maps(&db_tables).unwrap();
+        let mut all_schemas = Vec::new();
+        all_schemas.extend(&schemas);
+        all_schemas.extend(&tb_schemas);
+        if all_schemas.len() <= 0 {
+            println!("found no schema need to do migrate");
+            return Ok(());
+        }
 
+        let mut table_used_seqs: HashSet<String> = HashSet::new();
+        let mut models: Vec<StructModel> = Vec::new();
+
+        let table_sql = format!("SELECT c.table_schema,c.table_name,c.column_name, c.data_type, c.column_default  
+        FROM information_schema.columns c where table_schema in ({}) and column_default is not null and column_default like 'nextval(%'
+        ", all_schemas.iter().map(|x| format!("'{}'", x)).collect::<Vec<String>>().join(","));
+        println!("pg query sequence used by table sql: {}", table_sql);
+        let mut rows = query(&table_sql).fetch(pg_pool);
+        while let Some(row) = rows.try_next().await? {
+            let (schema_name, table_name): (String, String) = (
+                PgStructExtractor::get_str_with_null(&row, "table_schema").unwrap(),
+                PgStructExtractor::get_str_with_null(&row, "table_name").unwrap(),
+            );
+            if schema_name.is_empty() && table_name.is_empty() {
+                continue;
+            }
+            let schema_table_name = format!("{}.{}", schema_name, table_name);
+            if !tbs.contains(&schema_table_name) && !schemas.contains(&schema_name) {
+                continue;
+            }
+            // build with default_value, such as nextval('table_test_name_seq'::regclass), find seq name
+            match PgStructExtractor::get_seq_name_by_default_value(
+                PgStructExtractor::get_str_with_null(&row, "column_default").unwrap(),
+            ) {
+                Some(seq_name) => table_used_seqs.insert(seq_name),
+                None => false,
+            };
+        }
+        if table_used_seqs.len() > 0 {
+            // query target seq
+            let seq_sql = format!("select sequence_catalog,sequence_schema,sequence_name,data_type,start_value,minimum_value,maximum_value,increment,cycle_option 
+            from information_schema.sequences where sequence_schema in ({})", all_schemas.iter().map(|x| format!("'{}'", x)).collect::<Vec<String>>().join(","));
+            println!("pg query sequence sql: {}", seq_sql);
+            let mut rows = query(&seq_sql).fetch(pg_pool);
+            while let Some(row) = rows.try_next().await? {
+                let (schema_name, seq_name): (String, String) = (
+                    PgStructExtractor::get_str_with_null(&row, "sequence_schema").unwrap(),
+                    PgStructExtractor::get_str_with_null(&row, "sequence_name").unwrap(),
+                );
+                if schema_name.is_empty() || seq_name.is_empty() {
+                    continue;
+                }
+                if !table_used_seqs.contains(&seq_name) || !all_schemas.contains(&&schema_name) {
+                    continue;
+                }
+                models.push(StructModel::SequenceModel {
+                    sequence_name: seq_name,
+                    database_name: PgStructExtractor::get_str_with_null(&row, "sequence_catalog")
+                        .unwrap(),
+                    schema_name,
+                    data_type: PgStructExtractor::get_str_with_null(&row, "data_type").unwrap(),
+                    start_value: row.get("start_value"),
+                    increment: row.get("increment"),
+                    min_value: row.get("minimum_value"),
+                    max_value: row.get("maximum_value"),
+                    is_circle: PgStructExtractor::get_str_with_null(&row, "cycle_option").unwrap(),
+                })
+            }
+        } else {
+            println!("find no table used sequence")
+        }
+        if models.len() > 0 {
+            for model in &models {
+                let _ =
+                    QueueOperator::push_to_queue(&self.struct_obj_queue, model.clone(), 1).await;
+            }
+        }
+        println!("get sequence finished");
         Ok(())
     }
 
@@ -524,5 +620,22 @@ impl PgStructExtractor<'_> {
             None => {}
         }
         None
+    }
+
+    fn get_seq_name_by_default_value(default_value: String) -> Option<String> {
+        // default_value: nextval('table_test_name_seq'::regclass) or nextval('table_test_name_seq')
+        if default_value.is_empty() || !default_value.starts_with("nextval(") {
+            return None;
+        }
+        let arr_tmp: Vec<&str> = default_value.split("'").collect();
+        if arr_tmp.len() != 3 {
+            println!(
+                "default_value:[{}] is like a sequence used, but not valid in process.",
+                default_value
+            );
+            return None;
+        }
+        let seq_name = arr_tmp[1];
+        Some(seq_name.to_string())
     }
 }

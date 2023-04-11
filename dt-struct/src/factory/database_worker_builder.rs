@@ -14,6 +14,7 @@ use dt_common::{
 };
 
 use crate::{
+    config::struct_config::{ConflictPolicyEnum, StructConfig},
     extractor::{
         mysql::basic_mysql_extractor::MySqlStructExtractor,
         postgresql::basic_pg_extractor::PgStructExtractor,
@@ -30,6 +31,7 @@ pub struct StructBuilder {
     pub sinker_config: SinkerConfig,
     pub filter_config: FilterConfig,
     pub router_config: RouterConfig,
+    pub struct_config: StructConfig,
 }
 
 impl StructBuilder {
@@ -61,7 +63,11 @@ impl StructBuilder {
                 while !extractor.is_finished().unwrap() || !struct_obj_queue.is_empty() {
                     match &mut struct_obj_queue.pop() {
                         Ok(model) => {
-                            let _ = sinker.sink_from_queue(model).await;
+                            let result = sinker.sink_from_queue(model).await;
+                            match self.struct_config.conflict_policy {
+                                ConflictPolicyEnum::Ignore => {}
+                                ConflictPolicyEnum::Interrupt => result.unwrap(),
+                            }
                         }
                         Err(e) => {
                             match e {
@@ -70,6 +76,7 @@ impl StructBuilder {
                                 }
                                 _ => {
                                     println!("pop from queue meet error:{}", e);
+                                    panic!();
                                 }
                             }
                             tokio::time::sleep(Duration::from_millis(1)).await;

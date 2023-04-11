@@ -12,3 +12,5 @@ async-trait = "0.1.64"
 tokio = { version = "1.25.0", features = ["full"] }
 concurrent-queue = "2.0.0"
 futures = "0.3.25"
+strum = { version = "0.21.0", features = ["derive"] }
+configparser = "3.0.2"
