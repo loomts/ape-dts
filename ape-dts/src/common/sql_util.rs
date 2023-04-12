@@ -97,9 +97,9 @@ impl SqlUtil<'_> {
 
         let sql = format!(
             "DELETE FROM {}.{} WHERE ({}) IN ({})",
-            self.rdb_tb_meta.schema,
-            self.rdb_tb_meta.tb,
-            self.rdb_tb_meta.id_cols.join(","),
+            self.quote(&self.rdb_tb_meta.schema),
+            self.quote(&self.rdb_tb_meta.tb),
+            self.quote_cols(&self.rdb_tb_meta.id_cols).join(","),
             all_placeholders.join(",")
         );
 
@@ -144,9 +144,9 @@ impl SqlUtil<'_> {
 
         let sql = format!(
             "INSERT INTO {}.{}({}) VALUES{}",
-            self.rdb_tb_meta.schema,
-            self.rdb_tb_meta.tb,
-            self.rdb_tb_meta.cols.join(","),
+            self.quote(&self.rdb_tb_meta.schema),
+            self.quote(&self.rdb_tb_meta.tb),
+            self.quote_cols(&self.rdb_tb_meta.cols).join(","),
             row_values.join(",")
         );
 
@@ -174,9 +174,9 @@ impl SqlUtil<'_> {
 
         let sql = format!(
             "INSERT INTO {}.{}({}) VALUES({})",
-            self.rdb_tb_meta.schema,
-            self.rdb_tb_meta.tb,
-            self.rdb_tb_meta.cols.join(","),
+            self.quote(&self.rdb_tb_meta.schema),
+            self.quote(&self.rdb_tb_meta.tb),
+            self.quote_cols(&self.rdb_tb_meta.cols).join(","),
             col_values.join(",")
         );
 
@@ -198,7 +198,9 @@ impl SqlUtil<'_> {
         let (where_sql, not_null_cols) = self.get_where_info(1, &before)?;
         let mut sql = format!(
             "DELETE FROM {}.{} WHERE {}",
-            self.rdb_tb_meta.schema, self.rdb_tb_meta.tb, where_sql
+            self.quote(&self.rdb_tb_meta.schema),
+            self.quote(&self.rdb_tb_meta.tb),
+            where_sql
         );
         if self.rdb_tb_meta.key_map.is_empty() {
             sql += " LIMIT 1";
@@ -227,7 +229,7 @@ impl SqlUtil<'_> {
             set_cols.push(col.clone());
             set_pairs.push(format!(
                 "{}={}",
-                col,
+                self.quote(col),
                 self.get_placeholder(placeholder_index, col)
             ));
             placeholder_index += 1;
@@ -245,8 +247,8 @@ impl SqlUtil<'_> {
         let (where_sql, not_null_cols) = self.get_where_info(placeholder_index, &before)?;
         let mut sql = format!(
             "UPDATE {}.{} SET {} WHERE {}",
-            self.rdb_tb_meta.schema,
-            self.rdb_tb_meta.tb,
+            self.quote(&self.rdb_tb_meta.schema),
+            self.quote(&self.rdb_tb_meta.tb),
             set_pairs.join(","),
             where_sql,
         );
@@ -275,8 +277,8 @@ impl SqlUtil<'_> {
         let mut sql = format!(
             "SELECT {} FROM {}.{} WHERE {}",
             self.build_extract_cols_str()?,
-            self.rdb_tb_meta.schema,
-            self.rdb_tb_meta.tb,
+            self.quote(&self.rdb_tb_meta.schema),
+            self.quote(&self.rdb_tb_meta.tb),
             where_sql,
         );
 
@@ -337,9 +339,9 @@ impl SqlUtil<'_> {
                 let col_type = tb_meta.col_type_map.get(col).unwrap();
                 let extract_type = PgColValueConvertor::get_extract_type(col_type);
                 let extract_col = if extract_type.is_empty() {
-                    col.to_string()
+                    self.quote(col)
                 } else {
-                    format!("{}::{}", col, extract_type)
+                    format!("{}::{}", self.quote(col), extract_type)
                 };
                 extract_cols.push(extract_col);
             }
@@ -361,21 +363,22 @@ impl SqlUtil<'_> {
                 where_sql += " AND";
             }
 
+            let quoted_col = self.quote(&col);
             let col_value = col_value_map.get(col);
             if let Some(value) = col_value {
                 if *value == ColValue::None {
-                    where_sql = format!("{} {} IS NULL", where_sql, col);
+                    where_sql = format!("{} {} IS NULL", where_sql, quoted_col);
                 } else {
                     where_sql = format!(
                         "{} {} = {}",
                         where_sql,
-                        col,
+                        quoted_col,
                         self.get_placeholder(placeholder_index, col)
                     );
                     not_null_cols.push(col.clone());
                 }
             } else {
-                where_sql = format!("{} {} IS NULL", where_sql, col);
+                where_sql = format!("{} {} IS NULL", where_sql, quoted_col);
             }
 
             placeholder_index += 1;
@@ -397,7 +400,7 @@ impl SqlUtil<'_> {
 
         Ok(format!(
             "({}) IN ({})",
-            self.rdb_tb_meta.id_cols.join(","),
+            self.quote_cols(&self.rdb_tb_meta.id_cols).join(","),
             all_placeholders.join(",")
         ))
     }
@@ -416,5 +419,20 @@ impl SqlUtil<'_> {
         }
 
         "?".to_string()
+    }
+
+    pub fn quote(&self, origin: &str) -> String {
+        if let Some(_tb_meta) = self.pg_tb_meta {
+            return format!(r#""{}""#, origin);
+        }
+        format!(r#"`{}`"#, origin)
+    }
+
+    pub fn quote_cols(&self, cols: &Vec<String>) -> Vec<String> {
+        let mut quoted_cols = Vec::new();
+        for col in cols {
+            quoted_cols.push(self.quote(col));
+        }
+        quoted_cols
     }
 }

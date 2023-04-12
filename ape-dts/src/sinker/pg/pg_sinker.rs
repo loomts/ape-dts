@@ -145,7 +145,7 @@ impl PgSinker {
         for col in tb_meta.basic.cols.iter() {
             let set_pair = format!(
                 "{}={}",
-                col,
+                sql_util.quote(&col),
                 sql_util.get_placeholder(placeholder_index, col)
             );
             set_pairs.push(set_pair);
@@ -157,7 +157,7 @@ impl PgSinker {
         sql = format!(
             "{} ON CONFLICT ({}) DO UPDATE SET {}",
             sql,
-            tb_meta.basic.id_cols.join(","),
+            sql_util.quote_cols(&tb_meta.basic.id_cols).join(","),
             set_pairs.join(",")
         );
         Ok((sql, cols, binds))

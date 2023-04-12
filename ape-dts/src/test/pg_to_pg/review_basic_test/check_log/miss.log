@@ -1,3 +1,5 @@
-public,default_table,pk,2,10
-public,default_table,pk,2,12
-public,default_table,pk,2,11
+6,public|13,default_table|2,pk|2,10
+6,public|13,default_table|2,pk|2,12
+6,public|13,default_table|2,pk|2,11
+6,public|31,col_has_special_character_table|5,p,k,1|11,pk1,value,3|5,p\k&2|11,pk2,value,3
+6,public|31,col_has_special_character_table|5,p,k,1|11,pk1,value,5|5,p\k&2|11,pk2,value,5

@@ -561,7 +561,7 @@ impl TestRunner {
         let data = if let Some(pool) = conn_pool_mysql {
             self.fetch_data_mysql(tb, cols, pool).await?
         } else if let Some(pool) = conn_pool_pg {
-            self.fetch_data_pg(tb, cols, pool).await?
+            self.fetch_data_pg(tb, pool).await?
         } else {
             Vec::new()
         };
@@ -576,7 +576,7 @@ impl TestRunner {
         let data = if let Some(pool) = &self.dst_conn_pool_mysql {
             self.fetch_data_mysql(tb, cols, pool).await?
         } else if let Some(pool) = &self.dst_conn_pool_pg {
-            self.fetch_data_pg(tb, cols, pool).await?
+            self.fetch_data_pg(tb, pool).await?
         } else {
             Vec::new()
         };
@@ -609,7 +609,6 @@ impl TestRunner {
     async fn fetch_data_pg(
         &self,
         tb: &str,
-        cols: &Vec<String>,
         conn_pool: &Pool<Postgres>,
     ) -> Result<Vec<Vec<Option<Vec<u8>>>>, Error> {
         let mut db = "public";
@@ -622,12 +621,16 @@ impl TestRunner {
 
         let mut meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
         let tb_meta = meta_manager.get_tb_meta(db, tb).await?;
+        let cols = &tb_meta.basic.cols;
         let sql_util = SqlUtil::new_for_pg(&tb_meta);
         let cols_str = sql_util.build_extract_cols_str().unwrap();
 
         let sql = format!(
             "SELECT {} FROM {}.{} ORDER BY {} ASC",
-            cols_str, db, tb, cols[0]
+            cols_str,
+            db,
+            tb,
+            sql_util.quote(&cols[0])
         );
         let query = sqlx::query(&sql);
         let mut rows = query.fetch(conn_pool);

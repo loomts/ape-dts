@@ -148,3 +148,10 @@ INSERT INTO timezone_table VALUES(1, now(), now(), now(), now());
 INSERT INTO timezone_table VALUES(2, NULL, NULL, NULL, NULL);
 UPDATE timezone_table SET t1=NULL, t2=NULL, t3=NULL, t4=NULL WHERE pk=1;
 UPDATE timezone_table SET t1=now(), t2=now(), t3=now(), t4=now() WHERE pk=2;
+DELETE FROM timezone_table;
+
+INSERT INTO col_has_special_character_table VALUES(1, 'col:1:value', 'col&2:value', 'col\3:value');
+INSERT INTO col_has_special_character_table VALUES(2, NULL, NULL, NULL);
+UPDATE col_has_special_character_table SET "col`1"=NULL, "col,2"=NULL, "col\3"=NULL WHERE "p:k"=1;
+UPDATE col_has_special_character_table SET "col`1"='col:1:value', "col,2"='col&2:value', "col\3"='col\3:value' WHERE "p:k"=2;
+DELETE FROM col_has_special_character_table;

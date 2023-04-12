@@ -16,13 +16,30 @@ const NULL_VALUE_LEN: i32 = -1;
 
 impl CheckLog {
     pub fn to_string(&self) -> String {
-        let mut str = format!("{},{}", self.schema, self.tb);
+        // example: 3,db1|3,tb1|4,col1|3,abc|4,col2|-1,
+        let mut str = format!(
+            "{},{}|{},{}",
+            self.schema.len(),
+            self.schema,
+            self.tb.len(),
+            self.tb
+        );
+
         for i in 0..self.cols.len() {
-            if let Some(value) = &self.col_values[i] {
-                str = format!("{},{},{},{}", str, self.cols[i], value.len(), value);
+            let (value_len, value) = if let Some(value) = &self.col_values[i] {
+                (value.len() as i32, value.as_str())
             } else {
-                str = format!("{},{},{},{}", str, self.cols[i], NULL_VALUE_LEN, "");
-            }
+                (NULL_VALUE_LEN, "")
+            };
+
+            str = format!(
+                "{}|{},{}|{},{}",
+                str,
+                self.cols[i].len(),
+                self.cols[i],
+                value_len,
+                value
+            );
         }
         str
     }
@@ -44,30 +61,32 @@ impl CheckLog {
     }
 
     pub fn from_str(line: &str, log_type: LogType) -> Self {
-        // schema,tb,[col1 name],[col1 value length],[col1 value],[col2 name],[col2 value length],[col2 value]
-        // example: db1,tb1,col1,4,1112,col2,5,abcde
+        // [schema length],schema|[tb length],tb|[col1 name length],[col1 name]|[col1 value length],[col1 value]|[col2 name length],[col2 name]|[col2 value length],[col2 value]|
+        // example 1: 3,db1|3,tb1|4,col1|4,1112|4,col2|5,abcde|
+        // example 2: 3,db1|3,tb1|4,col1|-1,|4,col2|-1,|
         let chars: Vec<char> = line.chars().collect();
-        let end_char = ',';
+        let mut tokens = Vec::new();
 
-        let (schema, index) = Self::read_token(&chars, 0, end_char);
-        let (tb, index) = Self::read_token(&chars, index, end_char);
+        let mut start_index = 0;
+        while start_index < chars.len() {
+            let (token, next_index) = Self::read_token(&chars, start_index, ',');
+            start_index = next_index;
+            if token.is_none() {
+                start_index += 1;
+            }
+            tokens.push(token);
+        }
+
+        let schema = tokens[0].clone().unwrap();
+        let tb = tokens[1].clone().unwrap();
+
+        let mut i = 2;
         let mut cols = Vec::new();
         let mut col_values = Vec::new();
-
-        let mut start_index = index;
-        while start_index < chars.len() {
-            let (col, index) = Self::read_token(&chars, start_index, end_char);
-            let (col_value_len, index) = Self::read_token(&chars, index, end_char);
-            let col_value_len = col_value_len.parse::<i32>().unwrap();
-            let (col_value, index) = Self::read_token_by_len(&chars, index, col_value_len);
-
-            start_index = index;
-            cols.push(col);
-            if col_value_len == NULL_VALUE_LEN {
-                col_values.push(Option::None);
-            } else {
-                col_values.push(Some(col_value));
-            }
+        while i < tokens.len() - 1 {
+            cols.push(tokens[i].clone().unwrap());
+            col_values.push(tokens[i + 1].clone());
+            i += 2;
         }
 
         Self {
@@ -79,6 +98,22 @@ impl CheckLog {
         }
     }
 
+    fn read_token(
+        chars: &Vec<char>,
+        start_index: usize,
+        split_char: char,
+    ) -> (Option<String>, usize) {
+        // example 1: "4,abcd"
+        // example 2: "-1,"
+        let (token_len, next_index) = Self::read_token_by_end_char(&chars, start_index, split_char);
+        let token_len = token_len.parse::<i32>().unwrap();
+        if token_len == NULL_VALUE_LEN {
+            return (Option::None, next_index);
+        }
+        let (token, next_index) = Self::read_token_by_len(&chars, next_index, token_len);
+        (Some(token), next_index)
+    }
+
     fn read_token_by_len(chars: &Vec<char>, start_index: usize, len: i32) -> (String, usize) {
         let len = cmp::max(len, 0) as usize;
         let slice = &chars[start_index..start_index + len];
@@ -87,7 +122,11 @@ impl CheckLog {
         (token, next_index)
     }
 
-    fn read_token(chars: &Vec<char>, start_index: usize, end_char: char) -> (String, usize) {
+    fn read_token_by_end_char(
+        chars: &Vec<char>,
+        start_index: usize,
+        end_char: char,
+    ) -> (String, usize) {
         let mut token = String::new();
         for i in start_index..chars.len() {
             let c = chars[i];
@@ -110,7 +149,7 @@ mod test {
     #[test]
     fn test_check_log() {
         // col1, col2 values are none
-        let str = "db1,tb1,col1,-1,,col2,-1,";
+        let str = "3,db1|3,tb1|4,col1|-1,|4,col2|-1,";
         let log = CheckLog::from_str(str, LogType::Diff);
         assert_eq!(log.schema, "db1");
         assert_eq!(log.tb, "tb1");
@@ -119,7 +158,7 @@ mod test {
         assert_eq!(str, log.to_string());
 
         // col1, col2 values is empty
-        let str = "db1,tb1,col1,0,,col2,0,";
+        let str = "3,db1|3,tb1|4,col1|0,|4,col2|0,";
         let log = CheckLog::from_str(str, LogType::Diff);
         assert_eq!(log.schema, "db1");
         assert_eq!(log.tb, "tb1");
@@ -130,7 +169,7 @@ mod test {
         );
         assert_eq!(str, log.to_string());
 
-        let str = "db1,tb1,col1,4,1234,col2,5,abcde";
+        let str = "3,db1|3,tb1|4,col1|4,1234|4,col2|5,abcde";
         let log = CheckLog::from_str(str, LogType::Diff);
         assert_eq!(log.schema, "db1");
         assert_eq!(log.tb, "tb1");
@@ -141,26 +180,12 @@ mod test {
         );
         assert_eq!(str, log.to_string());
 
-        let str = "db1,tb1";
+        let str = "3,db1|3,tb1";
         let log = CheckLog::from_str(str, LogType::Diff);
         assert_eq!(log.schema, "db1");
         assert_eq!(log.tb, "tb1");
         assert_eq!(log.cols.len(), 0);
         assert_eq!(log.col_values.len(), 0);
         assert_eq!(str, log.to_string());
-
-        let str = "db1";
-        let log = CheckLog::from_str(str, LogType::Diff);
-        assert_eq!(log.schema, "db1");
-        assert_eq!(log.tb, "");
-        assert_eq!(log.cols.len(), 0);
-        assert_eq!(log.col_values.len(), 0);
-
-        let str = "";
-        let log = CheckLog::from_str(str, LogType::Diff);
-        assert_eq!(log.schema, "");
-        assert_eq!(log.tb, "");
-        assert_eq!(log.cols.len(), 0);
-        assert_eq!(log.col_values.len(), 0);
     }
 }
