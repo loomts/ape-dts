@@ -114,7 +114,7 @@ impl RdbMerger {
     fn check_collision(
         &mut self,
         buffer: &HashMap<u128, RowData>,
-        where_cols: &Vec<String>,
+        id_cols: &Vec<String>,
         row_data: &RowData,
         hash_code: u128,
     ) -> bool {
@@ -129,7 +129,7 @@ impl RdbMerger {
                 _ => exist.before.as_ref().unwrap(),
             };
 
-            for col in where_cols.iter() {
+            for col in id_cols.iter() {
                 if col_values.get(col) != exist_col_values.get(col) {
                     return true;
                 }

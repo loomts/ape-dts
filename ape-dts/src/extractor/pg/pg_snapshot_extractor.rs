@@ -157,29 +157,32 @@ impl PgSnapshotExtractor<'_> {
     fn build_extract_sql(&mut self, tb_meta: &PgTbMeta, has_start_value: bool) -> String {
         let sql_util = SqlUtil::new_for_pg(tb_meta);
         let cols_str = sql_util.build_extract_cols_str().unwrap();
+        let schema = sql_util.quote(&self.schema);
+        let tb = sql_util.quote(&self.tb);
 
         // SELECT col_1, col_2::text FROM tb_1 WHERE col_1 > $1 ORDER BY col_1;
         if let Some(order_col) = &tb_meta.basic.order_col {
+            let quoted_order_col = sql_util.quote(&order_col);
             if has_start_value {
                 let order_col_type = tb_meta.col_type_map.get(order_col).unwrap();
                 return format!(
                     "SELECT {} FROM {}.{} WHERE {} > $1::{} ORDER BY {} ASC LIMIT {}",
                     cols_str,
-                    self.schema,
-                    self.tb,
-                    order_col,
+                    schema,
+                    tb,
+                    quoted_order_col,
                     order_col_type.short_name,
-                    order_col,
+                    quoted_order_col,
                     self.slice_size
                 );
             } else {
                 return format!(
                     "SELECT {} FROM {}.{} ORDER BY {} ASC LIMIT {}",
-                    cols_str, self.schema, self.tb, order_col, self.slice_size
+                    cols_str, schema, tb, quoted_order_col, self.slice_size
                 );
             }
         } else {
-            return format!("SELECT {} FROM {}.{}", cols_str, self.schema, self.tb);
+            return format!("SELECT {} FROM {}.{}", cols_str, schema, tb);
         }
     }
 }

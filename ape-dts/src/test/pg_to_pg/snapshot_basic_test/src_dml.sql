@@ -73,3 +73,6 @@ INSERT INTO public.postgis_array_table (pk, ga, gann) VALUES (2, NULL, NULL)
 
 INSERT INTO timezone_table VALUES(1, now(), now(), now(), now());
 INSERT INTO timezone_table VALUES(2, NULL, NULL, NULL, NULL);
+
+INSERT INTO col_has_special_character_table VALUES(1, 'col:1:value', 'col&2:value', 'col\3:value');
+INSERT INTO col_has_special_character_table VALUES(2, NULL, NULL, NULL);

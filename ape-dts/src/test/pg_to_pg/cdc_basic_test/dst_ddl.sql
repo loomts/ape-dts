@@ -76,3 +76,6 @@ CREATE TABLE postgis_array_table (pk SERIAL, ga GEOMETRY[], gann GEOMETRY[], PRI
 
 DROP TABLE IF EXISTS timezone_table;
 CREATE TABLE timezone_table (pk SERIAL, t1 time, t2 timetz, t3 timestamp, t4 timestamptz, PRIMARY KEY(pk));
+
+DROP TABLE IF EXISTS col_has_special_character_table;
+CREATE TABLE col_has_special_character_table ("p:k" SERIAL, "col`1" text, "col,2" text, "col\3" text, PRIMARY KEY("p:k"));
