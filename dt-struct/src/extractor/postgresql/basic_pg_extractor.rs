@@ -38,6 +38,8 @@ pub struct PgStructExtractor<'a> {
     pub source_config: ExtractorConfig,
     pub filter_config: FilterConfig,
     pub is_finished: Arc<AtomicBool>,
+
+    pub seq_owners: HashMap<String, StructModel>,
 }
 
 #[async_trait]
@@ -69,7 +71,7 @@ impl StructExtrator for PgStructExtractor<'_> {
         Ok(())
     }
 
-    async fn get_sequence(&self) -> Result<(), Error> {
+    async fn get_sequence(&mut self) -> Result<(), Error> {
         let pg_pool: &Pool<Postgres>;
         match &self.pool {
             Some(pool) => pg_pool = pool,
@@ -101,7 +103,7 @@ impl StructExtrator for PgStructExtractor<'_> {
         }
 
         let mut table_used_seqs: HashSet<String> = HashSet::new();
-        let mut models: Vec<StructModel> = Vec::new();
+        let mut models: HashMap<String, StructModel> = HashMap::new();
 
         let table_sql = format!("SELECT c.table_schema,c.table_name,c.column_name, c.data_type, c.column_default  
         FROM information_schema.columns c where table_schema in ({}) and column_default is not null and column_default like 'nextval(%'
@@ -145,26 +147,78 @@ impl StructExtrator for PgStructExtractor<'_> {
                 if !table_used_seqs.contains(&seq_name) || !all_schemas.contains(&&schema_name) {
                     continue;
                 }
-                models.push(StructModel::SequenceModel {
-                    sequence_name: seq_name,
-                    database_name: PgStructExtractor::get_str_with_null(&row, "sequence_catalog")
+                models.insert(
+                    format!("{}.{}", schema_name, seq_name),
+                    StructModel::SequenceModel {
+                        sequence_name: seq_name,
+                        database_name: PgStructExtractor::get_str_with_null(
+                            &row,
+                            "sequence_catalog",
+                        )
                         .unwrap(),
-                    schema_name,
-                    data_type: PgStructExtractor::get_str_with_null(&row, "data_type").unwrap(),
-                    start_value: row.get("start_value"),
-                    increment: row.get("increment"),
-                    min_value: row.get("minimum_value"),
-                    max_value: row.get("maximum_value"),
-                    is_circle: PgStructExtractor::get_str_with_null(&row, "cycle_option").unwrap(),
-                })
+                        schema_name,
+                        data_type: PgStructExtractor::get_str_with_null(&row, "data_type").unwrap(),
+                        start_value: row.get("start_value"),
+                        increment: row.get("increment"),
+                        min_value: row.get("minimum_value"),
+                        max_value: row.get("maximum_value"),
+                        is_circle: PgStructExtractor::get_str_with_null(&row, "cycle_option")
+                            .unwrap(),
+                    },
+                );
+            }
+            // query seq ownership, and put the StructModel into memory, will push to queue after get_tables
+            let owner_sql = format!("select seq.relname,tab.relname as table_name, attr.attname as column_name, ns.nspname 
+            from pg_class as seq 
+            join pg_namespace ns on (seq.relnamespace = ns.oid) 
+            join pg_depend as dep on (seq.relfilenode = dep.objid) 
+            join pg_class as tab on (dep.refobjid = tab.relfilenode) 
+            join pg_attribute as attr on (attr.attnum = dep.refobjsubid and attr.attrelid = dep.refobjid) 
+            where dep.deptype='a' and ns.nspname in ({}) ", all_schemas.iter().map(|x| format!("'{}'", x)).collect::<Vec<String>>().join(","));
+            println!("pg query sequence owner sql: {}", owner_sql);
+            let mut rows = query(&owner_sql).fetch(pg_pool);
+            while let Some(row) = rows.try_next().await? {
+                let (schema_name, seq_name): (String, String) = (
+                    PgStructExtractor::get_str_with_null(&row, "nspname").unwrap(),
+                    PgStructExtractor::get_str_with_null(&row, "relname").unwrap(),
+                );
+                if schema_name.is_empty() && seq_name.is_empty() {
+                    continue;
+                }
+                let schema_seq_name = format!("{}.{}", schema_name, seq_name);
+                if (!table_used_seqs.contains(&seq_name) || !all_schemas.contains(&&schema_name))
+                    || !models.contains_key(&schema_seq_name)
+                {
+                    continue;
+                }
+                if !self.seq_owners.contains_key(&schema_seq_name) {
+                    self.seq_owners.insert(
+                        schema_seq_name,
+                        StructModel::SequenceOwnerModel {
+                            sequence_name: seq_name,
+                            database_name: String::from(""),
+                            schema_name: schema_name,
+                            owner_table_name: PgStructExtractor::get_str_with_null(
+                                &row,
+                                "table_name",
+                            )
+                            .unwrap(),
+                            owner_table_column_name: PgStructExtractor::get_str_with_null(
+                                &row,
+                                "column_name",
+                            )
+                            .unwrap(),
+                        },
+                    );
+                }
             }
         } else {
-            println!("find no table used sequence")
+            println!("find no table used sequence");
         }
         if models.len() > 0 {
-            for model in &models {
-                let _ =
-                    QueueOperator::push_to_queue(&self.struct_obj_queue, model.clone(), 1).await;
+            for (_, seq_model) in &models {
+                let _ = QueueOperator::push_to_queue(&self.struct_obj_queue, seq_model.clone(), 1)
+                    .await;
             }
         }
         println!("get sequence finished");
@@ -304,6 +358,11 @@ impl StructExtrator for PgStructExtractor<'_> {
             for (_, model) in &models {
                 let _ =
                     QueueOperator::push_to_queue(&self.struct_obj_queue, model.clone(), 1).await;
+            }
+            // push the sequence related to those tables
+            for (_, seq_model) in &self.seq_owners {
+                let _ = QueueOperator::push_to_queue(&self.struct_obj_queue, seq_model.clone(), 1)
+                    .await;
             }
         }
         println!("get tables finished");

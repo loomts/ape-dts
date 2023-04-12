@@ -184,12 +184,12 @@ impl StructSinker for MySqlStructSinker {
                 let sql;
                 if !column_name.is_empty() {
                     sql = format!(
-                        "COMMENT ON COLUMN {}.{}.{} IS '{}'",
+                        "COMMENT ON COLUMN `{}`.`{}`.`{}` IS '{}'",
                         schema_name, table_name, column_name, comment
                     )
                 } else {
                     sql = format!(
-                        "COMMENT ON TABLE {}.{} is '{}'",
+                        "COMMENT ON TABLE `{}`.`{}` is '{}'",
                         schema_name, table_name, comment
                     )
                 }

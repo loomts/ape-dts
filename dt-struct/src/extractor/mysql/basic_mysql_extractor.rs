@@ -65,7 +65,7 @@ impl StructExtrator for MySqlStructExtractor<'_> {
         Ok(())
     }
 
-    async fn get_sequence(&self) -> Result<(), Error> {
+    async fn get_sequence(&mut self) -> Result<(), Error> {
         Ok(())
     }
 

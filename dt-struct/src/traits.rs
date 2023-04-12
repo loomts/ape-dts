@@ -8,20 +8,17 @@ pub trait StructExtrator {
     fn is_finished(&self) -> Result<bool, Error>;
 
     async fn build_connection(&mut self) -> Result<(), Error>;
-    async fn get_sequence(&self) -> Result<(), Error>;
+    async fn get_sequence(&mut self) -> Result<(), Error>;
     async fn get_table(&self) -> Result<(), Error>;
     async fn get_constraint(&self) -> Result<(), Error>;
     async fn get_index(&self) -> Result<(), Error>;
     async fn get_comment(&self) -> Result<(), Error>;
 
     // // charset,case,timezone configuration and so on
-    // fn getDbBasicSetting() -> error;
+    // fn get_db_basic_setting() -> error;
 
-    // fn fetchDatabases() -> error;
-    // fn fetchSchemas() -> error;
-    // fn fetchTables() -> error;
-    // fn fetchIndexs() -> error;
-    // fn fetchViews() -> error;
+    // fn get_databases() -> error;
+    // fn get_schemas() -> error;
 }
 
 #[async_trait]
