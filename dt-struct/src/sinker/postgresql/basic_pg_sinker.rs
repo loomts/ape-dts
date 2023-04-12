@@ -49,7 +49,10 @@ impl StructSinker for PgStructSinker {
                 columns,
             } => {
                 let col_sql = PgStructSinker::build_columns_sql_str(columns).unwrap();
-                let sql = format!("CREATE TABLE {}.{} ({})", schema_name, table_name, col_sql);
+                let sql = format!(
+                    "CREATE TABLE \"{}\".\"{}\" ({})",
+                    schema_name, table_name, col_sql
+                );
                 match query(&sql).execute(pg_pool).await {
                     Ok(_) => {
                         return {
@@ -112,11 +115,12 @@ impl StructSinker for PgStructSinker {
                 definition,
             } => {
                 if constraint_type == &ConstraintTypeEnum::Foregin.to_charval().unwrap() {
-                    println!("foreign key is not supported yet");
-                    return Ok(());
+                    let msg = format!("foreign key is not supported yet, schema:[{}], table:[{}], constraint_name:[{}]", schema_name, table_name, constraint_name);
+                    println!("{}", msg);
+                    return Err(Error::StructError { error: msg });
                 }
                 let sql = format!(
-                    "ALTER TABLE {}.{} ADD CONSTRAINT {} {}",
+                    "ALTER TABLE \"{}\".\"{}\" ADD CONSTRAINT \"{}\" {}",
                     schema_name, table_name, constraint_name, definition
                 );
                 match query(&sql).execute(pg_pool).await {
@@ -153,7 +157,7 @@ impl StructSinker for PgStructSinker {
                 if is_circle.to_lowercase() == "yes" {
                     cycle_str = String::from("CYCLE");
                 }
-                let create_sql = format!("CREATE SEQUENCE {}.{} AS {} START {} INCREMENT by {} MINVALUE {} MAXVALUE {} {}", schema_name, sequence_name, data_type, start_value, increment, min_value, max_value, cycle_str);
+                let create_sql = format!("CREATE SEQUENCE \"{}\".\"{}\" AS {} START {} INCREMENT by {} MINVALUE {} MAXVALUE {} {}", schema_name, sequence_name, data_type, start_value, increment, min_value, max_value, cycle_str);
                 match query(&create_sql).execute(pg_pool).await {
                     Ok(_) => {
                         return {
@@ -177,6 +181,51 @@ impl StructSinker for PgStructSinker {
                     }
                 }
             }
+            StructModel::SequenceOwnerModel {
+                sequence_name,
+                database_name: _,
+                schema_name,
+                owner_table_name,
+                owner_table_column_name,
+            } => {
+                if !owner_table_name.is_empty() && !owner_table_column_name.is_empty() {
+                    let create_owner_sql = format!(
+                        "ALTER SEQUENCE \"{}\".\"{}\" OWNED BY \"{}\".\"{}\".\"{}\"",
+                        schema_name,
+                        sequence_name,
+                        schema_name,
+                        owner_table_name,
+                        owner_table_column_name
+                    );
+                    match query(&create_owner_sql).execute(pg_pool).await {
+                        Ok(_) => {
+                            return {
+                                println!(
+                                    "add ownership for sequence:[{}], sql:[{}], execute success",
+                                    sequence_name, create_owner_sql
+                                );
+                                Ok(())
+                            }
+                        }
+                        Err(e) => {
+                            return {
+                                println!(
+                                    "add ownership for sequence:[{}], sql:[{}], execute success,execute failed:{}",
+                                    sequence_name,
+                                    create_owner_sql,
+                                    e.to_string()
+                                );
+                                Err(Error::from(e))
+                            }
+                        }
+                    }
+                } else {
+                    println!(
+                        "schema:[{}.{}] has no ownership.",
+                        schema_name, sequence_name
+                    );
+                }
+            }
             _ => {}
         }
         Ok(())
@@ -188,7 +237,8 @@ impl PgStructSinker {
         let mut result_str = String::from("");
         columns.sort_by(|a, b| a.order_position.cmp(&b.order_position));
         for column in columns {
-            result_str.push_str(format!("{} {} ", column.column_name, column.column_type).as_str());
+            result_str
+                .push_str(format!("\"{}\" {} ", column.column_name, column.column_type).as_str());
             if column.is_nullable.to_lowercase() == "no" {
                 result_str.push_str("NOT NULL ");
             }

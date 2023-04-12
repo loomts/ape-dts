@@ -55,6 +55,13 @@ pub enum StructModel {
         max_value: String,
         is_circle: String,
     },
+    SequenceOwnerModel {
+        sequence_name: String,
+        database_name: String,
+        schema_name: String,
+        owner_table_name: String,
+        owner_table_column_name: String,
+    },
     ViewModel {},
 }
 

@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     sync::{atomic::AtomicBool, Arc},
     time::Duration,
 };
@@ -42,6 +43,7 @@ impl StructBuilder {
         // 3. more model support
         let struct_obj_queue: ConcurrentQueue<StructModel> = ConcurrentQueue::bounded(100);
         let excutor_finish_flag = Arc::new(AtomicBool::new(false));
+
         let mut extractor = self
             .build_extractor(&struct_obj_queue, excutor_finish_flag)
             .await
@@ -49,9 +51,11 @@ impl StructBuilder {
         extractor.build_connection().await.unwrap();
         let mut sinker = self.build_sinker().await.unwrap();
         sinker.build_connection().await.unwrap();
+
+        extractor.get_sequence().await.unwrap();
+
         tokio::join!(
             async {
-                extractor.get_sequence().await.unwrap();
                 extractor.get_table().await.unwrap();
                 extractor.get_constraint().await.unwrap();
                 extractor.get_index().await.unwrap();
@@ -60,7 +64,7 @@ impl StructBuilder {
                 extractor.set_finished().unwrap();
             },
             async {
-                while !extractor.is_finished().unwrap() || !struct_obj_queue.is_empty() {
+                while !extractor.is_finished().unwrap().clone() || !struct_obj_queue.is_empty() {
                     match &mut struct_obj_queue.pop() {
                         Ok(model) => {
                             let result = sinker.sink_from_queue(model).await;
@@ -107,6 +111,7 @@ impl StructBuilder {
                     source_config: self.extractor_config.clone(),
                     filter_config: self.filter_config.clone(),
                     is_finished: finished_flag,
+                    seq_owners: HashMap::new(),
                 }),
             },
             _ => {
