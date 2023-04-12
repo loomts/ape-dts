@@ -64,7 +64,7 @@ impl StructBuilder {
                 extractor.set_finished().unwrap();
             },
             async {
-                while !extractor.is_finished().unwrap().clone() || !struct_obj_queue.is_empty() {
+                while !extractor.is_finished().unwrap() || !struct_obj_queue.is_empty() {
                     match &mut struct_obj_queue.pop() {
                         Ok(model) => {
                             let result = sinker.sink_from_queue(model).await;
