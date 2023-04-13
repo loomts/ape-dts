@@ -14,7 +14,7 @@ use std::{
 use crate::{
     common::sql_util::SqlUtil,
     error::Error,
-    meta::pg::pg_meta_manager::PgMetaManager,
+    meta::{mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager},
     task::{task_runner::TaskRunner, task_util::TaskUtil},
 };
 
@@ -500,10 +500,8 @@ impl TestRunner {
         for i in 0..src_tbs.len() {
             let src_tb = &src_tbs[i];
             let dst_tb = &dst_tbs[i];
-            let cols = &cols_list[i];
-
             if filtered_tbs.contains(src_tb) {
-                let dst_data = self.fetch_data(&dst_tb, cols, "dst").await?;
+                let dst_data = self.fetch_data(&dst_tb, "dst").await?;
                 if dst_data.len() > 0 {
                     return Ok(false);
                 }
@@ -522,8 +520,8 @@ impl TestRunner {
         dst_tb: &str,
         cols: &Vec<String>,
     ) -> Result<bool, Error> {
-        let src_data = self.fetch_data(src_tb, cols, "src").await?;
-        let dst_data = self.fetch_data(dst_tb, cols, "dst").await?;
+        let src_data = self.fetch_data(src_tb, "src").await?;
+        let dst_data = self.fetch_data(dst_tb, "dst").await?;
         println!(
             "comparing row data for src_tb: {}, src_data count: {}",
             src_tb,
@@ -540,12 +538,7 @@ impl TestRunner {
         Ok(true)
     }
 
-    async fn fetch_data(
-        &self,
-        tb: &str,
-        cols: &Vec<String>,
-        from: &str,
-    ) -> Result<Vec<Vec<Option<Vec<u8>>>>, Error> {
+    async fn fetch_data(&self, tb: &str, from: &str) -> Result<Vec<Vec<Option<Vec<u8>>>>, Error> {
         let conn_pool_mysql = if from == "src" {
             &self.src_conn_pool_mysql
         } else {
@@ -559,7 +552,7 @@ impl TestRunner {
         };
 
         let data = if let Some(pool) = conn_pool_mysql {
-            self.fetch_data_mysql(tb, cols, pool).await?
+            self.fetch_data_mysql(tb, pool).await?
         } else if let Some(pool) = conn_pool_pg {
             self.fetch_data_pg(tb, pool).await?
         } else {
@@ -568,13 +561,9 @@ impl TestRunner {
         Ok(data)
     }
 
-    async fn fetch_dst_data(
-        &self,
-        tb: &str,
-        cols: &Vec<String>,
-    ) -> Result<Vec<Vec<Option<Vec<u8>>>>, Error> {
+    async fn fetch_dst_data(&self, tb: &str) -> Result<Vec<Vec<Option<Vec<u8>>>>, Error> {
         let data = if let Some(pool) = &self.dst_conn_pool_mysql {
-            self.fetch_data_mysql(tb, cols, pool).await?
+            self.fetch_data_mysql(tb, pool).await?
         } else if let Some(pool) = &self.dst_conn_pool_pg {
             self.fetch_data_pg(tb, pool).await?
         } else {
@@ -586,10 +575,27 @@ impl TestRunner {
     async fn fetch_data_mysql(
         &self,
         tb: &str,
-        cols: &Vec<String>,
         conn_pool: &Pool<MySql>,
     ) -> Result<Vec<Vec<Option<Vec<u8>>>>, Error> {
-        let sql = format!("SELECT * FROM {} ORDER BY {}", tb, cols[0]);
+        let tokens: Vec<&str> = tb.split(".").collect();
+        let mut db = "";
+        let mut tb = "";
+        if tokens.len() > 1 {
+            db = tokens[0];
+            tb = tokens[1];
+        }
+
+        let mut meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
+        let tb_meta = meta_manager.get_tb_meta(db, tb).await?;
+        let cols = &tb_meta.basic.cols;
+        let sql_util = SqlUtil::new_for_mysql(&tb_meta);
+
+        let sql = format!(
+            "SELECT * FROM {}.{} ORDER BY {}",
+            sql_util.quote(db),
+            sql_util.quote(tb),
+            sql_util.quote(&cols[0])
+        );
         let query = sqlx::query(&sql);
         let mut rows = query.fetch(conn_pool);
 
@@ -628,8 +634,8 @@ impl TestRunner {
         let sql = format!(
             "SELECT {} FROM {}.{} ORDER BY {} ASC",
             cols_str,
-            db,
-            tb,
+            sql_util.quote(db),
+            sql_util.quote(tb),
             sql_util.quote(&cols[0])
         );
         let query = sqlx::query(&sql);
