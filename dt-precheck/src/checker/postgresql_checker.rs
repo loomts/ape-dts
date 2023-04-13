@@ -198,7 +198,6 @@ impl Checker for PostgresqlChecker {
                         }
                     }
                     // wal_level=logic,max_replication_slots>=1, max_wal_senders>=1.
-                    // Todo: test
                     if wal_level.to_lowercase() != "logical" {
                         err_msgs.push(format!(
                             "wal_level should not be '{}', need to be 'logical'.",
