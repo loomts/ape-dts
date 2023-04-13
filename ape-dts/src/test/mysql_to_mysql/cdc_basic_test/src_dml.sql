@@ -48,6 +48,9 @@ INSERT INTO test_db_1.one_pk_multi_uk VALUES (7,7,1,7,5,123456.1234,1234.78,1234
 INSERT INTO test_db_1.one_pk_multi_uk VALUES (8,8,1,8,50,654321.4321,4321.89,54321.321,3045,'2021-02-01 04:05:06.654321','04:05:06.654321','2012-02-01',2021,'2021-02-01 04:05:06.654321','1','2','3','4','5','6','7','8',x'ABCDEF0123456789',x'ABCDEF0123456789',x'ABCDEF0123456789',x'ABCDEF0123456789','small','b', NULL);
 INSERT INTO test_db_1.one_pk_multi_uk VALUES (9, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
+INSERT INTO test_db_1.col_has_special_character_table VALUES(1, 'col:1:value', 'col&2:value', 'col\3:value');
+INSERT INTO test_db_1.col_has_special_character_table VALUES(2, NULL, NULL, NULL);
+
 UPDATE test_db_1.no_pk_no_uk SET f_1=20, f_2=30, f_3=40, f_4=50, f_5=654321.4321, f_6=4321.21, f_7=54321.321, f_8=3045, f_9='2021-02-01 04:05:06.654321', f_10='04:05:06.654321', f_11='2012-02-01', f_12=2021, f_13='2021-02-01 04:05:06.654321', f_14='1', f_15='2', f_16='3', f_17='4', f_18='5', f_19='6', f_20='7', f_21='8', f_22=x'ABCDEF0123456789', f_23=x'ABCDEF0123456789', f_24=x'ABCDEF0123456789', f_25=x'ABCDEF0123456789', f_26='small', f_27='b', f_28=NULL WHERE f_0=1;
 
 UPDATE test_db_1.one_pk_no_uk SET f_1=20, f_2=30, f_3=40, f_4=50, f_5=654321.4321, f_6=4321.21, f_7=54321.321, f_8=3045, f_9='2021-02-01 04:05:06.654321', f_10='04:05:06.654321', f_11='2012-02-01', f_12=2021, f_13='2021-02-01 04:05:06.654321', f_14='1', f_15='2', f_16='3', f_17='4', f_18='5', f_19='6', f_20='7', f_21='8', f_22=x'ABCDEF0123456789', f_23=x'ABCDEF0123456789', f_24=x'ABCDEF0123456789', f_25=x'ABCDEF0123456789', f_26='small', f_27='b', f_28=NULL WHERE f_0=1;
@@ -62,8 +65,12 @@ UPDATE test_db_1.no_pk_multi_uk SET f_1=20, f_2=30, f_3=40, f_4=50, f_5=23456.12
 UPDATE test_db_1.one_pk_multi_uk SET f_1=200, f_2=300, f_3=400, f_4=500, f_5=54321.4321, f_6=321.21, f_7=4321.321, f_8=3045, f_9='2021-02-01 04:05:06.654321', f_10='04:05:06.654321', f_11='2012-02-01', f_12=2021, f_13='2021-02-01 04:05:06.654321', f_14='1', f_15='2', f_16='3', f_17='4', f_18='5', f_19='6', f_20='7', f_21='8', f_22=x'ABCDEF0123456789', f_23=x'ABCDEF0123456789', f_24=x'ABCDEF0123456789', f_25=x'ABCDEF0123456789', f_26='small', f_27='b', f_28=NULL WHERE f_0=1;
 UPDATE test_db_1.one_pk_multi_uk SET f_1=20, f_2=30, f_3=40, f_4=50, f_5=23456.1234, f_6=234.12, f_7=2345.123, f_8=1893, f_9='2022-01-02 03:04:05.123456', f_10='03:04:05.123456', f_11='2022-01-02', f_12=2022, f_13='2022-01-02 03:04:05.123456', f_14='ab', f_15='cd', f_16='ef', f_17='gh', f_18='ij', f_19='kl', f_20='mn', f_21='op', f_22=x'0123456789ABCDEF', f_23=x'0123456789ABCDEF', f_24=x'0123456789ABCDEF', f_25=x'0123456789ABCDEF', f_26='x-small', f_27='c', f_28=NULL WHERE f_0=2;
 
+UPDATE test_db_1.col_has_special_character_table SET `col"1`=NULL, `col,2`=NULL, `col\3`=NULL WHERE `p:k`=1;
+UPDATE test_db_1.col_has_special_character_table SET `col"1`='col:1:value', `col,2`='col&2:value', `col\3`='col\3:value' WHERE `p:k`=2;
+
 DELETE FROM test_db_1.no_pk_no_uk;
 DELETE FROM test_db_1.one_pk_no_uk;
 DELETE FROM test_db_1.no_pk_one_uk;
 DELETE FROM test_db_1.no_pk_multi_uk;
 DELETE FROM test_db_1.one_pk_multi_uk;
+DELETE FROM test_db_1.col_has_special_character_table;

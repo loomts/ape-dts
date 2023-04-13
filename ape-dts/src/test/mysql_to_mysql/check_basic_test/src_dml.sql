@@ -37,3 +37,9 @@ INSERT INTO test_db_1.one_pk_multi_uk VALUES (6,6,1,6,50,654321.4321,4321.67,543
 INSERT INTO test_db_1.one_pk_multi_uk VALUES (7,7,1,7,5,123456.1234,1234.78,12345.123,1893,'2022-01-02 03:04:05.123456','03:04:05.123456','2022-01-02',2022,'2022-01-02 03:04:05.123456','ab','cd','ef','gh','ij','kl','mn','op',x'0123456789ABCDEF',x'0123456789ABCDEF',x'0123456789ABCDEF',x'0123456789ABCDEF','x-small','c', NULL);
 INSERT INTO test_db_1.one_pk_multi_uk VALUES (8,8,1,8,50,654321.4321,4321.89,54321.321,3045,'2021-02-01 04:05:06.654321','04:05:06.654321','2012-02-01',2021,'2021-02-01 04:05:06.654321','1','2','3','4','5','6','7','8',x'ABCDEF0123456789',x'ABCDEF0123456789',x'ABCDEF0123456789',x'ABCDEF0123456789','small','b', NULL);
 INSERT INTO test_db_1.one_pk_multi_uk VALUES (9, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+
+INSERT INTO test_db_1.col_has_special_character_table VALUES('pk1,value,1', 'pk2,value,1', 'col:1:value', 'col&2:value', 'col\3:value');
+INSERT INTO test_db_1.col_has_special_character_table VALUES('pk1,value,2', 'pk2,value,2', 'col:1:value', 'col&2:value', 'col\3:value');
+INSERT INTO test_db_1.col_has_special_character_table VALUES('pk1,value,3', 'pk2,value,3', 'col:1:value', 'col&2:value', 'col\3:value');
+INSERT INTO test_db_1.col_has_special_character_table VALUES('pk1,value,4', 'pk2,value,4', NULL, NULL, NULL);
+INSERT INTO test_db_1.col_has_special_character_table VALUES('pk1,value,5', 'pk2,value,5', NULL, NULL, NULL);

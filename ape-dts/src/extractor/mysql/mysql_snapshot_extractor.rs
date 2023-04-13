@@ -8,6 +8,7 @@ use sqlx::{MySql, Pool};
 
 use crate::{
     adaptor::{mysql_col_value_convertor::MysqlColValueConvertor, sqlx_ext::SqlxMysqlExt},
+    common::sql_util::SqlUtil,
     error::Error,
     extractor::extractor_util::ExtractorUtil,
     info,
@@ -79,8 +80,13 @@ impl MysqlSnapshotExtractor<'_> {
             self.db, self.tb
         );
 
+        let sql_util = SqlUtil::new_for_mysql(tb_meta);
         let mut all_count = 0;
-        let sql = format!("SELECT * FROM {}.{}", self.db, self.tb);
+        let sql = format!(
+            "SELECT * FROM {}.{}",
+            sql_util.quote(&self.db),
+            sql_util.quote(&self.tb)
+        );
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let row_data = RowData::from_mysql_row(&row, &tb_meta);
@@ -109,15 +115,20 @@ impl MysqlSnapshotExtractor<'_> {
             self.db, self.tb
         );
 
+        let sql_util = SqlUtil::new_for_mysql(tb_meta);
+        let db = sql_util.quote(&self.db);
+        let tb = sql_util.quote(&self.tb);
+        let quoted_order_col = sql_util.quote(order_col);
+
         let mut all_count = 0;
         let mut start_value = init_start_value;
         let sql1 = format!(
             "SELECT * FROM {}.{} ORDER BY {} ASC LIMIT {}",
-            self.db, self.tb, order_col, self.slice_size
+            db, tb, quoted_order_col, self.slice_size
         );
         let sql2 = format!(
             "SELECT * FROM {}.{} WHERE {} > ? ORDER BY {} ASC LIMIT {}",
-            self.db, self.tb, order_col, order_col, self.slice_size
+            db, tb, quoted_order_col, quoted_order_col, self.slice_size
         );
 
         loop {
