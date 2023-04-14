@@ -31,7 +31,7 @@ use crate::{
 
 // Refer to: https://github.com/MichaelDBA/pg_get_tabledef/blob/main/pg_get_tabledef.sql
 // Todo: character_set, partition
-// not support column type: text[][]
+// not support column type: array[][]; user defined type
 pub struct PgStructExtractor<'a> {
     pub pool: Option<Pool<Postgres>>,
     pub struct_obj_queue: &'a ConcurrentQueue<StructModel>,
@@ -694,7 +694,14 @@ impl PgStructExtractor<'_> {
             );
             return None;
         }
-        let seq_name = arr_tmp[1];
+        let mut seq_name = arr_tmp[1];
+        if seq_name.starts_with("\"") && seq_name.ends_with("\"") {
+            let (start_index, end_index) = (
+                seq_name.find("\"").unwrap() + 1,
+                seq_name.rfind("\"").unwrap(),
+            );
+            seq_name = &seq_name[start_index..end_index];
+        }
         Some(seq_name.to_string())
     }
 }

@@ -18,9 +18,9 @@ Session.vim
 
 ## Build
 /target
-/images/ape-dts
-/images/dt-struct
-/images/dt-precheck
+/images/**/ape-dts
+/images/**/dt-struct
+/images/**/dt-precheck
 /logs
 /tmp
 

@@ -13,5 +13,11 @@ release-build:
 .PHONY: docker-build
 docker-build:
 	docker build -t $(RELASE_IMG):$(VERSION) --build-arg LOCAL_CONFIG_PATH=$(CONFIG_PATH) --build-arg MODULE_NAME=$(MODULE_NAME) -f Dockerfile_release . 
-
+PLATFORMS ?= linux/arm64,linux/amd64
+.PHONY: docker-buildx
+docker-buildx:
+	- docker buildx create --platform ${PLATFORMS} --name rust-builder
+	docker buildx use rust-builder
+	- docker buildx build --push --platform ${PLATFORMS} -t $(RELASE_IMG):$(VERSION) --build-arg MODULE_NAME=$(MODULE_NAME) -f Dockerfile_release_cross .
+	- docker buildx rm rust-builder
 
