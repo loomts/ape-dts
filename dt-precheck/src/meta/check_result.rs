@@ -74,6 +74,13 @@ impl CheckResult {
                 check_desc = format!("check account permission");
                 advise_msg = format!("advise account permission");
             }
+            CheckItem::CheckIfStructExisted => {
+                check_desc = format!(
+                    "check whether the data structure of the {} database is existed",
+                    source_or_sink
+                );
+                advise_msg = format!("manually created the missing struct.");
+            }
             CheckItem::CheckIfTableStructSupported => {
                 check_desc = format!(
                     "check whether the data structure of the {} database to be migrated supports",

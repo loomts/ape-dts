@@ -6,5 +6,6 @@ pub enum CheckItem {
     CheckDatabaseVersionSupported,
     CheckAccountPermission,
     CheckIfDatabaseSupportCdc,
+    CheckIfStructExisted,
     CheckIfTableStructSupported,
 }
