@@ -4,11 +4,12 @@ RELASE_IMG ?= apecloud/ape-dts
 VERSION ?= 0.1
 CONFIG_PATH ?= ./images/example/mysql_snapshot_sample.yaml
 MODULE_NAME ?= ape-dts
+GIT_BRANCH ?= main
 
 # make release-build GIT_TOKEN=xxx
 .PHONY: release-build
 release-build:
-	cd images && ./build.sh "$(BUILD_IMG):$(VERSION)" "$(GIT_TOKEN)"
+	cd images && ./build.sh "$(BUILD_IMG):$(VERSION)" "$(GIT_TOKEN)" "${GIT_BRANCH}"
 # make docker-build RELASE_IMG=apecloud/ape-dts MODULE_NAME=ape-dts CONFIG_PATH=xxx
 .PHONY: docker-build
 docker-build:
