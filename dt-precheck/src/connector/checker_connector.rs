@@ -141,6 +141,10 @@ impl CheckerConnector {
             check_results.push(source_checker.check_cdc_supported().await);
         }
 
+        println!("[*]begin to check the if the structs is existed or not");
+        check_results.push(source_checker.check_struct_existed_or_not().await);
+        check_results.push(sink_checker.check_struct_existed_or_not().await);
+
         println!("[*]begin to check the database structs");
         check_results.push(source_checker.check_table_structs().await);
 
