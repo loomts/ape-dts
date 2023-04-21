@@ -64,7 +64,7 @@ impl MysqlCdcExtractor<'_> {
         let mut binlog_filename = self.binlog_filename.clone();
 
         loop {
-            let (header, data) = stream.read().await?;
+            let (header, data) = stream.read().await.unwrap();
             match data {
                 EventData::Rotate(r) => {
                     binlog_filename = r.binlog_filename;
