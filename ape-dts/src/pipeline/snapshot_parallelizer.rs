@@ -5,13 +5,14 @@ use concurrent_queue::ConcurrentQueue;
 
 use crate::{
     error::Error,
-    meta::{dt_data::DtData,row_data::RowData},
+    meta::{ddl_data::DdlData, dt_data::DtData, row_data::RowData},
     traits::{Parallelizer, Sinker},
 };
 
-use super::parallelizer_util::ParallelizerUtil;
+use super::base_parallelizer::BaseParallelizer;
 
 pub struct SnapshotParallelizer {
+    pub base_parallelizer: BaseParallelizer,
     pub parallel_size: usize,
 }
 
@@ -22,21 +23,34 @@ impl Parallelizer for SnapshotParallelizer {
     }
 
     async fn drain(&mut self, buffer: &ConcurrentQueue<DtData>) -> Result<Vec<DtData>, Error> {
-        ParallelizerUtil::drain(buffer)
+        self.base_parallelizer.drain(buffer)
     }
 
-    async fn sink(
+    async fn sink_dml(
         &mut self,
         data: Vec<RowData>,
         sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
     ) -> Result<(), Error> {
         let sub_datas = Self::partition(data, self.parallel_size)?;
-        ParallelizerUtil::sink(sub_datas, sinkers, self.parallel_size, true).await
+        self.base_parallelizer
+            .sink_dml(sub_datas, sinkers, self.parallel_size, true)
+            .await
+    }
+
+    async fn sink_ddl(
+        &mut self,
+        _data: Vec<DdlData>,
+        _sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
+    ) -> Result<(), Error> {
+        Ok(())
     }
 }
 
 impl SnapshotParallelizer {
-    pub fn partition(data: Vec<RowData>, parallele_size: usize) -> Result<Vec<Vec<RowData>>, Error> {
+    pub fn partition(
+        data: Vec<RowData>,
+        parallele_size: usize,
+    ) -> Result<Vec<Vec<RowData>>, Error> {
         let mut sub_datas = Vec::new();
         if parallele_size <= 1 {
             sub_datas.push(data);

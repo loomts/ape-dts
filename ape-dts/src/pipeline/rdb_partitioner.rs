@@ -66,8 +66,8 @@ impl RdbPartitioner {
                         &row_data.db,
                         &row_data.tb,
                         col,
-                        col_value_before.unwrap().to_string(),
-                        col_value_after.unwrap().to_string()
+                        col_value_before.unwrap().to_option_string(),
+                        col_value_after.unwrap().to_option_string()
                     );
                     return Ok(false);
                 }

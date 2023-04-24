@@ -8,6 +8,7 @@ use crate::{
     common::sql_util::SqlUtil,
     error::Error,
     meta::{
+        ddl_data::DdlData,
         pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
         row_data::RowData,
     },
@@ -25,11 +26,16 @@ pub struct PgChecker {
 
 #[async_trait]
 impl Sinker for PgChecker {
-    async fn sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
+    async fn sink_dml(&mut self, data: Vec<RowData>, batch: bool) -> Result<(), Error> {
         if data.len() == 0 {
             return Ok(());
         }
-        self.serial_check(data).await
+
+        if !batch {
+            self.serial_check(data).await
+        } else {
+            self.batch_check(data).await
+        }
     }
 
     async fn close(&mut self) -> Result<(), Error> {
@@ -39,11 +45,8 @@ impl Sinker for PgChecker {
         return Ok(self.conn_pool.close().await);
     }
 
-    async fn batch_sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
-        if data.len() == 0 {
-            return Ok(());
-        }
-        self.batch_check(data).await
+    async fn sink_ddl(&mut self, _data: Vec<DdlData>, _batch: bool) -> Result<(), Error> {
+        Ok(())
     }
 }
 

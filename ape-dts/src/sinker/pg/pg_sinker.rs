@@ -4,6 +4,7 @@ use crate::{
     error::Error,
     meta::{
         col_value::ColValue,
+        ddl_data::DdlData,
         pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
         row_data::RowData,
         row_type::RowType,
@@ -26,11 +27,20 @@ pub struct PgSinker {
 
 #[async_trait]
 impl Sinker for PgSinker {
-    async fn sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
+    async fn sink_dml(&mut self, data: Vec<RowData>, batch: bool) -> Result<(), Error> {
         if data.len() == 0 {
             return Ok(());
         }
-        self.serial_sink(data).await
+
+        if !batch {
+            self.serial_sink(data).await
+        } else {
+            match &data[0].row_type {
+                RowType::Delete => self.batch_delete(data).await,
+                RowType::Insert => self.batch_insert(data).await,
+                _ => self.serial_sink(data).await,
+            }
+        }
     }
 
     async fn close(&mut self) -> Result<(), Error> {
@@ -40,16 +50,8 @@ impl Sinker for PgSinker {
         return Ok(self.conn_pool.close().await);
     }
 
-    async fn batch_sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
-        if data.len() == 0 {
-            return Ok(());
-        }
-
-        match &data[0].row_type {
-            RowType::Delete => self.batch_delete(data).await,
-            RowType::Insert => self.batch_insert(data).await,
-            _ => self.serial_sink(data).await,
-        }
+    async fn sink_ddl(&mut self, _data: Vec<DdlData>, _batch: bool) -> Result<(), Error> {
+        Ok(())
     }
 }
 

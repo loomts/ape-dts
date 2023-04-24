@@ -5,13 +5,14 @@ use concurrent_queue::ConcurrentQueue;
 
 use crate::{
     error::Error,
-    meta::{dt_data::DtData, row_data::RowData},
+    meta::{ddl_data::DdlData, dt_data::DtData, row_data::RowData},
     traits::{Parallelizer, Sinker},
 };
 
-use super::{parallelizer_util::ParallelizerUtil, rdb_partitioner::RdbPartitioner};
+use super::{base_parallelizer::BaseParallelizer, rdb_partitioner::RdbPartitioner};
 
 pub struct PartitionParallelizer {
+    pub base_parallelizer: BaseParallelizer,
     pub partitioner: RdbPartitioner,
     pub parallel_size: usize,
 }
@@ -19,7 +20,7 @@ pub struct PartitionParallelizer {
 #[async_trait]
 impl Parallelizer for PartitionParallelizer {
     fn get_name(&self) -> String {
-        "DefaultParallelizer".to_string()
+        "PartitionParallelizer".to_string()
     }
 
     async fn drain(&mut self, buffer: &ConcurrentQueue<DtData>) -> Result<Vec<DtData>, Error> {
@@ -40,17 +41,29 @@ impl Parallelizer for PartitionParallelizer {
                 DtData::Commit { .. } => {
                     data.push(dt_data);
                 }
+
+                _ => {}
             }
         }
         Ok(data)
     }
 
-    async fn sink(
+    async fn sink_dml(
         &mut self,
         data: Vec<RowData>,
         sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
     ) -> Result<(), Error> {
         let sub_datas = self.partitioner.partition(data, self.parallel_size).await?;
-        ParallelizerUtil::sink(sub_datas, sinkers, self.parallel_size, false).await
+        self.base_parallelizer
+            .sink_dml(sub_datas, sinkers, self.parallel_size, false)
+            .await
+    }
+
+    async fn sink_ddl(
+        &mut self,
+        _data: Vec<DdlData>,
+        _sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
+    ) -> Result<(), Error> {
+        Ok(())
     }
 }

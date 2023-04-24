@@ -3,6 +3,7 @@ use crate::{
     error,
     error::Error,
     meta::{
+        ddl_data::DdlData,
         mysql::{mysql_meta_manager::MysqlMetaManager, mysql_tb_meta::MysqlTbMeta},
         row_data::RowData,
         row_type::RowType,
@@ -25,11 +26,20 @@ pub struct MysqlSinker {
 
 #[async_trait]
 impl Sinker for MysqlSinker {
-    async fn sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
+    async fn sink_dml(&mut self, data: Vec<RowData>, batch: bool) -> Result<(), Error> {
         if data.len() == 0 {
             return Ok(());
         }
-        self.serial_sink(data).await
+
+        if !batch {
+            self.serial_sink(data).await
+        } else {
+            match &data[0].row_type {
+                RowType::Insert => self.batch_insert(data).await,
+                RowType::Delete => self.batch_delete(data).await,
+                _ => self.serial_sink(data).await,
+            }
+        }
     }
 
     async fn close(&mut self) -> Result<(), Error> {
@@ -39,16 +49,8 @@ impl Sinker for MysqlSinker {
         return Ok(self.conn_pool.close().await);
     }
 
-    async fn batch_sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
-        if data.len() == 0 {
-            return Ok(());
-        }
-
-        match &data[0].row_type {
-            RowType::Insert => self.batch_insert(data).await,
-            RowType::Delete => self.batch_delete(data).await,
-            _ => self.serial_sink(data).await,
-        }
+    async fn sink_ddl(&mut self, _data: Vec<DdlData>, _batch: bool) -> Result<(), Error> {
+        Ok(())
     }
 }
 

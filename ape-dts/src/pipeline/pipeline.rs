@@ -12,7 +12,7 @@ use crate::{
     common::syncer::Syncer,
     error::Error,
     info, log_monitor, log_position,
-    meta::{dt_data::DtData, row_data::RowData},
+    meta::{ddl_data::DdlData, dt_data::DtData, row_data::RowData},
     monitor::{counter::Counter, statistic_counter::StatisticCounter},
     task::task_util::TaskUtil,
     traits::{Parallelizer, Sinker},
@@ -24,6 +24,7 @@ pub struct Pipeline<'a> {
     pub sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
     pub shut_down: &'a AtomicBool,
     pub checkpoint_interval_secs: u64,
+    pub batch_sink_interval_secs: u64,
     pub syncer: Arc<Mutex<Syncer>>,
 }
 
@@ -43,6 +44,7 @@ impl Pipeline<'_> {
             self.checkpoint_interval_secs
         );
 
+        let mut last_sink_time = Instant::now();
         let mut last_checkpoint_time = Instant::now();
         let mut count_counter = Counter::new();
         let mut tps_counter = StatisticCounter::new(self.checkpoint_interval_secs);
@@ -50,19 +52,30 @@ impl Pipeline<'_> {
         let mut last_commit_position = Option::None;
 
         while !self.shut_down.load(Ordering::Acquire) || !self.buffer.is_empty() {
+            // some sinkers (foxlake) need to accumulate data to a big batch and sink
+            let data = if last_sink_time.elapsed().as_secs() < self.batch_sink_interval_secs
+                && !self.buffer.is_full()
+            {
+                Vec::new()
+            } else {
+                last_sink_time = Instant::now();
+                self.parallelizer.drain(&self.buffer).await.unwrap()
+            };
+
             // process all row_datas in buffer at a time
-            let all_data = self.parallelizer.drain(&self.buffer).await.unwrap();
-            let mut count = 0;
-            if all_data.len() > 0 {
-                let (data, last_received, last_commit) = Self::filter_data(all_data);
+            let mut sink_count = 0;
+            if data.len() > 0 {
+                let (count, last_received, last_commit);
+                if data[0].is_ddl() {
+                    (count, last_received, last_commit) = self.sink_ddl(data).await.unwrap();
+                } else {
+                    (count, last_received, last_commit) = self.sink_dml(data).await.unwrap();
+                }
+
+                sink_count = count;
                 last_received_position = last_received;
                 if last_commit.is_some() {
                     last_commit_position = last_commit;
-                }
-
-                count = data.len();
-                if count > 0 {
-                    self.parallelizer.sink(data, &self.sinkers).await.unwrap();
                 }
             }
 
@@ -72,7 +85,7 @@ impl Pipeline<'_> {
                 &last_commit_position,
                 &mut tps_counter,
                 &mut count_counter,
-                count as u64,
+                sink_count as u64,
             );
 
             // sleep 1 millis for data preparing
@@ -82,8 +95,38 @@ impl Pipeline<'_> {
         Ok(())
     }
 
-    fn filter_data(mut data: Vec<DtData>) -> (Vec<RowData>, Option<String>, Option<String>) {
-        let mut filtered_data = Vec::new();
+    async fn sink_dml(
+        &mut self,
+        all_data: Vec<DtData>,
+    ) -> Result<(usize, Option<String>, Option<String>), Error> {
+        let (data, last_received_position, last_commit_position) = Self::fetch_dml(all_data);
+        let count = data.len();
+        if count > 0 {
+            self.parallelizer
+                .sink_dml(data, &self.sinkers)
+                .await
+                .unwrap()
+        }
+        Ok((count, last_received_position, last_commit_position))
+    }
+
+    async fn sink_ddl(
+        &mut self,
+        all_data: Vec<DtData>,
+    ) -> Result<(usize, Option<String>, Option<String>), Error> {
+        let (data, last_received_position, last_commit_position) = Self::fetch_ddl(all_data);
+        let count = data.len();
+        if count > 0 {
+            self.parallelizer
+                .sink_ddl(data, &self.sinkers)
+                .await
+                .unwrap()
+        }
+        Ok((count, last_received_position, last_commit_position))
+    }
+
+    fn fetch_dml(mut data: Vec<DtData>) -> (Vec<RowData>, Option<String>, Option<String>) {
+        let mut dml_data = Vec::new();
         let mut last_received_position = Option::None;
         let mut last_commit_position = Option::None;
         for i in data.drain(..) {
@@ -96,18 +139,42 @@ impl Pipeline<'_> {
 
                 DtData::Dml { row_data } => {
                     last_received_position = Some(row_data.position.clone());
-                    filtered_data.push(row_data);
+                    dml_data.push(row_data);
                 }
+
+                _ => {}
             }
         }
 
-        (filtered_data, last_received_position, last_commit_position)
+        (dml_data, last_received_position, last_commit_position)
     }
-}
 
-impl Pipeline<'_> {
+    fn fetch_ddl(mut data: Vec<DtData>) -> (Vec<DdlData>, Option<String>, Option<String>) {
+        // TODO, change result name
+        let mut result = Vec::new();
+        let mut last_received_position = Option::None;
+        let mut last_commit_position = Option::None;
+        for i in data.drain(..) {
+            match i {
+                DtData::Commit { position, .. } => {
+                    last_commit_position = Some(position);
+                    last_received_position = last_commit_position.clone();
+                    continue;
+                }
+
+                DtData::Ddl { ddl_data } => {
+                    result.push(ddl_data);
+                }
+
+                _ => {}
+            }
+        }
+
+        (result, last_received_position, last_commit_position)
+    }
+
     #[inline(always)]
-    pub fn record_checkpoint(
+    fn record_checkpoint(
         &self,
         last_checkpoint_time: Instant,
         last_received: &Option<String>,

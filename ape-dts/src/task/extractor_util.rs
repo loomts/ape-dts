@@ -37,6 +37,7 @@ impl ExtractorUtil {
         let mut dbs = match db_type {
             DbType::Mysql => Self::list_mysql_dbs(url).await?,
             DbType::Pg => Self::list_pg_schemas(url).await?,
+            _ => Vec::new(),
         };
         dbs.sort();
         Ok(dbs)
@@ -46,6 +47,7 @@ impl ExtractorUtil {
         let mut tbs = match db_type {
             DbType::Mysql => Self::list_mysql_tbs(url, db).await?,
             DbType::Pg => Self::list_pg_tbs(url, db).await?,
+            _ => Vec::new(),
         };
         tbs.sort();
         Ok(tbs)

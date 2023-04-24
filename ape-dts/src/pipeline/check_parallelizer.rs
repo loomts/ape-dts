@@ -5,16 +5,17 @@ use concurrent_queue::ConcurrentQueue;
 
 use crate::{
     error::Error,
-    meta::{dt_data::DtData, row_data::RowData},
+    meta::{ddl_data::DdlData, dt_data::DtData, row_data::RowData},
     traits::{Parallelizer, Sinker},
 };
 
 use super::{
-    parallelizer_util::ParallelizerUtil, rdb_merger::RdbMerger,
+    base_parallelizer::BaseParallelizer, rdb_merger::RdbMerger,
     snapshot_parallelizer::SnapshotParallelizer,
 };
 
 pub struct CheckParallelizer {
+    pub base_parallelizer: BaseParallelizer,
     pub merger: RdbMerger,
     pub parallel_size: usize,
 }
@@ -26,10 +27,10 @@ impl Parallelizer for CheckParallelizer {
     }
 
     async fn drain(&mut self, buffer: &ConcurrentQueue<DtData>) -> Result<Vec<DtData>, Error> {
-        ParallelizerUtil::drain(buffer)
+        self.base_parallelizer.drain(buffer)
     }
 
-    async fn sink(
+    async fn sink_dml(
         &mut self,
         data: Vec<RowData>,
         sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
@@ -38,17 +39,27 @@ impl Parallelizer for CheckParallelizer {
         for (_full_tb, tb_merged_data) in merged_datas.iter_mut() {
             let batch_data = tb_merged_data.get_insert_rows();
             let batch_sub_datas = SnapshotParallelizer::partition(batch_data, self.parallel_size)?;
-            ParallelizerUtil::sink(batch_sub_datas, sinkers, self.parallel_size, true)
+            self.base_parallelizer
+                .sink_dml(batch_sub_datas, sinkers, self.parallel_size, true)
                 .await
                 .unwrap();
 
             let serial_data = tb_merged_data.get_unmerged_rows();
             let serial_sub_datas =
                 SnapshotParallelizer::partition(serial_data, self.parallel_size)?;
-            ParallelizerUtil::sink(serial_sub_datas, sinkers, self.parallel_size, false)
+            self.base_parallelizer
+                .sink_dml(serial_sub_datas, sinkers, self.parallel_size, false)
                 .await
                 .unwrap();
         }
+        Ok(())
+    }
+
+    async fn sink_ddl(
+        &mut self,
+        _data: Vec<DdlData>,
+        _sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
+    ) -> Result<(), Error> {
         Ok(())
     }
 }

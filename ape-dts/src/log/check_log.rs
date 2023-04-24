@@ -48,7 +48,7 @@ impl CheckLog {
         let after = row_data.after.as_ref().unwrap();
         let mut col_values = Vec::new();
         for col in tb_meta.id_cols.iter() {
-            col_values.push(after.get(col).unwrap().to_string());
+            col_values.push(after.get(col).unwrap().to_option_string());
         }
 
         Self {

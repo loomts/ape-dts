@@ -19,8 +19,8 @@ use crate::{
     extractor::{extractor_util::ExtractorUtil, rdb_filter::RdbFilter},
     info,
     meta::{
-        col_value::ColValue, dt_data::DtData, mysql::mysql_meta_manager::MysqlMetaManager,
-        row_data::RowData, row_type::RowType,
+        col_value::ColValue, ddl_data::DdlData, ddl_type::DdlType, dt_data::DtData,
+        mysql::mysql_meta_manager::MysqlMetaManager, row_data::RowData, row_type::RowType,
     },
     traits::Extractor,
 };
@@ -35,6 +35,8 @@ pub struct MysqlCdcExtractor<'a> {
     pub server_id: u64,
     pub shut_down: &'a AtomicBool,
 }
+
+const QUERY_BEGIN: &str = "BEGIN";
 
 #[async_trait]
 impl Extractor for MysqlCdcExtractor<'_> {
@@ -159,6 +161,17 @@ impl MysqlCdcExtractor<'_> {
                         position: position.clone(),
                     };
                     let _ = self.push_row_to_buf(row_data).await?;
+                }
+            }
+
+            EventData::Query(query) => {
+                if query.query != QUERY_BEGIN {
+                    let ddl_data = DdlData {
+                        schema: query.schema,
+                        query: query.query,
+                        ddl_type: DdlType::Create,
+                    };
+                    ExtractorUtil::push_dt_data(&self.buffer, DtData::Ddl { ddl_data }).await?;
                 }
             }
 
