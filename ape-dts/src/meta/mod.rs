@@ -2,7 +2,6 @@ pub mod col_value;
 pub mod ddl_data;
 pub mod ddl_type;
 pub mod dt_data;
-pub mod meta_util;
 pub mod mysql;
 pub mod pg;
 pub mod rdb_meta_manager;

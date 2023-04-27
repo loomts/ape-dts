@@ -115,7 +115,7 @@ impl MysqlColValueConvertor {
 
             ColumnValue::Timestamp(v) => {
                 if let MysqlColType::Timestamp {
-                    timezone_diff_utc_seconds,
+                    timezone_offset: timezone_diff_utc_seconds,
                 } = *col_type
                 {
                     // the value parsed from binlog is in millis with UTC
@@ -200,9 +200,7 @@ impl MysqlColValueConvertor {
             MysqlColType::Date => ColValue::Date(value_str),
             MysqlColType::DateTime => ColValue::DateTime(value_str),
 
-            MysqlColType::Timestamp {
-                timezone_diff_utc_seconds: _,
-            } => ColValue::Timestamp(value_str),
+            MysqlColType::Timestamp { timezone_offset: _ } => ColValue::Timestamp(value_str),
 
             MysqlColType::Year => match value_str.parse::<u16>() {
                 Ok(value) => ColValue::Year(value),
@@ -299,9 +297,7 @@ impl MysqlColValueConvertor {
                 let value: Vec<u8> = row.get_unchecked(col);
                 return MysqlColValueConvertor::parse_datetime(value);
             }
-            MysqlColType::Timestamp {
-                timezone_diff_utc_seconds: _,
-            } => {
+            MysqlColType::Timestamp { timezone_offset: _ } => {
                 let value: Vec<u8> = row.get_unchecked(col);
                 return MysqlColValueConvertor::parse_timestamp(value);
             }

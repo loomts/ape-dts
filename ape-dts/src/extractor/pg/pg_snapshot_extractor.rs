@@ -10,7 +10,7 @@ use crate::{
     adaptor::{pg_col_value_convertor::PgColValueConvertor, sqlx_ext::SqlxPgExt},
     common::sql_util::SqlUtil,
     error::Error,
-    extractor::extractor_util::ExtractorUtil,
+    extractor::base_extractor::BaseExtractor,
     info,
     meta::{
         col_value::ColValue,
@@ -90,7 +90,7 @@ impl PgSnapshotExtractor<'_> {
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let row_data = RowData::from_pg_row(&row, &tb_meta);
-            ExtractorUtil::push_row(self.buffer, row_data)
+            BaseExtractor::push_row(self.buffer, row_data)
                 .await
                 .unwrap();
             all_count += 1;
@@ -131,7 +131,7 @@ impl PgSnapshotExtractor<'_> {
             let mut slice_count = 0usize;
             while let Some(row) = rows.try_next().await.unwrap() {
                 let row_data = RowData::from_pg_row(&row, &tb_meta);
-                ExtractorUtil::push_row(self.buffer, row_data)
+                BaseExtractor::push_row(self.buffer, row_data)
                     .await
                     .unwrap();
 

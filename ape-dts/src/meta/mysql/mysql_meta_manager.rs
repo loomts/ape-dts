@@ -6,7 +6,7 @@ use sqlx::{mysql::MySqlRow, MySql, Pool, Row};
 
 use crate::{
     error::Error,
-    meta::{meta_util::MetaUtil, rdb_tb_meta::RdbTbMeta},
+    meta::{rdb_meta_manager::RdbMetaManager, rdb_tb_meta::RdbTbMeta},
 };
 
 use super::{mysql_col_type::MysqlColType, mysql_tb_meta::MysqlTbMeta};
@@ -16,9 +16,6 @@ pub struct MysqlMetaManager {
     pub conn_pool: Pool<MySql>,
     pub cache: HashMap<String, MysqlTbMeta>,
     pub version: String,
-    // TODO, change this to offset
-    // timezone diff with utc in seconds
-    pub timezone_diff_utc_seconds: i64,
 }
 
 const COLUMN_NAME: &str = "COLUMN_NAME";
@@ -33,13 +30,11 @@ impl<'a> MysqlMetaManager {
             conn_pool,
             cache: HashMap::new(),
             version: "".to_string(),
-            timezone_diff_utc_seconds: 0,
         }
     }
 
     pub async fn init(mut self) -> Result<Self, Error> {
         self.init_version().await?;
-        self.init_timezone_diff_utc_seconds().await?;
         Ok(self)
     }
 
@@ -51,7 +46,7 @@ impl<'a> MysqlMetaManager {
 
         let (cols, col_type_map) = self.parse_cols(schema, tb).await?;
         let key_map = self.parse_keys(schema, tb).await?;
-        let (order_col, partition_col, id_cols) = MetaUtil::parse_rdb_cols(&key_map, &cols)?;
+        let (order_col, partition_col, id_cols) = RdbMetaManager::parse_rdb_cols(&key_map, &cols)?;
 
         let basic = RdbTbMeta {
             schema: schema.to_string(),
@@ -166,9 +161,12 @@ impl<'a> MysqlMetaManager {
                 }
             }
 
-            "timestamp" => MysqlColType::Timestamp {
-                timezone_diff_utc_seconds: self.timezone_diff_utc_seconds,
-            },
+            // as a client of mysql, sqlx's client timezone is UTC by default,
+            // so no matter what timezone of src/dst server is,
+            // src server will convert the timestamp field into UTC for sqx,
+            // and then sqx will write it into dst server by UTC,
+            // and then dst server will convert the received UTC timestamp into its own timezone.
+            "timestamp" => MysqlColType::Timestamp { timezone_offset: 0 },
 
             "tinyblob" | "mediumblob" | "longblob" | "blob" => MysqlColType::Blob,
             "float" => MysqlColType::Float,
@@ -241,20 +239,6 @@ impl<'a> MysqlMetaManager {
 
         Err(Error::MetadataError {
             error: "failed to init mysql version".to_string(),
-        })
-    }
-
-    async fn init_timezone_diff_utc_seconds(&mut self) -> Result<(), Error> {
-        let sql = "SELECT TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP, NOW())";
-        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-        if let Some(row) = rows.try_next().await.unwrap() {
-            // by default, sqlx will use UTC(+00:00) for connections which TIMESTAMPDIFF is 0
-            self.timezone_diff_utc_seconds = row.try_get(0)?;
-            return Ok(());
-        }
-
-        Err(Error::MetadataError {
-            error: "failed to init timestamp diff with utc".to_string(),
         })
     }
 }

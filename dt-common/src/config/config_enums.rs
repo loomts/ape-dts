@@ -34,8 +34,8 @@ pub enum ParallelType {
     RdbMerge,
     #[strum(serialize = "rdb_check")]
     RdbCheck,
-    #[strum(serialize = "foxlake")]
-    Foxlake,
+    #[strum(serialize = "table")]
+    Table,
 }
 
 pub enum RouteType {

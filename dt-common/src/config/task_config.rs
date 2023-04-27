@@ -161,7 +161,7 @@ impl TaskConfig {
                 timeout_secs: ini.getuint(SINKER, "timeout_secs").unwrap().unwrap() as u64,
             }),
 
-            DbType::Foxlake => Ok(SinkerConfig::FoxlakeS3 {
+            DbType::Foxlake => Ok(SinkerConfig::Foxlake {
                 batch_size,
                 bucket: ini.get(SINKER, "bucket").unwrap(),
                 access_key: ini.get(SINKER, "access_key").unwrap(),

@@ -1,4 +1,5 @@
 mod log_reader;
+mod mysql_to_foxlake;
 mod mysql_to_mysql;
 mod pg_to_pg;
 mod rdb_to_kafka;

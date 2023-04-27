@@ -42,7 +42,7 @@ pub enum SinkerConfig {
         timeout_secs: u64,
     },
 
-    FoxlakeS3 {
+    Foxlake {
         batch_size: usize,
         bucket: String,
         access_key: String,

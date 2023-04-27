@@ -114,7 +114,7 @@ impl SinkerUtil {
                 .await?
             }
 
-            SinkerConfig::FoxlakeS3 {
+            SinkerConfig::Foxlake {
                 batch_size,
                 bucket,
                 access_key,

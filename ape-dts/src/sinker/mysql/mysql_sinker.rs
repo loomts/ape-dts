@@ -1,4 +1,5 @@
 use crate::{
+    call_batch_fn, close_conn_pool,
     common::sql_util::SqlUtil,
     error,
     error::Error,
@@ -8,7 +9,7 @@ use crate::{
         row_data::RowData,
         row_type::RowType,
     },
-    sinker::{rdb_router::RdbRouter, sinker_util::SinkerUtil},
+    sinker::{base_sinker::BaseSinker, rdb_router::RdbRouter},
     traits::Sinker,
 };
 
@@ -26,27 +27,29 @@ pub struct MysqlSinker {
 
 #[async_trait]
 impl Sinker for MysqlSinker {
-    async fn sink_dml(&mut self, data: Vec<RowData>, batch: bool) -> Result<(), Error> {
+    async fn sink_dml(&mut self, mut data: Vec<RowData>, batch: bool) -> Result<(), Error> {
         if data.len() == 0 {
             return Ok(());
         }
 
         if !batch {
-            self.serial_sink(data).await
+            self.serial_sink(data).await.unwrap();
         } else {
-            match &data[0].row_type {
-                RowType::Insert => self.batch_insert(data).await,
-                RowType::Delete => self.batch_delete(data).await,
-                _ => self.serial_sink(data).await,
+            match data[0].row_type {
+                RowType::Insert => {
+                    call_batch_fn!(self, data, Self::batch_insert);
+                }
+                RowType::Delete => {
+                    call_batch_fn!(self, data, Self::batch_delete);
+                }
+                _ => self.serial_sink(data).await.unwrap(),
             }
         }
+        Ok(())
     }
 
     async fn close(&mut self) -> Result<(), Error> {
-        if self.conn_pool.is_closed() {
-            return Ok(());
-        }
-        return Ok(self.conn_pool.close().await);
+        return close_conn_pool!(self);
     }
 
     async fn sink_ddl(&mut self, _data: Vec<DdlData>, _batch: bool) -> Result<(), Error> {
@@ -68,67 +71,49 @@ impl MysqlSinker {
         Ok(())
     }
 
-    async fn batch_delete(&mut self, data: Vec<RowData>) -> Result<(), Error> {
-        let all_count = data.len();
-        let mut sinked_count = 0;
+    async fn batch_delete(
+        &mut self,
+        data: &mut Vec<RowData>,
+        sinked_count: usize,
+        batch_size: usize,
+    ) -> Result<(), Error> {
         let tb_meta = self.get_tb_meta(&data[0]).await?;
         let sql_util = SqlUtil::new_for_mysql(&tb_meta);
 
-        loop {
-            let mut batch_size = self.batch_size;
-            if all_count - sinked_count < batch_size {
-                batch_size = all_count - sinked_count;
-            }
+        let (sql, cols, binds) =
+            sql_util.get_batch_delete_query(&data, sinked_count, batch_size)?;
+        let query = SqlUtil::create_mysql_query(&sql, &cols, &binds, &tb_meta);
 
-            let (sql, cols, binds) =
-                sql_util.get_batch_delete_query(&data, sinked_count, batch_size)?;
-            let query = SqlUtil::create_mysql_query(&sql, &cols, &binds, &tb_meta);
-            query.execute(&self.conn_pool).await.unwrap();
-
-            sinked_count += batch_size;
-            if sinked_count == all_count {
-                break;
-            }
-        }
+        query.execute(&self.conn_pool).await.unwrap();
         Ok(())
     }
 
-    async fn batch_insert(&mut self, data: Vec<RowData>) -> Result<(), Error> {
-        let all_count = data.len();
-        let mut sinked_count = 0;
+    async fn batch_insert(
+        &mut self,
+        data: &mut Vec<RowData>,
+        start_index: usize,
+        batch_size: usize,
+    ) -> Result<(), Error> {
         let tb_meta = self.get_tb_meta(&data[0]).await?;
         let sql_util = SqlUtil::new_for_mysql(&tb_meta);
 
-        loop {
-            let mut batch_size = self.batch_size;
-            if all_count - sinked_count < batch_size {
-                batch_size = all_count - sinked_count;
-            }
+        let (mut sql, cols, binds) =
+            sql_util.get_batch_insert_query(&data, start_index, batch_size)?;
+        sql = self.handle_dialect(&sql);
+        let query = SqlUtil::create_mysql_query(&sql, &cols, &binds, &tb_meta);
 
-            let (mut sql, cols, binds) =
-                sql_util.get_batch_insert_query(&data, sinked_count, batch_size)?;
-            sql = self.handle_dialect(&sql);
-            let query = SqlUtil::create_mysql_query(&sql, &cols, &binds, &tb_meta);
-
-            let result = query.execute(&self.conn_pool).await;
-            if let Err(error) = result {
-                error!(
-                    "batch insert failed, will insert one by one, schema: {}, tb: {}, error: {}",
-                    tb_meta.basic.schema,
-                    tb_meta.basic.tb,
-                    error.to_string()
-                );
-                // insert one by one
-                let sub_data = &data[sinked_count..sinked_count + batch_size];
-                self.serial_sink(sub_data.to_vec()).await.unwrap();
-            }
-
-            sinked_count += batch_size;
-            if sinked_count == all_count {
-                break;
-            }
+        let result = query.execute(&self.conn_pool).await;
+        if let Err(error) = result {
+            error!(
+                "batch insert failed, will insert one by one, schema: {}, tb: {}, error: {}",
+                tb_meta.basic.schema,
+                tb_meta.basic.tb,
+                error.to_string()
+            );
+            // insert one by one
+            let sub_data = &data[start_index..start_index + batch_size];
+            self.serial_sink(sub_data.to_vec()).await.unwrap();
         }
-
         Ok(())
     }
 
@@ -139,6 +124,6 @@ impl MysqlSinker {
 
     #[inline(always)]
     async fn get_tb_meta(&mut self, row_data: &RowData) -> Result<MysqlTbMeta, Error> {
-        SinkerUtil::get_mysql_tb_meta(&mut self.meta_manager, &mut self.router, row_data).await
+        BaseSinker::get_mysql_tb_meta(&mut self.meta_manager, &mut self.router, row_data).await
     }
 }

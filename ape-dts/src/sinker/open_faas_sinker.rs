@@ -3,6 +3,7 @@ use log::error;
 use serde_json::json;
 
 use crate::{
+    call_batch_fn,
     error::Error,
     meta::{ddl_data::DdlData, row_data::RowData},
     traits::Sinker,
@@ -18,27 +19,8 @@ pub struct OpenFaasSinker {
 
 #[async_trait]
 impl Sinker for OpenFaasSinker {
-    async fn sink_dml(&mut self, data: Vec<RowData>, _batch: bool) -> Result<(), Error> {
-        let all_count = data.len();
-        let mut sinked_count = 0;
-
-        loop {
-            let mut batch_size = self.batch_size;
-            if all_count - sinked_count < batch_size {
-                batch_size = all_count - sinked_count;
-            }
-
-            let mut messages = Vec::new();
-            for i in sinked_count..sinked_count + batch_size {
-                messages.push(&data[i]);
-            }
-
-            self.invoke(messages).await.unwrap();
-            sinked_count += batch_size;
-            if sinked_count == all_count {
-                break;
-            }
-        }
+    async fn sink_dml(&mut self, mut data: Vec<RowData>, _batch: bool) -> Result<(), Error> {
+        call_batch_fn!(self, data, Self::invoke);
         Ok(())
     }
 
@@ -52,7 +34,17 @@ impl Sinker for OpenFaasSinker {
 }
 
 impl OpenFaasSinker {
-    async fn invoke(&self, data: Vec<&RowData>) -> Result<(), Error> {
+    async fn invoke(
+        &mut self,
+        data: &mut Vec<RowData>,
+        start_index: usize,
+        batch_size: usize,
+    ) -> Result<(), Error> {
+        let mut messages = Vec::new();
+        for i in start_index..start_index + batch_size {
+            messages.push(&data[i]);
+        }
+
         let response = self
             .http_client
             .post(&self.gateway_url)

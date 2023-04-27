@@ -11,13 +11,13 @@ use crate::{
 
 use super::base_parallelizer::BaseParallelizer;
 
-pub struct FoxlakeParallelizer {
+pub struct TableParallelizer {
     pub base_parallelizer: BaseParallelizer,
     pub parallel_size: usize,
 }
 
 #[async_trait]
-impl Parallelizer for FoxlakeParallelizer {
+impl Parallelizer for TableParallelizer {
     fn get_name(&self) -> String {
         "FoxlakeParallelizer".to_string()
     }
@@ -31,9 +31,9 @@ impl Parallelizer for FoxlakeParallelizer {
         data: Vec<RowData>,
         sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
     ) -> Result<(), Error> {
-        let sub_datas = Self::partition(data)?;
+        let sub_datas = Self::partition_dml(data)?;
         self.base_parallelizer
-            .sink_dml(sub_datas, sinkers, 1, false)
+            .sink_dml(sub_datas, sinkers, self.parallel_size, false)
             .await
     }
 
@@ -42,22 +42,38 @@ impl Parallelizer for FoxlakeParallelizer {
         data: Vec<DdlData>,
         sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
     ) -> Result<(), Error> {
+        let sub_datas = Self::partition_ddl(data)?;
         self.base_parallelizer
-            .sink_ddl(vec![data], sinkers, 1, false)
+            .sink_ddl(sub_datas, sinkers, self.parallel_size, false)
             .await
     }
 }
 
-impl FoxlakeParallelizer {
-    pub fn partition(data: Vec<RowData>) -> Result<Vec<Vec<RowData>>, Error> {
+impl TableParallelizer {
+    /// partition dml vec into sub vecs by full table name
+    pub fn partition_dml(data: Vec<RowData>) -> Result<Vec<Vec<RowData>>, Error> {
         let mut sub_data_map: HashMap<String, Vec<RowData>> = HashMap::new();
         for row_data in data {
             let full_tb = format!("{}.{}", row_data.db, row_data.tb);
             if let Some(sub_data) = sub_data_map.get_mut(&full_tb) {
                 sub_data.push(row_data);
             } else {
-                let sub_data = vec![row_data];
-                sub_data_map.insert(full_tb, sub_data);
+                sub_data_map.insert(full_tb, vec![row_data]);
+            }
+        }
+
+        let sub_datas = sub_data_map.into_iter().map(|(_, v)| v).collect();
+        Ok(sub_datas)
+    }
+
+    /// partition ddl vec into sub vecs by schema
+    pub fn partition_ddl(data: Vec<DdlData>) -> Result<Vec<Vec<DdlData>>, Error> {
+        let mut sub_data_map: HashMap<String, Vec<DdlData>> = HashMap::new();
+        for ddl in data {
+            if let Some(sub_data) = sub_data_map.get_mut(&ddl.schema) {
+                sub_data.push(ddl);
+            } else {
+                sub_data_map.insert(ddl.schema.clone(), vec![ddl]);
             }
         }
 

@@ -51,10 +51,13 @@ impl Parallelizer for MergeParallelizer {
 
     async fn sink_ddl(
         &mut self,
-        _data: Vec<DdlData>,
-        _sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
+        data: Vec<DdlData>,
+        sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
     ) -> Result<(), Error> {
-        Ok(())
+        // ddl should always be excuted serially
+        self.base_parallelizer
+            .sink_ddl(vec![data], sinkers, 1, false)
+            .await
     }
 }
 

@@ -14,9 +14,9 @@ use mysql_binlog_connector_rust::{
 
 use crate::{
     adaptor::mysql_col_value_convertor::MysqlColValueConvertor,
-    common::position_util::PositionUtil,
+    common::{position_util::PositionUtil, sql_parser::ddl_parser::DdlParser},
     error::Error,
-    extractor::{extractor_util::ExtractorUtil, rdb_filter::RdbFilter},
+    extractor::{base_extractor::BaseExtractor, rdb_filter::RdbFilter},
     info,
     meta::{
         col_value::ColValue, ddl_data::DdlData, ddl_type::DdlType, dt_data::DtData,
@@ -165,13 +165,20 @@ impl MysqlCdcExtractor<'_> {
             }
 
             EventData::Query(query) => {
+                let mut ddl_data = DdlData {
+                    schema: query.schema,
+                    query: query.query.clone(),
+                    ddl_type: DdlType::Unknown,
+                };
+
                 if query.query != QUERY_BEGIN {
-                    let ddl_data = DdlData {
-                        schema: query.schema,
-                        query: query.query,
-                        ddl_type: DdlType::Create,
-                    };
-                    ExtractorUtil::push_dt_data(&self.buffer, DtData::Ddl { ddl_data }).await?;
+                    if let Ok((ddl_type, schema, _)) = DdlParser::parse(&query.query) {
+                        ddl_data.ddl_type = ddl_type;
+                        if let Some(schema) = schema {
+                            ddl_data.schema = schema;
+                        }
+                    }
+                    BaseExtractor::push_dt_data(&self.buffer, DtData::Ddl { ddl_data }).await?;
                 }
             }
 
@@ -180,7 +187,7 @@ impl MysqlCdcExtractor<'_> {
                     xid: xid.xid.to_string(),
                     position: position.to_string(),
                 };
-                ExtractorUtil::push_dt_data(&self.buffer, commit).await?;
+                BaseExtractor::push_dt_data(&self.buffer, commit).await?;
             }
 
             _ => {}
@@ -196,7 +203,7 @@ impl MysqlCdcExtractor<'_> {
         {
             return Ok(());
         }
-        ExtractorUtil::push_row(&self.buffer, row_data).await
+        BaseExtractor::push_row(&self.buffer, row_data).await
     }
 
     async fn parse_row_data(

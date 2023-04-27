@@ -6,10 +6,10 @@ use crate::{
     error::Error,
     pipeline::{
         base_parallelizer::BaseParallelizer, check_parallelizer::CheckParallelizer,
-        foxlake_parallelizer::FoxlakeParallelizer, merge_parallelizer::MergeParallelizer,
-        partition_parallelizer::PartitionParallelizer, rdb_merger::RdbMerger,
-        rdb_partitioner::RdbPartitioner, serial_parallelizer::SerialParallelizer,
-        snapshot_parallelizer::SnapshotParallelizer,
+        merge_parallelizer::MergeParallelizer, partition_parallelizer::PartitionParallelizer,
+        rdb_merger::RdbMerger, rdb_partitioner::RdbPartitioner,
+        serial_parallelizer::SerialParallelizer, snapshot_parallelizer::SnapshotParallelizer,
+        table_parallelizer::TableParallelizer,
     },
     traits::Parallelizer,
 };
@@ -63,7 +63,7 @@ impl PipelineUtil {
 
             ParallelType::Serial => Box::new(SerialParallelizer { base_parallelizer }),
 
-            ParallelType::Foxlake => Box::new(FoxlakeParallelizer {
+            ParallelType::Table => Box::new(TableParallelizer {
                 base_parallelizer,
                 parallel_size,
             }),

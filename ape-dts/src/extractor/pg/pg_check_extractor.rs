@@ -11,7 +11,7 @@ use crate::{
     adaptor::pg_col_value_convertor::PgColValueConvertor,
     common::sql_util::SqlUtil,
     error::Error,
-    extractor::{base_check_extractor::BaseCheckExtractor, extractor_util::ExtractorUtil},
+    extractor::{base_check_extractor::BaseCheckExtractor, base_extractor::BaseExtractor},
     info,
     log::{check_log::CheckLog, log_type::LogType},
     meta::{
@@ -88,7 +88,7 @@ impl BatchCheckExtractor for PgCheckExtractor<'_> {
                 row_data.before = row_data.after.clone();
             }
 
-            ExtractorUtil::push_row(self.buffer, row_data)
+            BaseExtractor::push_row(self.buffer, row_data)
                 .await
                 .unwrap();
         }
