@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use dt_common::config::router_config::RouterConfig;
+use dt_common::config::{config_enums::RouteType, router_config::RouterConfig};
 use regex::Regex;
 
 use crate::error::Error;
@@ -16,8 +16,8 @@ impl RdbRouter {
     pub fn from_config(config: &RouterConfig) -> Result<Self, Error> {
         match config {
             RouterConfig::Rdb { db_map, tb_map, .. } => Ok(Self {
-                db_map: Self::parse_str(db_map, NameType::Db)?,
-                tb_map: Self::parse_str(tb_map, NameType::DbTb)?,
+                db_map: Self::parse_str(db_map, RouteType::Db)?,
+                tb_map: Self::parse_str(tb_map, RouteType::DbTb)?,
                 cache: HashMap::new(),
             }),
         }
@@ -48,7 +48,7 @@ impl RdbRouter {
         return (db.to_string(), tb.to_string());
     }
 
-    fn parse_str(config_str: &str, name_type: NameType) -> Result<HashMap<String, String>, Error> {
+    fn parse_str(config_str: &str, name_type: RouteType) -> Result<HashMap<String, String>, Error> {
         let mut map = HashMap::new();
         if config_str.is_empty() {
             return Ok(map);
@@ -73,12 +73,12 @@ impl RdbRouter {
         Ok(map)
     }
 
-    fn is_valid_name(name: &str, name_type: &NameType) -> bool {
+    fn is_valid_name(name: &str, name_type: &RouteType) -> bool {
         let re = Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_]{0,63}$").unwrap();
         match name_type {
-            NameType::Db => re.is_match(name),
+            RouteType::Db => re.is_match(name),
 
-            NameType::DbTb => {
+            RouteType::DbTb => {
                 let tokens: Vec<&str> = name.split(".").collect();
                 if tokens.len() != 2 {
                     return false;
@@ -89,11 +89,6 @@ impl RdbRouter {
     }
 }
 
-enum NameType {
-    Db,
-    DbTb,
-}
-
 #[cfg(test)]
 mod tests {
 
@@ -101,22 +96,22 @@ mod tests {
 
     #[test]
     fn test_valid_db_names() {
-        assert!(RdbRouter::is_valid_name("my_database", &NameType::Db));
-        assert!(RdbRouter::is_valid_name("database1", &NameType::Db));
-        assert!(RdbRouter::is_valid_name("_database", &NameType::Db));
-        assert!(RdbRouter::is_valid_name("a", &NameType::Db));
+        assert!(RdbRouter::is_valid_name("my_database", &RouteType::Db));
+        assert!(RdbRouter::is_valid_name("database1", &RouteType::Db));
+        assert!(RdbRouter::is_valid_name("_database", &RouteType::Db));
+        assert!(RdbRouter::is_valid_name("a", &RouteType::Db));
     }
 
     #[test]
     fn test_invalid_db_names() {
         // empty
-        assert!(!RdbRouter::is_valid_name("", &NameType::Db));
+        assert!(!RdbRouter::is_valid_name("", &RouteType::Db));
         // invalid character
-        assert!(!RdbRouter::is_valid_name("database*", &NameType::Db));
+        assert!(!RdbRouter::is_valid_name("database*", &RouteType::Db));
         // too long
         assert!(!RdbRouter::is_valid_name(
             "ttttttttttttttttttttttttttttttttttttttt_this_is_a_really_long_database_name_that_is_over_64_characters",
-            &NameType::Db
+            &RouteType::Db
         ));
     }
 
@@ -124,38 +119,38 @@ mod tests {
     fn test_valid_dbtb_names() {
         assert!(RdbRouter::is_valid_name(
             "my_database.tb_1",
-            &NameType::DbTb
+            &RouteType::DbTb
         ));
-        assert!(RdbRouter::is_valid_name("_database.tb_1", &NameType::DbTb));
-        assert!(RdbRouter::is_valid_name("a._tb_2", &NameType::DbTb));
+        assert!(RdbRouter::is_valid_name("_database.tb_1", &RouteType::DbTb));
+        assert!(RdbRouter::is_valid_name("a._tb_2", &RouteType::DbTb));
         assert!(RdbRouter::is_valid_name(
             "a123456789012345678901234567890123456789012345678901234567890123.a123456789012345678901234567890123456789012345678901234567890123",
-            &NameType::DbTb
+            &RouteType::DbTb
         ));
     }
 
     #[test]
     fn test_invalid_dbtb_names() {
         // only db
-        assert!(!RdbRouter::is_valid_name("my_database", &NameType::DbTb));
+        assert!(!RdbRouter::is_valid_name("my_database", &RouteType::DbTb));
         // empty tb
-        assert!(!RdbRouter::is_valid_name("my_database.", &NameType::DbTb));
+        assert!(!RdbRouter::is_valid_name("my_database.", &RouteType::DbTb));
         // emtpy tb
-        assert!(!RdbRouter::is_valid_name(".my_database", &NameType::DbTb));
+        assert!(!RdbRouter::is_valid_name(".my_database", &RouteType::DbTb));
         // more than 2 parts
         assert!(!RdbRouter::is_valid_name(
             "_database.tb_1.",
-            &NameType::DbTb
+            &RouteType::DbTb
         ));
         // invalid characters in tb
-        assert!(!RdbRouter::is_valid_name("a.-database", &NameType::DbTb));
-        assert!(!RdbRouter::is_valid_name("*.*", &NameType::DbTb));
-        assert!(!RdbRouter::is_valid_name("*.?", &NameType::DbTb));
-        assert!(!RdbRouter::is_valid_name("a*b?c.a*b?c", &NameType::DbTb));
+        assert!(!RdbRouter::is_valid_name("a.-database", &RouteType::DbTb));
+        assert!(!RdbRouter::is_valid_name("*.*", &RouteType::DbTb));
+        assert!(!RdbRouter::is_valid_name("*.?", &RouteType::DbTb));
+        assert!(!RdbRouter::is_valid_name("a*b?c.a*b?c", &RouteType::DbTb));
         // tb too long
         assert!(!RdbRouter::is_valid_name(
             "a.ttttttttttttttttttttttttttttttttttttttt_this_is_a_really_long_database_name_that_is_over_64_characters",
-            &NameType::DbTb
+            &RouteType::DbTb
         ));
     }
 
@@ -165,7 +160,7 @@ mod tests {
         result.insert("a".to_string(), "b".to_string());
         result.insert("c".to_string(), "d".to_string());
         assert_eq!(
-            RdbRouter::parse_str("a:b,c:d", NameType::Db).unwrap(),
+            RdbRouter::parse_str("a:b,c:d", RouteType::Db).unwrap(),
             result
         );
 
@@ -173,7 +168,7 @@ mod tests {
         result.insert("a.a".to_string(), "b.b".to_string());
         result.insert("c.c".to_string(), "d.d".to_string());
         assert_eq!(
-            RdbRouter::parse_str("a.a:b.b,c.c:d.d", NameType::DbTb).unwrap(),
+            RdbRouter::parse_str("a.a:b.b,c.c:d.d", RouteType::DbTb).unwrap(),
             result
         );
     }
@@ -181,22 +176,22 @@ mod tests {
     #[test]
     fn test_rdb_router_parse_str_err() {
         // miss map value
-        assert!(RdbRouter::parse_str("a", NameType::Db).is_err());
+        assert!(RdbRouter::parse_str("a", RouteType::Db).is_err());
         // mis map value
-        assert!(RdbRouter::parse_str("a:b,c", NameType::Db).is_err());
+        assert!(RdbRouter::parse_str("a:b,c", RouteType::Db).is_err());
         // invalid characters in name
-        assert!(RdbRouter::parse_str("a:b,c&:d", NameType::Db).is_err());
+        assert!(RdbRouter::parse_str("a:b,c&:d", RouteType::Db).is_err());
         // wrong map
-        assert!(RdbRouter::parse_str("a:b:b,c:d", NameType::Db).is_err());
+        assert!(RdbRouter::parse_str("a:b:b,c:d", RouteType::Db).is_err());
 
         // miss map value
-        assert!(RdbRouter::parse_str("a.b", NameType::DbTb).is_err());
+        assert!(RdbRouter::parse_str("a.b", RouteType::DbTb).is_err());
         // mis map value
-        assert!(RdbRouter::parse_str("a.a:b.b,c.c", NameType::DbTb).is_err());
+        assert!(RdbRouter::parse_str("a.a:b.b,c.c", RouteType::DbTb).is_err());
         // invalid characters in name
-        assert!(RdbRouter::parse_str("a.a:b.b,c&.c:d.d", NameType::DbTb).is_err());
+        assert!(RdbRouter::parse_str("a.a:b.b,c&.c:d.d", RouteType::DbTb).is_err());
         // wrong map
-        assert!(RdbRouter::parse_str("a.a:b.b:c.c,c.c:d.d", NameType::DbTb).is_err());
+        assert!(RdbRouter::parse_str("a.a:b.b:c.c,c.c:d.d", RouteType::DbTb).is_err());
     }
 
     #[test]

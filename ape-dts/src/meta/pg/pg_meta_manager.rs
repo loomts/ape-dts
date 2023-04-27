@@ -5,7 +5,7 @@ use sqlx::{Pool, Postgres, Row};
 
 use crate::{
     error::Error,
-    meta::{meta_util::MetaUtil, rdb_tb_meta::RdbTbMeta},
+    meta::{rdb_meta_manager::RdbMetaManager, rdb_tb_meta::RdbTbMeta},
 };
 
 use super::{pg_col_type::PgColType, pg_tb_meta::PgTbMeta, type_registry::TypeRegistry};
@@ -58,7 +58,7 @@ impl PgMetaManager {
         let oid = self.get_oid(schema, tb).await?;
         let (cols, col_type_map) = self.parse_cols(schema, tb).await?;
         let key_map = self.parse_keys(schema, tb).await?;
-        let (order_col, partition_col, id_cols) = MetaUtil::parse_rdb_cols(&key_map, &cols)?;
+        let (order_col, partition_col, id_cols) = RdbMetaManager::parse_rdb_cols(&key_map, &cols)?;
 
         let basic = RdbTbMeta {
             schema: schema.to_string(),

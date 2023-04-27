@@ -3,7 +3,9 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-#[derive(Debug, Clone, PartialEq)]
+use serde::{Deserialize, Serialize, Serializer};
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[allow(dead_code)]
 pub enum ColValue {
     None,
@@ -40,13 +42,13 @@ impl ColValue {
             ColValue::None => 0,
             _ => {
                 let mut hasher = DefaultHasher::new();
-                self.to_string().hash(&mut hasher);
+                self.to_option_string().hash(&mut hasher);
                 hasher.finish()
             }
         }
     }
 
-    pub fn to_string(&self) -> Option<String> {
+    pub fn to_option_string(&self) -> Option<String> {
         match self {
             ColValue::Tiny(v) => Some(v.to_string()),
             ColValue::UnsignedTiny(v) => Some(v.to_string()),
@@ -71,8 +73,45 @@ impl ColValue {
             ColValue::Set2(v) => Some(v.to_string()),
             ColValue::Enum(v) => Some(v.to_string()),
             ColValue::Enum2(v) => Some(v.to_string()),
+            // TODO: support JSON
             ColValue::Json(v) => Some(format!("{:?}", v)),
             _ => Option::None,
+        }
+    }
+}
+
+impl Serialize for ColValue {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            ColValue::Tiny(v) => serializer.serialize_i8(*v),
+            ColValue::UnsignedTiny(v) => serializer.serialize_u8(*v),
+            ColValue::Short(v) => serializer.serialize_i16(*v),
+            ColValue::UnsignedShort(v) => serializer.serialize_u16(*v),
+            ColValue::Long(v) => serializer.serialize_i32(*v),
+            ColValue::UnsignedLong(v) => serializer.serialize_u32(*v),
+            ColValue::LongLong(v) => serializer.serialize_i64(*v),
+            ColValue::UnsignedLongLong(v) => serializer.serialize_u64(*v),
+            ColValue::Float(v) => serializer.serialize_f32(*v),
+            ColValue::Double(v) => serializer.serialize_f64(*v),
+            ColValue::Decimal(v) => serializer.serialize_str(v),
+            ColValue::Time(v) => serializer.serialize_str(v),
+            ColValue::Date(v) => serializer.serialize_str(v),
+            ColValue::DateTime(v) => serializer.serialize_str(v),
+            ColValue::Timestamp(v) => serializer.serialize_str(v),
+            ColValue::Year(v) => serializer.serialize_u16(*v),
+            ColValue::String(v) => serializer.serialize_str(v),
+            ColValue::Blob(v) => serializer.serialize_bytes(v),
+            ColValue::Bit(v) => serializer.serialize_u64(*v),
+            ColValue::Set(v) => serializer.serialize_u64(*v),
+            ColValue::Set2(v) => serializer.serialize_str(v),
+            ColValue::Enum(v) => serializer.serialize_u32(*v),
+            ColValue::Enum2(v) => serializer.serialize_str(v),
+            // TODO: support JSON
+            ColValue::Json(v) => serializer.serialize_bytes(v),
+            _ => serializer.serialize_none(),
         }
     }
 }

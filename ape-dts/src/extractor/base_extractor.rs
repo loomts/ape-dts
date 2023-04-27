@@ -6,9 +6,9 @@ use crate::{
     task::task_util::TaskUtil,
 };
 
-pub struct ExtractorUtil {}
+pub struct BaseExtractor {}
 
-impl ExtractorUtil {
+impl BaseExtractor {
     pub async fn push_dt_data(
         buffer: &ConcurrentQueue<DtData>,
         dt_data: DtData,

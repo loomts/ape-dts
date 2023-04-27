@@ -24,6 +24,8 @@ pub enum SinkType {
 
 #[derive(EnumString, AsStaticStr)]
 pub enum ParallelType {
+    #[strum(serialize = "serial")]
+    Serial,
     #[strum(serialize = "snapshot")]
     Snapshot,
     #[strum(serialize = "rdb_partition")]
@@ -32,4 +34,11 @@ pub enum ParallelType {
     RdbMerge,
     #[strum(serialize = "rdb_check")]
     RdbCheck,
+    #[strum(serialize = "table")]
+    Table,
+}
+
+pub enum RouteType {
+    Db,
+    DbTb,
 }

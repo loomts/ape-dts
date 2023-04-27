@@ -19,7 +19,7 @@ pub enum MysqlColType {
     DateTime,
     // timezone diff with utc in seconds
     // refer: https://dev.mysql.com/doc/refman/8.0/en/datetime.html
-    Timestamp { timezone_diff_utc_seconds: i64 },
+    Timestamp { timezone_offset: i64 },
     Year,
     // for char(length), the maximum length is 255,
     // for varchar(length), the maximum length is 65535

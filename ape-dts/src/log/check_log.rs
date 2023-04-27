@@ -48,11 +48,11 @@ impl CheckLog {
         let after = row_data.after.as_ref().unwrap();
         let mut col_values = Vec::new();
         for col in tb_meta.id_cols.iter() {
-            col_values.push(after.get(col).unwrap().to_string());
+            col_values.push(after.get(col).unwrap().to_option_string());
         }
 
         Self {
-            schema: row_data.db.clone(),
+            schema: row_data.schema.clone(),
             tb: row_data.tb.clone(),
             cols: tb_meta.id_cols.clone(),
             col_values,

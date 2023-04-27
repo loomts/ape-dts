@@ -48,7 +48,7 @@ impl CheckResult {
         err_option: Option<Error>,
     ) -> Self {
         let check_desc;
-        let advise_msg;
+        let mut advise_msg = String::new();
         let mut source_or_sink = String::from("source");
         if !is_source {
             source_or_sink = String::from("sink");
@@ -67,6 +67,7 @@ impl CheckResult {
                 match db_type {
                     DbType::Mysql => advise_msg = format!("(1)open 'log_bin' configuration. (2)set 'binlog_format' configuration to 'row'. (3)set 'binlog_row_image' configuration to 'full'."),
                     DbType::Pg => advise_msg = format!("(1)set 'wal_level' configuration to 'logical'. (2)make sure that the number of 'max_replication_slots' configured is sufficient. (3)make sure that the number of 'max_wal_senders' configured is sufficient."),
+                    _ => {}
                 }
             }
             CheckItem::CheckAccountPermission => {
@@ -90,10 +91,11 @@ impl CheckResult {
             }
             CheckItem::CheckDatabaseVersionSupported => {
                 check_desc = format!("check if the {} database version supports.", source_or_sink);
-                let advise_version;
+                let mut advise_version = String::new();
                 match db_type {
                     DbType::Mysql => advise_version = format!("currently supports version '8.*'."),
                     DbType::Pg => advise_version = format!("currently supports version '14.*'."),
+                    _ => {}
                 }
                 advise_msg = format!("{} wait for the next release.", advise_version);
             }

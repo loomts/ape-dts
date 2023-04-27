@@ -5,16 +5,17 @@ use concurrent_queue::ConcurrentQueue;
 
 use crate::{
     error::Error,
-    meta::{dt_data::DtData, row_data::RowData, row_type::RowType},
+    meta::{ddl_data::DdlData, dt_data::DtData, row_data::RowData, row_type::RowType},
     traits::{Parallelizer, Sinker},
 };
 
 use super::{
-    parallelizer_util::ParallelizerUtil,
+    base_parallelizer::BaseParallelizer,
     rdb_merger::{RdbMerger, TbMergedData},
 };
 
 pub struct MergeParallelizer {
+    pub base_parallelizer: BaseParallelizer,
     pub merger: RdbMerger,
     pub parallel_size: usize,
 }
@@ -30,10 +31,10 @@ impl Parallelizer for MergeParallelizer {
     }
 
     async fn drain(&mut self, buffer: &ConcurrentQueue<DtData>) -> Result<Vec<DtData>, Error> {
-        ParallelizerUtil::drain(buffer)
+        self.base_parallelizer.drain(buffer)
     }
 
-    async fn sink(
+    async fn sink_dml(
         &mut self,
         data: Vec<RowData>,
         sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
@@ -46,6 +47,17 @@ impl Parallelizer for MergeParallelizer {
         self.sink_internal(&mut merged_datas, sinkers, UNMERGED)
             .await?;
         Ok(())
+    }
+
+    async fn sink_ddl(
+        &mut self,
+        data: Vec<DdlData>,
+        sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
+    ) -> Result<(), Error> {
+        // ddl should always be excuted serially
+        self.base_parallelizer
+            .sink_ddl(vec![data], sinkers, 1, false)
+            .await
     }
 }
 
@@ -74,7 +86,7 @@ impl MergeParallelizer {
             let sinker = sinkers[i % parallel_size].clone();
             let future = tokio::spawn(async move {
                 match sinker_type_clone.as_str() {
-                    DELETE | INSERT => sinker.lock().await.batch_sink(data).await.unwrap(),
+                    DELETE | INSERT => sinker.lock().await.sink_dml(data, true).await.unwrap(),
                     _ => Self::sink_unmerged_rows(sinker, data).await.unwrap(),
                 };
             });
@@ -98,9 +110,9 @@ impl MergeParallelizer {
             if i == data.len() || data[i].row_type != data[start].row_type {
                 let sub_data = data[start..i].to_vec();
                 if data[start].row_type == RowType::Insert {
-                    sinker.lock().await.batch_sink(sub_data).await?;
+                    sinker.lock().await.sink_dml(sub_data, true).await?;
                 } else {
-                    sinker.lock().await.sink(sub_data).await?;
+                    sinker.lock().await.sink_dml(sub_data, false).await?;
                 }
                 start = i;
             }

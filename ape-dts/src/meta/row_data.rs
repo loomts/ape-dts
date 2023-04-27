@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sqlx::{mysql::MySqlRow, postgres::PgRow};
 
 use crate::adaptor::{
@@ -11,14 +13,14 @@ use super::{
     rdb_tb_meta::RdbTbMeta, row_type::RowType,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RowData {
-    // TODO, change to schema
-    pub db: String,
+    pub schema: String,
     pub tb: String,
     pub row_type: RowType,
     pub before: Option<HashMap<String, ColValue>>,
     pub after: Option<HashMap<String, ColValue>>,
+    #[serde(skip)]
     pub position: String,
 }
 
@@ -43,7 +45,7 @@ impl RowData {
 
     pub fn build_insert_row_data(after: HashMap<String, ColValue>, tb_meta: &RdbTbMeta) -> Self {
         RowData {
-            db: tb_meta.schema.clone(),
+            schema: tb_meta.schema.clone(),
             tb: tb_meta.tb.clone(),
             before: None,
             after: Some(after),
@@ -52,24 +54,9 @@ impl RowData {
         }
     }
 
-    // pub fn to_string(&self, tb_meta: &RdbTbMeta) -> String {
-    //     let mut result = Vec::new();
-    //     result.push(format!(
-    //         "db: {}, tb: {}, row_type: {}",
-    //         self.db,
-    //         self.tb,
-    //         self.row_type.as_static()
-    //     ));
-    //     result.push(format!(
-    //         "before: {}",
-    //         Self::format_values(&self.before, tb_meta)
-    //     ));
-    //     result.push(format!(
-    //         "after: {}",
-    //         Self::format_values(&self.after, tb_meta)
-    //     ));
-    //     result.join("\n")
-    // }
+    pub fn to_string(&self) -> String {
+        json!(self).to_string()
+    }
 
     pub fn get_hash_code(&self, tb_meta: &RdbTbMeta) -> u128 {
         let col_values = match self.row_type {
@@ -95,26 +82,4 @@ impl RowData {
         }
         hash_code
     }
-
-    // fn format_values(values: &Option<HashMap<String, ColValue>>, tb_meta: &RdbTbMeta) -> String {
-    //     if values.is_none() {
-    //         return "none".to_string();
-    //     }
-
-    //     let mut result = Vec::new();
-    //     let unwrap_values = values.as_ref().unwrap();
-    //     for col in tb_meta.cols.iter() {
-    //         if !unwrap_values.contains_key(col) {
-    //             result.push(format!("{}: none", col));
-    //             continue;
-    //         }
-
-    //         result.push(format!(
-    //             "{}: {}",
-    //             col,
-    //             unwrap_values.get(col).unwrap().to_string()
-    //         ));
-    //     }
-    //     return result.join(" , ");
-    // }
 }
