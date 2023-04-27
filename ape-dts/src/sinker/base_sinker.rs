@@ -53,7 +53,7 @@ impl BaseSinker {
         router: &mut RdbRouter,
         row_data: &RowData,
     ) -> Result<MysqlTbMeta, Error> {
-        let (db, tb) = router.get_route(&row_data.db, &row_data.tb);
+        let (db, tb) = router.get_route(&row_data.schema, &row_data.tb);
         let tb_meta = meta_manager.get_tb_meta(&db, &tb).await?;
         return Ok(tb_meta);
     }
@@ -64,7 +64,7 @@ impl BaseSinker {
         router: &mut RdbRouter,
         row_data: &RowData,
     ) -> Result<PgTbMeta, Error> {
-        let (db, tb) = router.get_route(&row_data.db, &row_data.tb);
+        let (db, tb) = router.get_route(&row_data.schema, &row_data.tb);
         let tb_meta = meta_manager.get_tb_meta(&db, &tb).await?;
         return Ok(tb_meta);
     }

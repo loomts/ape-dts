@@ -16,7 +16,7 @@ impl RdbMerger {
     ) -> Result<HashMap<String, TbMergedData>, Error> {
         let mut sub_datas = HashMap::<String, TbMergedData>::new();
         for row_data in data {
-            let full_tb = format!("{}.{}", row_data.db, row_data.tb);
+            let full_tb = format!("{}.{}", row_data.schema, row_data.tb);
             if let Some(merged) = sub_datas.get_mut(&full_tb) {
                 self.merge_row_data(merged, row_data).await?;
             } else {
@@ -50,7 +50,7 @@ impl RdbMerger {
 
         let tb_meta = self
             .meta_manager
-            .get_tb_meta(&row_data.db, &row_data.tb)
+            .get_tb_meta(&row_data.schema, &row_data.tb)
             .await?;
         match row_data.row_type {
             RowType::Delete => {
@@ -86,7 +86,7 @@ impl RdbMerger {
                 ) {
                     let row_data = RowData {
                         row_type: RowType::Update,
-                        db: delete.db,
+                        schema: delete.schema,
                         tb: delete.tb,
                         before: delete.before,
                         after: insert.after,
@@ -144,7 +144,7 @@ impl RdbMerger {
     ) -> Result<(RowData, RowData), Error> {
         let delete_row = RowData {
             row_type: RowType::Delete,
-            db: row_data.db.clone(),
+            schema: row_data.schema.clone(),
             tb: row_data.tb.clone(),
             before: row_data.before,
             after: Option::None,
@@ -153,7 +153,7 @@ impl RdbMerger {
 
         let insert_row = RowData {
             row_type: RowType::Insert,
-            db: row_data.db,
+            schema: row_data.schema,
             tb: row_data.tb,
             before: Option::None,
             after: row_data.after,
@@ -166,7 +166,7 @@ impl RdbMerger {
     async fn get_hash_code(&mut self, row_data: &RowData) -> Result<u128, Error> {
         let tb_meta = self
             .meta_manager
-            .get_tb_meta(&row_data.db, &row_data.tb)
+            .get_tb_meta(&row_data.schema, &row_data.tb)
             .await?;
         if tb_meta.key_map.is_empty() {
             return Ok(0);

@@ -113,6 +113,13 @@ impl StructBuilder {
                     is_finished: finished_flag,
                     seq_owners: HashMap::new(),
                 }),
+                _ => Box::new(MySqlStructExtractor {
+                    pool: Option::None,
+                    struct_obj_queue: queue,
+                    source_config: self.extractor_config.clone(),
+                    filter_config: self.filter_config.clone(),
+                    is_finished: finished_flag,
+                }),
             },
             _ => {
                 // Todo:
@@ -131,6 +138,11 @@ impl StructBuilder {
                     router_config: self.router_config.clone(),
                 }),
                 DbType::Pg => Box::new(PgStructSinker {
+                    pool: Option::None,
+                    sinker_config: self.sinker_config.clone(),
+                    router_config: self.router_config.clone(),
+                }),
+                _ => Box::new(MySqlStructSinker {
                     pool: Option::None,
                     sinker_config: self.sinker_config.clone(),
                     router_config: self.router_config.clone(),

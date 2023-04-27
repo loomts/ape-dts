@@ -15,8 +15,7 @@ use super::{
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RowData {
-    // TODO, change to schema
-    pub db: String,
+    pub schema: String,
     pub tb: String,
     pub row_type: RowType,
     pub before: Option<HashMap<String, ColValue>>,
@@ -46,7 +45,7 @@ impl RowData {
 
     pub fn build_insert_row_data(after: HashMap<String, ColValue>, tb_meta: &RdbTbMeta) -> Self {
         RowData {
-            db: tb_meta.schema.clone(),
+            schema: tb_meta.schema.clone(),
             tb: tb_meta.tb.clone(),
             before: None,
             after: Some(after),

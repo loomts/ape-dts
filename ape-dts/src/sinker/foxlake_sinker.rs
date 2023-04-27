@@ -25,7 +25,7 @@ impl Sinker for FoxlakeSinker {
             return Ok(());
         }
 
-        let db = &data[0].db;
+        let db = &data[0].schema;
         let tb = &data[0].tb;
         let sequence = self.get_sequence(db).await.unwrap();
         let key = self.generate_dml_key(db, tb, sequence);

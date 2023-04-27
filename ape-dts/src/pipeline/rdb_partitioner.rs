@@ -39,7 +39,7 @@ impl RdbPartitioner {
 
         let tb_meta = self
             .meta_manager
-            .get_tb_meta(&row_data.db, &row_data.tb)
+            .get_tb_meta(&row_data.schema, &row_data.tb)
             .await?;
         let before = row_data.before.as_ref().unwrap();
         let after = row_data.after.as_ref().unwrap();
@@ -63,7 +63,7 @@ impl RdbPartitioner {
                 if col_value_before != col_value_after {
                     debug!(
                         "{}.{}.{} changed from {:?} to {:?}",
-                        &row_data.db,
+                        &row_data.schema,
                         &row_data.tb,
                         col,
                         col_value_before.unwrap().to_option_string(),
@@ -100,7 +100,7 @@ impl RdbPartitioner {
 
         let tb_meta = self
             .meta_manager
-            .get_tb_meta(&row_data.db, &row_data.tb)
+            .get_tb_meta(&row_data.schema, &row_data.tb)
             .await?;
         if let Some(partition_col_value) = col_values.get(&tb_meta.partition_col) {
             Ok(partition_col_value.hash_code() as usize % slice_count)

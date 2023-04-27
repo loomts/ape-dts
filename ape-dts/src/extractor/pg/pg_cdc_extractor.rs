@@ -242,7 +242,7 @@ impl PgCdcExtractor<'_> {
         let col_values = self.parse_row_data(&tb_meta, event.tuple().tuple_data())?;
 
         let row_data = RowData {
-            db: tb_meta.basic.schema,
+            schema: tb_meta.basic.schema,
             tb: tb_meta.basic.tb,
             row_type: RowType::Insert,
             before: Option::None,
@@ -275,7 +275,7 @@ impl PgCdcExtractor<'_> {
         };
 
         let row_data = RowData {
-            db: basic.schema.clone(),
+            schema: basic.schema.clone(),
             tb: basic.tb.clone(),
             row_type: RowType::Update,
             before: Some(col_values_before),
@@ -299,7 +299,7 @@ impl PgCdcExtractor<'_> {
         };
 
         let row_data = RowData {
-            db: tb_meta.basic.schema,
+            schema: tb_meta.basic.schema,
             tb: tb_meta.basic.tb,
             row_type: RowType::Delete,
             before: Some(col_values),
@@ -344,7 +344,7 @@ impl PgCdcExtractor<'_> {
     async fn push_row_to_buf(&mut self, row_data: RowData) -> Result<(), Error> {
         if self
             .filter
-            .filter(&row_data.db, &row_data.tb, &row_data.row_type)
+            .filter(&row_data.schema, &row_data.tb, &row_data.row_type)
         {
             return Ok(());
         }

@@ -54,7 +54,7 @@ impl TableParallelizer {
     pub fn partition_dml(data: Vec<RowData>) -> Result<Vec<Vec<RowData>>, Error> {
         let mut sub_data_map: HashMap<String, Vec<RowData>> = HashMap::new();
         for row_data in data {
-            let full_tb = format!("{}.{}", row_data.db, row_data.tb);
+            let full_tb = format!("{}.{}", row_data.schema, row_data.tb);
             if let Some(sub_data) = sub_data_map.get_mut(&full_tb) {
                 sub_data.push(row_data);
             } else {

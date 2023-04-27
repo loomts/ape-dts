@@ -114,7 +114,7 @@ impl MysqlCdcExtractor<'_> {
                         .parse_row_data(&table_map_event, &w.included_columns, event)
                         .await?;
                     let row_data = RowData {
-                        db: table_map_event.database_name.clone(),
+                        schema: table_map_event.database_name.clone(),
                         tb: table_map_event.table_name.clone(),
                         row_type: RowType::Insert,
                         before: Option::None,
@@ -135,7 +135,7 @@ impl MysqlCdcExtractor<'_> {
                         .parse_row_data(&table_map_event, &u.included_columns_after, &mut event.1)
                         .await?;
                     let row_data = RowData {
-                        db: table_map_event.database_name.clone(),
+                        schema: table_map_event.database_name.clone(),
                         tb: table_map_event.table_name.clone(),
                         row_type: RowType::Update,
                         before: Some(col_values_before),
@@ -153,7 +153,7 @@ impl MysqlCdcExtractor<'_> {
                         .parse_row_data(&table_map_event, &d.included_columns, event)
                         .await?;
                     let row_data = RowData {
-                        db: table_map_event.database_name.clone(),
+                        schema: table_map_event.database_name.clone(),
                         tb: table_map_event.table_name.clone(),
                         row_type: RowType::Delete,
                         before: Some(col_values),
@@ -199,7 +199,7 @@ impl MysqlCdcExtractor<'_> {
     async fn push_row_to_buf(&mut self, row_data: RowData) -> Result<(), Error> {
         if self
             .filter
-            .filter(&row_data.db, &row_data.tb, &row_data.row_type)
+            .filter(&row_data.schema, &row_data.tb, &row_data.row_type)
         {
             return Ok(());
         }

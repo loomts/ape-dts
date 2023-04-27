@@ -43,7 +43,7 @@ impl KafkaSinker {
         let mut topics = Vec::new();
         for i in sinked_count..sinked_count + batch_size {
             let row_data = &data[i];
-            let topic = self.kafka_router.get_route(&row_data.db, &row_data.tb);
+            let topic = self.kafka_router.get_route(&row_data.schema, &row_data.tb);
             topics.push(topic);
         }
 

@@ -87,6 +87,7 @@ impl CheckerConnector {
                 db_type_option: None,
                 is_source,
             })),
+            _ => None,
         };
         checker
     }
