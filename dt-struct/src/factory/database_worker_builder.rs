@@ -25,6 +25,7 @@ use crate::{
         mysql::basic_mysql_sinker::MySqlStructSinker, postgresql::basic_pg_sinker::PgStructSinker,
     },
     traits::{StructExtrator, StructSinker},
+    utils::database_model_ops::DatabaseModelOps,
 };
 
 pub struct StructBuilder {
@@ -36,7 +37,7 @@ pub struct StructBuilder {
 }
 
 impl StructBuilder {
-    pub async fn build_job<'a>(&self) {
+    pub async fn build_job<'a>(&self) -> Result<(), Error> {
         // Todo:
         // 1. step control, can migrate different kind of model by setting
         // 2. multy thread support
@@ -66,7 +67,17 @@ impl StructBuilder {
             self.check_for_database(&mut sink_struct_models, &mut sinker)
                 .await;
 
-            // Todo: compare with structModel and log with println!
+            println!("\n[check result:] ");
+            let check_result =
+                DatabaseModelOps::check_diff(&source_struct_models, &sink_struct_models);
+            if !check_result {
+                println!("check finished, not the same.");
+                return Err(Error::Unexpected {
+                    error: String::from("check finished, not the same."),
+                });
+            } else {
+                println!("check finished, is the same.");
+            }
         } else {
             // do migration
             let mut sinker = self.build_sinker().await.unwrap();
@@ -109,6 +120,7 @@ impl StructBuilder {
                 }
             );
         }
+        Ok(())
     }
 
     pub async fn build_extractor<'a>(

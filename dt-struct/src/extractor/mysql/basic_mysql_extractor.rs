@@ -213,7 +213,28 @@ impl StructExtrator for MySqlStructExtractor<'_> {
         if db_tb_map.len() > 0 {
             for (_, model) in &db_tb_map {
                 if self.is_do_check {
-                    result_vec.push(model.clone());
+                    let model_clone = model.clone();
+                    match model_clone {
+                        StructModel::TableModel {
+                            database_name,
+                            schema_name,
+                            table_name,
+                            engine_name,
+                            table_comment,
+                            mut columns,
+                        } => {
+                            columns.sort_by(|a, b| a.order_position.cmp(&b.order_position));
+                            result_vec.push(StructModel::TableModel {
+                                database_name,
+                                schema_name,
+                                table_name,
+                                engine_name,
+                                table_comment,
+                                columns,
+                            });
+                        }
+                        _ => {}
+                    }
                 } else {
                     let _ = QueueOperator::push_to_queue(&self.struct_obj_queue, model.clone(), 1)
                         .await;
@@ -345,7 +366,7 @@ impl StructExtrator for MySqlStructExtractor<'_> {
             }
         }
         println!("get index finished");
-        Ok(vec![])
+        Ok(result_vec)
     }
 
     async fn get_constraint(&self) -> Result<Vec<StructModel>, Error> {

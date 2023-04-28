@@ -269,11 +269,20 @@ fn build_sql_with_table_columns(
         result_str
             .push_str(format!(" `{}` {} {} ", col.column_name, col.column_type, nullable).as_str());
         match &col.default_value {
-            Some(v) => result_str.push_str(format!("DEFAULT '{}' ", v).as_str()),
+            Some(v) => {
+                if v.to_lowercase().starts_with("current_") {
+                    result_str.push_str(format!("DEFAULT {} ", v).as_str());
+                } else {
+                    result_str.push_str(format!("DEFAULT '{}' ", v).as_str());
+                }
+            }
             None => {}
         }
         if !col.extra.is_empty() {
-            result_str.push_str(format!("{} ", col.extra).as_str());
+            // DEFAULT_GENERATED
+            // DEFAULT_GENERATED on update CURRENT_TIMESTAMP
+            result_str
+                .push_str(format!("{} ", col.extra.replace("DEFAULT_GENERATED", "")).as_str());
         }
         if !col.column_comment.is_empty() {
             result_str.push_str(format!("COMMENT '{}' ", col.column_comment).as_str())

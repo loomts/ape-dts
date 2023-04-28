@@ -1,1 +1,1 @@
-create database precheck_it;
+create database struct_it;
