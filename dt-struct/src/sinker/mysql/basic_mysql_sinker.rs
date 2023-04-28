@@ -301,3 +301,25 @@ impl MySqlStructSinker {
         arr.dedup();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sort_and_dedup_test() {
+        let mut vec_4_test: Vec<String> = vec![
+            String::from("b"),
+            String::from("a"),
+            String::from("c"),
+            String::from("b"),
+        ];
+        MySqlStructSinker::sort_and_dedup(&mut vec_4_test);
+        assert!(
+            vec_4_test.len() == 3
+                && vec_4_test[0] == String::from("a")
+                && vec_4_test[1] == String::from("b")
+                && vec_4_test[2] == String::from("c")
+        )
+    }
+}

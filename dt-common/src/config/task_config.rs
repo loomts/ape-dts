@@ -1,8 +1,8 @@
-use std::{fs::File, io::Read, str::FromStr};
+use std::{fs::File, io::Read, path::Path, str::FromStr};
 
 use configparser::ini::Ini;
 
-use crate::{error::Error, meta::db_enums::DbType};
+use crate::{error::Error, meta::db_enums::DbType, utils::config_url_util::ConfigUrlUtil};
 
 use super::{
     config_enums::{ExtractType, ParallelType, SinkType},
@@ -14,6 +14,7 @@ use super::{
     sinker_config::SinkerConfig,
 };
 
+#[derive(Clone)]
 pub struct TaskConfig {
     pub extractor: ExtractorConfig,
     pub sinker: SinkerConfig,
@@ -36,6 +37,10 @@ const BATCH_SIZE: &str = "batch_size";
 
 impl TaskConfig {
     pub fn new(task_config_file: &str) -> Self {
+        TaskConfig::new_with_envs(task_config_file, None)
+    }
+
+    pub fn new_with_envs(task_config_file: &str, env_file_option: Option<String>) -> Self {
         let mut config_str = String::new();
         File::open(task_config_file)
             .unwrap()
@@ -43,6 +48,11 @@ impl TaskConfig {
             .unwrap();
         let mut ini = Ini::new();
         ini.read(config_str).unwrap();
+
+        if env_file_option.is_some() {
+            // init the envs with specified .env file
+            _ = dotenv::from_path(Path::new(env_file_option.unwrap().as_str()));
+        }
 
         Self {
             extractor: Self::load_extractor_config(&ini).unwrap(),
@@ -58,7 +68,8 @@ impl TaskConfig {
         let db_type = DbType::from_str(&ini.get(EXTRACTOR, DB_TYPE).unwrap()).unwrap();
         let extract_type =
             ExtractType::from_str(&ini.get(EXTRACTOR, "extract_type").unwrap()).unwrap();
-        let url = ini.get(EXTRACTOR, URL).unwrap();
+
+        let url = ConfigUrlUtil::convert_with_envs(ini.get(EXTRACTOR, URL).unwrap()).unwrap();
 
         match db_type {
             DbType::Mysql => match extract_type {
@@ -116,8 +127,9 @@ impl TaskConfig {
     fn load_sinker_config(ini: &Ini) -> Result<SinkerConfig, Error> {
         let db_type = DbType::from_str(&ini.get(SINKER, DB_TYPE).unwrap()).unwrap();
         let sink_type = SinkType::from_str(&ini.get(SINKER, "sink_type").unwrap()).unwrap();
-        let url = ini.get(SINKER, URL).unwrap();
         let batch_size = ini.getuint(SINKER, BATCH_SIZE).unwrap().unwrap() as usize;
+
+        let url = ConfigUrlUtil::convert_with_envs(ini.get(SINKER, URL).unwrap()).unwrap();
 
         match db_type {
             DbType::Mysql => match sink_type {
@@ -183,5 +195,34 @@ impl TaskConfig {
             tb_map: ini.get(ROUTER, "tb_map").unwrap(),
             field_map: ini.get(ROUTER, "field_map").unwrap(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::utils::work_dir_util::WorkDirUtil;
+
+    use super::*;
+    use std::{fs, path::PathBuf};
+
+    #[test]
+    fn task_config_new_test() {
+        let project_root = WorkDirUtil::get_project_root().unwrap();
+
+        let path_name = format!("{}/dt-common/src/test/config", project_root);
+        println!("path_name:{}", path_name);
+
+        for entry in fs::read_dir(PathBuf::from(path_name)).unwrap() {
+            if entry.is_err() {
+                continue;
+            }
+            let dir_entry = entry.unwrap();
+            println!(
+                "begin check config: {}",
+                dir_entry.file_name().to_string_lossy()
+            );
+            TaskConfig::new(&dir_entry.path().to_string_lossy().to_string());
+        }
+        assert!(true)
     }
 }

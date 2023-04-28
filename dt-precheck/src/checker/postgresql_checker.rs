@@ -129,7 +129,10 @@ impl Checker for PostgresqlChecker {
                 if is_super {
                     // super user dose not neet to do validate
                     println!("the database account is a super user");
-                    return Ok(CheckResult::build(CheckItem::CheckAccountPermission));
+                    return Ok(CheckResult::build(
+                        CheckItem::CheckAccountPermission,
+                        self.is_source,
+                    ));
                 }
             }
             Err(e) => return Err(e),

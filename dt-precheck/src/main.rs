@@ -11,6 +11,7 @@ mod config;
 mod connector;
 mod error;
 mod meta;
+mod test;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -29,7 +30,7 @@ fn main() {
 
     rt.block_on(async {
         let checker_connector = CheckerConnector::build(precheck_config.precheck, task_config);
-        let result = checker_connector.check().await;
+        let result = checker_connector.verify_check_result().await;
         match result {
             Err(e) => {
                 println!("precheck not passed.");

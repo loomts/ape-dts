@@ -22,7 +22,7 @@ pub enum SinkType {
     Basic,
 }
 
-#[derive(EnumString, AsStaticStr)]
+#[derive(EnumString, AsStaticStr, Clone)]
 pub enum ParallelType {
     #[strum(serialize = "snapshot")]
     Snapshot,
