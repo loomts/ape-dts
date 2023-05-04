@@ -65,7 +65,7 @@ pub enum StructModel {
     ViewModel {},
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Column {
     pub column_name: String,
     pub order_position: u32,
@@ -80,7 +80,7 @@ pub struct Column {
     pub collation: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct IndexColumn {
     pub column_name: String,
     pub seq_in_index: u32,
@@ -91,4 +91,356 @@ pub enum IndexKind {
     PrimaryKey,
     Unique,
     Index,
+}
+
+impl PartialEq for IndexKind {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (IndexKind::PrimaryKey, IndexKind::PrimaryKey) => true,
+            (IndexKind::Unique, IndexKind::Unique) => true,
+            (IndexKind::Index, IndexKind::Index) => true,
+            _ => false,
+        }
+    }
+}
+
+impl PartialEq for StructModel {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (
+                StructModel::DatabaseModel { name: name1 },
+                StructModel::DatabaseModel { name: name2 },
+            ) => name1 == name2,
+            (
+                StructModel::SchemaModel {
+                    database_name: db1,
+                    schema_name: schema1,
+                },
+                StructModel::SchemaModel {
+                    database_name: db2,
+                    schema_name: schema2,
+                },
+            ) => db1 == db2 && schema1 == schema2,
+            (
+                StructModel::TableModel {
+                    database_name: db1,
+                    schema_name: schema1,
+                    table_name: table1,
+                    engine_name: engine1,
+                    table_comment: comment1,
+                    columns: column1,
+                },
+                StructModel::TableModel {
+                    database_name: db2,
+                    schema_name: schema2,
+                    table_name: table2,
+                    engine_name: engine2,
+                    table_comment: comment2,
+                    columns: column2,
+                },
+            ) => {
+                if schema1.is_empty() && schema2.is_empty() {
+                    // suck as mysql
+                    return db1 == db2
+                        && table1 == table2
+                        && engine1 == engine2
+                        && comment1 == comment2
+                        && column1 == column2;
+                } else {
+                    // such as postgresql
+                    return schema1 == schema2
+                        && table1 == table2
+                        && engine1 == engine2
+                        && comment1 == comment2
+                        && column1 == column2;
+                }
+            }
+            (
+                StructModel::ConstraintModel {
+                    database_name: db1,
+                    schema_name: schema1,
+                    table_name: table1,
+                    constraint_name: constraint1,
+                    constraint_type: type1,
+                    definition: d1,
+                },
+                StructModel::ConstraintModel {
+                    database_name: db2,
+                    schema_name: schema2,
+                    table_name: table2,
+                    constraint_name: constraint2,
+                    constraint_type: type2,
+                    definition: d2,
+                },
+            ) => {
+                if schema1.is_empty() && schema2.is_empty() {
+                    // suck as mysql
+                    return db1 == db2
+                        && table1 == table2
+                        && constraint1 == constraint2
+                        && type1 == type2
+                        && d1 == d2;
+                } else {
+                    // such as postgresql
+                    return schema1 == schema2
+                        && table1 == table2
+                        && constraint1 == constraint2
+                        && type1 == type2
+                        && d1 == d2;
+                }
+            }
+            (
+                StructModel::IndexModel {
+                    database_name: db1,
+                    schema_name: schema1,
+                    table_name: table1,
+                    index_name: index1,
+                    index_kind: kind1,
+                    index_type: type1,
+                    comment: comment1,
+                    tablespace: space1,
+                    definition: d1,
+                    columns: c1,
+                },
+                StructModel::IndexModel {
+                    database_name: db2,
+                    schema_name: schema2,
+                    table_name: table2,
+                    index_name: index2,
+                    index_kind: kind2,
+                    index_type: type2,
+                    comment: comment2,
+                    tablespace: space2,
+                    definition: d2,
+                    columns: c2,
+                },
+            ) => {
+                if schema1.is_empty() && schema2.is_empty() {
+                    // suck as mysql
+                    return db1 == db2
+                        && table1 == table2
+                        && index1 == index2
+                        && kind1 == kind2
+                        && type1 == type2
+                        && comment1 == comment2
+                        && space1 == space2
+                        && d1 == d2
+                        && c1 == c2;
+                } else {
+                    // such as postgresql
+                    return schema1 == schema2
+                        && table1 == table2
+                        && index1 == index2
+                        && kind1 == kind2
+                        && type1 == type2
+                        && comment1 == comment2
+                        && space1 == space2
+                        && d1 == d2
+                        && c1 == c2;
+                }
+            }
+            (
+                StructModel::CommentModel {
+                    database_name: db1,
+                    schema_name: schema1,
+                    table_name: table1,
+                    column_name: col1,
+                    comment: c1,
+                },
+                StructModel::CommentModel {
+                    database_name: db2,
+                    schema_name: schema2,
+                    table_name: table2,
+                    column_name: col2,
+                    comment: c2,
+                },
+            ) => {
+                if schema1.is_empty() && schema2.is_empty() {
+                    // suck as mysql
+                    return db1 == db2 && table1 == table2 && col1 == col2 && c1 == c2;
+                } else {
+                    // such as postgresql
+                    return schema1 == schema2 && table1 == table2 && col1 == col2 && c1 == c2;
+                }
+            }
+            (
+                StructModel::SequenceModel {
+                    sequence_name: seq1,
+                    database_name: db1,
+                    schema_name: schema1,
+                    data_type: type1,
+                    start_value: s1,
+                    increment: i1,
+                    min_value: min1,
+                    max_value: max1,
+                    is_circle: c1,
+                },
+                StructModel::SequenceModel {
+                    sequence_name: seq2,
+                    database_name: db2,
+                    schema_name: schema2,
+                    data_type: type2,
+                    start_value: s2,
+                    increment: i2,
+                    min_value: min2,
+                    max_value: max2,
+                    is_circle: c2,
+                },
+            ) => {
+                if schema1.is_empty() && schema2.is_empty() {
+                    // suck as mysql
+                    return db1 == db2
+                        && seq1 == seq2
+                        && type1 == type2
+                        && s1 == s2
+                        && i1 == i2
+                        && min1 == min2
+                        && max1 == max2
+                        && c1 == c2;
+                } else {
+                    // such as postgresql
+                    return schema1 == schema2
+                        && seq1 == seq2
+                        && type1 == type2
+                        // && s1 == s2 // startvalue is not match most of time
+                        && i1 == i2
+                        && min1 == min2
+                        && max1 == max2
+                        && c1 == c2;
+                }
+            }
+            (
+                StructModel::SequenceOwnerModel {
+                    sequence_name: seq1,
+                    database_name: db1,
+                    schema_name: schema1,
+                    owner_table_name: ot1,
+                    owner_table_column_name: oc1,
+                },
+                StructModel::SequenceOwnerModel {
+                    sequence_name: seq2,
+                    database_name: db2,
+                    schema_name: schema2,
+                    owner_table_name: ot2,
+                    owner_table_column_name: oc2,
+                },
+            ) => {
+                if schema1.is_empty() && schema2.is_empty() {
+                    // suck as mysql
+                    return db1 == db2 && seq1 == seq2 && ot1 == ot2 && oc1 == oc2;
+                } else {
+                    // such as postgresql
+                    return schema1 == schema2 && seq1 == seq2 && ot1 == ot2 && oc1 == oc2;
+                }
+            }
+            _ => false,
+        }
+    }
+}
+
+impl StructModel {
+    pub fn to_log_string(&self) -> String {
+        let str;
+        match self {
+            Self::DatabaseModel { name } => str = format!("database:[name:{}]", name),
+            Self::SchemaModel {
+                database_name,
+                schema_name,
+            } => {
+                str = format!(
+                    "schema:[database:{}, schema:{}]",
+                    database_name, schema_name
+                )
+            }
+            Self::TableModel {
+                database_name,
+                schema_name,
+                table_name,
+                engine_name: _,
+                table_comment: _,
+                columns: _,
+            } => {
+                str = format!(
+                    "table:[database:{}, schema:{}, table_name:{}]",
+                    database_name, schema_name, table_name
+                )
+            }
+            Self::IndexModel {
+                database_name,
+                schema_name,
+                table_name,
+                index_name,
+                index_kind: _,
+                index_type: _,
+                comment: _,
+                tablespace: _,
+                definition: _,
+                columns: _,
+            } => {
+                str = format!(
+                    "index:[database:{}, schema:{}, table:{}, index:{}]",
+                    database_name, schema_name, table_name, index_name
+                )
+            }
+            Self::ConstraintModel {
+                database_name,
+                schema_name,
+                table_name,
+                constraint_name,
+                constraint_type: _,
+                definition: _,
+            } => {
+                str = format!(
+                    "constraint:[database:{}, schema:{}, table:{}, constaint:{}]",
+                    database_name, schema_name, table_name, constraint_name
+                )
+            }
+            Self::CommentModel {
+                database_name,
+                schema_name,
+                table_name,
+                column_name,
+                comment: _,
+            } => {
+                str = format!(
+                    "comment:[database:{}, schema:{}, table:{}, column:{}]",
+                    database_name, schema_name, table_name, column_name
+                )
+            }
+            Self::SequenceModel {
+                sequence_name,
+                database_name,
+                schema_name,
+                data_type: _,
+                start_value: _,
+                increment: _,
+                min_value: _,
+                max_value: _,
+                is_circle: _,
+            } => {
+                str = format!(
+                    "sequence:[database:{}, schema:{}, sequence:{}]",
+                    database_name, schema_name, sequence_name
+                )
+            }
+            Self::SequenceOwnerModel {
+                sequence_name,
+                database_name,
+                schema_name,
+                owner_table_name,
+                owner_table_column_name,
+            } => {
+                str = format!(
+                    "sequence-owner:[database:{}, schema:{}, sequence:{}, table:{}, col:{}]",
+                    database_name,
+                    schema_name,
+                    sequence_name,
+                    owner_table_name,
+                    owner_table_column_name
+                )
+            }
+            _ => str = format!("{:?}", self),
+        }
+        str
+    }
 }

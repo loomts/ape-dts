@@ -92,7 +92,7 @@ impl CheckerConnector {
         checker
     }
 
-    pub async fn check(&self) -> Result<(), Error> {
+    pub async fn check(&self) -> Result<Vec<Result<CheckResult, Error>>, Error> {
         if !self.valid_config().unwrap() {
             return Err(Error::PreCheckError {
                 error: "config is invalid.".to_string(),
@@ -149,25 +149,37 @@ impl CheckerConnector {
         println!("[*]begin to check the database structs");
         check_results.push(source_checker.check_table_structs().await);
 
-        println!("check result:");
-        let mut error_count = 0;
-        for check_result in check_results {
-            match check_result {
-                Ok(result) => {
-                    result.log();
-                    if !result.is_validate {
-                        error_count += 1;
+        Ok(check_results)
+    }
+
+    pub async fn verify_check_result(&self) -> Result<(), Error> {
+        let check_results = self.check().await;
+        match check_results {
+            Ok(results) => {
+                println!("check result:");
+                let mut error_count = 0;
+                for check_result in results {
+                    match check_result {
+                        Ok(result) => {
+                            result.log();
+                            if !result.is_validate {
+                                error_count += 1;
+                            }
+                        }
+                        Err(e) => return Err(e),
                     }
                 }
-                Err(e) => return Err(e),
+                if error_count > 0 {
+                    return Err(Error::PreCheckError {
+                        error: "precheck not passed.".to_string(),
+                    });
+                } else {
+                    return Ok(());
+                }
             }
-        }
-        if error_count > 0 {
-            Err(Error::PreCheckError {
-                error: "precheck not passed.".to_string(),
-            })
-        } else {
-            Ok(())
+            Err(e) => {
+                return Err(e);
+            }
         }
     }
 }

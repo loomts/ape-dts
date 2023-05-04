@@ -8,11 +8,11 @@ pub trait StructExtrator {
     fn is_finished(&self) -> Result<bool, Error>;
 
     async fn build_connection(&mut self) -> Result<(), Error>;
-    async fn get_sequence(&mut self) -> Result<(), Error>;
-    async fn get_table(&self) -> Result<(), Error>;
-    async fn get_constraint(&self) -> Result<(), Error>;
-    async fn get_index(&self) -> Result<(), Error>;
-    async fn get_comment(&self) -> Result<(), Error>;
+    async fn get_sequence(&mut self) -> Result<Vec<StructModel>, Error>;
+    async fn get_table(&self) -> Result<Vec<StructModel>, Error>;
+    async fn get_constraint(&self) -> Result<Vec<StructModel>, Error>;
+    async fn get_index(&self) -> Result<Vec<StructModel>, Error>;
+    async fn get_comment(&self) -> Result<Vec<StructModel>, Error>;
 
     // // charset,case,timezone configuration and so on
     // fn get_db_basic_setting() -> error;

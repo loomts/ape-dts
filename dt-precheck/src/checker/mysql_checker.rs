@@ -119,7 +119,10 @@ impl Checker for MySqlChecker {
     }
 
     async fn check_permission(&self) -> Result<CheckResult, Error> {
-        Ok(CheckResult::build(CheckItem::CheckAccountPermission))
+        Ok(CheckResult::build(
+            CheckItem::CheckAccountPermission,
+            self.is_source,
+        ))
     }
 
     async fn check_cdc_supported(&self) -> Result<CheckResult, Error> {

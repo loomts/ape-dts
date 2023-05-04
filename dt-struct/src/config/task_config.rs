@@ -28,8 +28,17 @@ impl StructTaskConfig {
     }
 
     fn load_struct_config(ini: &Ini) -> Result<StructConfig, Error> {
+        let mut is_do_check = false;
+        match ini.getbool(STRUCT, "is_do_check") {
+            Ok(val_opt) => match val_opt {
+                Some(val) => is_do_check = val,
+                None => {}
+            },
+            Err(_) => {}
+        }
         Ok(StructConfig {
             conflict_policy: ini.get(STRUCT, "conflict_policy").unwrap().parse().unwrap(),
+            is_do_check,
         })
     }
 }
