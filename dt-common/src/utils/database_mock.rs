@@ -64,6 +64,11 @@ impl DatabaseMockUtils {
                     }
                 }
             }
+            _ => Ok(Self {
+                mysql_pool: None,
+                pg_pool: None,
+                db_type,
+            }),
         }
     }
 
@@ -81,6 +86,7 @@ impl DatabaseMockUtils {
                     return Ok(());
                 }
             }
+            _ => return Ok(()),
         }
 
         let absolute_path = WorkDirUtil::get_absolute_by_relative(relative_data_path).unwrap();
@@ -112,6 +118,7 @@ impl DatabaseMockUtils {
                         }
                         _ = sqlx::query(&sql).execute(pool).await;
                     }
+                    _ => return Ok(()),
                 }
                 println!("executed sql: {}", sql);
             }

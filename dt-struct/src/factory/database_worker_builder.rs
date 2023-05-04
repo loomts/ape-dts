@@ -149,6 +149,11 @@ impl StructBuilder {
                     seq_owners: HashMap::new(),
                     is_do_check: self.struct_config.is_do_check,
                 }),
+                _ => {
+                    return Err(Error::Unexpected {
+                        error: String::from("not support extractor db type."),
+                    })
+                }
             },
             _ => {
                 // Todo:
@@ -184,6 +189,11 @@ impl StructBuilder {
                     seq_owners: HashMap::new(),
                     is_do_check: self.struct_config.is_do_check,
                 }),
+                _ => {
+                    return Err(Error::Unexpected {
+                        error: String::from("not support sinker db type."),
+                    })
+                }
             },
             _ => {
                 // Todo:
@@ -206,6 +216,11 @@ impl StructBuilder {
                     sinker_config: self.sinker_config.clone(),
                     router_config: self.router_config.clone(),
                 }),
+                _ => {
+                    return Err(Error::Unexpected {
+                        error: String::from("not support sinker db type."),
+                    })
+                }
             },
             _ => {
                 // Todo:

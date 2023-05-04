@@ -121,6 +121,7 @@ impl TaskRunner {
             sinkers,
             shut_down: &shut_down,
             checkpoint_interval_secs: self.config.pipeline.checkpoint_interval_secs,
+            batch_sink_interval_secs: self.config.pipeline.batch_sink_interval_secs,
             syncer,
         };
 

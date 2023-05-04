@@ -178,58 +178,12 @@ mod tests {
         // install source struct and sink database
         precheck_mock_handler(
             &source_db_mock_factory,
-            "/mysql2mysql/check_struct_supported/source_ddl_invalid_1.sql",
+            "/mysql2mysql/check_struct_supported/source_ddl.sql",
         )
         .await;
         precheck_mock_handler(
             &sink_db_mock_factory,
-            "/mysql2mysql/check_struct_supported/sink_ddl_1.sql",
-        )
-        .await;
-        let results = checker_connector.check().await;
-        assert!(results.is_ok());
-        for result in results.unwrap() {
-            assert!(result.is_ok());
-            let result_some = result.unwrap();
-            if result_some.check_type_name == CheckItem::CheckIfTableStructSupported.to_string() {
-                assert!(!result_some.is_validate);
-            } else {
-                assert!(result_some.is_validate);
-            }
-        }
-
-        // clean data & install source another struct
-        precheck_mock_handler(
-            &source_db_mock_factory,
-            "/mysql2mysql/check_struct_supported/source_clean.sql",
-        )
-        .await;
-        precheck_mock_handler(
-            &source_db_mock_factory,
-            "/mysql2mysql/check_struct_supported/source_ddl_invalid_2.sql",
-        )
-        .await;
-        let results = checker_connector.check().await;
-        assert!(results.is_ok());
-        for result in results.unwrap() {
-            assert!(result.is_ok());
-            let result_some = result.unwrap();
-            if result_some.check_type_name == CheckItem::CheckIfTableStructSupported.to_string() {
-                assert!(!result_some.is_validate);
-            } else {
-                assert!(result_some.is_validate);
-            }
-        }
-
-        // clean data & install source valid struct
-        precheck_mock_handler(
-            &source_db_mock_factory,
-            "/mysql2mysql/check_struct_supported/source_clean.sql",
-        )
-        .await;
-        precheck_mock_handler(
-            &source_db_mock_factory,
-            "/mysql2mysql/check_struct_supported/source_ddl_valid_1.sql",
+            "/mysql2mysql/check_struct_supported/sink_ddl.sql",
         )
         .await;
         let results = checker_connector.check().await;
@@ -262,6 +216,158 @@ mod tests {
                 assert!(result_some.is_validate);
             }
         }
+
+        source_db_mock_factory.release_pool().await;
+        sink_db_mock_factory.release_pool().await;
+    }
+
+    #[tokio::test]
+    async fn mysql2mysql_struct_supported_test_no_pk() {
+        let mysql2mysql_env: String = format!(
+            "{}{}/mysql2mysql/.env",
+            WorkDirUtil::get_project_root().unwrap(),
+            PRECHECK_IT_PATH
+        );
+        let config = WorkDirUtil::get_absolute_by_relative(
+            format!(
+                "{}/mysql2mysql/check_struct_supported/no_pk/task_config.ini",
+                PRECHECK_IT_PATH.to_string()
+            )
+            .as_str(),
+        )
+        .unwrap();
+
+        let (task_config, precheck_config, source_db_mock_factory, sink_db_mock_factory): (
+            TaskConfig,
+            PrecheckTaskConfig,
+            DatabaseMockUtils,
+            DatabaseMockUtils,
+        ) = init_config_for_test(&mysql2mysql_env, &config).await;
+
+        // clean data
+        precheck_mock_handler(
+            &source_db_mock_factory,
+            "/mysql2mysql/check_struct_supported/no_pk/source_clean.sql",
+        )
+        .await;
+        precheck_mock_handler(
+            &sink_db_mock_factory,
+            "/mysql2mysql/check_struct_supported/no_pk/sink_clean.sql",
+        )
+        .await;
+
+        let checker_connector =
+            CheckerConnector::build(precheck_config.precheck.clone(), task_config.clone());
+
+        // install source struct and sink database
+        precheck_mock_handler(
+            &source_db_mock_factory,
+            "/mysql2mysql/check_struct_supported/no_pk/source_ddl.sql",
+        )
+        .await;
+        precheck_mock_handler(
+            &sink_db_mock_factory,
+            "/mysql2mysql/check_struct_supported/no_pk/sink_ddl.sql",
+        )
+        .await;
+        let results = checker_connector.check().await;
+        assert!(results.is_ok());
+        for result in results.unwrap() {
+            assert!(result.is_ok());
+            let result_some = result.unwrap();
+            if result_some.check_type_name == CheckItem::CheckIfTableStructSupported.to_string() {
+                assert!(!result_some.is_validate);
+            } else {
+                assert!(result_some.is_validate);
+            }
+        }
+
+        precheck_mock_handler(
+            &source_db_mock_factory,
+            "/mysql2mysql/check_struct_supported/no_pk/source_clean.sql",
+        )
+        .await;
+        precheck_mock_handler(
+            &sink_db_mock_factory,
+            "/mysql2mysql/check_struct_supported/no_pk/sink_clean.sql",
+        )
+        .await;
+
+        source_db_mock_factory.release_pool().await;
+        sink_db_mock_factory.release_pool().await;
+    }
+
+    #[tokio::test]
+    async fn mysql2mysql_struct_supported_test_have_fk() {
+        let mysql2mysql_env: String = format!(
+            "{}{}/mysql2mysql/.env",
+            WorkDirUtil::get_project_root().unwrap(),
+            PRECHECK_IT_PATH
+        );
+        let config = WorkDirUtil::get_absolute_by_relative(
+            format!(
+                "{}/mysql2mysql/check_struct_supported/have_fk/task_config.ini",
+                PRECHECK_IT_PATH.to_string()
+            )
+            .as_str(),
+        )
+        .unwrap();
+
+        let (task_config, precheck_config, source_db_mock_factory, sink_db_mock_factory): (
+            TaskConfig,
+            PrecheckTaskConfig,
+            DatabaseMockUtils,
+            DatabaseMockUtils,
+        ) = init_config_for_test(&mysql2mysql_env, &config).await;
+
+        // clean data
+        precheck_mock_handler(
+            &source_db_mock_factory,
+            "/mysql2mysql/check_struct_supported/have_fk/source_clean.sql",
+        )
+        .await;
+        precheck_mock_handler(
+            &sink_db_mock_factory,
+            "/mysql2mysql/check_struct_supported/have_fk/sink_clean.sql",
+        )
+        .await;
+
+        let checker_connector =
+            CheckerConnector::build(precheck_config.precheck.clone(), task_config.clone());
+
+        // install source struct and sink database
+        precheck_mock_handler(
+            &source_db_mock_factory,
+            "/mysql2mysql/check_struct_supported/have_fk/source_ddl.sql",
+        )
+        .await;
+        precheck_mock_handler(
+            &sink_db_mock_factory,
+            "/mysql2mysql/check_struct_supported/have_fk/sink_ddl.sql",
+        )
+        .await;
+        let results = checker_connector.check().await;
+        assert!(results.is_ok());
+        for result in results.unwrap() {
+            assert!(result.is_ok());
+            let result_some = result.unwrap();
+            if result_some.check_type_name == CheckItem::CheckIfTableStructSupported.to_string() {
+                assert!(!result_some.is_validate);
+            } else {
+                assert!(result_some.is_validate);
+            }
+        }
+
+        precheck_mock_handler(
+            &source_db_mock_factory,
+            "/mysql2mysql/check_struct_supported/have_fk/source_clean.sql",
+        )
+        .await;
+        precheck_mock_handler(
+            &sink_db_mock_factory,
+            "/mysql2mysql/check_struct_supported/have_fk/sink_clean.sql",
+        )
+        .await;
 
         source_db_mock_factory.release_pool().await;
         sink_db_mock_factory.release_pool().await;
@@ -433,58 +539,12 @@ mod tests {
         // install source struct and sink database
         precheck_mock_handler(
             &source_db_mock_factory,
-            "/pg2pg/check_struct_supported/source_ddl_invalid_1.sql",
+            "/pg2pg/check_struct_supported/source_ddl.sql",
         )
         .await;
         precheck_mock_handler(
             &sink_db_mock_factory,
-            "/pg2pg/check_struct_supported/sink_ddl_1.sql",
-        )
-        .await;
-        let results = checker_connector.check().await;
-        assert!(results.is_ok());
-        for result in results.unwrap() {
-            assert!(result.is_ok());
-            let result_some = result.unwrap();
-            if result_some.check_type_name == CheckItem::CheckIfTableStructSupported.to_string() {
-                assert!(!result_some.is_validate);
-            } else {
-                assert!(result_some.is_validate);
-            }
-        }
-
-        // clean data & install source another struct
-        precheck_mock_handler(
-            &source_db_mock_factory,
-            "/pg2pg/check_struct_supported/source_clean.sql",
-        )
-        .await;
-        precheck_mock_handler(
-            &source_db_mock_factory,
-            "/pg2pg/check_struct_supported/source_ddl_invalid_2.sql",
-        )
-        .await;
-        let results = checker_connector.check().await;
-        assert!(results.is_ok());
-        for result in results.unwrap() {
-            assert!(result.is_ok());
-            let result_some = result.unwrap();
-            if result_some.check_type_name == CheckItem::CheckIfTableStructSupported.to_string() {
-                assert!(!result_some.is_validate);
-            } else {
-                assert!(result_some.is_validate);
-            }
-        }
-
-        // clean data & install source valid struct
-        precheck_mock_handler(
-            &source_db_mock_factory,
-            "/pg2pg/check_struct_supported/source_clean.sql",
-        )
-        .await;
-        precheck_mock_handler(
-            &source_db_mock_factory,
-            "/pg2pg/check_struct_supported/source_ddl_valid_1.sql",
+            "/pg2pg/check_struct_supported/sink_ddl.sql",
         )
         .await;
         let results = checker_connector.check().await;
@@ -517,6 +577,158 @@ mod tests {
                 assert!(result_some.is_validate);
             }
         }
+
+        source_db_mock_factory.release_pool().await;
+        sink_db_mock_factory.release_pool().await;
+    }
+
+    #[tokio::test]
+    async fn pg2pg_struct_supported_test_have_fk() {
+        let pg2pg_env: String = format!(
+            "{}{}/pg2pg/.env",
+            WorkDirUtil::get_project_root().unwrap(),
+            PRECHECK_IT_PATH
+        );
+        let config = WorkDirUtil::get_absolute_by_relative(
+            format!(
+                "{}/pg2pg/check_struct_supported/have_fk/task_config.ini",
+                PRECHECK_IT_PATH.to_string()
+            )
+            .as_str(),
+        )
+        .unwrap();
+
+        let (task_config, precheck_config, source_db_mock_factory, sink_db_mock_factory): (
+            TaskConfig,
+            PrecheckTaskConfig,
+            DatabaseMockUtils,
+            DatabaseMockUtils,
+        ) = init_config_for_test(&pg2pg_env, &config).await;
+
+        // clean data
+        precheck_mock_handler(
+            &source_db_mock_factory,
+            "/pg2pg/check_struct_supported/have_fk/source_clean.sql",
+        )
+        .await;
+        precheck_mock_handler(
+            &sink_db_mock_factory,
+            "/pg2pg/check_struct_supported/have_fk/sink_clean.sql",
+        )
+        .await;
+
+        let checker_connector =
+            CheckerConnector::build(precheck_config.precheck.clone(), task_config.clone());
+
+        // install source struct and sink database
+        precheck_mock_handler(
+            &source_db_mock_factory,
+            "/pg2pg/check_struct_supported/have_fk/source_ddl.sql",
+        )
+        .await;
+        precheck_mock_handler(
+            &sink_db_mock_factory,
+            "/pg2pg/check_struct_supported/have_fk/sink_ddl.sql",
+        )
+        .await;
+        let results = checker_connector.check().await;
+        assert!(results.is_ok());
+        for result in results.unwrap() {
+            assert!(result.is_ok());
+            let result_some = result.unwrap();
+            if result_some.check_type_name == CheckItem::CheckIfTableStructSupported.to_string() {
+                assert!(!result_some.is_validate);
+            } else {
+                assert!(result_some.is_validate);
+            }
+        }
+
+        precheck_mock_handler(
+            &source_db_mock_factory,
+            "/pg2pg/check_struct_supported/have_fk/source_clean.sql",
+        )
+        .await;
+        precheck_mock_handler(
+            &sink_db_mock_factory,
+            "/pg2pg/check_struct_supported/have_fk/sink_clean.sql",
+        )
+        .await;
+
+        source_db_mock_factory.release_pool().await;
+        sink_db_mock_factory.release_pool().await;
+    }
+
+    #[tokio::test]
+    async fn pg2pg_struct_supported_test_no_pk() {
+        let pg2pg_env: String = format!(
+            "{}{}/pg2pg/.env",
+            WorkDirUtil::get_project_root().unwrap(),
+            PRECHECK_IT_PATH
+        );
+        let config = WorkDirUtil::get_absolute_by_relative(
+            format!(
+                "{}/pg2pg/check_struct_supported/no_pk/task_config.ini",
+                PRECHECK_IT_PATH.to_string()
+            )
+            .as_str(),
+        )
+        .unwrap();
+
+        let (task_config, precheck_config, source_db_mock_factory, sink_db_mock_factory): (
+            TaskConfig,
+            PrecheckTaskConfig,
+            DatabaseMockUtils,
+            DatabaseMockUtils,
+        ) = init_config_for_test(&pg2pg_env, &config).await;
+
+        // clean data
+        precheck_mock_handler(
+            &source_db_mock_factory,
+            "/pg2pg/check_struct_supported/no_pk/source_clean.sql",
+        )
+        .await;
+        precheck_mock_handler(
+            &sink_db_mock_factory,
+            "/pg2pg/check_struct_supported/no_pk/sink_clean.sql",
+        )
+        .await;
+
+        let checker_connector =
+            CheckerConnector::build(precheck_config.precheck.clone(), task_config.clone());
+
+        // install source struct and sink database
+        precheck_mock_handler(
+            &source_db_mock_factory,
+            "/pg2pg/check_struct_supported/no_pk/source_ddl.sql",
+        )
+        .await;
+        precheck_mock_handler(
+            &sink_db_mock_factory,
+            "/pg2pg/check_struct_supported/no_pk/sink_ddl.sql",
+        )
+        .await;
+        let results = checker_connector.check().await;
+        assert!(results.is_ok());
+        for result in results.unwrap() {
+            assert!(result.is_ok());
+            let result_some = result.unwrap();
+            if result_some.check_type_name == CheckItem::CheckIfTableStructSupported.to_string() {
+                assert!(!result_some.is_validate);
+            } else {
+                assert!(result_some.is_validate);
+            }
+        }
+
+        precheck_mock_handler(
+            &source_db_mock_factory,
+            "/pg2pg/check_struct_supported/no_pk/source_clean.sql",
+        )
+        .await;
+        precheck_mock_handler(
+            &sink_db_mock_factory,
+            "/pg2pg/check_struct_supported/no_pk/sink_clean.sql",
+        )
+        .await;
 
         source_db_mock_factory.release_pool().await;
         sink_db_mock_factory.release_pool().await;

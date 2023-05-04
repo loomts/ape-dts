@@ -1,5 +1,3 @@
-# setup test envrionments
-
 ## postgres
 - source
 ```

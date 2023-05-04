@@ -51,7 +51,7 @@ impl SqlUtil<'_> {
     }
 
     #[inline(always)]
-    pub fn new_for_mysql<'a>(tb_meta: &'a MysqlTbMeta) -> SqlUtil {
+    pub fn new_for_mysql(tb_meta: &MysqlTbMeta) -> SqlUtil {
         SqlUtil {
             rdb_tb_meta: tb_meta.basic.clone(),
             pg_tb_meta: Option::None,
@@ -59,7 +59,7 @@ impl SqlUtil<'_> {
     }
 
     #[inline(always)]
-    pub fn new_for_pg<'a>(tb_meta: &'a PgTbMeta) -> SqlUtil {
+    pub fn new_for_pg(tb_meta: &PgTbMeta) -> SqlUtil {
         SqlUtil {
             rdb_tb_meta: tb_meta.basic.clone(),
             pg_tb_meta: Some(&tb_meta),

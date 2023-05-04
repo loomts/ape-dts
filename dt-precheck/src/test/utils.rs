@@ -62,14 +62,16 @@ pub mod tests_utils {
         // build database instance
         let (source_url, source_db_type): (Option<String>, Option<DbType>) =
             get_source_info(&task_config.extractor);
+        println!("source_url:{}", source_url.clone().unwrap());
         let source_db_mock_factory =
-            DatabaseMockUtils::new(source_url.unwrap(), source_db_type.unwrap(), 8, 5)
+            DatabaseMockUtils::new(source_url.unwrap(), source_db_type.unwrap(), 2, 10)
                 .await
                 .unwrap();
         let (sink_url, sink_db_type): (Option<String>, Option<DbType>) =
             get_sink_info(&task_config.sinker);
+        println!("sink_url:{}", sink_url.clone().unwrap());
         let sink_db_mock_factory: DatabaseMockUtils =
-            DatabaseMockUtils::new(sink_url.unwrap(), sink_db_type.unwrap(), 8, 5)
+            DatabaseMockUtils::new(sink_url.unwrap(), sink_db_type.unwrap(), 2, 10)
                 .await
                 .unwrap();
         (

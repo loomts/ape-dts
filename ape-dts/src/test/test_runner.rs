@@ -23,7 +23,7 @@ use super::test_config_util::TestConfigUtil;
 pub struct TestRunner {
     test_dir: String,
     sinker_check_log_dir: String,
-    task_config_file: String,
+    pub task_config_file: String,
     src_conn_pool_mysql: Option<Pool<MySql>>,
     dst_conn_pool_mysql: Option<Pool<MySql>>,
     src_conn_pool_pg: Option<Pool<Postgres>>,
@@ -78,11 +78,7 @@ impl TestRunner {
                 src_conn_pool_pg = Some(TaskUtil::create_pg_conn_pool(&url, 1, false).await?);
             }
 
-            _ => {
-                return Err(Error::Unexpected {
-                    error: "unexpected extractor type".to_string(),
-                });
-            }
+            _ => {}
         }
 
         match config.sinker {
@@ -94,11 +90,7 @@ impl TestRunner {
                 dst_conn_pool_pg = Some(TaskUtil::create_pg_conn_pool(&url, 1, false).await?);
             }
 
-            _ => {
-                return Err(Error::Unexpected {
-                    error: "unexpected sinker type".to_string(),
-                });
-            }
+            _ => {}
         }
 
         Ok(Self {
@@ -174,8 +166,32 @@ impl TestRunner {
         self.run_check_test().await
     }
 
+    pub async fn run_foxlake_test(
+        &self,
+        start_millis: u64,
+        parse_millis: u64,
+    ) -> Result<(), Error> {
+        // execute src ddl sqls
+        self.run_test_ddl_sqls().await?;
+
+        let task_runner = TaskRunner::new(self.task_config_file.clone()).await;
+        let task = tokio::spawn(async move { task_runner.start_task(false).await.unwrap() });
+        TaskUtil::sleep_millis(start_millis).await;
+
+        // execute src dml sqls
+        let src_dml_sqls = TestRunner::load_sqls(&self.src_dml_file);
+        self.execute_src_sqls(&src_dml_sqls).await?;
+        thread::sleep(Duration::from_millis(parse_millis));
+
+        task.abort();
+        while !task.is_finished() {
+            TaskUtil::sleep_millis(1).await;
+        }
+        Ok(())
+    }
+
     pub async fn run_snapshot_test(&self) -> Result<(), Error> {
-        let (src_tbs, dst_tbs, cols_list) = TestRunner::parse_ddl(&self.src_ddl_file).unwrap();
+        let (src_tbs, dst_tbs, cols_list) = Self::parse_ddl(&self.src_ddl_file).unwrap();
 
         // prepare src and dst tables
         self.run_test_ddl_sqls().await?;
@@ -204,12 +220,12 @@ impl TestRunner {
         TaskUtil::sleep_millis(start_millis).await;
 
         // load dml sqls
-        let src_dml_file_sqls = TestRunner::load_sqls(&self.src_dml_file);
+        let src_dml_sqls = TestRunner::load_sqls(&self.src_dml_file);
         let mut src_insert_sqls = Vec::new();
         let mut src_update_sqls = Vec::new();
         let mut src_delete_sqls = Vec::new();
 
-        for sql in src_dml_file_sqls {
+        for sql in src_dml_sqls {
             if sql.to_lowercase().starts_with("insert") {
                 src_insert_sqls.push(sql);
             } else if sql.to_lowercase().starts_with("update") {
@@ -346,6 +362,10 @@ impl TestRunner {
     }
 
     fn load_file(file_path: &str) -> Vec<String> {
+        if fs::metadata(&file_path).is_err() {
+            return Vec::new();
+        }
+
         let file = File::open(file_path).unwrap();
         let reader = BufReader::new(file);
 

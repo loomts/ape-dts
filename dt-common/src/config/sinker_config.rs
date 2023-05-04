@@ -28,4 +28,26 @@ pub enum SinkerConfig {
         batch_size: usize,
         check_log_dir: Option<String>,
     },
+
+    Kafka {
+        url: String,
+        batch_size: usize,
+        ack_timeout_secs: u64,
+        required_acks: String,
+    },
+
+    OpenFaas {
+        url: String,
+        batch_size: usize,
+        timeout_secs: u64,
+    },
+
+    Foxlake {
+        batch_size: usize,
+        bucket: String,
+        access_key: String,
+        secret_key: String,
+        region: String,
+        root_dir: String,
+    },
 }

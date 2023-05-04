@@ -1,11 +1,15 @@
+use std::collections::VecDeque;
+
 use dt_common::config::{config_enums::ParallelType, task_config::TaskConfig};
 
 use crate::{
     error::Error,
     pipeline::{
-        check_parallelizer::CheckParallelizer, merge_parallelizer::MergeParallelizer,
-        partition_parallelizer::PartitionParallelizer, rdb_merger::RdbMerger,
-        rdb_partitioner::RdbPartitioner, snapshot_parallelizer::SnapshotParallelizer,
+        base_parallelizer::BaseParallelizer, check_parallelizer::CheckParallelizer,
+        merge_parallelizer::MergeParallelizer, partition_parallelizer::PartitionParallelizer,
+        rdb_merger::RdbMerger, rdb_partitioner::RdbPartitioner,
+        serial_parallelizer::SerialParallelizer, snapshot_parallelizer::SnapshotParallelizer,
+        table_parallelizer::TableParallelizer,
     },
     traits::Parallelizer,
 };
@@ -20,13 +24,20 @@ impl PipelineUtil {
     ) -> Result<Box<dyn Parallelizer + Send>, Error> {
         let parallel_size = config.pipeline.parallel_size;
         let parallel_type = &config.pipeline.parallel_type;
+        let base_parallelizer = BaseParallelizer {
+            poped_data: VecDeque::new(),
+        };
 
         let parallelizer: Box<dyn Parallelizer + Send> = match parallel_type {
-            ParallelType::Snapshot => Box::new(SnapshotParallelizer { parallel_size }),
+            ParallelType::Snapshot => Box::new(SnapshotParallelizer {
+                base_parallelizer,
+                parallel_size,
+            }),
 
             ParallelType::RdbPartition => {
                 let partitioner = Self::create_rdb_partitioner(config).await?;
                 Box::new(PartitionParallelizer {
+                    base_parallelizer,
                     partitioner,
                     parallel_size,
                 })
@@ -35,6 +46,7 @@ impl PipelineUtil {
             ParallelType::RdbMerge => {
                 let merger = Self::create_rdb_merger(config).await?;
                 Box::new(MergeParallelizer {
+                    base_parallelizer,
                     merger,
                     parallel_size,
                 })
@@ -43,10 +55,18 @@ impl PipelineUtil {
             ParallelType::RdbCheck => {
                 let merger = Self::create_rdb_merger(config).await?;
                 Box::new(CheckParallelizer {
+                    base_parallelizer,
                     merger,
                     parallel_size,
                 })
             }
+
+            ParallelType::Serial => Box::new(SerialParallelizer { base_parallelizer }),
+
+            ParallelType::Table => Box::new(TableParallelizer {
+                base_parallelizer,
+                parallel_size,
+            }),
         };
         Ok(parallelizer)
     }

@@ -1,1 +1,1 @@
-create schema precheck_it;
+create schema precheck_it_pg2pg_1;

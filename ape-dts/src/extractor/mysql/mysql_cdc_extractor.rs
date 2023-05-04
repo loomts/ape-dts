@@ -14,13 +14,13 @@ use mysql_binlog_connector_rust::{
 
 use crate::{
     adaptor::mysql_col_value_convertor::MysqlColValueConvertor,
-    common::position_util::PositionUtil,
+    common::{position_util::PositionUtil, sql_parser::ddl_parser::DdlParser},
     error::Error,
-    extractor::{extractor_util::ExtractorUtil, rdb_filter::RdbFilter},
+    extractor::{base_extractor::BaseExtractor, rdb_filter::RdbFilter},
     info,
     meta::{
-        col_value::ColValue, dt_data::DtData, mysql::mysql_meta_manager::MysqlMetaManager,
-        row_data::RowData, row_type::RowType,
+        col_value::ColValue, ddl_data::DdlData, ddl_type::DdlType, dt_data::DtData,
+        mysql::mysql_meta_manager::MysqlMetaManager, row_data::RowData, row_type::RowType,
     },
     traits::Extractor,
 };
@@ -35,6 +35,8 @@ pub struct MysqlCdcExtractor<'a> {
     pub server_id: u64,
     pub shut_down: &'a AtomicBool,
 }
+
+const QUERY_BEGIN: &str = "BEGIN";
 
 #[async_trait]
 impl Extractor for MysqlCdcExtractor<'_> {
@@ -112,7 +114,7 @@ impl MysqlCdcExtractor<'_> {
                         .parse_row_data(&table_map_event, &w.included_columns, event)
                         .await?;
                     let row_data = RowData {
-                        db: table_map_event.database_name.clone(),
+                        schema: table_map_event.database_name.clone(),
                         tb: table_map_event.table_name.clone(),
                         row_type: RowType::Insert,
                         before: Option::None,
@@ -133,7 +135,7 @@ impl MysqlCdcExtractor<'_> {
                         .parse_row_data(&table_map_event, &u.included_columns_after, &mut event.1)
                         .await?;
                     let row_data = RowData {
-                        db: table_map_event.database_name.clone(),
+                        schema: table_map_event.database_name.clone(),
                         tb: table_map_event.table_name.clone(),
                         row_type: RowType::Update,
                         before: Some(col_values_before),
@@ -151,7 +153,7 @@ impl MysqlCdcExtractor<'_> {
                         .parse_row_data(&table_map_event, &d.included_columns, event)
                         .await?;
                     let row_data = RowData {
-                        db: table_map_event.database_name.clone(),
+                        schema: table_map_event.database_name.clone(),
                         tb: table_map_event.table_name.clone(),
                         row_type: RowType::Delete,
                         before: Some(col_values),
@@ -162,12 +164,30 @@ impl MysqlCdcExtractor<'_> {
                 }
             }
 
+            EventData::Query(query) => {
+                let mut ddl_data = DdlData {
+                    schema: query.schema,
+                    query: query.query.clone(),
+                    ddl_type: DdlType::Unknown,
+                };
+
+                if query.query != QUERY_BEGIN {
+                    if let Ok((ddl_type, schema, _)) = DdlParser::parse(&query.query) {
+                        ddl_data.ddl_type = ddl_type;
+                        if let Some(schema) = schema {
+                            ddl_data.schema = schema;
+                        }
+                    }
+                    BaseExtractor::push_dt_data(&self.buffer, DtData::Ddl { ddl_data }).await?;
+                }
+            }
+
             EventData::Xid(xid) => {
                 let commit = DtData::Commit {
                     xid: xid.xid.to_string(),
                     position: position.to_string(),
                 };
-                ExtractorUtil::push_dt_data(&self.buffer, commit).await?;
+                BaseExtractor::push_dt_data(&self.buffer, commit).await?;
             }
 
             _ => {}
@@ -179,11 +199,11 @@ impl MysqlCdcExtractor<'_> {
     async fn push_row_to_buf(&mut self, row_data: RowData) -> Result<(), Error> {
         if self
             .filter
-            .filter(&row_data.db, &row_data.tb, &row_data.row_type)
+            .filter(&row_data.schema, &row_data.tb, &row_data.row_type)
         {
             return Ok(());
         }
-        ExtractorUtil::push_row(&self.buffer, row_data).await
+        BaseExtractor::push_row(&self.buffer, row_data).await
     }
 
     async fn parse_row_data(
