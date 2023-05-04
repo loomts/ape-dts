@@ -40,6 +40,6 @@ fn main() {
         .build()
         .unwrap();
 
-    rt.block_on(async { builder.build_job().await });
+    rt.block_on(async { _ = builder.build_job().await });
     println!("finished");
 }

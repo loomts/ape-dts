@@ -1,1 +1,1 @@
-drop schema if exists struct_it;
+drop schema if exists struct_it CASCADE;

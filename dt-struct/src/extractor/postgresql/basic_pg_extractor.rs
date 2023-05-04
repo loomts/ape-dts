@@ -731,7 +731,10 @@ impl PgStructExtractor<'_> {
     }
 
     fn get_seq_name_by_default_value(default_value: String) -> Option<String> {
-        // default_value: nextval('table_test_name_seq'::regclass) or nextval('table_test_name_seq')
+        // default_value such as:
+        //   nextval('table_test_name_seq'::regclass)
+        //   nextval('"table_test_name_seq"')
+        //   nextval('struct_it.full_column_type_id_seq'::regclass)
         if default_value.is_empty() || !default_value.starts_with("nextval(") {
             return None;
         }
@@ -744,6 +747,10 @@ impl PgStructExtractor<'_> {
             return None;
         }
         let mut seq_name = arr_tmp[1];
+        if seq_name.contains(".") {
+            let real_name_start_index = seq_name.find(".").unwrap() + 1;
+            seq_name = &seq_name[real_name_start_index..seq_name.len()];
+        }
         if seq_name.starts_with("\"") && seq_name.ends_with("\"") {
             let (start_index, end_index) = (
                 seq_name.find("\"").unwrap() + 1,
@@ -782,5 +789,15 @@ mod tests {
             "nextval('\"has_special_'\"'::regclass)",
         ));
         assert!(opt.is_none());
+
+        opt = PgStructExtractor::get_seq_name_by_default_value(String::from(
+            "nextval('schema.table_test_name_seq'::regclass)",
+        ));
+        assert_eq!(opt.unwrap(), String::from("table_test_name_seq"));
+
+        opt = PgStructExtractor::get_seq_name_by_default_value(String::from(
+            "nextval('\"has_special_schema_^&@\".\"table::123&^%@-_test_name_seq\"'::regclass)",
+        ));
+        assert_eq!(opt.unwrap(), String::from("table::123&^%@-_test_name_seq"));
     }
 }
