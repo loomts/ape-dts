@@ -75,8 +75,8 @@ impl TaskConfig {
             DbType::Mysql => match extract_type {
                 ExtractType::Snapshot => Ok(ExtractorConfig::MysqlSnapshot {
                     url,
-                    db: "".to_string(),
-                    tb: "".to_string(),
+                    db: String::new(),
+                    tb: String::new(),
                 }),
 
                 ExtractType::Cdc => Ok(ExtractorConfig::MysqlCdc {
@@ -99,8 +99,8 @@ impl TaskConfig {
             DbType::Pg => match extract_type {
                 ExtractType::Snapshot => Ok(ExtractorConfig::PgSnapshot {
                     url,
-                    db: "".to_string(),
-                    tb: "".to_string(),
+                    db: String::new(),
+                    tb: String::new(),
                 }),
 
                 ExtractType::Cdc => Ok(ExtractorConfig::PgCdc {
@@ -120,6 +120,21 @@ impl TaskConfig {
                 }),
 
                 ExtractType::Basic => Ok(ExtractorConfig::BasicConfig { url, db_type }),
+            },
+
+            DbType::Mongo => match extract_type {
+                ExtractType::Snapshot => Ok(ExtractorConfig::MongoSnapshot {
+                    url,
+                    db: String::new(),
+                    tb: String::new(),
+                }),
+
+                ExtractType::Cdc => Ok(ExtractorConfig::MongoCdc {
+                    url,
+                    resume_token: ini.get(EXTRACTOR, "resume_token").unwrap(),
+                }),
+
+                _ => Ok(ExtractorConfig::BasicConfig { url, db_type }),
             },
 
             _ => Err(Error::Unexpected {
@@ -159,6 +174,12 @@ impl TaskConfig {
                 }),
 
                 SinkType::Basic => Ok(SinkerConfig::BasicConfig { url, db_type }),
+            },
+
+            DbType::Mongo => match sink_type {
+                SinkType::Write => Ok(SinkerConfig::Mongo { url, batch_size }),
+
+                _ => Ok(SinkerConfig::BasicConfig { url, db_type }),
             },
 
             DbType::Kafka => Ok(SinkerConfig::Kafka {

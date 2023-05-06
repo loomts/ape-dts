@@ -355,7 +355,7 @@ impl SqlUtil<'_> {
         mut placeholder_index: usize,
         col_value_map: &HashMap<String, ColValue>,
     ) -> Result<(String, Vec<String>), Error> {
-        let mut where_sql = "".to_string();
+        let mut where_sql = String::new();
         let mut not_null_cols = Vec::new();
 
         for col in self.rdb_tb_meta.id_cols.iter() {

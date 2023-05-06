@@ -12,6 +12,8 @@ pub enum DbType {
     OpenFaas,
     #[strum(serialize = "foxlake")]
     Foxlake,
+    #[strum(serialize = "mongo")]
+    Mongo,
 }
 
 pub enum CharacterSetType {

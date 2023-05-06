@@ -55,6 +55,10 @@ impl TaskRunner {
                 self.start_multi_task(url, &DbType::Pg).await?
             }
 
+            ExtractorConfig::MongoSnapshot { url, .. } => {
+                self.start_multi_task(url, &DbType::Mongo).await?
+            }
+
             _ => self.start_single_task(&self.config.extractor).await?,
         };
 
@@ -88,6 +92,12 @@ impl TaskRunner {
                         tb: tb.clone(),
                     },
 
+                    ExtractorConfig::MongoSnapshot { url, .. } => ExtractorConfig::MongoSnapshot {
+                        url: url.clone(),
+                        db: db.clone(),
+                        tb: tb.clone(),
+                    },
+
                     _ => {
                         return Err(Error::Unexpected {
                             error: "unexpected extractor config type for rdb snapshot task"
@@ -106,7 +116,7 @@ impl TaskRunner {
         let buffer = ConcurrentQueue::bounded(self.config.pipeline.buffer_size);
         let shut_down = AtomicBool::new(false);
         let syncer = Arc::new(Mutex::new(Syncer {
-            checkpoint_position: "".to_string(),
+            checkpoint_position: String::new(),
         }));
 
         let mut extractor = self
@@ -242,6 +252,26 @@ impl TaskRunner {
                     &self.config.runtime.log_level,
                     &shut_down,
                     syncer,
+                )
+                .await?;
+                Box::new(extractor)
+            }
+
+            ExtractorConfig::MongoSnapshot { url, db, tb } => {
+                let extractor =
+                    ExtractorUtil::create_mongo_snapshot_extractor(url, db, tb, buffer, shut_down)
+                        .await?;
+                Box::new(extractor)
+            }
+
+            ExtractorConfig::MongoCdc { url, resume_token } => {
+                let filter = RdbFilter::from_config(&self.config.filter)?;
+                let extractor = ExtractorUtil::create_mongo_cdc_extractor(
+                    url,
+                    resume_token,
+                    buffer,
+                    filter,
+                    shut_down,
                 )
                 .await?;
                 Box::new(extractor)

@@ -314,7 +314,7 @@ impl TestRunner {
 
         // CREATE TABLE bitbin_table (pk SERIAL, bvunlimited1 BIT VARYING, p GEOMETRY(POINT,3187), PRIMARY KEY(pk));
         let mut tokens = Vec::new();
-        let mut token = "".to_string();
+        let mut token = String::new();
         let mut brakets = 0;
 
         for b in sql.as_bytes() {

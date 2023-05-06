@@ -50,7 +50,7 @@ impl RowData {
             before: None,
             after: Some(after),
             row_type: RowType::Insert,
-            position: "".to_string(),
+            position: String::new(),
         }
     }
 

@@ -13,6 +13,7 @@ use crate::{
         foxlake_sinker::FoxlakeSinker,
         kafka::kafka_router::KafkaRouter,
         kafka::kafka_sinker::KafkaSinker,
+        mongo::mongo_sinker::MongoSinker,
         mysql::{mysql_checker::MysqlChecker, mysql_sinker::MysqlSinker},
         open_faas_sinker::OpenFaasSinker,
         pg::{pg_checker::PgChecker, pg_sinker::PgSinker},
@@ -76,6 +77,17 @@ impl SinkerUtil {
                     &url,
                     &router,
                     &task_config.runtime.log_level,
+                    task_config.pipeline.parallel_size,
+                    *batch_size,
+                )
+                .await?
+            }
+
+            SinkerConfig::Mongo { url, batch_size } => {
+                let router = RdbRouter::from_config(&task_config.router)?;
+                SinkerUtil::create_mongo_sinker(
+                    &url,
+                    &router,
                     task_config.pipeline.parallel_size,
                     *batch_size,
                 )
@@ -324,6 +336,25 @@ impl SinkerUtil {
                 bucket: bucket.to_string(),
                 root_dir: root_dir.to_string(),
                 s3_client,
+            };
+            sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
+        }
+        Ok(sub_sinkers)
+    }
+
+    async fn create_mongo_sinker<'a>(
+        url: &str,
+        router: &RdbRouter,
+        parallel_size: usize,
+        batch_size: usize,
+    ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
+        let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
+        for _ in 0..parallel_size {
+            let mongo_client = TaskUtil::create_mongo_client(url).await.unwrap();
+            let sinker = MongoSinker {
+                batch_size,
+                router: router.clone(),
+                mongo_client,
             };
             sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
         }

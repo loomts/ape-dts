@@ -17,6 +17,11 @@ pub enum SinkerConfig {
         batch_size: usize,
     },
 
+    Mongo {
+        url: String,
+        batch_size: usize,
+    },
+
     MysqlCheck {
         url: String,
         batch_size: usize,

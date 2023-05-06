@@ -6,10 +6,10 @@ use crate::{
     error::Error,
     pipeline::{
         base_parallelizer::BaseParallelizer, check_parallelizer::CheckParallelizer,
-        merge_parallelizer::MergeParallelizer, partition_parallelizer::PartitionParallelizer,
-        rdb_merger::RdbMerger, rdb_partitioner::RdbPartitioner,
-        serial_parallelizer::SerialParallelizer, snapshot_parallelizer::SnapshotParallelizer,
-        table_parallelizer::TableParallelizer,
+        merge_parallelizer::MergeParallelizer, mongo_parallelizer::MongoParallelizer,
+        partition_parallelizer::PartitionParallelizer, rdb_merger::RdbMerger,
+        rdb_partitioner::RdbPartitioner, serial_parallelizer::SerialParallelizer,
+        snapshot_parallelizer::SnapshotParallelizer, table_parallelizer::TableParallelizer,
     },
     traits::Parallelizer,
 };
@@ -64,6 +64,11 @@ impl PipelineUtil {
             ParallelType::Serial => Box::new(SerialParallelizer { base_parallelizer }),
 
             ParallelType::Table => Box::new(TableParallelizer {
+                base_parallelizer,
+                parallel_size,
+            }),
+
+            ParallelType::Mongo => Box::new(MongoParallelizer {
                 base_parallelizer,
                 parallel_size,
             }),

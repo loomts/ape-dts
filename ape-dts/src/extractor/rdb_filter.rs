@@ -240,7 +240,7 @@ mod tests {
     fn test_rdb_filter_ignore_tbs() {
         let config = FilterConfig::Rdb {
             do_dbs: "*".to_string(),
-            ignore_dbs: "".to_string(),
+            ignore_dbs: String::new(),
             do_tbs: "*.*".to_string(),
             ignore_tbs: "*.b*".to_string(),
             do_events: RowType::Insert.as_static().to_string(),
@@ -258,7 +258,7 @@ mod tests {
             do_dbs: "*".to_string(),
             ignore_dbs: "a*".to_string(),
             do_tbs: "*.*".to_string(),
-            ignore_tbs: "".to_string(),
+            ignore_tbs: String::new(),
             do_events: RowType::Insert.as_static().to_string(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config).unwrap();
@@ -274,7 +274,7 @@ mod tests {
             do_dbs: "b*".to_string(),
             ignore_dbs: "a*".to_string(),
             do_tbs: "aaaaaaa.*".to_string(),
-            ignore_tbs: "".to_string(),
+            ignore_tbs: String::new(),
             do_events: RowType::Insert.as_static().to_string(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config).unwrap();
@@ -287,10 +287,10 @@ mod tests {
     #[test]
     fn test_rdb_filter_do_tbs() {
         let config = FilterConfig::Rdb {
-            do_dbs: "".to_string(),
+            do_dbs: String::new(),
             ignore_dbs: "b*".to_string(),
             do_tbs: "a*.*".to_string(),
-            ignore_tbs: "".to_string(),
+            ignore_tbs: String::new(),
             do_events: RowType::Insert.as_static().to_string(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config).unwrap();
@@ -306,8 +306,8 @@ mod tests {
         let config = FilterConfig::Rdb {
             do_dbs: "test_db_*".to_string(),
             ignore_dbs: "test_db_2".to_string(),
-            do_tbs: "".to_string(),
-            ignore_tbs: "".to_string(),
+            do_tbs: String::new(),
+            ignore_tbs: String::new(),
             do_events: RowType::Insert.as_static().to_string(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config).unwrap();
@@ -317,8 +317,8 @@ mod tests {
         let config = FilterConfig::Rdb {
             do_dbs: "test_db_*".to_string(),
             ignore_dbs: "test_db_1".to_string(),
-            do_tbs: "".to_string(),
-            ignore_tbs: "".to_string(),
+            do_tbs: String::new(),
+            ignore_tbs: String::new(),
             do_events: RowType::Insert.as_static().to_string(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config).unwrap();
@@ -328,8 +328,8 @@ mod tests {
         let config = FilterConfig::Rdb {
             do_dbs: "test_db_1".to_string(),
             ignore_dbs: "*".to_string(),
-            do_tbs: "".to_string(),
-            ignore_tbs: "".to_string(),
+            do_tbs: String::new(),
+            ignore_tbs: String::new(),
             do_events: RowType::Insert.as_static().to_string(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config).unwrap();
@@ -338,8 +338,8 @@ mod tests {
         // keep by do_dbs, NOT all tables filtered by ignore_tbs
         let config = FilterConfig::Rdb {
             do_dbs: "test_db_*".to_string(),
-            ignore_dbs: "".to_string(),
-            do_tbs: "".to_string(),
+            ignore_dbs: String::new(),
+            do_tbs: String::new(),
             ignore_tbs: "test_db_1.a*".to_string(),
             do_events: RowType::Insert.as_static().to_string(),
         };
@@ -349,8 +349,8 @@ mod tests {
         // keep by do_dbs, all tables filtered by ignore_tbs
         let config = FilterConfig::Rdb {
             do_dbs: "test_db_*".to_string(),
-            ignore_dbs: "".to_string(),
-            do_tbs: "".to_string(),
+            ignore_dbs: String::new(),
+            do_tbs: String::new(),
             ignore_tbs: "test_db_1.*".to_string(),
             do_events: RowType::Insert.as_static().to_string(),
         };
@@ -359,8 +359,8 @@ mod tests {
 
         // keep by do_tbs, NOT all tables filtered by ignore_tbs
         let config = FilterConfig::Rdb {
-            do_dbs: "".to_string(),
-            ignore_dbs: "".to_string(),
+            do_dbs: String::new(),
+            ignore_dbs: String::new(),
             do_tbs: "test_db_1.one_pk_multi_uk".to_string(),
             ignore_tbs: "test_db_*.a*".to_string(),
             do_events: RowType::Insert.as_static().to_string(),
@@ -370,7 +370,7 @@ mod tests {
 
         // keep by do_tbs, all tables filtered by ignore_tbs
         let config = FilterConfig::Rdb {
-            do_dbs: "".to_string(),
+            do_dbs: String::new(),
             ignore_dbs: "b*".to_string(),
             do_tbs: "test_db_1.one_pk_multi_uk".to_string(),
             ignore_tbs: "test_db_*.*".to_string(),
@@ -381,10 +381,10 @@ mod tests {
 
         // keep by do_tbs, NOT filtered by ignore_dbs
         let config = FilterConfig::Rdb {
-            do_dbs: "".to_string(),
+            do_dbs: String::new(),
             ignore_dbs: "test_db_2".to_string(),
             do_tbs: "test_db_1.one_pk_multi_uk".to_string(),
-            ignore_tbs: "".to_string(),
+            ignore_tbs: String::new(),
             do_events: RowType::Insert.as_static().to_string(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config).unwrap();
@@ -392,10 +392,10 @@ mod tests {
 
         // keep by do_tbs, filtered by ignore_dbs exactly
         let config = FilterConfig::Rdb {
-            do_dbs: "".to_string(),
+            do_dbs: String::new(),
             ignore_dbs: "test_db_1".to_string(),
             do_tbs: "test_db_1.one_pk_multi_uk".to_string(),
-            ignore_tbs: "".to_string(),
+            ignore_tbs: String::new(),
             do_events: RowType::Insert.as_static().to_string(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config).unwrap();
@@ -403,10 +403,10 @@ mod tests {
 
         // keep by do_tbs, filtered by ignore_dbs wildchar
         let config = FilterConfig::Rdb {
-            do_dbs: "".to_string(),
+            do_dbs: String::new(),
             ignore_dbs: "test_db_*".to_string(),
             do_tbs: "test_db_1.one_pk_multi_uk".to_string(),
-            ignore_tbs: "".to_string(),
+            ignore_tbs: String::new(),
             do_events: RowType::Insert.as_static().to_string(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config).unwrap();
