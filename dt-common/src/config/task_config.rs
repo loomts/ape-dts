@@ -1,8 +1,8 @@
-use std::{fmt::Debug, fs::File, io::Read, path::Path, str::FromStr};
+use std::{fmt::Debug, fs::File, io::Read, str::FromStr};
 
 use configparser::ini::Ini;
 
-use crate::{error::Error, meta::db_enums::DbType, utils::config_url_util::ConfigUrlUtil};
+use crate::{error::Error, meta::db_enums::DbType};
 
 use super::{
     config_enums::{ExtractType, ParallelType, SinkType},
@@ -14,7 +14,6 @@ use super::{
     sinker_config::SinkerConfig,
 };
 
-#[derive(Clone)]
 pub struct TaskConfig {
     pub extractor: ExtractorConfig,
     pub sinker: SinkerConfig,
@@ -37,10 +36,6 @@ const BATCH_SIZE: &str = "batch_size";
 
 impl TaskConfig {
     pub fn new(task_config_file: &str) -> Self {
-        TaskConfig::new_with_envs(task_config_file, None)
-    }
-
-    pub fn new_with_envs(task_config_file: &str, env_file_option: Option<String>) -> Self {
         let mut config_str = String::new();
         File::open(task_config_file)
             .unwrap()
@@ -48,11 +43,6 @@ impl TaskConfig {
             .unwrap();
         let mut ini = Ini::new();
         ini.read(config_str).unwrap();
-
-        if env_file_option.is_some() {
-            // init the envs with specified .env file
-            _ = dotenv::from_path(Path::new(env_file_option.unwrap().as_str()));
-        }
 
         Self {
             extractor: Self::load_extractor_config(&ini).unwrap(),
@@ -68,8 +58,7 @@ impl TaskConfig {
         let db_type = DbType::from_str(&ini.get(EXTRACTOR, DB_TYPE).unwrap()).unwrap();
         let extract_type =
             ExtractType::from_str(&ini.get(EXTRACTOR, "extract_type").unwrap()).unwrap();
-
-        let url = ConfigUrlUtil::convert_with_envs(ini.get(EXTRACTOR, URL).unwrap()).unwrap();
+        let url = ini.get(EXTRACTOR, URL).unwrap();
 
         match db_type {
             DbType::Mysql => match extract_type {
@@ -146,10 +135,8 @@ impl TaskConfig {
     fn load_sinker_config(ini: &Ini) -> Result<SinkerConfig, Error> {
         let db_type = DbType::from_str(&ini.get(SINKER, DB_TYPE).unwrap()).unwrap();
         let sink_type = SinkType::from_str(&ini.get(SINKER, "sink_type").unwrap()).unwrap();
+        let url = ini.get(SINKER, URL).unwrap();
         let batch_size: usize = Self::get_optional_value(ini, SINKER, BATCH_SIZE);
-
-        let url =
-            ConfigUrlUtil::convert_with_envs(Self::get_optional_value(ini, SINKER, URL)).unwrap();
 
         match db_type {
             DbType::Mysql => match sink_type {

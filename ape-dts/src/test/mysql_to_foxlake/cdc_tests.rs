@@ -8,15 +8,15 @@ mod test {
     use serial_test::serial;
     use tokio::runtime::Runtime;
 
-    use crate::{error::Error, test::test_runner::TestRunner};
+    use crate::{error::Error, test::test_runners::rdb_test_runner::RdbTestRunner};
 
     #[test]
     #[serial]
     fn cdc_basic_test() {
         let test_dir = "mysql_to_foxlake/cdc_basic_test";
         let rt = Runtime::new().unwrap();
-        let runner = rt.block_on(TestRunner::new(test_dir)).unwrap();
-        let (s3_client, bucket, root_dir) = init_s3_client(&runner.task_config_file);
+        let runner = rt.block_on(RdbTestRunner::new(test_dir)).unwrap();
+        let (s3_client, bucket, root_dir) = init_s3_client(&runner.base.task_config_file);
         let s3_client = s3_client.unwrap();
 
         rt.block_on(delete_dir(&s3_client, &bucket, &root_dir));
