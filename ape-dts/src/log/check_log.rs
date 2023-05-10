@@ -165,7 +165,7 @@ mod test {
         assert_eq!(log.cols, vec!["col1", "col2"]);
         assert_eq!(
             log.col_values,
-            vec![Some("".to_string()), Some("".to_string())]
+            vec![Some(String::new()), Some(String::new())]
         );
         assert_eq!(str, log.to_string());
 

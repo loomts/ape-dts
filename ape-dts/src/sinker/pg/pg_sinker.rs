@@ -94,14 +94,13 @@ impl PgSinker {
     async fn batch_insert(
         &mut self,
         data: &mut Vec<RowData>,
-        sinked_count: usize,
+        start_index: usize,
         batch_size: usize,
     ) -> Result<(), Error> {
         let tb_meta = self.get_tb_meta(&data[0]).await?;
         let sql_util = SqlUtil::new_for_pg(&tb_meta);
 
-        let (sql, cols, binds) =
-            sql_util.get_batch_insert_query(&data, sinked_count, batch_size)?;
+        let (sql, cols, binds) = sql_util.get_batch_insert_query(&data, start_index, batch_size)?;
         let query = SqlUtil::create_pg_query(&sql, &cols, &binds, &tb_meta);
 
         let result = query.execute(&self.conn_pool).await;
@@ -112,7 +111,7 @@ impl PgSinker {
                 tb_meta.basic.tb,
                 error.to_string()
             );
-            let sub_data = &data[sinked_count..sinked_count + batch_size];
+            let sub_data = &data[start_index..start_index + batch_size];
             self.serial_sink(sub_data.to_vec()).await.unwrap();
         }
         Ok(())

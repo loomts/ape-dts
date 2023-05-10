@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     fs::{self, File},
     io::Read,
     path::Path,
@@ -14,13 +15,19 @@ use strum::AsStaticRef;
 pub struct TestConfigUtil {}
 
 const PIPELINE: &str = "pipeline";
+const EXTRACTOR: &str = "extractor";
 const SINKER: &str = "sinker";
+const RUNTIME: &str = "runtime";
 const PARALLEL_TYPE: &str = "parallel_type";
 const PARALLEL_SIZE: &str = "parallel_size";
 const BATCH_SIZE: &str = "batch_size";
 
 #[allow(dead_code)]
 impl TestConfigUtil {
+    pub const LOG_DIR: &str = "log_dir";
+    pub const EXTRACTOR_CHECK_LOG_DIR: &str = "extractor_check_log_dir";
+    pub const SINKER_CHECK_LOG_DIR: &str = "sinker_check_log_dir";
+
     pub fn get_project_root() -> String {
         project_root::get_project_root()
             .unwrap()
@@ -89,25 +96,17 @@ impl TestConfigUtil {
         src_task_config_file: &str,
         dst_task_config_file: &str,
         project_root: &str,
-    ) -> (String, String, String) {
+    ) -> HashMap<String, String> {
         let config = TaskConfig::new(&src_task_config_file);
         let mut update_configs = Vec::new();
 
         // runtime/log4rs_file
         let log4rs_file = format!("{}/{}", project_root, config.runtime.log4rs_file);
-        update_configs.push((
-            "runtime".to_string(),
-            "log4rs_file".to_string(),
-            log4rs_file,
-        ));
+        update_configs.push((RUNTIME.to_string(), "log4rs_file".to_string(), log4rs_file));
 
         // runtime/log_dir
         let log_dir = format!("{}/{}", project_root, config.runtime.log_dir);
-        update_configs.push((
-            "runtime".to_string(),
-            "log_dir".to_string(),
-            log_dir.clone(),
-        ));
+        update_configs.push((RUNTIME.to_string(), "log_dir".to_string(), log_dir.clone()));
 
         // extractor/check_log_dir
         let mut extractor_check_log_dir = String::new();
@@ -116,7 +115,7 @@ impl TestConfigUtil {
             | ExtractorConfig::PgCheck { check_log_dir, .. } => {
                 extractor_check_log_dir = format!("{}/{}", project_root, check_log_dir);
                 update_configs.push((
-                    "extractor".to_string(),
+                    EXTRACTOR.to_string(),
                     "check_log_dir".to_string(),
                     extractor_check_log_dir.clone(),
                 ));
@@ -133,7 +132,7 @@ impl TestConfigUtil {
                     if !dir.is_empty() {
                         sinker_check_log_dir = format!("{}/{}", project_root, dir);
                         update_configs.push((
-                            "sinker".to_string(),
+                            SINKER.to_string(),
                             "check_log_dir".to_string(),
                             sinker_check_log_dir.clone(),
                         ));
@@ -153,11 +152,14 @@ impl TestConfigUtil {
             &update_configs,
         );
 
-        (
-            log_dir.clone(),
-            extractor_check_log_dir.clone(),
-            sinker_check_log_dir.clone(),
-        )
+        let mut updated_config_fields = HashMap::new();
+        updated_config_fields.insert(Self::LOG_DIR.to_string(), log_dir);
+        updated_config_fields.insert(
+            Self::EXTRACTOR_CHECK_LOG_DIR.to_string(),
+            extractor_check_log_dir,
+        );
+        updated_config_fields.insert(Self::SINKER_CHECK_LOG_DIR.to_string(), sinker_check_log_dir);
+        updated_config_fields
     }
 
     pub fn update_task_config(

@@ -19,7 +19,7 @@ pub struct TableParallelizer {
 #[async_trait]
 impl Parallelizer for TableParallelizer {
     fn get_name(&self) -> String {
-        "FoxlakeParallelizer".to_string()
+        "TableParallelizer".to_string()
     }
 
     async fn drain(&mut self, buffer: &ConcurrentQueue<DtData>) -> Result<Vec<DtData>, Error> {

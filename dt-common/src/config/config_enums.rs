@@ -36,6 +36,8 @@ pub enum ParallelType {
     RdbCheck,
     #[strum(serialize = "table")]
     Table,
+    #[strum(serialize = "mongo")]
+    Mongo,
 }
 
 pub enum RouteType {

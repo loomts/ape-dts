@@ -74,14 +74,13 @@ impl MysqlSinker {
     async fn batch_delete(
         &mut self,
         data: &mut Vec<RowData>,
-        sinked_count: usize,
+        start_index: usize,
         batch_size: usize,
     ) -> Result<(), Error> {
         let tb_meta = self.get_tb_meta(&data[0]).await?;
         let sql_util = SqlUtil::new_for_mysql(&tb_meta);
 
-        let (sql, cols, binds) =
-            sql_util.get_batch_delete_query(&data, sinked_count, batch_size)?;
+        let (sql, cols, binds) = sql_util.get_batch_delete_query(&data, start_index, batch_size)?;
         let query = SqlUtil::create_mysql_query(&sql, &cols, &binds, &tb_meta);
 
         query.execute(&self.conn_pool).await.unwrap();

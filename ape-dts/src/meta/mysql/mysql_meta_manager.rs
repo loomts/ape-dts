@@ -29,7 +29,7 @@ impl<'a> MysqlMetaManager {
         Self {
             conn_pool,
             cache: HashMap::new(),
-            version: "".to_string(),
+            version: String::new(),
         }
     }
 

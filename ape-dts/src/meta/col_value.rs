@@ -3,6 +3,7 @@ use std::{
     hash::{Hash, Hasher},
 };
 
+use mongodb::bson::Document;
 use serde::{Deserialize, Serialize, Serializer};
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -34,6 +35,7 @@ pub enum ColValue {
     Set2(String),
     Enum2(String),
     Json(Vec<u8>),
+    MongoDoc(Document),
 }
 
 impl ColValue {

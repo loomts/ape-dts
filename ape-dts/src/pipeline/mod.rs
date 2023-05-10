@@ -1,6 +1,7 @@
 pub mod base_parallelizer;
 pub mod check_parallelizer;
 pub mod merge_parallelizer;
+pub mod mongo_parallelizer;
 pub mod partition_parallelizer;
 pub mod pipeline;
 pub mod rdb_merger;

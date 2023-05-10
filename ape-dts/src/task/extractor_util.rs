@@ -9,6 +9,10 @@ use crate::{
     common::syncer::Syncer,
     error::Error,
     extractor::{
+        mongo::{
+            mongo_cdc_extractor::MongoCdcExtractor,
+            mongo_snapshot_extractor::MongoSnapshotExtractor,
+        },
         mysql::{
             mysql_cdc_extractor::MysqlCdcExtractor, mysql_check_extractor::MysqlCheckExtractor,
             mysql_snapshot_extractor::MysqlSnapshotExtractor,
@@ -37,6 +41,7 @@ impl ExtractorUtil {
         let mut dbs = match db_type {
             DbType::Mysql => Self::list_mysql_dbs(url).await?,
             DbType::Pg => Self::list_pg_schemas(url).await?,
+            DbType::Mongo => Self::list_mongo_dbs(url).await?,
             _ => Vec::new(),
         };
         dbs.sort();
@@ -47,6 +52,7 @@ impl ExtractorUtil {
         let mut tbs = match db_type {
             DbType::Mysql => Self::list_mysql_tbs(url, db).await?,
             DbType::Pg => Self::list_pg_tbs(url, db).await?,
+            DbType::Mongo => Self::list_mongo_tbs(url, db).await?,
             _ => Vec::new(),
         };
         tbs.sort();
@@ -116,6 +122,22 @@ impl ExtractorUtil {
             let tb: String = row.try_get(0)?;
             tbs.push(tb);
         }
+        Ok(tbs)
+    }
+
+    async fn list_mongo_dbs(url: &str) -> Result<Vec<String>, Error> {
+        let client = TaskUtil::create_mongo_client(url).await.unwrap();
+        let dbs = client.list_database_names(None, None).await.unwrap();
+        Ok(dbs)
+    }
+
+    async fn list_mongo_tbs(url: &str, db: &str) -> Result<Vec<String>, Error> {
+        let client = TaskUtil::create_mongo_client(url).await.unwrap();
+        let tbs = client
+            .database(db)
+            .list_collection_names(None)
+            .await
+            .unwrap();
         Ok(tbs)
     }
 
@@ -194,7 +216,7 @@ impl ExtractorUtil {
             db: db.to_string(),
             tb: tb.to_string(),
             slice_size,
-            shut_down: &&shut_down,
+            shut_down: &shut_down,
         })
     }
 
@@ -216,7 +238,7 @@ impl ExtractorUtil {
             buffer,
             check_log_dir: check_log_dir.to_string(),
             batch_size,
-            shut_down: &&shut_down,
+            shut_down: &shut_down,
         })
     }
 
@@ -238,7 +260,7 @@ impl ExtractorUtil {
             check_log_dir: check_log_dir.to_string(),
             buffer,
             batch_size,
-            shut_down: &&shut_down,
+            shut_down: &shut_down,
         })
     }
 
@@ -262,7 +284,41 @@ impl ExtractorUtil {
             slice_size,
             schema: db.to_string(),
             tb: tb.to_string(),
-            shut_down: &&shut_down,
+            shut_down: &shut_down,
+        })
+    }
+
+    pub async fn create_mongo_snapshot_extractor<'a>(
+        url: &str,
+        db: &str,
+        tb: &str,
+        buffer: &'a ConcurrentQueue<DtData>,
+        shut_down: &'a AtomicBool,
+    ) -> Result<MongoSnapshotExtractor<'a>, Error> {
+        let mongo_client = TaskUtil::create_mongo_client(url).await.unwrap();
+        Ok(MongoSnapshotExtractor {
+            buffer,
+            db: db.to_string(),
+            tb: tb.to_string(),
+            shut_down: &shut_down,
+            mongo_client,
+        })
+    }
+
+    pub async fn create_mongo_cdc_extractor<'a>(
+        url: &str,
+        resume_token: &str,
+        buffer: &'a ConcurrentQueue<DtData>,
+        filter: RdbFilter,
+        shut_down: &'a AtomicBool,
+    ) -> Result<MongoCdcExtractor<'a>, Error> {
+        let mongo_client = TaskUtil::create_mongo_client(url).await.unwrap();
+        Ok(MongoCdcExtractor {
+            buffer,
+            filter,
+            resume_token: resume_token.to_string(),
+            shut_down: &shut_down,
+            mongo_client,
         })
     }
 }

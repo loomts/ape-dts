@@ -44,4 +44,15 @@ pub enum ExtractorConfig {
         check_log_dir: String,
         batch_size: usize,
     },
+
+    MongoSnapshot {
+        url: String,
+        db: String,
+        tb: String,
+    },
+
+    MongoCdc {
+        url: String,
+        resume_token: String,
+    },
 }
