@@ -52,9 +52,9 @@ impl PgStructExtractor<'_> {
     pub async fn extract_internal(&mut self) -> Result<(), Error> {
         let mut metas = Vec::new();
 
-        let (mut seqs, mut seq_owners) = self.get_sequence().await.unwrap();
+        let (seqs, seq_owners) = self.get_sequence().await.unwrap();
 
-        for (_, seq) in seqs.drain() {
+        for (_, seq) in seqs {
             metas.push(seq);
         }
 
@@ -62,7 +62,7 @@ impl PgStructExtractor<'_> {
             metas.push(table);
         }
 
-        for (_, seq_owner) in seq_owners.drain() {
+        for (_, seq_owner) in seq_owners {
             metas.push(seq_owner);
         }
 
@@ -83,7 +83,7 @@ impl PgStructExtractor<'_> {
                 schema: self.db.clone(),
                 query: String::new(),
                 meta: Some(meta),
-                ddl_type: DdlType::CreateTable,
+                ddl_type: DdlType::Unknown,
             };
             BaseExtractor::push_dt_data(&self.buffer, DtData::Ddl { ddl_data })
                 .await

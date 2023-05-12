@@ -58,7 +58,7 @@ impl MysqlStructExtractor<'_> {
                 schema: self.db.clone(),
                 query: String::new(),
                 meta: Some(meta),
-                ddl_type: DdlType::CreateTable,
+                ddl_type: DdlType::Unknown,
             };
             BaseExtractor::push_dt_data(&self.buffer, DtData::Ddl { ddl_data })
                 .await

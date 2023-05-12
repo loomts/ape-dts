@@ -36,6 +36,13 @@ impl BaseTestRunner {
             &project_root,
         );
 
+        // update extractor / sinker urls from .env
+        TestConfigUtil::update_task_config_url(
+            &dst_task_config_file,
+            &dst_task_config_file,
+            &project_root,
+        );
+
         let (src_dml_sqls, dst_dml_sqls, src_ddl_sqls, dst_ddl_sqls) = Self::load_sqls(&test_dir);
 
         Ok(Self {

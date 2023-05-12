@@ -44,6 +44,7 @@ impl BaseCheckExtractor<'_> {
             }
         }
 
+        Self::batch_extract_and_clear(extractor, &mut batch).await;
         BaseExtractor::wait_task_finish(self.buffer, self.shut_down).await
     }
 

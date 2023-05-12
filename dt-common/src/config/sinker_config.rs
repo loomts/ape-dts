@@ -60,3 +60,17 @@ pub enum SinkerConfig {
         root_dir: String,
     },
 }
+
+impl SinkerConfig {
+    pub fn get_db_type(&self) -> DbType {
+        match self {
+            Self::Mysql { .. } | Self::MysqlCheck { .. } => DbType::Mysql,
+            Self::Pg { .. } | Self::PgCheck { .. } => DbType::Pg,
+            Self::Mongo { .. } => DbType::Mongo,
+            Self::Kafka { .. } => DbType::Kafka,
+            Self::OpenFaas { .. } => DbType::OpenFaas,
+            Self::Foxlake { .. } => DbType::Foxlake,
+            Self::BasicConfig { db_type, .. } => db_type.clone(),
+        }
+    }
+}

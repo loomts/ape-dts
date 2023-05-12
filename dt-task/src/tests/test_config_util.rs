@@ -1,14 +1,18 @@
 use std::{
     collections::HashMap,
+    env,
     fs::{self, File},
     io::Read,
     path::Path,
 };
 
 use configparser::ini::Ini;
-use dt_common::config::{
-    config_enums::ParallelType, extractor_config::ExtractorConfig, sinker_config::SinkerConfig,
-    task_config::TaskConfig,
+use dt_common::{
+    config::{
+        config_enums::ParallelType, extractor_config::ExtractorConfig, sinker_config::SinkerConfig,
+        task_config::TaskConfig,
+    },
+    meta::db_enums::DbType,
 };
 
 pub struct TestConfigUtil {}
@@ -20,6 +24,7 @@ const RUNTIME: &str = "runtime";
 const PARALLEL_TYPE: &str = "parallel_type";
 const PARALLEL_SIZE: &str = "parallel_size";
 const BATCH_SIZE: &str = "batch_size";
+const URL: &str = "url";
 
 #[allow(dead_code)]
 impl TestConfigUtil {
@@ -89,6 +94,80 @@ impl TestConfigUtil {
             (PIPELINE, PARALLEL_SIZE, "2"),
             (SINKER, BATCH_SIZE, "2"),
         ])
+    }
+
+    pub fn update_task_config_url(
+        src_task_config_file: &str,
+        dst_task_config_file: &str,
+        project_root: &str,
+    ) {
+        let env_path = format!("{}/dt-task/src/tests/.env", project_root);
+        dotenv::from_path(env_path).unwrap();
+
+        let config = TaskConfig::new(&src_task_config_file);
+        let mut update_configs = Vec::new();
+
+        match &config.extractor.get_db_type() {
+            DbType::Mysql => {
+                update_configs.push((
+                    EXTRACTOR.to_string(),
+                    URL.to_string(),
+                    env::var("mysql_extractor_url").unwrap(),
+                ));
+            }
+
+            DbType::Pg => {
+                update_configs.push((
+                    EXTRACTOR.to_string(),
+                    URL.to_string(),
+                    env::var("pg_extractor_url").unwrap(),
+                ));
+            }
+
+            DbType::Mongo => {
+                update_configs.push((
+                    EXTRACTOR.to_string(),
+                    URL.to_string(),
+                    env::var("mongo_extractor_url").unwrap(),
+                ));
+            }
+
+            _ => {}
+        }
+
+        match &config.sinker.get_db_type() {
+            DbType::Mysql => {
+                update_configs.push((
+                    SINKER.to_string(),
+                    URL.to_string(),
+                    env::var("mysql_sinker_url").unwrap(),
+                ));
+            }
+
+            DbType::Pg => {
+                update_configs.push((
+                    SINKER.to_string(),
+                    URL.to_string(),
+                    env::var("pg_sinker_url").unwrap(),
+                ));
+            }
+
+            DbType::Mongo => {
+                update_configs.push((
+                    SINKER.to_string(),
+                    URL.to_string(),
+                    env::var("mongo_sinker_url").unwrap(),
+                ));
+            }
+
+            _ => {}
+        }
+
+        TestConfigUtil::update_task_config(
+            &src_task_config_file,
+            &dst_task_config_file,
+            &update_configs,
+        );
     }
 
     pub fn update_task_config_log_dir(
