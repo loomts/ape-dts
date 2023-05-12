@@ -169,7 +169,7 @@ impl StructBuilder {
         finished_flag: Arc<AtomicBool>,
     ) -> Result<Box<dyn StructExtrator + 'a + Send>, Error> {
         let sinker: Box<dyn StructExtrator + Send> = match &self.sinker_config {
-            SinkerConfig::BasicConfig { url, db_type } => match db_type {
+            SinkerConfig::BasicConfig { url, db_type, .. } => match db_type {
                 DbType::Mysql => Box::new(MySqlStructExtractor {
                     pool: Option::None,
                     struct_obj_queue: queue,
@@ -205,7 +205,7 @@ impl StructBuilder {
 
     pub async fn build_sinker(&self) -> Result<Box<dyn StructSinker + Send>, Error> {
         let sinker: Box<dyn StructSinker + Send> = match &self.sinker_config {
-            SinkerConfig::BasicConfig { url: _, db_type } => match db_type {
+            SinkerConfig::BasicConfig { db_type, .. } => match db_type {
                 DbType::Mysql => Box::new(MySqlStructSinker {
                     pool: Option::None,
                     sinker_config: self.sinker_config.clone(),

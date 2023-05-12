@@ -6,8 +6,20 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-configparser = "3.0.2"
-strum = { version = "0.21.0", features = ["derive"] }
-project-root = "0.2.2"
-dotenv = "0.15.0"
-sqlx = {version = "0.6.2", features = ["runtime-async-std-rustls", "mysql", "postgres", "decimal", "bigdecimal", "ipnetwork", "mac_address", "bit-vec", "time", "chrono", "json", "uuid"]}
+dotenv = { workspace = true }
+sqlx = { workspace = true }
+strum = { workspace = true }
+project-root = { workspace = true }
+configparser = { workspace = true }
+serde ={ workspace = true }
+serde_json = { workspace = true }
+byteorder = { workspace = true }
+chrono =  { workspace = true }
+mysql-binlog-connector-rust = { workspace = true }
+mongodb = { workspace = true }
+bytes = { workspace = true }
+futures = { workspace = true }
+serde_yaml = { workspace = true }
+regex = { workspace = true }
+nom = { workspace = true }
+tokio = { workspace = true }

@@ -2,9 +2,14 @@ use crate::meta::db_enums::DbType;
 
 #[derive(Clone)]
 pub enum ExtractorConfig {
-    BasicConfig {
+    MysqlBasic {
         url: String,
-        db_type: DbType,
+        db: String,
+    },
+
+    PgBasic {
+        url: String,
+        db: String,
     },
 
     MysqlSnapshot {
@@ -55,4 +60,22 @@ pub enum ExtractorConfig {
         url: String,
         resume_token: String,
     },
+}
+
+impl ExtractorConfig {
+    pub fn get_db_type(&self) -> DbType {
+        match self {
+            Self::MysqlBasic { .. }
+            | Self::MysqlSnapshot { .. }
+            | Self::MysqlCdc { .. }
+            | Self::MysqlCheck { .. } => DbType::Mysql,
+
+            Self::PgBasic { .. }
+            | Self::PgSnapshot { .. }
+            | Self::PgCdc { .. }
+            | Self::PgCheck { .. } => DbType::Pg,
+
+            Self::MongoSnapshot { .. } | Self::MongoCdc { .. } => DbType::Mongo,
+        }
+    }
 }

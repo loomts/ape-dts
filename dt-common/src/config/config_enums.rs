@@ -1,6 +1,10 @@
-use strum::{AsStaticStr, Display, EnumString, IntoStaticStr};
+use std::str::FromStr;
 
-#[derive(Display, EnumString, IntoStaticStr, AsStaticStr)]
+use strum::{Display, EnumString, IntoStaticStr};
+
+use crate::error::Error;
+
+#[derive(Display, EnumString, IntoStaticStr)]
 pub enum ExtractType {
     #[strum(serialize = "snapshot")]
     Snapshot,
@@ -12,7 +16,7 @@ pub enum ExtractType {
     Basic,
 }
 
-#[derive(EnumString, AsStaticStr)]
+#[derive(EnumString, IntoStaticStr)]
 pub enum SinkType {
     #[strum(serialize = "write")]
     Write,
@@ -22,7 +26,7 @@ pub enum SinkType {
     Basic,
 }
 
-#[derive(EnumString, AsStaticStr, Clone)]
+#[derive(EnumString, IntoStaticStr, Clone, Display)]
 pub enum ParallelType {
     #[strum(serialize = "serial")]
     Serial,
@@ -42,5 +46,23 @@ pub enum ParallelType {
 
 pub enum RouteType {
     Db,
-    DbTb,
+    Tb,
+}
+
+#[derive(Clone, IntoStaticStr)]
+pub enum ConflictPolicyEnum {
+    #[strum(serialize = "ignore")]
+    Ignore,
+    #[strum(serialize = "interrupt")]
+    Interrupt,
+}
+
+impl FromStr for ConflictPolicyEnum {
+    type Err = Error;
+    fn from_str(str: &str) -> Result<Self, Self::Err> {
+        match str {
+            "ignore" => Ok(Self::Ignore),
+            _ => Ok(Self::Interrupt),
+        }
+    }
 }

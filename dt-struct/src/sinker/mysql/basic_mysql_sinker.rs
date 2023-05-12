@@ -21,7 +21,7 @@ impl StructSinker for MySqlStructSinker {
 
     async fn build_connection(&mut self) -> Result<(), Error> {
         match &self.sinker_config {
-            SinkerConfig::BasicConfig { url, db_type: _ } => {
+            SinkerConfig::BasicConfig { url, .. } => {
                 let db_pool = MySqlPoolOptions::new().connect(&url).await?;
                 self.pool = Option::Some(db_pool);
             }

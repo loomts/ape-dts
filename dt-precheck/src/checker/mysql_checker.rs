@@ -6,7 +6,7 @@ use dt_common::{
         extractor_config::ExtractorConfig, filter_config::FilterConfig,
         router_config::RouterConfig, sinker_config::SinkerConfig,
     },
-    meta::{db_enums::DbType, db_table_model::DbTable},
+    meta::{db_enums::DbType, struct_meta::db_table_model::DbTable},
 };
 use regex::Regex;
 use sqlx::{mysql::MySqlPoolOptions, query, MySql, Pool, Row};
@@ -41,15 +41,15 @@ impl Checker for MySqlChecker {
 
         if self.is_source {
             match &self.source_config {
-                ExtractorConfig::BasicConfig { url, db_type } => {
+                ExtractorConfig::MysqlBasic { url, .. } => {
                     connection_url = String::from(url);
-                    self.db_type_option = Some(db_type.clone());
+                    self.db_type_option = Some(DbType::Mysql);
                 }
                 _ => {}
             };
         } else {
             match &self.sinker_config {
-                SinkerConfig::BasicConfig { url, db_type } => {
+                SinkerConfig::BasicConfig { url, db_type, .. } => {
                     connection_url = String::from(url);
                     self.db_type_option = Some(db_type.clone());
                 }

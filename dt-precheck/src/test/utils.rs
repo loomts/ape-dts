@@ -17,10 +17,16 @@ pub mod tests_utils {
         let mut result_type: Option<DbType> = None;
 
         match extractor_config {
-            ExtractorConfig::BasicConfig { url, db_type } => {
+            ExtractorConfig::MysqlBasic { url, .. } => {
                 result_url = url.clone();
-                result_type = Some(db_type.clone());
+                result_type = Some(DbType::Mysql);
             }
+
+            ExtractorConfig::PgBasic { url, .. } => {
+                result_url = url.clone();
+                result_type = Some(DbType::Pg);
+            }
+
             _ => {}
         }
 
@@ -32,7 +38,7 @@ pub mod tests_utils {
         let mut result_type: Option<DbType> = None;
 
         match sinker_config {
-            SinkerConfig::BasicConfig { url, db_type } => {
+            SinkerConfig::BasicConfig { url, db_type, .. } => {
                 result_url = url.clone();
                 result_type = Some(db_type.clone());
             }

@@ -1,19 +1,10 @@
+pub mod adaptor;
 pub mod config;
+pub mod constants;
 pub mod error;
+pub mod log;
 pub mod meta;
+pub mod monitor;
+pub mod sql_parser;
+pub mod syncer;
 pub mod utils;
-
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}

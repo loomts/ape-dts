@@ -1,10 +1,14 @@
 use crate::meta::db_enums::DbType;
 
+use super::config_enums::ConflictPolicyEnum;
+
 #[derive(Clone)]
 pub enum SinkerConfig {
+    // TODO, split this config into mysql/pg/...
     BasicConfig {
         url: String,
         db_type: DbType,
+        conflict_policy: ConflictPolicyEnum,
     },
 
     Mysql {
