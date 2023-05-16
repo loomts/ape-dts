@@ -1,8 +1,5 @@
-use dt_common::{
-    error::Error,
-    log_debug,
-    meta::{rdb_meta_manager::RdbMetaManager, row_data::RowData, row_type::RowType},
-};
+use dt_common::{error::Error, log_debug};
+use dt_meta::{rdb_meta_manager::RdbMetaManager, row_data::RowData, row_type::RowType};
 
 pub struct RdbPartitioner {
     pub meta_manager: RdbMetaManager,

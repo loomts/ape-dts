@@ -2,27 +2,23 @@ use std::sync::atomic::AtomicBool;
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
+use dt_meta::{
+    adaptor::{mysql_col_value_convertor::MysqlColValueConvertor, sqlx_ext::SqlxMysqlExt},
+    col_value::ColValue,
+    dt_data::DtData,
+    mysql::{
+        mysql_col_type::MysqlColType, mysql_meta_manager::MysqlMetaManager,
+        mysql_tb_meta::MysqlTbMeta,
+    },
+    row_data::RowData,
+};
 use futures::TryStreamExt;
 
 use sqlx::{MySql, Pool};
 
-use dt_common::{
-    adaptor::{mysql_col_value_convertor::MysqlColValueConvertor, sqlx_ext::SqlxMysqlExt},
-    error::Error,
-    log_info,
-    meta::{
-        col_value::ColValue,
-        dt_data::DtData,
-        mysql::{
-            mysql_col_type::MysqlColType, mysql_meta_manager::MysqlMetaManager,
-            mysql_tb_meta::MysqlTbMeta,
-        },
-        row_data::RowData,
-    },
-    utils::sql_util::SqlUtil,
-};
+use dt_common::{error::Error, log_info};
 
-use crate::{extractor::base_extractor::BaseExtractor, Extractor};
+use crate::{extractor::base_extractor::BaseExtractor, sql_util::SqlUtil, Extractor};
 
 pub struct MysqlSnapshotExtractor<'a> {
     pub conn_pool: Pool<MySql>,
@@ -55,7 +51,7 @@ impl Extractor for MysqlSnapshotExtractor<'_> {
 }
 
 impl MysqlSnapshotExtractor<'_> {
-    pub async fn extract_internal(&mut self) -> Result<(), Error> {
+    async fn extract_internal(&mut self) -> Result<(), Error> {
         let tb_meta = self.meta_manager.get_tb_meta(&self.db, &self.tb).await?;
 
         if let Some(order_col) = &tb_meta.basic.order_col {

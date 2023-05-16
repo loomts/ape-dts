@@ -4,6 +4,12 @@ use async_recursion::async_recursion;
 use async_trait::async_trait;
 
 use concurrent_queue::ConcurrentQueue;
+use dt_meta::{
+    adaptor::mysql_col_value_convertor::MysqlColValueConvertor, col_value::ColValue,
+    ddl_data::DdlData, ddl_type::DdlType, dt_data::DtData,
+    mysql::mysql_meta_manager::MysqlMetaManager, row_data::RowData, row_type::RowType,
+    sql_parser::ddl_parser::DdlParser,
+};
 use mysql_binlog_connector_rust::{
     binlog_client::BinlogClient,
     event::{
@@ -12,17 +18,7 @@ use mysql_binlog_connector_rust::{
     },
 };
 
-use dt_common::{
-    adaptor::mysql_col_value_convertor::MysqlColValueConvertor,
-    error::Error,
-    log_info,
-    meta::{
-        col_value::ColValue, ddl_data::DdlData, ddl_type::DdlType, dt_data::DtData,
-        mysql::mysql_meta_manager::MysqlMetaManager, row_data::RowData, row_type::RowType,
-    },
-    sql_parser::ddl_parser::DdlParser,
-    utils::position_util::PositionUtil,
-};
+use dt_common::{error::Error, log_info, utils::position_util::PositionUtil};
 
 use crate::{
     extractor::{base_extractor::BaseExtractor, rdb_filter::RdbFilter},

@@ -2,10 +2,9 @@ use async_trait::async_trait;
 
 use crate::{call_batch_fn, Sinker};
 
-use dt_common::{
-    error::Error,
-    meta::{ddl_data::DdlData, row_data::RowData},
-};
+use dt_common::error::Error;
+
+use dt_meta::{ddl_data::DdlData, row_data::RowData};
 
 use kafka::producer::{Producer, Record};
 

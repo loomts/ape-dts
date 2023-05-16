@@ -7,26 +7,21 @@ use futures::TryStreamExt;
 
 use sqlx::{Pool, Postgres};
 
-use dt_common::{
-    log_info,
-    meta::{
-        col_value::ColValue,
-        dt_data::DtData,
-        pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
-        row_data::RowData,
-        row_type::RowType,
-    },
-    utils::sql_util::SqlUtil,
-};
+use dt_common::{error::Error, log_info};
 
-use dt_common::{
+use dt_meta::{
     adaptor::pg_col_value_convertor::PgColValueConvertor,
-    error::Error,
-    log::{check_log::CheckLog, log_type::LogType},
+    col_value::ColValue,
+    dt_data::DtData,
+    pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
+    row_data::RowData,
+    row_type::RowType,
 };
 
 use crate::{
+    check_log::{check_log::CheckLog, log_type::LogType},
     extractor::{base_check_extractor::BaseCheckExtractor, base_extractor::BaseExtractor},
+    sql_util::SqlUtil,
     BatchCheckExtractor, Extractor,
 };
 

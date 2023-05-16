@@ -10,12 +10,12 @@ use concurrent_queue::ConcurrentQueue;
 use dt_common::{
     error::Error,
     log_info, log_monitor, log_position,
-    meta::{ddl_data::DdlData, dt_data::DtData, row_data::RowData},
     monitor::{counter::Counter, statistic_counter::StatisticCounter},
     syncer::Syncer,
     utils::time_util::TimeUtil,
 };
 use dt_connector::Sinker;
+use dt_meta::{ddl_data::DdlData, dt_data::DtData, row_data::RowData};
 
 use crate::Parallelizer;
 

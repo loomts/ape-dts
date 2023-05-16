@@ -4,6 +4,22 @@ use strum::{Display, EnumString, IntoStaticStr};
 
 use crate::error::Error;
 
+#[derive(Clone, Display, EnumString, IntoStaticStr)]
+pub enum DbType {
+    #[strum(serialize = "mysql")]
+    Mysql,
+    #[strum(serialize = "pg")]
+    Pg,
+    #[strum(serialize = "kafka")]
+    Kafka,
+    #[strum(serialize = "open_faas")]
+    OpenFaas,
+    #[strum(serialize = "foxlake")]
+    Foxlake,
+    #[strum(serialize = "mongo")]
+    Mongo,
+}
+
 #[derive(Display, EnumString, IntoStaticStr)]
 pub enum ExtractType {
     #[strum(serialize = "snapshot")]

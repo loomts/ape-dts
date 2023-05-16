@@ -1,4 +1,4 @@
-use dt_common::meta::db_enums::DbType;
+use dt_common::config::config_enums::DbType;
 
 use crate::error::Error;
 

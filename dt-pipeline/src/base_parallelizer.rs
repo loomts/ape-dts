@@ -3,10 +3,8 @@ use std::sync::Arc;
 
 use concurrent_queue::ConcurrentQueue;
 use dt_common::error::Error;
-use dt_common::meta::ddl_data::DdlData;
-use dt_common::meta::dt_data::DtData;
-use dt_common::meta::row_data::RowData;
 use dt_connector::Sinker;
+use dt_meta::{ddl_data::DdlData, dt_data::DtData, row_data::RowData};
 
 pub struct BaseParallelizer {
     pub poped_data: VecDeque<DtData>,

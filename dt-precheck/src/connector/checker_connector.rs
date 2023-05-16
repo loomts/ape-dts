@@ -1,10 +1,8 @@
 use std::vec;
 
-use dt_common::{
-    config::{
-        extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
-    },
-    meta::db_enums::DbType,
+use dt_common::config::{
+    config_enums::DbType, extractor_config::ExtractorConfig, sinker_config::SinkerConfig,
+    task_config::TaskConfig,
 };
 
 use crate::{
@@ -39,7 +37,7 @@ impl CheckerConnector {
             _ => {}
         }
         match &self.task_config.sinker {
-            SinkerConfig::BasicConfig { url, .. } => {
+            SinkerConfig::MysqlBasic { url, .. } | SinkerConfig::PgBasic { url, .. } => {
                 if url.is_empty() {
                     return Ok(false);
                 }
@@ -59,7 +57,8 @@ impl CheckerConnector {
             }
         } else {
             match &self.task_config.sinker {
-                SinkerConfig::BasicConfig { db_type, .. } => db_type_option = Some(db_type),
+                SinkerConfig::MysqlBasic { .. } => db_type_option = Some(&DbType::Mysql),
+                SinkerConfig::PgBasic { .. } => db_type_option = Some(&DbType::Pg),
                 _ => {}
             }
         }

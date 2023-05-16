@@ -5,12 +5,9 @@ use mongodb::{
     Client, Collection,
 };
 
-use dt_common::{
-    constants::MongoConstants,
-    error::Error,
-    log_error,
-    meta::{col_value::ColValue, ddl_data::DdlData, row_data::RowData, row_type::RowType},
-};
+use dt_common::{constants::MongoConstants, error::Error, log_error};
+
+use dt_meta::{col_value::ColValue, ddl_data::DdlData, row_data::RowData, row_type::RowType};
 
 use crate::{call_batch_fn, sinker::rdb_router::RdbRouter, Sinker};
 

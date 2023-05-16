@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 
-use dt_common::{
-    error::Error,
-    meta::{rdb_meta_manager::RdbMetaManager, row_data::RowData, row_type::RowType},
-};
+use dt_common::error::Error;
+use dt_meta::{rdb_meta_manager::RdbMetaManager, row_data::RowData, row_type::RowType};
 
 pub struct RdbMerger {
     pub meta_manager: RdbMetaManager,

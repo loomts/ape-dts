@@ -1,4 +1,4 @@
-use crate::meta::db_enums::DbType;
+use super::config_enums::DbType;
 
 #[derive(Clone)]
 pub enum ExtractorConfig {

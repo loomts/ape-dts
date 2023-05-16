@@ -1,13 +1,11 @@
 use crate::{close_conn_pool, Sinker};
 
-use dt_common::{
-    config::config_enums::ConflictPolicyEnum,
-    error::Error,
-    meta::{
-        ddl_data::DdlData,
-        row_data::RowData,
-        struct_meta::database_model::{Column, IndexKind, StructModel},
-    },
+use dt_common::{config::config_enums::ConflictPolicyEnum, error::Error};
+
+use dt_meta::{
+    ddl_data::DdlData,
+    row_data::RowData,
+    struct_meta::database_model::{Column, IndexKind, StructModel},
 };
 
 use sqlx::{query, MySql, Pool};

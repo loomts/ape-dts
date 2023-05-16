@@ -5,23 +5,20 @@ use std::{
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
-use dt_common::{
-    error::Error,
-    log_info,
-    meta::{
-        ddl_data::DdlData,
-        ddl_type::DdlType,
-        struct_meta::{
-            col_model::ColType,
-            database_model::{Column, IndexKind, StructModel},
-        },
+use dt_common::{error::Error, log_info};
+
+use dt_meta::{
+    ddl_data::DdlData,
+    ddl_type::DdlType,
+    dt_data::DtData,
+    struct_meta::{
+        col_model::ColType,
+        database_model::{Column, IndexKind, StructModel},
     },
 };
 
 use futures::TryStreamExt;
 use sqlx::{postgres::PgRow, Pool, Postgres, Row};
-
-use dt_common::meta::dt_data::DtData;
 
 use crate::{
     extractor::{base_extractor::BaseExtractor, rdb_filter::RdbFilter},
@@ -92,7 +89,7 @@ impl PgStructExtractor<'_> {
         BaseExtractor::wait_task_finish(self.buffer, self.shut_down).await
     }
 
-    async fn get_sequence(
+    pub async fn get_sequence(
         &mut self,
     ) -> Result<(HashMap<String, StructModel>, HashMap<String, StructModel>), Error> {
         let mut table_used_seqs = HashSet::new();
@@ -224,11 +221,11 @@ impl PgStructExtractor<'_> {
         Ok((models, seq_owners))
     }
 
-    async fn get_table(&mut self) -> Result<HashMap<String, StructModel>, Error> {
+    pub async fn get_table(&mut self) -> Result<HashMap<String, StructModel>, Error> {
         let sql = format!("SELECT c.table_schema,c.table_name,c.column_name, c.data_type, c.udt_name, c.character_maximum_length, c.is_nullable, c.column_default, c.numeric_precision, c.numeric_scale, c.is_identity, c.identity_generation,c.ordinal_position 
             FROM information_schema.columns c 
             WHERE table_schema ='{}' 
-            ORDER BY table_schema,table_name", self.db);
+            ORDER BY table_schema, table_name, column_name", self.db);
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
 
         let mut results = HashMap::new();
@@ -298,7 +295,7 @@ impl PgStructExtractor<'_> {
         Ok(results)
     }
 
-    async fn get_constraint(&mut self) -> Result<HashMap<String, StructModel>, Error> {
+    pub async fn get_constraint(&mut self) -> Result<HashMap<String, StructModel>, Error> {
         let sql = format!("SELECT nsp.nspname, rel.relname, con.conname as constraint_name, con.contype as constraint_type,pg_get_constraintdef(con.oid) as constraint_definition
             FROM pg_catalog.pg_constraint con JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
             WHERE nsp.nspname ='{}' 
@@ -340,7 +337,7 @@ impl PgStructExtractor<'_> {
         Ok(result)
     }
 
-    async fn get_index(&mut self) -> Result<HashMap<String, StructModel>, Error> {
+    pub async fn get_index(&mut self) -> Result<HashMap<String, StructModel>, Error> {
         let sql = format!("SELECT schemaname,tablename,indexdef, COALESCE(tablespace, 'pg_default') as tablespace, indexname 
             FROM pg_indexes 
             WHERE schemaname = '{}'", self.db);
@@ -382,7 +379,7 @@ impl PgStructExtractor<'_> {
         Ok(result)
     }
 
-    async fn get_comment(&mut self) -> Result<HashMap<String, StructModel>, Error> {
+    pub async fn get_comment(&mut self) -> Result<HashMap<String, StructModel>, Error> {
         let mut result = HashMap::new();
 
         // table comment

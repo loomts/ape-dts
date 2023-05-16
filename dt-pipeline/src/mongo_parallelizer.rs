@@ -2,15 +2,11 @@ use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
-use dt_common::{
-    constants::MongoConstants,
-    error::Error,
-    meta::{
-        col_value::ColValue, ddl_data::DdlData, dt_data::DtData, row_data::RowData,
-        row_type::RowType,
-    },
-};
+use dt_common::{constants::MongoConstants, error::Error};
 use dt_connector::Sinker;
+use dt_meta::{
+    col_value::ColValue, ddl_data::DdlData, dt_data::DtData, row_data::RowData, row_type::RowType,
+};
 
 use crate::Parallelizer;
 

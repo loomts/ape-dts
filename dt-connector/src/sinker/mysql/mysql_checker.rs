@@ -7,17 +7,16 @@ use sqlx::{MySql, Pool};
 use crate::{
     call_batch_fn, close_conn_pool,
     sinker::{base_checker::BaseChecker, base_sinker::BaseSinker, rdb_router::RdbRouter},
+    sql_util::SqlUtil,
     Sinker,
 };
 
-use dt_common::{
-    error::Error,
-    meta::{
-        ddl_data::DdlData,
-        mysql::{mysql_meta_manager::MysqlMetaManager, mysql_tb_meta::MysqlTbMeta},
-        row_data::RowData,
-    },
-    utils::sql_util::SqlUtil,
+use dt_common::error::Error;
+
+use dt_meta::{
+    ddl_data::DdlData,
+    mysql::{mysql_meta_manager::MysqlMetaManager, mysql_tb_meta::MysqlTbMeta},
+    row_data::RowData,
 };
 
 #[derive(Clone)]

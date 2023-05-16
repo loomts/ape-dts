@@ -1,14 +1,11 @@
 use std::{collections::HashMap, sync::Arc};
 
+use crate::Parallelizer;
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
-use dt_common::{
-    error::Error,
-    meta::{ddl_data::DdlData, dt_data::DtData, row_data::RowData},
-};
+use dt_common::error::Error;
 use dt_connector::Sinker;
-
-use crate::Parallelizer;
+use dt_meta::{ddl_data::DdlData, dt_data::DtData, row_data::RowData};
 
 use super::base_parallelizer::BaseParallelizer;
 

@@ -1,14 +1,11 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
-use dt_common::{
-    error::Error,
-    meta::{
-        ddl_data::DdlData,
-        pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
-        row_data::RowData,
-    },
-    utils::sql_util::SqlUtil,
+use dt_common::error::Error;
+use dt_meta::{
+    ddl_data::DdlData,
+    pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
+    row_data::RowData,
 };
 use futures::TryStreamExt;
 use sqlx::{Pool, Postgres};
@@ -16,6 +13,7 @@ use sqlx::{Pool, Postgres};
 use crate::{
     call_batch_fn, close_conn_pool,
     sinker::{base_checker::BaseChecker, base_sinker::BaseSinker, rdb_router::RdbRouter},
+    sql_util::SqlUtil,
     Sinker,
 };
 

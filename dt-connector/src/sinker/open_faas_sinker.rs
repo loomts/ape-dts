@@ -1,15 +1,9 @@
-use async_trait::async_trait;
-
-use dt_common::{
-    error::Error,
-    log_error,
-    meta::{ddl_data::DdlData, row_data::RowData},
-};
-use serde_json::json;
-
 use crate::{call_batch_fn, Sinker};
-
+use async_trait::async_trait;
+use dt_common::{error::Error, log_error};
+use dt_meta::{ddl_data::DdlData, row_data::RowData};
 use reqwest::Client;
+use serde_json::json;
 
 pub struct OpenFaasSinker {
     pub batch_size: usize,

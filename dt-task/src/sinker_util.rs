@@ -5,10 +5,6 @@ use dt_common::{
         config_enums::ConflictPolicyEnum, sinker_config::SinkerConfig, task_config::TaskConfig,
     },
     error::Error,
-    meta::{
-        db_enums::DbType, mysql::mysql_meta_manager::MysqlMetaManager,
-        pg::pg_meta_manager::PgMetaManager,
-    },
 };
 use dt_connector::{
     sinker::{
@@ -25,6 +21,7 @@ use dt_connector::{
     },
     Sinker,
 };
+use dt_meta::{mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager};
 use kafka::producer::{Producer, RequiredAcks};
 use reqwest::Client;
 use rusoto_core::Region;
@@ -154,37 +151,31 @@ impl SinkerUtil {
                 .await?
             }
 
-            SinkerConfig::BasicConfig {
+            SinkerConfig::MysqlBasic {
                 url,
-                db_type,
                 conflict_policy,
-            } => match db_type {
-                DbType::Mysql => {
-                    SinkerUtil::create_mysql_struct_sinker(
-                        url,
-                        &task_config.runtime.log_level,
-                        task_config.pipeline.parallel_size,
-                        conflict_policy,
-                    )
-                    .await?
-                }
+            } => {
+                SinkerUtil::create_mysql_struct_sinker(
+                    url,
+                    &task_config.runtime.log_level,
+                    task_config.pipeline.parallel_size,
+                    conflict_policy,
+                )
+                .await?
+            }
 
-                DbType::Pg => {
-                    SinkerUtil::create_pg_struct_sinker(
-                        url,
-                        &task_config.runtime.log_level,
-                        task_config.pipeline.parallel_size,
-                        conflict_policy,
-                    )
-                    .await?
-                }
-
-                _ => {
-                    return Err(Error::Unexpected {
-                        error: "unexpected sinker type".to_string(),
-                    })
-                }
-            },
+            SinkerConfig::PgBasic {
+                url,
+                conflict_policy,
+            } => {
+                SinkerUtil::create_pg_struct_sinker(
+                    url,
+                    &task_config.runtime.log_level,
+                    task_config.pipeline.parallel_size,
+                    conflict_policy,
+                )
+                .await?
+            }
         };
         Ok(sinkers)
     }

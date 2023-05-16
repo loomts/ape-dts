@@ -4,10 +4,10 @@ use dt_common::{
     config::{sinker_config::SinkerConfig, task_config::TaskConfig},
     constants::MongoConstants,
     error::Error,
-    meta::{
-        mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
-        rdb_meta_manager::RdbMetaManager,
-    },
+};
+use dt_meta::{
+    mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
+    rdb_meta_manager::RdbMetaManager,
 };
 use mongodb::options::ClientOptions;
 use sqlx::{

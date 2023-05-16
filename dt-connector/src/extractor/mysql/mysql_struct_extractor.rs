@@ -2,20 +2,16 @@ use std::{collections::HashMap, sync::atomic::AtomicBool};
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
-use dt_common::{
-    error::Error,
-    log_info,
-    meta::{
-        ddl_data::DdlData,
-        ddl_type::DdlType,
-        struct_meta::database_model::{Column, IndexColumn, IndexKind, StructModel},
-    },
-};
+use dt_common::{error::Error, log_info};
 
+use dt_meta::{
+    ddl_data::DdlData,
+    ddl_type::DdlType,
+    dt_data::DtData,
+    struct_meta::database_model::{Column, IndexColumn, IndexKind, StructModel},
+};
 use futures::TryStreamExt;
 use sqlx::{mysql::MySqlRow, MySql, Pool, Row};
-
-use dt_common::meta::dt_data::DtData;
 
 use crate::{
     extractor::{base_extractor::BaseExtractor, rdb_filter::RdbFilter},
@@ -68,7 +64,7 @@ impl MysqlStructExtractor<'_> {
     }
 
     // Create Table: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
-    async fn get_table(&mut self) -> Result<HashMap<String, StructModel>, Error> {
+    pub async fn get_table(&mut self) -> Result<HashMap<String, StructModel>, Error> {
         let sql = format!("select t.table_schema,t.table_name,t.engine,t.table_comment,c.column_name,c.ordinal_position,c.column_default,c.is_nullable,c.column_type,c.column_key,c.extra,c.column_comment,c.character_set_name,c.collation_name
             from information_schema.tables t left join information_schema.columns c on t.table_schema = c.table_schema and t.table_name = c.table_name where t.table_schema ='{}'",
             self.db);
@@ -127,7 +123,7 @@ impl MysqlStructExtractor<'_> {
     }
 
     // Create Index: https://dev.mysql.com/doc/refman/8.0/en/create-index.html
-    async fn get_index(&mut self) -> Result<HashMap<String, StructModel>, Error> {
+    pub async fn get_index(&mut self) -> Result<HashMap<String, StructModel>, Error> {
         let sql = format!("select table_schema,table_name,non_unique,index_name, seq_in_index,column_name,index_type,is_visible,comment from information_schema.statistics 
             WHERE index_name != 'PRIMARY' and table_schema ='{}' 
             ORDER BY table_schema, table_name, index_name", 

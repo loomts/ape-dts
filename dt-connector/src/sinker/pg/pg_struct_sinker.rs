@@ -1,15 +1,13 @@
 use crate::{close_conn_pool, Sinker};
 
-use dt_common::{
-    config::config_enums::ConflictPolicyEnum,
-    error::Error,
-    meta::{
-        ddl_data::DdlData,
-        row_data::RowData,
-        struct_meta::{
-            database_model::{Column, StructModel},
-            pg_enums::ConstraintTypeEnum,
-        },
+use dt_common::{config::config_enums::ConflictPolicyEnum, error::Error};
+
+use dt_meta::{
+    ddl_data::DdlData,
+    row_data::RowData,
+    struct_meta::{
+        database_model::{Column, StructModel},
+        pg_enums::ConstraintTypeEnum,
     },
 };
 

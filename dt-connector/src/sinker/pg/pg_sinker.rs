@@ -1,22 +1,20 @@
 use crate::{
     call_batch_fn, close_conn_pool,
     sinker::{base_sinker::BaseSinker, rdb_router::RdbRouter},
+    sql_util::SqlUtil,
     Sinker,
 };
 
-use dt_common::{
-    error::Error,
-    log_error,
-    meta::{
-        col_value::ColValue,
-        ddl_data::DdlData,
-        pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
-        row_data::RowData,
-        row_type::RowType,
-    },
-    utils::sql_util::SqlUtil,
-};
+use dt_common::{error::Error, log_error};
 use sqlx::{Pool, Postgres};
+
+use dt_meta::{
+    col_value::ColValue,
+    ddl_data::DdlData,
+    pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
+    row_data::RowData,
+    row_type::RowType,
+};
 
 use async_trait::async_trait;
 

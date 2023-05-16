@@ -2,10 +2,10 @@ use std::{fmt::Debug, fs::File, io::Read, str::FromStr};
 
 use configparser::ini::Ini;
 
-use crate::{error::Error, meta::db_enums::DbType};
+use crate::error::Error;
 
 use super::{
-    config_enums::{ConflictPolicyEnum, ExtractType, ParallelType, SinkType},
+    config_enums::{ConflictPolicyEnum, DbType, ExtractType, ParallelType, SinkType},
     extractor_config::ExtractorConfig,
     filter_config::FilterConfig,
     pipeline_config::PipelineConfig,
@@ -87,7 +87,6 @@ impl TaskConfig {
                     url,
                     db: String::new(),
                 }),
-                // ExtractType::Basic => Ok(ExtractorConfig::BasicConfig { url, db_type }),
             },
 
             DbType::Pg => match extract_type {
@@ -117,7 +116,6 @@ impl TaskConfig {
                     url,
                     db: String::new(),
                 }),
-                // ExtractType::Basic => Ok(ExtractorConfig::BasicConfig { url, db_type }),
             },
 
             DbType::Mongo => match extract_type {
@@ -162,9 +160,8 @@ impl TaskConfig {
                     check_log_dir: ini.get(SINKER, CHECK_LOG_DIR),
                 }),
 
-                SinkType::Basic => Ok(SinkerConfig::BasicConfig {
+                SinkType::Basic => Ok(SinkerConfig::MysqlBasic {
                     url,
-                    db_type,
                     conflict_policy,
                 }),
             },
@@ -178,9 +175,8 @@ impl TaskConfig {
                     check_log_dir: ini.get(SINKER, CHECK_LOG_DIR),
                 }),
 
-                SinkType::Basic => Ok(SinkerConfig::BasicConfig {
+                SinkType::Basic => Ok(SinkerConfig::PgBasic {
                     url,
-                    db_type,
                     conflict_policy,
                 }),
             },

@@ -1,11 +1,14 @@
 use std::sync::atomic::AtomicBool;
 
 use concurrent_queue::ConcurrentQueue;
-use dt_common::log::check_log::CheckLog;
 
-use dt_common::{error::Error, log::log_reader::LogReader, meta::dt_data::DtData};
+use dt_common::error::Error;
+use dt_meta::dt_data::DtData;
 
-use crate::BatchCheckExtractor;
+use crate::{
+    check_log::{check_log::CheckLog, log_reader::LogReader},
+    BatchCheckExtractor,
+};
 
 use super::base_extractor::BaseExtractor;
 

@@ -1,15 +1,11 @@
+use crate::Sinker;
 use async_trait::async_trait;
-use dt_common::{
-    error::Error,
-    log_info,
-    meta::{ddl_data::DdlData, row_data::RowData},
-};
+use dt_common::{error::Error, log_info};
+use dt_meta::{ddl_data::DdlData, row_data::RowData};
 use rusoto_core::ByteStream;
 use rusoto_s3::{GetObjectRequest, HeadObjectRequest, PutObjectRequest, S3Client, S3};
 use tokio::io::AsyncReadExt;
 use uuid::Uuid;
-
-use crate::Sinker;
 
 pub struct FoxlakeSinker {
     pub batch_size: usize,

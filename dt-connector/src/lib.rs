@@ -1,12 +1,12 @@
+pub mod check_log;
 pub mod extractor;
 pub mod sinker;
+pub mod sql_util;
 
 use async_trait::async_trait;
-use dt_common::{
-    error::Error,
-    log::check_log::CheckLog,
-    meta::{ddl_data::DdlData, row_data::RowData},
-};
+use check_log::check_log::CheckLog;
+use dt_common::error::Error;
+use dt_meta::{ddl_data::DdlData, row_data::RowData};
 
 #[async_trait]
 pub trait Sinker {

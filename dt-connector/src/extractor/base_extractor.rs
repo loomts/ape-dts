@@ -2,11 +2,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use concurrent_queue::ConcurrentQueue;
 
-use dt_common::{
-    error::Error,
-    meta::{dt_data::DtData, row_data::RowData},
-    utils::time_util::TimeUtil,
-};
+use dt_common::{error::Error, utils::time_util::TimeUtil};
+use dt_meta::{dt_data::DtData, row_data::RowData};
 
 pub struct BaseExtractor {}
 

@@ -7,7 +7,7 @@ use std::{
 
 use sqlx::{mysql::MySqlPoolOptions, postgres::PgPoolOptions, Error, MySql, Pool, Postgres};
 
-use crate::meta::db_enums::DbType;
+use crate::config::config_enums::DbType;
 
 use super::work_dir_util::WorkDirUtil;
 

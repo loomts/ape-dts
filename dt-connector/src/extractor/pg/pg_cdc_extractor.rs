@@ -25,7 +25,6 @@ use tokio::time::Instant;
 use tokio_postgres::replication::LogicalReplicationStream;
 
 use dt_common::{
-    adaptor::pg_col_value_convertor::PgColValueConvertor,
     error::Error,
     log_error, log_info,
     syncer::Syncer,
@@ -36,7 +35,8 @@ use crate::{
     extractor::{pg::pg_cdc_client::PgCdcClient, rdb_filter::RdbFilter},
     Extractor,
 };
-use dt_common::meta::{
+use dt_meta::{
+    adaptor::pg_col_value_convertor::PgColValueConvertor,
     col_value::ColValue,
     dt_data::DtData,
     pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
@@ -76,7 +76,7 @@ impl Extractor for PgCdcExtractor<'_> {
 }
 
 impl PgCdcExtractor<'_> {
-    pub async fn extract_internal(&mut self) -> Result<(), Error> {
+    async fn extract_internal(&mut self) -> Result<(), Error> {
         let mut cdc_client = PgCdcClient {
             url: self.url.clone(),
             slot_name: self.slot_name.clone(),

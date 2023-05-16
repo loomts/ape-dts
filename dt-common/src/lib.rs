@@ -1,10 +1,9 @@
-pub mod adaptor;
+// extern crate dt-meta;
+
 pub mod config;
 pub mod constants;
 pub mod error;
-pub mod log;
-pub mod meta;
+pub mod logger;
 pub mod monitor;
-pub mod sql_parser;
 pub mod syncer;
 pub mod utils;

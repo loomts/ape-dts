@@ -1,10 +1,9 @@
-use dt_common::{
-    error::Error,
-    meta::{
-        mysql::{mysql_meta_manager::MysqlMetaManager, mysql_tb_meta::MysqlTbMeta},
-        pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
-        row_data::RowData,
-    },
+use dt_common::error::Error;
+
+use dt_meta::{
+    mysql::{mysql_meta_manager::MysqlMetaManager, mysql_tb_meta::MysqlTbMeta},
+    pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
+    row_data::RowData,
 };
 
 use super::rdb_router::RdbRouter;

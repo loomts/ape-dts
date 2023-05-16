@@ -10,10 +10,10 @@ use dt_common::{
         extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
     },
     error::Error,
-    meta::{dt_data::DtData, row_type::RowType},
     syncer::Syncer,
 };
 use dt_connector::{extractor::rdb_filter::RdbFilter, Extractor};
+use dt_meta::{dt_data::DtData, row_type::RowType};
 use dt_pipeline::pipeline::Pipeline;
 use futures::future::join;
 use log4rs::config::RawConfig;

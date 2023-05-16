@@ -6,23 +6,19 @@ use futures::TryStreamExt;
 
 use sqlx::{Pool, Postgres};
 
-use dt_common::{
-    log_info,
-    meta::{
-        col_value::ColValue,
-        dt_data::DtData,
-        pg::{pg_col_type::PgColType, pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
-        row_data::RowData,
-    },
-    utils::sql_util::SqlUtil,
-};
+use dt_common::log_info;
 
-use dt_common::{
+use dt_meta::{
     adaptor::{pg_col_value_convertor::PgColValueConvertor, sqlx_ext::SqlxPgExt},
-    error::Error,
+    col_value::ColValue,
+    dt_data::DtData,
+    pg::{pg_col_type::PgColType, pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
+    row_data::RowData,
 };
 
-use crate::{extractor::base_extractor::BaseExtractor, Extractor};
+use dt_common::error::Error;
+
+use crate::{extractor::base_extractor::BaseExtractor, sql_util::SqlUtil, Extractor};
 
 pub struct PgSnapshotExtractor<'a> {
     pub conn_pool: Pool<Postgres>,
@@ -55,7 +51,7 @@ impl Extractor for PgSnapshotExtractor<'_> {
 }
 
 impl PgSnapshotExtractor<'_> {
-    pub async fn extract_internal(&mut self) -> Result<(), Error> {
+    async fn extract_internal(&mut self) -> Result<(), Error> {
         let tb_meta = self
             .meta_manager
             .get_tb_meta(&self.schema, &self.tb)

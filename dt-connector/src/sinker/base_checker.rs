@@ -1,10 +1,9 @@
 use std::collections::HashMap;
 
-use dt_common::{
-    log::{check_log::CheckLog, log_type::LogType},
-    log_diff, log_miss,
-    meta::{rdb_tb_meta::RdbTbMeta, row_data::RowData},
-};
+use dt_common::{log_diff, log_miss};
+use dt_meta::{rdb_tb_meta::RdbTbMeta, row_data::RowData};
+
+use crate::check_log::{check_log::CheckLog, log_type::LogType};
 
 pub struct BaseChecker {}
 

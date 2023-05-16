@@ -1,14 +1,7 @@
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
 
 use concurrent_queue::ConcurrentQueue;
-use dt_common::{
-    error::Error,
-    meta::{
-        db_enums::DbType, dt_data::DtData, mysql::mysql_meta_manager::MysqlMetaManager,
-        pg::pg_meta_manager::PgMetaManager,
-    },
-    syncer::Syncer,
-};
+use dt_common::{config::config_enums::DbType, error::Error, syncer::Syncer};
 use dt_connector::extractor::{
     mongo::{
         mongo_cdc_extractor::MongoCdcExtractor, mongo_snapshot_extractor::MongoSnapshotExtractor,
@@ -23,6 +16,10 @@ use dt_connector::extractor::{
         pg_snapshot_extractor::PgSnapshotExtractor, pg_struct_extractor::PgStructExtractor,
     },
     rdb_filter::RdbFilter,
+};
+use dt_meta::{
+    dt_data::DtData, mysql::mysql_meta_manager::MysqlMetaManager,
+    pg::pg_meta_manager::PgMetaManager,
 };
 use futures::TryStreamExt;
 use sqlx::Row;

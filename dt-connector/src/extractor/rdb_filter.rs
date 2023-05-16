@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
-use dt_common::{config::filter_config::FilterConfig, error::Error, meta::row_type::RowType};
+use dt_common::{config::filter_config::FilterConfig, error::Error};
 
+use dt_meta::row_type::RowType;
 use regex::Regex;
 
 #[derive(Debug, Clone)]

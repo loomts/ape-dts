@@ -2,26 +2,22 @@ use std::{collections::HashMap, sync::atomic::AtomicBool};
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
-use dt_common::{
+use dt_common::{error::Error, log_info};
+use dt_meta::{
     adaptor::mysql_col_value_convertor::MysqlColValueConvertor,
-    error::Error,
-    log::{check_log::CheckLog, log_type::LogType},
-    log_info,
-    utils::sql_util::SqlUtil,
-};
-use futures::TryStreamExt;
-use sqlx::{MySql, Pool};
-
-use dt_common::meta::{
     col_value::ColValue,
     dt_data::DtData,
     mysql::{mysql_meta_manager::MysqlMetaManager, mysql_tb_meta::MysqlTbMeta},
     row_data::RowData,
     row_type::RowType,
 };
+use futures::TryStreamExt;
+use sqlx::{MySql, Pool};
 
 use crate::{
+    check_log::{check_log::CheckLog, log_type::LogType},
     extractor::{base_check_extractor::BaseCheckExtractor, base_extractor::BaseExtractor},
+    sql_util::SqlUtil,
     BatchCheckExtractor, Extractor,
 };
 

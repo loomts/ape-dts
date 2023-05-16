@@ -2,12 +2,8 @@ use std::{collections::HashMap, sync::atomic::AtomicBool};
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
-use dt_common::{
-    constants::MongoConstants,
-    error::Error,
-    log_info,
-    meta::{col_value::ColValue, dt_data::DtData, row_data::RowData, row_type::RowType},
-};
+use dt_common::{constants::MongoConstants, error::Error, log_info};
+use dt_meta::{col_value::ColValue, dt_data::DtData, row_data::RowData, row_type::RowType};
 use mongodb::{
     bson::doc,
     change_stream::event::{OperationType, ResumeToken},
