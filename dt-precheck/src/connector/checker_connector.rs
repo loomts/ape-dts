@@ -1,10 +1,8 @@
 use std::vec;
 
-use dt_common::{
-    config::{
-        extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
-    },
-    meta::db_enums::DbType,
+use dt_common::config::{
+    config_enums::DbType, extractor_config::ExtractorConfig, sinker_config::SinkerConfig,
+    task_config::TaskConfig,
 };
 
 use crate::{
@@ -31,7 +29,7 @@ impl CheckerConnector {
 
     pub fn valid_config(&self) -> Result<bool, Error> {
         match &self.task_config.extractor {
-            ExtractorConfig::BasicConfig { url, db_type: _ } => {
+            ExtractorConfig::MysqlBasic { url, .. } | ExtractorConfig::PgBasic { url, .. } => {
                 if url.is_empty() {
                     return Ok(false);
                 }
@@ -39,7 +37,7 @@ impl CheckerConnector {
             _ => {}
         }
         match &self.task_config.sinker {
-            SinkerConfig::BasicConfig { url, db_type: _ } => {
+            SinkerConfig::MysqlBasic { url, .. } | SinkerConfig::PgBasic { url, .. } => {
                 if url.is_empty() {
                     return Ok(false);
                 }
@@ -53,12 +51,14 @@ impl CheckerConnector {
         let mut db_type_option: Option<&DbType> = None;
         if is_source {
             match &self.task_config.extractor {
-                ExtractorConfig::BasicConfig { url: _, db_type } => db_type_option = Some(db_type),
+                ExtractorConfig::MysqlBasic { .. } => db_type_option = Some(&DbType::Mysql),
+                ExtractorConfig::PgBasic { .. } => db_type_option = Some(&DbType::Pg),
                 _ => {}
             }
         } else {
             match &self.task_config.sinker {
-                SinkerConfig::BasicConfig { url: _, db_type } => db_type_option = Some(db_type),
+                SinkerConfig::MysqlBasic { .. } => db_type_option = Some(&DbType::Mysql),
+                SinkerConfig::PgBasic { .. } => db_type_option = Some(&DbType::Pg),
                 _ => {}
             }
         }

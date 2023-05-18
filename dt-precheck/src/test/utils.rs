@@ -2,9 +2,9 @@
 pub mod tests_utils {
     use dt_common::{
         config::{
-            extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
+            config_enums::DbType, extractor_config::ExtractorConfig, sinker_config::SinkerConfig,
+            task_config::TaskConfig,
         },
-        meta::db_enums::DbType,
         utils::database_mock::DatabaseMockUtils,
     };
 
@@ -17,10 +17,16 @@ pub mod tests_utils {
         let mut result_type: Option<DbType> = None;
 
         match extractor_config {
-            ExtractorConfig::BasicConfig { url, db_type } => {
+            ExtractorConfig::MysqlBasic { url, .. } => {
                 result_url = url.clone();
-                result_type = Some(db_type.clone());
+                result_type = Some(DbType::Mysql);
             }
+
+            ExtractorConfig::PgBasic { url, .. } => {
+                result_url = url.clone();
+                result_type = Some(DbType::Pg);
+            }
+
             _ => {}
         }
 
@@ -32,10 +38,16 @@ pub mod tests_utils {
         let mut result_type: Option<DbType> = None;
 
         match sinker_config {
-            SinkerConfig::BasicConfig { url, db_type } => {
+            SinkerConfig::MysqlBasic { url, .. } => {
                 result_url = url.clone();
-                result_type = Some(db_type.clone());
+                result_type = Some(DbType::Mysql);
             }
+
+            SinkerConfig::PgBasic { url, .. } => {
+                result_url = url.clone();
+                result_type = Some(DbType::Pg);
+            }
+
             _ => {}
         }
 

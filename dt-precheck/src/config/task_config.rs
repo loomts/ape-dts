@@ -13,7 +13,7 @@ pub struct PrecheckTaskConfig {
 }
 
 impl PrecheckTaskConfig {
-    pub fn new(task_config_file: &str) -> Self {
+    pub fn new(task_config_file: &str) -> Result<Self, Error> {
         let mut config_str = String::new();
         File::open(task_config_file)
             .unwrap()
@@ -22,9 +22,10 @@ impl PrecheckTaskConfig {
         let mut ini = Ini::new();
         ini.read(config_str).unwrap();
 
-        Self {
-            precheck: Self::load_precheck_config(&ini).unwrap(),
-        }
+        let precheck_config = Self::load_precheck_config(&ini)?;
+        Ok(Self {
+            precheck: precheck_config,
+        })
     }
 
     fn load_precheck_config(ini: &Ini) -> Result<PrecheckConfig, Error> {

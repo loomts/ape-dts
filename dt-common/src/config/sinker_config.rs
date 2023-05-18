@@ -1,12 +1,7 @@
-use crate::meta::db_enums::DbType;
+use super::config_enums::{ConflictPolicyEnum, DbType};
 
 #[derive(Clone)]
 pub enum SinkerConfig {
-    BasicConfig {
-        url: String,
-        db_type: DbType,
-    },
-
     Mysql {
         url: String,
         batch_size: usize,
@@ -34,6 +29,16 @@ pub enum SinkerConfig {
         check_log_dir: Option<String>,
     },
 
+    MysqlBasic {
+        url: String,
+        conflict_policy: ConflictPolicyEnum,
+    },
+
+    PgBasic {
+        url: String,
+        conflict_policy: ConflictPolicyEnum,
+    },
+
     Kafka {
         url: String,
         batch_size: usize,
@@ -55,4 +60,19 @@ pub enum SinkerConfig {
         region: String,
         root_dir: String,
     },
+}
+
+impl SinkerConfig {
+    pub fn get_db_type(&self) -> DbType {
+        match self {
+            Self::Mysql { .. } | Self::MysqlCheck { .. } => DbType::Mysql,
+            Self::Pg { .. } | Self::PgCheck { .. } => DbType::Pg,
+            Self::Mongo { .. } => DbType::Mongo,
+            Self::Kafka { .. } => DbType::Kafka,
+            Self::OpenFaas { .. } => DbType::OpenFaas,
+            Self::Foxlake { .. } => DbType::Foxlake,
+            Self::MysqlBasic { .. } => DbType::Mysql,
+            Self::PgBasic { .. } => DbType::Pg,
+        }
+    }
 }

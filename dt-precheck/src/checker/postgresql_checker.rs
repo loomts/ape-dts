@@ -3,12 +3,12 @@ use std::{collections::HashSet, time::Duration};
 use async_trait::async_trait;
 use dt_common::{
     config::{
-        extractor_config::ExtractorConfig, filter_config::FilterConfig,
+        config_enums::DbType, extractor_config::ExtractorConfig, filter_config::FilterConfig,
         router_config::RouterConfig, sinker_config::SinkerConfig,
     },
-    meta::{db_enums::DbType, db_table_model::DbTable, postgresql::pg_enums::ConstraintTypeEnum},
     utils::config_url_util::ConfigUrlUtil,
 };
+use dt_meta::struct_meta::{db_table_model::DbTable, pg_enums::ConstraintTypeEnum};
 use sqlx::{postgres::PgPoolOptions, query, Pool, Postgres, Row};
 
 use crate::{
@@ -41,17 +41,17 @@ impl Checker for PostgresqlChecker {
 
         if self.is_source {
             match &self.source_config {
-                ExtractorConfig::BasicConfig { url, db_type } => {
+                ExtractorConfig::PgBasic { url, .. } => {
                     connection_url = String::from(url);
-                    self.db_type_option = Some(db_type.clone());
+                    self.db_type_option = Some(DbType::Pg);
                 }
                 _ => {}
             };
         } else {
             match &self.sinker_config {
-                SinkerConfig::BasicConfig { url, db_type } => {
+                SinkerConfig::PgBasic { url, .. } => {
                     connection_url = String::from(url);
-                    self.db_type_option = Some(db_type.clone());
+                    self.db_type_option = Some(DbType::Pg);
                 }
                 _ => {}
             };
@@ -532,14 +532,14 @@ impl PostgresqlChecker {
         let user_option;
         if self.is_source {
             match &self.source_config {
-                ExtractorConfig::BasicConfig { url, db_type: _ } => {
+                ExtractorConfig::PgBasic { url, .. } => {
                     user_option = ConfigUrlUtil::get_username(String::from(url))
                 }
                 _ => user_option = None,
             }
         } else {
             match &self.sinker_config {
-                SinkerConfig::BasicConfig { url, db_type: _ } => {
+                SinkerConfig::PgBasic { url, .. } => {
                     user_option = ConfigUrlUtil::get_username(String::from(url))
                 }
                 _ => user_option = None,

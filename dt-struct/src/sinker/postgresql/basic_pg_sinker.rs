@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use dt_common::{
     config::{router_config::RouterConfig, sinker_config::SinkerConfig},
-    meta::postgresql::pg_enums::ConstraintTypeEnum,
+    meta::struct_meta::pg_enums::ConstraintTypeEnum,
 };
 use sqlx::{postgres::PgPoolOptions, query, Pool, Postgres};
 
@@ -24,7 +24,7 @@ impl StructSinker for PgStructSinker {
 
     async fn build_connection(&mut self) -> Result<(), Error> {
         match &self.sinker_config {
-            SinkerConfig::BasicConfig { url, db_type: _ } => {
+            SinkerConfig::BasicConfig { url, .. } => {
                 let db_pool = PgPoolOptions::new().connect(&url).await?;
                 self.pool = Option::Some(db_pool);
             }

@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
     config::filter_config::FilterConfig,
-    meta::{db_enums::DbType, db_table_model::DbTable},
+    meta::{db_enums::DbType, struct_meta::db_table_model::DbTable},
 };
 use futures::TryStreamExt;
 use sqlx::{
