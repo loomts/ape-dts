@@ -1,5 +1,6 @@
 ## File system
 .DS_Store
+mysql-binlog-connector-rust
 
 ## Editor
 *.swp
@@ -14,7 +15,7 @@ Session.vim
 .settings/
 
 ## Configuration
-/Cargo.lock
+# /Cargo.lock
 
 ## Build
 /target
@@ -23,4 +24,4 @@ Session.vim
 /images/**/dt-precheck
 /logs
 /tmp
-
+.cargo-ok
