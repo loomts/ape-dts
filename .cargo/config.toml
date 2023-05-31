@@ -1,0 +1,29 @@
+# NOTES: `cargo search` will not work as crates source has been overwritten, need to specify `--registry` flag, 
+# i.e., `cargo search <CRATE> --registry crates-io` 
+[source.crates-io]
+replace-with = 'ustc'
+
+[source.ustc]
+# requires cargo 1.68+ to enable sparse index
+registry = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/"
+#registry = "https://mirrors.ustc.edu.cn/crates.io-index"
+
+
+[target.x86_64-unknown-linux-musl]
+linker = "rust-lld"
+# rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-unknown-linux-musl]
+linker = "rust-lld"
+# rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.x86_64-unknown-linux-gnu]
+# linker = "rust-lld"
+# rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-unknown-linux-gnu]
+# linker = "rust-lld"
+# rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.x86_64-pc-windows-msvc]
+rustflags  =  ["-C", "target-feature=+crt-static"]

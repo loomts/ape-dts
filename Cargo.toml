@@ -1,8 +1,11 @@
 [workspace]
-
 members = [
     "ape-dts",
     "dt-common",
     "dt-struct",
     "dt-precheck"
 ]
+
+# [dev-dependencies]
+# grcov = "0.8.18"
+# tarpaulin = { version = "0.25.2", default-features = false }
