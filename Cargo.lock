@@ -880,6 +880,7 @@ dependencies = [
 
 [[package]]
 name = "dt-pipeline"
+<<<<<<< HEAD
 version = "0.1.0"
 dependencies = [
  "async-mutex",
@@ -895,8 +896,11 @@ dependencies = [
 
 [[package]]
 name = "dt-precheck"
+=======
+>>>>>>> a1ec37b (chore: merge from main)
 version = "0.1.0"
 dependencies = [
+ "async-mutex",
  "async-trait",
  "configparser",
  "dt-common",
@@ -909,6 +913,60 @@ dependencies = [
 ]
 
 [[package]]
+name = "dt-task"
+version = "0.1.0"
+dependencies = [
+ "async-mutex",
+ "concurrent-queue",
+ "dt-common",
+ "dt-connector",
+ "dt-meta",
+ "log",
+ "log4rs",
+ "tokio",
+]
+
+[[package]]
+name = "dt-precheck"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "configparser",
+ "dotenv",
+ "dt-common",
+<<<<<<< HEAD
+ "dt-connector",
+ "dt-meta",
+ "dt-pipeline",
+ "futures",
+ "kafka",
+ "log",
+ "log4rs",
+ "mongodb",
+ "project-root",
+ "rdkafka",
+ "regex",
+ "reqwest",
+ "rusoto_core",
+ "rusoto_credential",
+ "rusoto_s3",
+ "rusoto_sqs",
+ "serde_json",
+ "serde_yaml 0.9.21",
+ "serial_test 2.0.0",
+=======
+ "dt-meta",
+ "futures",
+ "regex",
+>>>>>>> a1ec37b (chore: merge from main)
+ "sqlx",
+ "strum",
+ "tokio",
+]
+
+[[package]]
+<<<<<<< HEAD
+=======
 name = "dt-task"
 version = "0.1.0"
 dependencies = [
@@ -942,6 +1000,7 @@ dependencies = [
 ]
 
 [[package]]
+>>>>>>> a1ec37b (chore: merge from main)
 name = "dt-tests"
 version = "0.1.0"
 dependencies = [
@@ -1425,7 +1484,11 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
+<<<<<<< HEAD
  "socket2 0.4.9",
+=======
+ "socket2",
+>>>>>>> a1ec37b (chore: merge from main)
  "tokio",
  "tower-service",
  "tracing",
@@ -1466,6 +1529,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f31827a206f56af32e590ba56d5d2d085f558508192593743f16b2306495269f"
 dependencies = [
  "cc",
+]
+
+[[package]]
+name = "ident_case"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
+
+[[package]]
+name = "idna"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "418a0a6fab821475f634efe3ccc45c013f742efe03d853e8d3355d5cb850ecf8"
+dependencies = [
+ "matches",
+ "unicode-bidi",
+ "unicode-normalization",
 ]
 
 [[package]]
@@ -1527,6 +1607,7 @@ dependencies = [
 
 [[package]]
 name = "ipconfig"
+<<<<<<< HEAD
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b58db92f96b720de98181bbbe63c831e87005ab460c1bf306eb2622b4707997f"
@@ -1535,6 +1616,16 @@ dependencies = [
  "widestring",
  "windows-sys 0.48.0",
  "winreg 0.50.0",
+=======
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd302af1b90f2463a98fa5ad469fc212c8e3175a41c3068601bfa2727591c5be"
+dependencies = [
+ "socket2",
+ "widestring",
+ "winapi",
+ "winreg",
+>>>>>>> a1ec37b (chore: merge from main)
 ]
 
 [[package]]
@@ -1837,7 +1928,11 @@ dependencies = [
  "serde_with",
  "sha-1",
  "sha2 0.10.6",
+<<<<<<< HEAD
  "socket2 0.4.9",
+=======
+ "socket2",
+>>>>>>> a1ec37b (chore: merge from main)
  "stringprep",
  "strsim",
  "take_mut",
@@ -2498,7 +2593,11 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+<<<<<<< HEAD
  "winreg 0.10.1",
+=======
+ "winreg",
+>>>>>>> a1ec37b (chore: merge from main)
 ]
 
 [[package]]
@@ -2793,6 +2892,50 @@ name = "seahash"
 version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c107b6f4780854c8b126e228ea8869f4d7b71260f962fefb57b996b8959ba6b"
+
+[[package]]
+name = "security-framework"
+version = "2.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fc758eb7bffce5b308734e9b0c1468893cae9ff70ebf13e7090be8dcbcc83a8"
+dependencies = [
+ "bitflags",
+ "core-foundation",
+ "core-foundation-sys",
+ "libc",
+ "security-framework-sys",
+]
+
+[[package]]
+name = "security-framework-sys"
+version = "2.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f51d0c0d83bec45f16480d0ce0058397a69e48fcdc52d1dc8855fb68acbd31a7"
+dependencies = [
+ "core-foundation-sys",
+ "libc",
+]
+
+[[package]]
+name = "semver"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d7eb9ef2c18661902cc47e535f9bc51b78acd254da71d375c2f6720d9a40403"
+dependencies = [
+ "semver-parser",
+]
+
+[[package]]
+name = "semver"
+version = "1.0.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bebd363326d05ec3e2f532ab7660680f3b02130d780c299bca73469d521bc0ed"
+
+[[package]]
+name = "semver-parser"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
 name = "security-framework"
@@ -3504,6 +3647,20 @@ checksum = "c43ee83903113e03984cb9e5cebe6c04a5116269e900e3ddba8f068a62adda59"
 dependencies = [
  "rustls",
  "tokio",
+<<<<<<< HEAD
+=======
+ "tokio-util 0.6.10",
+]
+
+[[package]]
+name = "tokio-rustls"
+version = "0.23.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c43ee83903113e03984cb9e5cebe6c04a5116269e900e3ddba8f068a62adda59"
+dependencies = [
+ "rustls",
+ "tokio",
+>>>>>>> a1ec37b (chore: merge from main)
  "webpki",
 ]
 
@@ -3916,9 +4073,15 @@ dependencies = [
 
 [[package]]
 name = "widestring"
+<<<<<<< HEAD
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "653f141f39ec16bba3c5abe400a0c60da7468261cc2cbf36805022876bc721a8"
+=======
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17882f045410753661207383517a6f62ec3dbeb6a4ed2acce01f0728238d1983"
+>>>>>>> a1ec37b (chore: merge from main)
 
 [[package]]
 name = "winapi"
@@ -4117,6 +4280,7 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< HEAD
 name = "winreg"
 version = "0.50.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4127,6 +4291,8 @@ dependencies = [
 ]
 
 [[package]]
+=======
+>>>>>>> a1ec37b (chore: merge from main)
 name = "wyz"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
