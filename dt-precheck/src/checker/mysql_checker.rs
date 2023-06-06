@@ -1,13 +1,11 @@
 use std::{collections::HashSet, time::Duration};
 
 use async_trait::async_trait;
-use dt_common::{
-    config::{
-        extractor_config::ExtractorConfig, filter_config::FilterConfig,
-        router_config::RouterConfig, sinker_config::SinkerConfig,
-    },
-    meta::{db_enums::DbType, db_table_model::DbTable},
+use dt_common::config::{
+    config_enums::DbType, extractor_config::ExtractorConfig, filter_config::FilterConfig,
+    router_config::RouterConfig, sinker_config::SinkerConfig,
 };
+use dt_meta::struct_meta::db_table_model::DbTable;
 use regex::Regex;
 use sqlx::{mysql::MySqlPoolOptions, query, MySql, Pool, Row};
 
@@ -41,17 +39,17 @@ impl Checker for MySqlChecker {
 
         if self.is_source {
             match &self.source_config {
-                ExtractorConfig::BasicConfig { url, db_type } => {
+                ExtractorConfig::MysqlBasic { url, .. } => {
                     connection_url = String::from(url);
-                    self.db_type_option = Some(db_type.clone());
+                    self.db_type_option = Some(DbType::Mysql);
                 }
                 _ => {}
             };
         } else {
             match &self.sinker_config {
-                SinkerConfig::BasicConfig { url, db_type } => {
+                SinkerConfig::MysqlBasic { url, .. } => {
                     connection_url = String::from(url);
-                    self.db_type_option = Some(db_type.clone());
+                    self.db_type_option = Some(DbType::Mysql);
                 }
                 _ => {}
             };
@@ -86,7 +84,10 @@ impl Checker for MySqlChecker {
             None => return Err(Error::from(sqlx::Error::PoolClosed)),
         }
         let sql = format!("select version()");
-        println!("mysql query database version: {}", sql);
+        println!(
+            "[check_database_version] mysql query database version: {}",
+            sql
+        );
         let rows_result = query(&sql).fetch_all(mysql_pool).await;
         match rows_result {
             Ok(rows) => {
@@ -116,7 +117,10 @@ impl Checker for MySqlChecker {
     }
 
     async fn check_permission(&self) -> Result<CheckResult, Error> {
-        Ok(CheckResult::build(CheckItem::CheckAccountPermission))
+        Ok(CheckResult::build(
+            CheckItem::CheckAccountPermission,
+            self.is_source,
+        ))
     }
 
     async fn check_cdc_supported(&self) -> Result<CheckResult, Error> {
@@ -143,7 +147,7 @@ impl Checker for MySqlChecker {
         let sql = format!(
             "show variables where variable_name in ('log_bin','binlog_format','binlog_row_image')"
         );
-        println!("mysql query cdc settings: {}", sql);
+        println!("[check_cdc_supported] mysql query cdc settings: {}", sql);
         let rows_result = query(&sql).fetch_all(mysql_pool).await;
         match rows_result {
             Ok(rows) => {
@@ -200,6 +204,130 @@ impl Checker for MySqlChecker {
         ))
     }
 
+    async fn check_struct_existed_or_not(&self) -> Result<CheckResult, Error> {
+        let mut check_error: Option<Error> = None;
+        let mysql_pool: &Pool<MySql>;
+
+        match &self.pool {
+            Some(pool) => mysql_pool = pool,
+            None => return Err(Error::from(sqlx::Error::PoolClosed)),
+        }
+
+        let (mut models, mut err_msgs): (Vec<DbTable>, Vec<String>) = (Vec::new(), Vec::new());
+        match &self.filter_config {
+            FilterConfig::Rdb {
+                do_dbs,
+                ignore_dbs: _,
+                do_tbs,
+                ignore_tbs: _,
+                do_events: _,
+            } => {
+                if !do_tbs.is_empty() {
+                    DbTable::from_str(do_tbs, &mut models)
+                } else if !do_dbs.is_empty() {
+                    DbTable::from_str(do_dbs, &mut models)
+                }
+            }
+        }
+        let (dbs, tb_dbs, tbs) = DbTable::get_config_maps(&models).unwrap();
+        let mut all_db_names = Vec::new();
+        all_db_names.extend(&dbs);
+        all_db_names.extend(&tb_dbs);
+
+        if (self.is_source || !self.precheck_config.do_struct_init) && tbs.len() > 0 {
+            // When a specific table to be migrated is specified and the following conditions are met, check the existence of the table
+            // 1. this check is for the source database
+            // 2. this check is for the sink database, and specified no structure initialization
+            let (mut current_tbs, mut not_existed_tbs): (HashSet<String>, HashSet<String>) =
+                (HashSet::new(), HashSet::new());
+
+            let table_sql = format!("select t.table_schema,t.table_name,t.engine,t.table_comment,c.column_name,c.ordinal_position,c.column_default,c.is_nullable,c.column_type,c.column_key,c.extra,c.column_comment,c.character_set_name,c.collation_name
+            from information_schema.tables t left join information_schema.columns c on t.table_schema = c.table_schema and t.table_name = c.table_name where t.table_schema in ({}) order by t.table_schema, t.table_name",
+            all_db_names.iter().map(|x| format!("'{}'",x)).collect::<Vec<_>>().join(","));
+            println!(
+                "[check_struct_existed_or_not] mysql query tables sql:{}",
+                table_sql
+            );
+            let mut rows = query(table_sql.as_str()).fetch(mysql_pool);
+            while let Some(row) = rows.try_next().await.unwrap() {
+                let (db, table): (String, String) =
+                    (row.get("TABLE_SCHEMA"), row.get("TABLE_NAME"));
+                let db_tb_name = format!("{}.{}", db, table);
+                if !tbs.contains(&db_tb_name) && !dbs.contains(&db) {
+                    continue;
+                }
+                current_tbs.insert(db_tb_name);
+            }
+            for tb in tbs {
+                if !current_tbs.contains(&tb) {
+                    not_existed_tbs.insert(tb);
+                }
+            }
+            if not_existed_tbs.len() > 0 {
+                err_msgs.push(format!(
+                    "tables not existed: [{}]",
+                    not_existed_tbs
+                        .iter()
+                        .map(|e| e.to_string())
+                        .collect::<Vec<String>>()
+                        .join(";")
+                ));
+            }
+        }
+
+        let (mut current_dbs, mut not_existed_dbs): (HashSet<String>, HashSet<String>) =
+            (HashSet::new(), HashSet::new());
+        let db_sql = format!(
+            "select schema_name from information_schema.SCHEMATA where schema_name in ({})",
+            all_db_names
+                .iter()
+                .map(|x| format!("'{}'", x))
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        println!(
+            "[check_struct_existed_or_not] mysql query dbs sql:{}",
+            db_sql
+        );
+        let mut rows = query(db_sql.as_str()).fetch(mysql_pool);
+        while let Some(row) = rows.try_next().await? {
+            println!("{:?}", row);
+            let schema_name: String = row.get("SCHEMA_NAME");
+            if !dbs.contains(&schema_name) && !tb_dbs.contains(&schema_name) {
+                continue;
+            }
+            current_dbs.insert(schema_name);
+        }
+        for db_name in all_db_names {
+            if !current_dbs.contains(db_name) {
+                not_existed_dbs.insert(db_name.clone());
+            }
+        }
+        if not_existed_dbs.len() > 0 {
+            err_msgs.push(format!(
+                "databases not existed: [{}]",
+                not_existed_dbs
+                    .iter()
+                    .map(|e| e.to_string())
+                    .collect::<Vec<String>>()
+                    .join(";")
+            ));
+        }
+
+        if err_msgs.len() > 0 {
+            check_error = Some(Error::PreCheckError {
+                error: err_msgs.join("."),
+            })
+        }
+
+        Ok(CheckResult::build_with_err(
+            CheckItem::CheckIfStructExisted,
+            self.is_source,
+            self.db_type_option.clone(),
+            check_error,
+        ))
+    }
+
     async fn check_table_structs(&self) -> Result<CheckResult, Error> {
         let mut check_error: Option<Error> = None;
         let mysql_pool: &Pool<MySql>;
@@ -249,7 +377,10 @@ impl Checker for MySqlChecker {
 
         let constraint_sql = format!("select table_schema,table_name,constraint_type from information_schema.table_constraints where constraint_schema in ({})", 
             all_db_names.iter().map(|x| format!("'{}'",x)).collect::<Vec<_>>().join(","));
-        println!("mysql check table structs sql:{}", constraint_sql);
+        println!(
+            "[check_table_structs] mysql check table structs sql:{}",
+            constraint_sql
+        );
         let mut rows = query(constraint_sql.as_str()).fetch(mysql_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let (db, table, constraint_type): (String, String, String) = (
@@ -271,7 +402,7 @@ impl Checker for MySqlChecker {
         let table_sql = format!("select t.table_schema,t.table_name,t.engine,t.table_comment,c.column_name,c.ordinal_position,c.column_default,c.is_nullable,c.column_type,c.column_key,c.extra,c.column_comment,c.character_set_name,c.collation_name
             from information_schema.tables t left join information_schema.columns c on t.table_schema = c.table_schema and t.table_name = c.table_name where t.table_schema in ({}) order by t.table_schema, t.table_name",
             all_db_names.iter().map(|x| format!("'{}'",x)).collect::<Vec<_>>().join(","));
-        println!("mysql query tables sql:{}", table_sql);
+        println!("[check_table_structs] mysql query tables sql:{}", table_sql);
         let mut rows = query(table_sql.as_str()).fetch(mysql_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let (db, table): (String, String) = (row.get("TABLE_SCHEMA"), row.get("TABLE_NAME"));

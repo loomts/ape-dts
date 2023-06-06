@@ -1,11 +1,11 @@
-use std::{fs::File, io::Read, str::FromStr};
+use std::{fmt::Debug, fs::File, io::Read, str::FromStr};
 
 use configparser::ini::Ini;
 
-use crate::{error::Error, meta::db_enums::DbType};
+use crate::error::Error;
 
 use super::{
-    config_enums::{ExtractType, ParallelType, SinkType},
+    config_enums::{ConflictPolicyEnum, DbType, ExtractType, ParallelType, SinkType},
     extractor_config::ExtractorConfig,
     filter_config::FilterConfig,
     pipeline_config::PipelineConfig,
@@ -14,6 +14,7 @@ use super::{
     sinker_config::SinkerConfig,
 };
 
+#[derive(Clone)]
 pub struct TaskConfig {
     pub extractor: ExtractorConfig,
     pub sinker: SinkerConfig,
@@ -64,8 +65,8 @@ impl TaskConfig {
             DbType::Mysql => match extract_type {
                 ExtractType::Snapshot => Ok(ExtractorConfig::MysqlSnapshot {
                     url,
-                    db: "".to_string(),
-                    tb: "".to_string(),
+                    db: String::new(),
+                    tb: String::new(),
                 }),
 
                 ExtractType::Cdc => Ok(ExtractorConfig::MysqlCdc {
@@ -82,14 +83,17 @@ impl TaskConfig {
                     batch_size: ini.getuint(EXTRACTOR, BATCH_SIZE).unwrap().unwrap() as usize,
                 }),
 
-                ExtractType::Basic => Ok(ExtractorConfig::BasicConfig { url, db_type }),
+                ExtractType::Basic => Ok(ExtractorConfig::MysqlBasic {
+                    url,
+                    db: String::new(),
+                }),
             },
 
             DbType::Pg => match extract_type {
                 ExtractType::Snapshot => Ok(ExtractorConfig::PgSnapshot {
                     url,
-                    db: "".to_string(),
-                    tb: "".to_string(),
+                    db: String::new(),
+                    tb: String::new(),
                 }),
 
                 ExtractType::Cdc => Ok(ExtractorConfig::PgCdc {
@@ -108,8 +112,32 @@ impl TaskConfig {
                     batch_size: ini.getuint(EXTRACTOR, BATCH_SIZE).unwrap().unwrap() as usize,
                 }),
 
-                ExtractType::Basic => Ok(ExtractorConfig::BasicConfig { url, db_type }),
+                ExtractType::Basic => Ok(ExtractorConfig::PgBasic {
+                    url,
+                    db: String::new(),
+                }),
             },
+
+            DbType::Mongo => match extract_type {
+                ExtractType::Snapshot => Ok(ExtractorConfig::MongoSnapshot {
+                    url,
+                    db: String::new(),
+                    tb: String::new(),
+                }),
+
+                ExtractType::Cdc => Ok(ExtractorConfig::MongoCdc {
+                    url,
+                    resume_token: ini.get(EXTRACTOR, "resume_token").unwrap(),
+                }),
+
+                _ => Err(Error::Unexpected {
+                    error: "extractor db type not supported".to_string(),
+                }),
+            },
+
+            _ => Err(Error::Unexpected {
+                error: "extractor db type not supported".to_string(),
+            }),
         }
     }
 
@@ -117,7 +145,10 @@ impl TaskConfig {
         let db_type = DbType::from_str(&ini.get(SINKER, DB_TYPE).unwrap()).unwrap();
         let sink_type = SinkType::from_str(&ini.get(SINKER, "sink_type").unwrap()).unwrap();
         let url = ini.get(SINKER, URL).unwrap();
-        let batch_size = ini.getuint(SINKER, BATCH_SIZE).unwrap().unwrap() as usize;
+        let batch_size: usize = Self::get_optional_value(ini, SINKER, BATCH_SIZE);
+
+        let conflict_policy_str: String = Self::get_optional_value(ini, SINKER, "conflict_policy");
+        let conflict_policy = ConflictPolicyEnum::from_str(&conflict_policy_str).unwrap();
 
         match db_type {
             DbType::Mysql => match sink_type {
@@ -129,7 +160,10 @@ impl TaskConfig {
                     check_log_dir: ini.get(SINKER, CHECK_LOG_DIR),
                 }),
 
-                SinkType::Basic => Ok(SinkerConfig::BasicConfig { url, db_type }),
+                SinkType::Basic => Ok(SinkerConfig::MysqlBasic {
+                    url,
+                    conflict_policy,
+                }),
             },
 
             DbType::Pg => match sink_type {
@@ -141,12 +175,47 @@ impl TaskConfig {
                     check_log_dir: ini.get(SINKER, CHECK_LOG_DIR),
                 }),
 
-                SinkType::Basic => Ok(SinkerConfig::BasicConfig { url, db_type }),
+                SinkType::Basic => Ok(SinkerConfig::PgBasic {
+                    url,
+                    conflict_policy,
+                }),
             },
+
+            DbType::Mongo => match sink_type {
+                SinkType::Write => Ok(SinkerConfig::Mongo { url, batch_size }),
+
+                _ => Err(Error::Unexpected {
+                    error: "sinker db type not supported".to_string(),
+                }),
+            },
+
+            DbType::Kafka => Ok(SinkerConfig::Kafka {
+                url,
+                batch_size,
+                ack_timeout_secs: ini.getuint(SINKER, "ack_timeout_secs").unwrap().unwrap() as u64,
+                required_acks: ini.get(SINKER, "required_acks").unwrap(),
+            }),
+
+            DbType::OpenFaas => Ok(SinkerConfig::OpenFaas {
+                url,
+                batch_size,
+                timeout_secs: ini.getuint(SINKER, "timeout_secs").unwrap().unwrap() as u64,
+            }),
+
+            DbType::Foxlake => Ok(SinkerConfig::Foxlake {
+                batch_size,
+                bucket: ini.get(SINKER, "bucket").unwrap(),
+                access_key: ini.get(SINKER, "access_key").unwrap(),
+                secret_key: ini.get(SINKER, "secret_key").unwrap(),
+                region: ini.get(SINKER, "region").unwrap(),
+                root_dir: ini.get(SINKER, "root_dir").unwrap(),
+            }),
         }
     }
 
     fn load_pipeline_config(ini: &Ini) -> PipelineConfig {
+        let batch_sink_interval_secs: u64 =
+            Self::get_optional_value(ini, PIPELINE, "batch_sink_interval_secs");
         PipelineConfig {
             buffer_size: ini.getuint(PIPELINE, "buffer_size").unwrap().unwrap() as usize,
             parallel_size: ini.getuint(PIPELINE, "parallel_size").unwrap().unwrap() as usize,
@@ -156,6 +225,7 @@ impl TaskConfig {
                 .getuint(PIPELINE, "checkpoint_interval_secs")
                 .unwrap()
                 .unwrap() as u64,
+            batch_sink_interval_secs,
         }
     }
 
@@ -183,5 +253,46 @@ impl TaskConfig {
             tb_map: ini.get(ROUTER, "tb_map").unwrap(),
             field_map: ini.get(ROUTER, "field_map").unwrap(),
         })
+    }
+
+    fn get_optional_value<T>(ini: &Ini, section: &str, key: &str) -> T
+    where
+        T: Default,
+        T: FromStr,
+        <T as FromStr>::Err: Debug,
+    {
+        if let Some(value) = ini.get(section, key) {
+            return value.parse::<T>().unwrap();
+        }
+        T::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::utils::work_dir_util::WorkDirUtil;
+
+    use super::*;
+    use std::{fs, path::PathBuf};
+
+    #[test]
+    fn task_config_new_test() {
+        let project_root = WorkDirUtil::get_project_root().unwrap();
+
+        let path_name = format!("{}/dt-common/src/test/config", project_root);
+        println!("path_name:{}", path_name);
+
+        for entry in fs::read_dir(PathBuf::from(path_name)).unwrap() {
+            if entry.is_err() {
+                continue;
+            }
+            let dir_entry = entry.unwrap();
+            println!(
+                "begin check config: {}",
+                dir_entry.file_name().to_string_lossy()
+            );
+            TaskConfig::new(&dir_entry.path().to_string_lossy().to_string());
+        }
+        assert!(true)
     }
 }

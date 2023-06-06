@@ -10,8 +10,8 @@ use std::{
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
-    config::{extractor_config::ExtractorConfig, filter_config::FilterConfig},
-    meta::db_table_model::DbTable,
+    config::filter_config::FilterConfig,
+    meta::{db_enums::DbType, struct_meta::db_table_model::DbTable},
 };
 use futures::TryStreamExt;
 use sqlx::{
@@ -35,9 +35,11 @@ use crate::{
 pub struct PgStructExtractor<'a> {
     pub pool: Option<Pool<Postgres>>,
     pub struct_obj_queue: &'a ConcurrentQueue<StructModel>,
-    pub source_config: ExtractorConfig,
+    pub url: String,
+    pub db_type: DbType,
     pub filter_config: FilterConfig,
     pub is_finished: Arc<AtomicBool>,
+    pub is_do_check: bool,
 
     pub seq_owners: HashMap<String, StructModel>,
 }
@@ -57,21 +59,16 @@ impl StructExtrator for PgStructExtractor<'_> {
     }
 
     async fn build_connection(&mut self) -> Result<(), Error> {
-        match &self.source_config {
-            ExtractorConfig::BasicConfig { url, db_type: _ } => {
-                let db_pool = PgPoolOptions::new()
-                    .max_connections(8)
-                    .acquire_timeout(Duration::from_secs(5))
-                    .connect(url)
-                    .await?;
-                self.pool = Option::Some(db_pool);
-            }
-            _ => {}
-        };
+        let db_pool = PgPoolOptions::new()
+            .max_connections(8)
+            .acquire_timeout(Duration::from_secs(5))
+            .connect(&self.url)
+            .await?;
+        self.pool = Option::Some(db_pool);
         Ok(())
     }
 
-    async fn get_sequence(&mut self) -> Result<(), Error> {
+    async fn get_sequence(&mut self) -> Result<Vec<StructModel>, Error> {
         let pg_pool: &Pool<Postgres>;
         match &self.pool {
             Some(pool) => pg_pool = pool,
@@ -99,7 +96,7 @@ impl StructExtrator for PgStructExtractor<'_> {
         all_schemas.extend(&tb_schemas);
         if all_schemas.len() <= 0 {
             println!("found no schema need to do migrate");
-            return Ok(());
+            return Ok(vec![]);
         }
 
         let mut table_used_seqs: HashSet<String> = HashSet::new();
@@ -215,17 +212,23 @@ impl StructExtrator for PgStructExtractor<'_> {
         } else {
             println!("find no table used sequence");
         }
+        let mut result_vec: Vec<StructModel> = vec![];
         if models.len() > 0 {
             for (_, seq_model) in &models {
-                let _ = QueueOperator::push_to_queue(&self.struct_obj_queue, seq_model.clone(), 1)
-                    .await;
+                if self.is_do_check {
+                    result_vec.push(seq_model.clone());
+                } else {
+                    let _ =
+                        QueueOperator::push_to_queue(&self.struct_obj_queue, seq_model.clone(), 1)
+                            .await;
+                }
             }
         }
         println!("get sequence finished");
-        Ok(())
+        Ok(result_vec)
     }
 
-    async fn get_table(&self) -> Result<(), Error> {
+    async fn get_table(&self) -> Result<Vec<StructModel>, Error> {
         let pg_pool: &Pool<Postgres>;
         match &self.pool {
             Some(pool) => pg_pool = pool,
@@ -253,7 +256,7 @@ impl StructExtrator for PgStructExtractor<'_> {
         all_schemas.extend(&tb_schemas);
         if all_schemas.len() <= 0 {
             println!("found no schema need to do migrate");
-            return Ok(());
+            return Ok(vec![]);
         }
         let sql = format!("SELECT c.table_schema,c.table_name,c.column_name, c.data_type, c.udt_name, c.character_maximum_length, c.is_nullable, c.column_default, c.numeric_precision, c.numeric_scale, c.is_identity, c.identity_generation,c.ordinal_position 
         FROM information_schema.columns c where table_schema in ({}) ORDER BY table_schema,table_name", all_schemas.iter().map(|x| format!("'{}'", x)).collect::<Vec<String>>().join(","));
@@ -354,22 +357,53 @@ impl StructExtrator for PgStructExtractor<'_> {
                 );
             }
         }
+        let mut result_vec: Vec<StructModel> = vec![];
         if models.len() > 0 {
             for (_, model) in &models {
-                let _ =
-                    QueueOperator::push_to_queue(&self.struct_obj_queue, model.clone(), 1).await;
+                if self.is_do_check {
+                    let model_clone = model.clone();
+                    match model_clone {
+                        StructModel::TableModel {
+                            database_name,
+                            schema_name,
+                            table_name,
+                            engine_name,
+                            table_comment,
+                            mut columns,
+                        } => {
+                            columns.sort_by(|a, b| a.order_position.cmp(&b.order_position));
+                            result_vec.push(StructModel::TableModel {
+                                database_name,
+                                schema_name,
+                                table_name,
+                                engine_name,
+                                table_comment,
+                                columns,
+                            });
+                        }
+                        _ => {}
+                    }
+                } else {
+                    let _ = QueueOperator::push_to_queue(&self.struct_obj_queue, model.clone(), 1)
+                        .await;
+                }
             }
             // push the sequence related to those tables
             for (_, seq_model) in &self.seq_owners {
-                let _ = QueueOperator::push_to_queue(&self.struct_obj_queue, seq_model.clone(), 1)
-                    .await;
+                if self.is_do_check {
+                    result_vec.push(seq_model.clone());
+                } else {
+                    let _ =
+                        QueueOperator::push_to_queue(&self.struct_obj_queue, seq_model.clone(), 1)
+                            .await;
+                }
             }
         }
         println!("get tables finished");
-        Ok(())
+        Ok(result_vec)
     }
 
-    async fn get_constraint(&self) -> Result<(), Error> {
+    async fn get_constraint(&self) -> Result<Vec<StructModel>, Error> {
         let pg_pool: &Pool<Postgres>;
         match &self.pool {
             Some(pool) => pg_pool = pool,
@@ -397,7 +431,7 @@ impl StructExtrator for PgStructExtractor<'_> {
         all_schemas.extend(&tb_schemas);
         if all_schemas.len() <= 0 {
             println!("found no schema need to do migrate");
-            return Ok(());
+            return Ok(vec![]);
         }
         let sql = format!("SELECT nsp.nspname, rel.relname, con.conname as constraint_name, con.contype as constraint_type,pg_get_constraintdef(con.oid) as constraint_definition
         FROM pg_catalog.pg_constraint con JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
@@ -433,17 +467,22 @@ impl StructExtrator for PgStructExtractor<'_> {
                     .unwrap(),
             });
         }
+        let mut result_vec: Vec<StructModel> = vec![];
         if result.len() > 0 {
             for model in &result {
-                let _ =
-                    QueueOperator::push_to_queue(&self.struct_obj_queue, model.clone(), 1).await;
+                if self.is_do_check {
+                    result_vec.push(model.clone());
+                } else {
+                    let _ = QueueOperator::push_to_queue(&self.struct_obj_queue, model.clone(), 1)
+                        .await;
+                }
             }
         }
         println!("get constraint finished");
-        Ok(())
+        Ok(result_vec)
     }
 
-    async fn get_index(&self) -> Result<(), Error> {
+    async fn get_index(&self) -> Result<Vec<StructModel>, Error> {
         let pg_pool: &Pool<Postgres>;
         match &self.pool {
             Some(pool) => pg_pool = pool,
@@ -471,7 +510,7 @@ impl StructExtrator for PgStructExtractor<'_> {
         all_schemas.extend(&tb_schemas);
         if all_schemas.len() <= 0 {
             println!("found no schema need to do migrate");
-            return Ok(());
+            return Ok(vec![]);
         }
         let sql = format!("SELECT schemaname,tablename,indexdef, COALESCE(tablespace, 'pg_default') as tablespace, indexname FROM pg_indexes WHERE schemaname in ({})", all_schemas.iter().map(|x| format!("'{}'", x)).collect::<Vec<String>>().join(","));
         println!("pg query index sql: {}", sql);
@@ -502,17 +541,22 @@ impl StructExtrator for PgStructExtractor<'_> {
                 columns: Vec::new(),
             })
         }
+        let mut result_vec: Vec<StructModel> = vec![];
         if result.len() > 0 {
             for model in &result {
-                let _ =
-                    QueueOperator::push_to_queue(&self.struct_obj_queue, model.clone(), 1).await;
+                if self.is_do_check {
+                    result_vec.push(model.clone());
+                } else {
+                    let _ = QueueOperator::push_to_queue(&self.struct_obj_queue, model.clone(), 1)
+                        .await;
+                }
             }
         }
         println!("get indexs finished");
-        Ok(())
+        Ok(result_vec)
     }
 
-    async fn get_comment(&self) -> Result<(), Error> {
+    async fn get_comment(&self) -> Result<Vec<StructModel>, Error> {
         let pg_pool: &Pool<Postgres>;
         match &self.pool {
             Some(pool) => pg_pool = pool,
@@ -540,7 +584,7 @@ impl StructExtrator for PgStructExtractor<'_> {
         all_schemas.extend(&tb_schemas);
         if all_schemas.len() <= 0 {
             println!("found no schema need to do migrate");
-            return Ok(());
+            return Ok(vec![]);
         }
         let mut result: Vec<StructModel> = Vec::new();
 
@@ -592,14 +636,19 @@ impl StructExtrator for PgStructExtractor<'_> {
                 comment: PgStructExtractor::get_str_with_null(&row, "comment").unwrap(),
             })
         }
+        let mut result_vec: Vec<StructModel> = vec![];
         if result.len() > 0 {
             for model in &result {
-                let _ =
-                    QueueOperator::push_to_queue(&self.struct_obj_queue, model.clone(), 1).await;
+                if self.is_do_check {
+                    result_vec.push(model.clone());
+                } else {
+                    let _ = QueueOperator::push_to_queue(&self.struct_obj_queue, model.clone(), 1)
+                        .await;
+                }
             }
         }
         println!("get comment finished");
-        Ok(())
+        Ok(result_vec)
     }
 }
 
@@ -682,7 +731,10 @@ impl PgStructExtractor<'_> {
     }
 
     fn get_seq_name_by_default_value(default_value: String) -> Option<String> {
-        // default_value: nextval('table_test_name_seq'::regclass) or nextval('table_test_name_seq')
+        // default_value such as:
+        //   nextval('table_test_name_seq'::regclass)
+        //   nextval('"table_test_name_seq"')
+        //   nextval('struct_it.full_column_type_id_seq'::regclass)
         if default_value.is_empty() || !default_value.starts_with("nextval(") {
             return None;
         }
@@ -695,6 +747,10 @@ impl PgStructExtractor<'_> {
             return None;
         }
         let mut seq_name = arr_tmp[1];
+        if seq_name.contains(".") {
+            let real_name_start_index = seq_name.find(".").unwrap() + 1;
+            seq_name = &seq_name[real_name_start_index..seq_name.len()];
+        }
         if seq_name.starts_with("\"") && seq_name.ends_with("\"") {
             let (start_index, end_index) = (
                 seq_name.find("\"").unwrap() + 1,
@@ -703,5 +759,45 @@ impl PgStructExtractor<'_> {
             seq_name = &seq_name[start_index..end_index];
         }
         Some(seq_name.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn get_seq_name_by_default_value_test() {
+        let mut opt: Option<String>;
+        opt = PgStructExtractor::get_seq_name_by_default_value(String::from(
+            "nextval('table_test_name_seq'::regclass)",
+        ));
+        assert_eq!(opt.unwrap(), String::from("table_test_name_seq"));
+
+        opt = PgStructExtractor::get_seq_name_by_default_value(String::from(
+            "nextval('table_test_name_seq')",
+        ));
+        assert_eq!(opt.unwrap(), String::from("table_test_name_seq"));
+
+        opt = PgStructExtractor::get_seq_name_by_default_value(String::from(
+            "nextval('\"table::123&^%@-_test_name_seq\"'::regclass)",
+        ));
+        assert_eq!(opt.unwrap(), String::from("table::123&^%@-_test_name_seq"));
+
+        opt = PgStructExtractor::get_seq_name_by_default_value(String::from(
+            "nextval('\"has_special_'\"'::regclass)",
+        ));
+        assert!(opt.is_none());
+
+        opt = PgStructExtractor::get_seq_name_by_default_value(String::from(
+            "nextval('schema.table_test_name_seq'::regclass)",
+        ));
+        assert_eq!(opt.unwrap(), String::from("table_test_name_seq"));
+
+        opt = PgStructExtractor::get_seq_name_by_default_value(String::from(
+            "nextval('\"has_special_schema_^&@\".\"table::123&^%@-_test_name_seq\"'::regclass)",
+        ));
+        assert_eq!(opt.unwrap(), String::from("table::123&^%@-_test_name_seq"));
     }
 }

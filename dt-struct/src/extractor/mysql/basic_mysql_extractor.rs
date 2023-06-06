@@ -9,8 +9,8 @@ use std::{
 
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
-    config::{extractor_config::ExtractorConfig, filter_config::FilterConfig},
-    meta::db_table_model::DbTable,
+    config::filter_config::FilterConfig,
+    meta::{db_enums::DbType, struct_meta::db_table_model::DbTable},
 };
 use futures::TryStreamExt;
 use sqlx::{mysql::*, query, Pool, Row};
@@ -27,9 +27,11 @@ use crate::{
 pub struct MySqlStructExtractor<'a> {
     pub pool: Option<Pool<MySql>>,
     pub struct_obj_queue: &'a ConcurrentQueue<StructModel>,
-    pub source_config: ExtractorConfig,
+    pub url: String,
+    pub db_type: DbType,
     pub filter_config: FilterConfig,
     pub is_finished: Arc<AtomicBool>,
+    pub is_do_check: bool,
 }
 
 #[async_trait]
@@ -51,26 +53,21 @@ impl StructExtrator for MySqlStructExtractor<'_> {
     }
 
     async fn build_connection(&mut self) -> Result<(), Error> {
-        match &self.source_config {
-            ExtractorConfig::BasicConfig { url, db_type: _ } => {
-                let db_pool = MySqlPoolOptions::new()
-                    .max_connections(8)
-                    .acquire_timeout(Duration::from_secs(5))
-                    .connect(&url)
-                    .await?;
-                self.pool = Option::Some(db_pool);
-            }
-            _ => {}
-        };
+        let db_pool = MySqlPoolOptions::new()
+            .max_connections(8)
+            .acquire_timeout(Duration::from_secs(5))
+            .connect(&self.url)
+            .await?;
+        self.pool = Option::Some(db_pool);
         Ok(())
     }
 
-    async fn get_sequence(&mut self) -> Result<(), Error> {
-        Ok(())
+    async fn get_sequence(&mut self) -> Result<Vec<StructModel>, Error> {
+        Ok(vec![])
     }
 
     // Create Table: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
-    async fn get_table(&self) -> Result<(), Error> {
+    async fn get_table(&self) -> Result<Vec<StructModel>, Error> {
         let mysql_pool: &Pool<MySql>;
         match &self.pool {
             Some(pool) => mysql_pool = pool,
@@ -212,18 +209,44 @@ impl StructExtrator for MySqlStructExtractor<'_> {
                 );
             }
         }
+        let mut result_vec: Vec<StructModel> = vec![];
         if db_tb_map.len() > 0 {
             for (_, model) in &db_tb_map {
-                let _ =
-                    QueueOperator::push_to_queue(&self.struct_obj_queue, model.clone(), 1).await;
+                if self.is_do_check {
+                    let model_clone = model.clone();
+                    match model_clone {
+                        StructModel::TableModel {
+                            database_name,
+                            schema_name,
+                            table_name,
+                            engine_name,
+                            table_comment,
+                            mut columns,
+                        } => {
+                            columns.sort_by(|a, b| a.order_position.cmp(&b.order_position));
+                            result_vec.push(StructModel::TableModel {
+                                database_name,
+                                schema_name,
+                                table_name,
+                                engine_name,
+                                table_comment,
+                                columns,
+                            });
+                        }
+                        _ => {}
+                    }
+                } else {
+                    let _ = QueueOperator::push_to_queue(&self.struct_obj_queue, model.clone(), 1)
+                        .await;
+                }
             }
         }
         println!("get table finished");
-        Ok(())
+        Ok(result_vec)
     }
 
     // Create Index: https://dev.mysql.com/doc/refman/8.0/en/create-index.html
-    async fn get_index(&self) -> Result<(), Error> {
+    async fn get_index(&self) -> Result<Vec<StructModel>, Error> {
         let mysql_pool: &Pool<MySql>;
         match &self.pool {
             Some(pool) => mysql_pool = pool,
@@ -331,24 +354,29 @@ impl StructExtrator for MySqlStructExtractor<'_> {
                 );
             }
         }
+        let mut result_vec: Vec<StructModel> = vec![];
         if index_map.len() > 0 {
             for (_, model) in &index_map {
-                let _ =
-                    QueueOperator::push_to_queue(&self.struct_obj_queue, model.clone(), 1).await;
+                if self.is_do_check {
+                    result_vec.push(model.clone());
+                } else {
+                    let _ = QueueOperator::push_to_queue(&self.struct_obj_queue, model.clone(), 1)
+                        .await;
+                }
             }
         }
         println!("get index finished");
-        Ok(())
+        Ok(result_vec)
     }
 
-    async fn get_constraint(&self) -> Result<(), Error> {
+    async fn get_constraint(&self) -> Result<Vec<StructModel>, Error> {
         // Todo:
-        Ok(())
+        Ok(vec![])
     }
 
-    async fn get_comment(&self) -> Result<(), Error> {
+    async fn get_comment(&self) -> Result<Vec<StructModel>, Error> {
         // do nothing here, comment is builded when Table or Column create
-        Ok(())
+        Ok(vec![])
     }
 }
 

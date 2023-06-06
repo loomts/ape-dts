@@ -1,4 +1,4 @@
-use dt_common::meta::db_enums::DbType;
+use dt_common::config::config_enums::DbType;
 
 use crate::error::Error;
 
@@ -10,34 +10,19 @@ pub struct CheckResult {
     pub check_desc: String,
     pub is_validate: bool,
     pub error_msg: String,
+    pub is_source: bool,
     pub advise_msg: String,
 }
 
-#[allow(dead_code)]
 impl CheckResult {
-    pub fn build(check_item: CheckItem) -> Self {
+    pub fn build(check_item: CheckItem, is_source: bool) -> Self {
         return Self {
             check_type_name: check_item.to_string(),
             check_desc: String::from(""),
             is_validate: true,
             error_msg: String::from(""),
+            is_source,
             advise_msg: String::from(""),
-        };
-    }
-
-    pub fn build_with(
-        check_type_name: String,
-        check_desc: String,
-        is_validate: bool,
-        error_msg: String,
-        advise_msg: String,
-    ) -> Self {
-        return Self {
-            check_type_name,
-            check_desc,
-            is_validate,
-            error_msg,
-            advise_msg,
         };
     }
 
@@ -48,7 +33,7 @@ impl CheckResult {
         err_option: Option<Error>,
     ) -> Self {
         let check_desc;
-        let advise_msg;
+        let mut advise_msg = String::new();
         let mut source_or_sink = String::from("source");
         if !is_source {
             source_or_sink = String::from("sink");
@@ -67,12 +52,20 @@ impl CheckResult {
                 match db_type {
                     DbType::Mysql => advise_msg = format!("(1)open 'log_bin' configuration. (2)set 'binlog_format' configuration to 'row'. (3)set 'binlog_row_image' configuration to 'full'."),
                     DbType::Pg => advise_msg = format!("(1)set 'wal_level' configuration to 'logical'. (2)make sure that the number of 'max_replication_slots' configured is sufficient. (3)make sure that the number of 'max_wal_senders' configured is sufficient."),
+                    _ => {}
                 }
             }
             CheckItem::CheckAccountPermission => {
                 // Todo:
                 check_desc = format!("check account permission");
                 advise_msg = format!("advise account permission");
+            }
+            CheckItem::CheckIfStructExisted => {
+                check_desc = format!(
+                    "check whether the data structure of the {} database is existed",
+                    source_or_sink
+                );
+                advise_msg = format!("manually created the missing struct.");
             }
             CheckItem::CheckIfTableStructSupported => {
                 check_desc = format!(
@@ -83,10 +76,11 @@ impl CheckResult {
             }
             CheckItem::CheckDatabaseVersionSupported => {
                 check_desc = format!("check if the {} database version supports.", source_or_sink);
-                let advise_version;
+                let mut advise_version = String::new();
                 match db_type {
                     DbType::Mysql => advise_version = format!("currently supports version '8.*'."),
                     DbType::Pg => advise_version = format!("currently supports version '14.*'."),
+                    _ => {}
                 }
                 advise_msg = format!("{} wait for the next release.", advise_version);
             }
@@ -97,6 +91,7 @@ impl CheckResult {
                 check_desc,
                 is_validate: false,
                 error_msg: err.to_string(),
+                is_source,
                 advise_msg,
             },
             None => Self {
@@ -104,6 +99,7 @@ impl CheckResult {
                 check_desc,
                 is_validate: true,
                 error_msg: String::from(""),
+                is_source,
                 advise_msg: String::from(""),
             },
         }

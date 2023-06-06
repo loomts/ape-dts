@@ -1,10 +1,8 @@
 use std::vec;
 
-use dt_common::{
-    config::{
-        extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
-    },
-    meta::db_enums::DbType,
+use dt_common::config::{
+    config_enums::DbType, extractor_config::ExtractorConfig, sinker_config::SinkerConfig,
+    task_config::TaskConfig,
 };
 
 use crate::{
@@ -31,7 +29,7 @@ impl CheckerConnector {
 
     pub fn valid_config(&self) -> Result<bool, Error> {
         match &self.task_config.extractor {
-            ExtractorConfig::BasicConfig { url, db_type: _ } => {
+            ExtractorConfig::MysqlBasic { url, .. } | ExtractorConfig::PgBasic { url, .. } => {
                 if url.is_empty() {
                     return Ok(false);
                 }
@@ -39,7 +37,7 @@ impl CheckerConnector {
             _ => {}
         }
         match &self.task_config.sinker {
-            SinkerConfig::BasicConfig { url, db_type: _ } => {
+            SinkerConfig::MysqlBasic { url, .. } | SinkerConfig::PgBasic { url, .. } => {
                 if url.is_empty() {
                     return Ok(false);
                 }
@@ -53,12 +51,14 @@ impl CheckerConnector {
         let mut db_type_option: Option<&DbType> = None;
         if is_source {
             match &self.task_config.extractor {
-                ExtractorConfig::BasicConfig { url: _, db_type } => db_type_option = Some(db_type),
+                ExtractorConfig::MysqlBasic { .. } => db_type_option = Some(&DbType::Mysql),
+                ExtractorConfig::PgBasic { .. } => db_type_option = Some(&DbType::Pg),
                 _ => {}
             }
         } else {
             match &self.task_config.sinker {
-                SinkerConfig::BasicConfig { url: _, db_type } => db_type_option = Some(db_type),
+                SinkerConfig::MysqlBasic { .. } => db_type_option = Some(&DbType::Mysql),
+                SinkerConfig::PgBasic { .. } => db_type_option = Some(&DbType::Pg),
                 _ => {}
             }
         }
@@ -87,11 +87,12 @@ impl CheckerConnector {
                 db_type_option: None,
                 is_source,
             })),
+            _ => None,
         };
         checker
     }
 
-    pub async fn check(&self) -> Result<(), Error> {
+    pub async fn check(&self) -> Result<Vec<Result<CheckResult, Error>>, Error> {
         if !self.valid_config().unwrap() {
             return Err(Error::PreCheckError {
                 error: "config is invalid.".to_string(),
@@ -141,28 +142,44 @@ impl CheckerConnector {
             check_results.push(source_checker.check_cdc_supported().await);
         }
 
+        println!("[*]begin to check the if the structs is existed or not");
+        check_results.push(source_checker.check_struct_existed_or_not().await);
+        check_results.push(sink_checker.check_struct_existed_or_not().await);
+
         println!("[*]begin to check the database structs");
         check_results.push(source_checker.check_table_structs().await);
 
-        println!("check result:");
-        let mut error_count = 0;
-        for check_result in check_results {
-            match check_result {
-                Ok(result) => {
-                    result.log();
-                    if !result.is_validate {
-                        error_count += 1;
+        Ok(check_results)
+    }
+
+    pub async fn verify_check_result(&self) -> Result<(), Error> {
+        let check_results = self.check().await;
+        match check_results {
+            Ok(results) => {
+                println!("check result:");
+                let mut error_count = 0;
+                for check_result in results {
+                    match check_result {
+                        Ok(result) => {
+                            result.log();
+                            if !result.is_validate {
+                                error_count += 1;
+                            }
+                        }
+                        Err(e) => return Err(e),
                     }
                 }
-                Err(e) => return Err(e),
+                if error_count > 0 {
+                    return Err(Error::PreCheckError {
+                        error: "precheck not passed.".to_string(),
+                    });
+                } else {
+                    return Ok(());
+                }
             }
-        }
-        if error_count > 0 {
-            Err(Error::PreCheckError {
-                error: "precheck not passed.".to_string(),
-            })
-        } else {
-            Ok(())
+            Err(e) => {
+                return Err(e);
+            }
         }
     }
 }

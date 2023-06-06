@@ -3,12 +3,12 @@ use std::{collections::HashSet, time::Duration};
 use async_trait::async_trait;
 use dt_common::{
     config::{
-        extractor_config::ExtractorConfig, filter_config::FilterConfig,
+        config_enums::DbType, extractor_config::ExtractorConfig, filter_config::FilterConfig,
         router_config::RouterConfig, sinker_config::SinkerConfig,
     },
-    meta::{db_enums::DbType, db_table_model::DbTable, postgresql::pg_enums::ConstraintTypeEnum},
     utils::config_url_util::ConfigUrlUtil,
 };
+use dt_meta::struct_meta::{db_table_model::DbTable, pg_enums::ConstraintTypeEnum};
 use sqlx::{postgres::PgPoolOptions, query, Pool, Postgres, Row};
 
 use crate::{
@@ -41,17 +41,17 @@ impl Checker for PostgresqlChecker {
 
         if self.is_source {
             match &self.source_config {
-                ExtractorConfig::BasicConfig { url, db_type } => {
+                ExtractorConfig::PgBasic { url, .. } => {
                     connection_url = String::from(url);
-                    self.db_type_option = Some(db_type.clone());
+                    self.db_type_option = Some(DbType::Pg);
                 }
                 _ => {}
             };
         } else {
             match &self.sinker_config {
-                SinkerConfig::BasicConfig { url, db_type } => {
+                SinkerConfig::PgBasic { url, .. } => {
                     connection_url = String::from(url);
-                    self.db_type_option = Some(db_type.clone());
+                    self.db_type_option = Some(DbType::Pg);
                 }
                 _ => {}
             };
@@ -86,7 +86,10 @@ impl Checker for PostgresqlChecker {
             None => return Err(Error::from(sqlx::Error::PoolClosed)),
         }
         let sql = format!("SELECT current_setting('server_version_num')::integer");
-        println!("pg query database version: {}", sql);
+        println!(
+            "[check_database_version] pg query database version: {}",
+            sql
+        );
         let rows_result = query(&sql).fetch_all(pg_pool).await;
         match rows_result {
             Ok(rows) => {
@@ -126,7 +129,10 @@ impl Checker for PostgresqlChecker {
                 if is_super {
                     // super user dose not neet to do validate
                     println!("the database account is a super user");
-                    return Ok(CheckResult::build(CheckItem::CheckAccountPermission));
+                    return Ok(CheckResult::build(
+                        CheckItem::CheckAccountPermission,
+                        self.is_source,
+                    ));
                 }
             }
             Err(e) => return Err(e),
@@ -169,7 +175,10 @@ impl Checker for PostgresqlChecker {
         let setting_sql = format!(
             "SELECT name,setting FROM pg_settings WHERE name in ('wal_level','max_wal_senders','max_replication_slots')"
         );
-        println!("pg query cdc settings: {}", setting_sql);
+        println!(
+            "[check_cdc_supported] pg query cdc settings: {}",
+            setting_sql
+        );
         let settings = query(&setting_sql).fetch_all(pg_pool).await;
         let (
             mut wal_level,
@@ -234,7 +243,7 @@ impl Checker for PostgresqlChecker {
         if check_error.is_none() {
             // check the slot count is less than max_replication_slots or not
             let slot_query = format!("select slot_name from pg_catalog.pg_replication_slots");
-            println!("pg query slot count: {}", setting_sql);
+            println!("[check_cdc_supported] pg query slot count: {}", setting_sql);
             let current_slots = query(&slot_query).fetch_all(pg_pool).await;
             match current_slots {
                 Ok(rows) => {
@@ -248,6 +257,128 @@ impl Checker for PostgresqlChecker {
 
         Ok(CheckResult::build_with_err(
             CheckItem::CheckIfDatabaseSupportCdc,
+            self.is_source,
+            self.db_type_option.clone(),
+            check_error,
+        ))
+    }
+
+    async fn check_struct_existed_or_not(&self) -> Result<CheckResult, Error> {
+        let mut check_error: Option<Error> = None;
+        let pg_pool: &Pool<Postgres>;
+
+        match &self.pool {
+            Some(pool) => pg_pool = pool,
+            None => return Err(Error::from(sqlx::Error::PoolClosed)),
+        }
+        let (mut db_tables, mut err_msgs): (Vec<DbTable>, Vec<String>) = (Vec::new(), Vec::new());
+        match &self.filter_config {
+            FilterConfig::Rdb {
+                do_dbs,
+                ignore_dbs: _,
+                do_tbs,
+                ignore_tbs: _,
+                do_events: _,
+            } => {
+                if !do_tbs.is_empty() {
+                    DbTable::from_str(do_tbs, &mut db_tables)
+                } else if !do_dbs.is_empty() {
+                    DbTable::from_str(do_dbs, &mut db_tables)
+                }
+            }
+        }
+        let (schemas, tb_schemas, tbs) = DbTable::get_config_maps(&db_tables).unwrap();
+        let mut all_schemas = Vec::new();
+        all_schemas.extend(&schemas);
+        all_schemas.extend(&tb_schemas);
+        if all_schemas.len() <= 0 {
+            println!("found no schema need to do migrate, very strange");
+            return Err(Error::PreCheckError {
+                error: String::from("found no schema need to do migrate"),
+            });
+        }
+
+        if (self.is_source || !self.precheck_config.do_struct_init) && tbs.len() > 0 {
+            // When a specific table to be migrated is specified and the following conditions are met, check the existence of the table
+            // 1. this check is for the source database
+            // 2. this check is for the sink database, and specified no structure initialization
+            let (mut current_tbs, mut not_existed_tbs): (HashSet<String>, HashSet<String>) =
+                (HashSet::new(), HashSet::new());
+            let table_sql = format!("SELECT c.table_schema,c.table_name,c.column_name, c.data_type, c.udt_name, c.character_maximum_length, c.is_nullable, c.column_default, c.numeric_precision, c.numeric_scale, c.is_identity, c.identity_generation,c.ordinal_position 
+        FROM information_schema.columns c where table_schema in ({}) ORDER BY table_schema,table_name", all_schemas.iter().map(|x| format!("'{}'", x)).collect::<Vec<String>>().join(","));
+            println!(
+                "[check_struct_existed_or_not] query table sql: {}",
+                table_sql
+            );
+            let mut rows = query(&table_sql).fetch(pg_pool);
+            while let Some(row) = rows.try_next().await? {
+                let (schema_name, table_name): (String, String) =
+                    (row.get("table_schema"), row.get("table_name"));
+                if schema_name.is_empty() && table_name.is_empty() {
+                    continue;
+                }
+                let schema_table_name = format!("{}.{}", schema_name, table_name);
+                if !tbs.contains(&schema_table_name) && !schemas.contains(&schema_name) {
+                    continue;
+                }
+                current_tbs.insert(schema_table_name);
+            }
+            for tb_key in tbs {
+                if !current_tbs.contains(&tb_key) {
+                    not_existed_tbs.insert(tb_key);
+                }
+            }
+            if not_existed_tbs.len() > 0 {
+                err_msgs.push(format!(
+                    "tables not existed: [{}]",
+                    not_existed_tbs
+                        .iter()
+                        .map(|e| e.to_string())
+                        .collect::<Vec<String>>()
+                        .join(";")
+                ));
+            }
+        }
+
+        let (mut not_existed_schema, mut current_schemas): (HashSet<String>, HashSet<String>) =
+            (HashSet::new(), HashSet::new());
+        let schema_sql = format!("select catalog_name,schema_name from information_schema.schemata where schema_name in ({})", all_schemas.iter().map(|x| format!("'{}'", x)).collect::<Vec<String>>().join(","));
+        println!(
+            "[check_struct_existed_or_not] query schema sql: {}",
+            schema_sql
+        );
+        let mut rows = query(&schema_sql).fetch(pg_pool);
+        while let Some(row) = rows.try_next().await? {
+            let schema_name: String = row.get("schema_name");
+            if !schemas.contains(&schema_name) && !tb_schemas.contains(&schema_name) {
+                continue;
+            }
+            current_schemas.insert(schema_name);
+        }
+        for schema in all_schemas {
+            if !current_schemas.contains(schema) {
+                not_existed_schema.insert(schema.clone());
+            }
+        }
+        if not_existed_schema.len() > 0 {
+            err_msgs.push(format!(
+                "schemas not existed: [{}]",
+                not_existed_schema
+                    .iter()
+                    .map(|e| e.to_string())
+                    .collect::<Vec<String>>()
+                    .join(";")
+            ));
+        }
+
+        if err_msgs.len() > 0 {
+            check_error = Some(Error::PreCheckError {
+                error: err_msgs.join("."),
+            })
+        }
+
+        Ok(CheckResult::build_with_err(
+            CheckItem::CheckIfStructExisted,
             self.is_source,
             self.db_type_option.clone(),
             check_error,
@@ -308,7 +439,7 @@ impl Checker for PostgresqlChecker {
 
         let table_sql = format!("SELECT c.table_schema,c.table_name,c.column_name, c.data_type, c.udt_name, c.character_maximum_length, c.is_nullable, c.column_default, c.numeric_precision, c.numeric_scale, c.is_identity, c.identity_generation,c.ordinal_position 
         FROM information_schema.columns c where table_schema in ({}) ORDER BY table_schema,table_name", all_schemas.iter().map(|x| format!("'{}'", x)).collect::<Vec<String>>().join(","));
-        println!("pg query table sql: {}", table_sql);
+        println!("[check_table_structs] pg query table sql: {}", table_sql);
         let mut rows = query(&table_sql).fetch(pg_pool);
         while let Some(row) = rows.try_next().await? {
             let (schema_name, table_name): (String, String) =
@@ -326,7 +457,10 @@ impl Checker for PostgresqlChecker {
         let constraint_sql = format!("SELECT nsp.nspname, rel.relname, con.conname as constraint_name, con.contype as constraint_type,pg_get_constraintdef(con.oid) as constraint_definition
         FROM pg_catalog.pg_constraint con JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
         WHERE nsp.nspname in ({}) order by nsp.nspname,rel.relname", all_schemas.iter().map(|x| format!("'{}'", x)).collect::<Vec<String>>().join(","));
-        println!("pg query constraint sql: {}", constraint_sql);
+        println!(
+            "[check_table_structs] pg query constraint sql: {}",
+            constraint_sql
+        );
         let mut rows = query(&constraint_sql).fetch(pg_pool);
         while let Some(row) = rows.try_next().await? {
             let (schema_name, table_name): (String, String) =
@@ -398,14 +532,14 @@ impl PostgresqlChecker {
         let user_option;
         if self.is_source {
             match &self.source_config {
-                ExtractorConfig::BasicConfig { url, db_type: _ } => {
+                ExtractorConfig::PgBasic { url, .. } => {
                     user_option = ConfigUrlUtil::get_username(String::from(url))
                 }
                 _ => user_option = None,
             }
         } else {
             match &self.sinker_config {
-                SinkerConfig::BasicConfig { url, db_type: _ } => {
+                SinkerConfig::PgBasic { url, .. } => {
                     user_option = ConfigUrlUtil::get_username(String::from(url))
                 }
                 _ => user_option = None,

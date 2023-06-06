@@ -1,6 +1,26 @@
-use strum::{AsStaticStr, Display, EnumString, IntoStaticStr};
+use std::str::FromStr;
 
-#[derive(Display, EnumString, IntoStaticStr, AsStaticStr)]
+use strum::{Display, EnumString, IntoStaticStr};
+
+use crate::error::Error;
+
+#[derive(Clone, Display, EnumString, IntoStaticStr)]
+pub enum DbType {
+    #[strum(serialize = "mysql")]
+    Mysql,
+    #[strum(serialize = "pg")]
+    Pg,
+    #[strum(serialize = "kafka")]
+    Kafka,
+    #[strum(serialize = "open_faas")]
+    OpenFaas,
+    #[strum(serialize = "foxlake")]
+    Foxlake,
+    #[strum(serialize = "mongo")]
+    Mongo,
+}
+
+#[derive(Display, EnumString, IntoStaticStr)]
 pub enum ExtractType {
     #[strum(serialize = "snapshot")]
     Snapshot,
@@ -12,7 +32,7 @@ pub enum ExtractType {
     Basic,
 }
 
-#[derive(EnumString, AsStaticStr)]
+#[derive(EnumString, IntoStaticStr)]
 pub enum SinkType {
     #[strum(serialize = "write")]
     Write,
@@ -22,8 +42,10 @@ pub enum SinkType {
     Basic,
 }
 
-#[derive(EnumString, AsStaticStr)]
+#[derive(EnumString, IntoStaticStr, Clone, Display)]
 pub enum ParallelType {
+    #[strum(serialize = "serial")]
+    Serial,
     #[strum(serialize = "snapshot")]
     Snapshot,
     #[strum(serialize = "rdb_partition")]
@@ -32,4 +54,31 @@ pub enum ParallelType {
     RdbMerge,
     #[strum(serialize = "rdb_check")]
     RdbCheck,
+    #[strum(serialize = "table")]
+    Table,
+    #[strum(serialize = "mongo")]
+    Mongo,
+}
+
+pub enum RouteType {
+    Db,
+    Tb,
+}
+
+#[derive(Clone, IntoStaticStr)]
+pub enum ConflictPolicyEnum {
+    #[strum(serialize = "ignore")]
+    Ignore,
+    #[strum(serialize = "interrupt")]
+    Interrupt,
+}
+
+impl FromStr for ConflictPolicyEnum {
+    type Err = Error;
+    fn from_str(str: &str) -> Result<Self, Self::Err> {
+        match str {
+            "ignore" => Ok(Self::Ignore),
+            _ => Ok(Self::Interrupt),
+        }
+    }
 }

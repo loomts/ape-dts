@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use dt_common::{
     config::{router_config::RouterConfig, sinker_config::SinkerConfig},
-    meta::postgresql::pg_enums::ConstraintTypeEnum,
+    meta::struct_meta::pg_enums::ConstraintTypeEnum,
 };
 use sqlx::{postgres::PgPoolOptions, query, Pool, Postgres};
 
@@ -24,7 +24,7 @@ impl StructSinker for PgStructSinker {
 
     async fn build_connection(&mut self) -> Result<(), Error> {
         match &self.sinker_config {
-            SinkerConfig::BasicConfig { url, db_type: _ } => {
+            SinkerConfig::BasicConfig { url, .. } => {
                 let db_pool = PgPoolOptions::new().connect(&url).await?;
                 self.pool = Option::Some(db_pool);
             }
@@ -224,6 +224,47 @@ impl StructSinker for PgStructSinker {
                         "schema:[{}.{}] has no ownership.",
                         schema_name, sequence_name
                     );
+                }
+            }
+            StructModel::CommentModel {
+                database_name: _,
+                schema_name,
+                table_name,
+                column_name,
+                comment,
+            } => {
+                if (table_name.is_empty() && column_name.is_empty()) || comment.is_empty() {
+                    return Ok(());
+                }
+                let sql;
+                if !column_name.is_empty() {
+                    sql = format!(
+                        "COMMENT ON COLUMN \"{}\".\"{}\".\"{}\" IS '{}'",
+                        schema_name, table_name, column_name, comment
+                    )
+                } else {
+                    sql = format!(
+                        "COMMENT ON TABLE \"{}\".\"{}\" is '{}'",
+                        schema_name, table_name, comment
+                    )
+                }
+                match query(&sql).execute(pg_pool).await {
+                    Ok(_) => {
+                        return {
+                            println!("create comment sql:[{}],execute success", sql);
+                            Ok(())
+                        }
+                    }
+                    Err(e) => {
+                        return {
+                            println!(
+                                "create comment sql:[{}],execute failed:{}",
+                                sql,
+                                e.to_string()
+                            );
+                            Err(Error::from(e))
+                        }
+                    }
                 }
             }
             _ => {}

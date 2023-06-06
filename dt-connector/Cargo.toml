@@ -1,0 +1,38 @@
+[package]
+name = "dt-connector"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dt-common = {path = "../dt-common", version = "0.1.0"}
+dt-meta = {path = "../dt-meta", version = "0.1.0"}
+
+sqlx = { workspace = true }
+async-trait = { workspace = true }
+async-recursion = { workspace = true }
+async-mutex = { workspace = true }
+rusoto_core = { workspace = true }
+rusoto_sqs = { workspace = true }
+rusoto_s3 = { workspace = true }
+rusoto_credential = { workspace = true }
+tokio-postgres = { workspace = true }
+postgres-protocol = { workspace = true }
+postgres-types= { workspace = true }
+strum = { workspace = true }
+serde ={ workspace = true }
+serde_json = { workspace = true }
+byteorder = { workspace = true }
+mysql-binlog-connector-rust = { workspace = true }
+mongodb = { workspace = true }
+bytes = { workspace = true }
+tokio = { workspace = true }
+concurrent-queue = { workspace = true }
+regex = { workspace = true }
+reqwest = { workspace = true }
+futures = { workspace = true }
+uuid = { workspace = true }
+rdkafka = { workspace = true }
+kafka = { workspace = true }
+url = { workspace = true }
+log = { workspace = true }
+log4rs = { workspace = true }

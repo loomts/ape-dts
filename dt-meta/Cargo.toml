@@ -1,0 +1,25 @@
+[package]
+name = "dt-meta"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dt-common = {path = "../dt-common", version = "0.1.0"}
+
+dotenv = { workspace = true }
+sqlx = { workspace = true }
+strum = { workspace = true }
+project-root = { workspace = true }
+configparser = { workspace = true }
+serde ={ workspace = true }
+serde_json = { workspace = true }
+byteorder = { workspace = true }
+chrono =  { workspace = true }
+mysql-binlog-connector-rust = { workspace = true }
+mongodb = { workspace = true }
+bytes = { workspace = true }
+futures = { workspace = true }
+serde_yaml = { workspace = true }
+regex = { workspace = true }
+nom = { workspace = true }
+tokio = { workspace = true }
