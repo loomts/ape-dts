@@ -1,4 +1,4 @@
-use std::{fmt::Debug, fs::File, io::Read, str::FromStr};
+use std::{collections::HashMap, fmt::Debug, fs::File, io::Read, str::FromStr};
 
 use configparser::ini::Ini;
 
@@ -9,6 +9,7 @@ use super::{
     extractor_config::ExtractorConfig,
     filter_config::FilterConfig,
     pipeline_config::PipelineConfig,
+    resumer_config::ResumerConfig,
     router_config::RouterConfig,
     runtime_config::RuntimeConfig,
     sinker_config::SinkerConfig,
@@ -22,6 +23,7 @@ pub struct TaskConfig {
     pub pipeline: PipelineConfig,
     pub filter: FilterConfig,
     pub router: RouterConfig,
+    pub resumer: ResumerConfig,
 }
 
 const EXTRACTOR: &str = "extractor";
@@ -33,6 +35,7 @@ const PIPELINE: &str = "pipeline";
 const RUNTIME: &str = "runtime";
 const FILTER: &str = "filter";
 const ROUTER: &str = "router";
+const RESUMER: &str = "resumer";
 const BATCH_SIZE: &str = "batch_size";
 
 impl TaskConfig {
@@ -52,6 +55,7 @@ impl TaskConfig {
             runtime: Self::load_runtime_config(&ini).unwrap(),
             filter: Self::load_filter_config(&ini).unwrap(),
             router: Self::load_router_config(&ini).unwrap(),
+            resumer: Self::load_resumer_config(&ini).unwrap(),
         }
     }
 
@@ -253,6 +257,14 @@ impl TaskConfig {
             tb_map: ini.get(ROUTER, "tb_map").unwrap(),
             field_map: ini.get(ROUTER, "field_map").unwrap(),
         })
+    }
+
+    fn load_resumer_config(ini: &Ini) -> Result<ResumerConfig, Error> {
+        let mut resume_values = HashMap::new();
+        if let Some(values) = ini.get_map().unwrap().get(RESUMER) {
+            resume_values = values.clone();
+        }
+        Ok(ResumerConfig { resume_values })
     }
 
     fn get_optional_value<T>(ini: &Ini, section: &str, key: &str) -> T

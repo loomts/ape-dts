@@ -18,11 +18,15 @@ use sqlx::{MySql, Pool};
 
 use dt_common::{error::Error, log_info};
 
-use crate::{extractor::base_extractor::BaseExtractor, sql_util::SqlUtil, Extractor};
+use crate::{
+    extractor::{base_extractor::BaseExtractor, snapshot_resumer::SnapshotResumer},
+    Extractor,
+};
 
 pub struct MysqlSnapshotExtractor<'a> {
     pub conn_pool: Pool<MySql>,
     pub meta_manager: MysqlMetaManager,
+    pub resumer: SnapshotResumer,
     pub buffer: &'a ConcurrentQueue<DtData>,
     pub slice_size: usize,
     pub db: String,
@@ -34,7 +38,7 @@ pub struct MysqlSnapshotExtractor<'a> {
 impl Extractor for MysqlSnapshotExtractor<'_> {
     async fn extract(&mut self) -> Result<(), Error> {
         log_info!(
-            "MysqlSnapshotExtractor starts, schema: {}, tb: {}, slice_size: {}",
+            "MysqlSnapshotExtractor starts, schema: `{}`, tb: `{}`, slice_size: {}",
             self.db,
             self.tb,
             self.slice_size
@@ -56,7 +60,17 @@ impl MysqlSnapshotExtractor<'_> {
 
         if let Some(order_col) = &tb_meta.basic.order_col {
             let order_col_type = tb_meta.col_type_map.get(order_col).unwrap();
-            self.extract_by_slices(&tb_meta, order_col, order_col_type, ColValue::None)
+
+            let resume_value = if let Some(value) = self
+                .resumer
+                .get_resume_value(&self.db, &self.tb, &order_col)
+            {
+                MysqlColValueConvertor::from_str(order_col_type, &value).unwrap()
+            } else {
+                ColValue::None
+            };
+
+            self.extract_by_slices(&tb_meta, order_col, order_col_type, resume_value)
                 .await?;
         } else {
             self.extract_all(&tb_meta).await?;
@@ -67,18 +81,13 @@ impl MysqlSnapshotExtractor<'_> {
 
     async fn extract_all(&mut self, tb_meta: &MysqlTbMeta) -> Result<(), Error> {
         log_info!(
-            "start extracting data from {}.{} without slices",
+            "start extracting data from `{}`.`{}` without slices",
             self.db,
             self.tb
         );
 
-        let sql_util = SqlUtil::new_for_mysql(tb_meta);
         let mut all_count = 0;
-        let sql = format!(
-            "SELECT * FROM {}.{}",
-            sql_util.quote(&self.db),
-            sql_util.quote(&self.tb)
-        );
+        let sql = format!("SELECT * FROM `{}`.`{}`", self.db, self.tb);
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let row_data = RowData::from_mysql_row(&row, &tb_meta);
@@ -89,7 +98,7 @@ impl MysqlSnapshotExtractor<'_> {
         }
 
         log_info!(
-            "end extracting data from {}.{}, all count: {}",
+            "end extracting data from `{}`.`{}`, all count: {}",
             self.db,
             self.tb,
             all_count
@@ -102,28 +111,23 @@ impl MysqlSnapshotExtractor<'_> {
         tb_meta: &MysqlTbMeta,
         order_col: &str,
         order_col_type: &MysqlColType,
-        init_start_value: ColValue,
+        resume_value: ColValue,
     ) -> Result<(), Error> {
         log_info!(
-            "start extracting data from {}.{} by slices",
+            "start extracting data from `{}`.`{}` by slices",
             self.db,
             self.tb
         );
 
-        let sql_util = SqlUtil::new_for_mysql(tb_meta);
-        let db = sql_util.quote(&self.db);
-        let tb = sql_util.quote(&self.tb);
-        let quoted_order_col = sql_util.quote(order_col);
-
         let mut all_count = 0;
-        let mut start_value = init_start_value;
+        let mut start_value = resume_value;
         let sql1 = format!(
-            "SELECT * FROM {}.{} ORDER BY {} ASC LIMIT {}",
-            db, tb, quoted_order_col, self.slice_size
+            "SELECT * FROM `{}`.`{}` ORDER BY `{}` ASC LIMIT {}",
+            self.db, self.tb, order_col, self.slice_size
         );
         let sql2 = format!(
-            "SELECT * FROM {}.{} WHERE {} > ? ORDER BY {} ASC LIMIT {}",
-            db, tb, quoted_order_col, quoted_order_col, self.slice_size
+            "SELECT * FROM `{}`.`{}` WHERE `{}` > ? ORDER BY `{}` ASC LIMIT {}",
+            self.db, self.tb, order_col, order_col, self.slice_size
         );
 
         loop {
@@ -137,12 +141,15 @@ impl MysqlSnapshotExtractor<'_> {
             let mut rows = query.fetch(&self.conn_pool);
             let mut slice_count = 0usize;
             while let Some(row) = rows.try_next().await.unwrap() {
-                let row_data = RowData::from_mysql_row(&row, &tb_meta);
+                let mut row_data = RowData::from_mysql_row(&row, &tb_meta);
+                start_value =
+                    MysqlColValueConvertor::from_query(&row, order_col, order_col_type).unwrap();
+                if let Some(value) = start_value.to_option_string() {
+                    row_data.position = format!("`{}`:{}", order_col, value)
+                }
                 BaseExtractor::push_row(self.buffer, row_data)
                     .await
                     .unwrap();
-                start_value =
-                    MysqlColValueConvertor::from_query(&row, order_col, order_col_type).unwrap();
                 slice_count += 1;
                 all_count += 1;
             }
@@ -154,7 +161,7 @@ impl MysqlSnapshotExtractor<'_> {
         }
 
         log_info!(
-            "end extracting data from {}.{}, all count: {}",
+            "end extracting data from `{}`.`{}`, all count: {}",
             self.db,
             self.tb,
             all_count

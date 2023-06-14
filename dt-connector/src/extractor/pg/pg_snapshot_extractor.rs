@@ -18,11 +18,16 @@ use dt_meta::{
 
 use dt_common::error::Error;
 
-use crate::{extractor::base_extractor::BaseExtractor, sql_util::SqlUtil, Extractor};
+use crate::{
+    extractor::{base_extractor::BaseExtractor, snapshot_resumer::SnapshotResumer},
+    rdb_query_builder::RdbQueryBuilder,
+    Extractor,
+};
 
 pub struct PgSnapshotExtractor<'a> {
     pub conn_pool: Pool<Postgres>,
     pub meta_manager: PgMetaManager,
+    pub resumer: SnapshotResumer,
     pub buffer: &'a ConcurrentQueue<DtData>,
     pub slice_size: usize,
     pub schema: String,
@@ -34,7 +39,7 @@ pub struct PgSnapshotExtractor<'a> {
 impl Extractor for PgSnapshotExtractor<'_> {
     async fn extract(&mut self) -> Result<(), Error> {
         log_info!(
-            "PgSnapshotExtractor starts, schema: {}, tb: {}, slice_size: {}",
+            r#"PgSnapshotExtractor starts, schema: "{}", tb: "{}", slice_size: {}"#,
             self.schema,
             self.tb,
             self.slice_size
@@ -58,14 +63,20 @@ impl PgSnapshotExtractor<'_> {
             .await?;
 
         if let Some(order_col) = &tb_meta.basic.order_col {
-            let order_col_type = tb_meta.col_type_map.get(order_col);
-            self.extract_by_slices(
-                &tb_meta,
-                &order_col,
-                order_col_type.unwrap(),
-                ColValue::None,
-            )
-            .await?;
+            let order_col_type = tb_meta.col_type_map.get(order_col).unwrap();
+
+            let resume_value = if let Some(value) =
+                self.resumer
+                    .get_resume_value(&self.schema, &self.tb, &order_col)
+            {
+                PgColValueConvertor::from_str(order_col_type, &value, &mut self.meta_manager)
+                    .unwrap()
+            } else {
+                ColValue::None
+            };
+
+            self.extract_by_slices(&tb_meta, &order_col, order_col_type, resume_value)
+                .await?;
         } else {
             self.extract_all(&tb_meta).await?;
         }
@@ -75,7 +86,7 @@ impl PgSnapshotExtractor<'_> {
 
     async fn extract_all(&mut self, tb_meta: &PgTbMeta) -> Result<(), Error> {
         log_info!(
-            "start extracting data from {}.{} without slices",
+            r#"start extracting data from "{}"."{}" without slices"#,
             self.schema,
             self.tb
         );
@@ -92,7 +103,7 @@ impl PgSnapshotExtractor<'_> {
         }
 
         log_info!(
-            "end extracting data from {}.{}, all count: {}",
+            r#"end extracting data from "{}"."{}", all count: {}"#,
             self.schema,
             self.tb,
             all_count
@@ -105,16 +116,16 @@ impl PgSnapshotExtractor<'_> {
         tb_meta: &PgTbMeta,
         order_col: &str,
         order_col_type: &PgColType,
-        init_start_value: ColValue,
+        resume_value: ColValue,
     ) -> Result<(), Error> {
         log_info!(
-            "start extracting data from {}.{} by slices",
+            r#"start extracting data from "{}"."{}" by slices"#,
             self.schema,
             self.tb
         );
 
         let mut all_count = 0;
-        let mut start_value = init_start_value;
+        let mut start_value = resume_value;
         let sql1 = self.build_extract_sql(tb_meta, false);
         let sql2 = self.build_extract_sql(tb_meta, true);
         loop {
@@ -128,13 +139,15 @@ impl PgSnapshotExtractor<'_> {
             let mut rows = query.fetch(&self.conn_pool);
             let mut slice_count = 0usize;
             while let Some(row) = rows.try_next().await.unwrap() {
-                let row_data = RowData::from_pg_row(&row, &tb_meta);
+                let mut row_data = RowData::from_pg_row(&row, &tb_meta);
+                start_value =
+                    PgColValueConvertor::from_query(&row, order_col, order_col_type).unwrap();
+                if let Some(value) = start_value.to_option_string() {
+                    row_data.position = format!("{}:{}", order_col, value)
+                }
                 BaseExtractor::push_row(self.buffer, row_data)
                     .await
                     .unwrap();
-
-                start_value =
-                    PgColValueConvertor::from_query(&row, order_col, order_col_type).unwrap();
                 slice_count += 1;
                 all_count += 1;
             }
@@ -146,7 +159,7 @@ impl PgSnapshotExtractor<'_> {
         }
 
         log_info!(
-            "end extracting data from {}.{}, all count: {}",
+            r#"end extracting data from "{}"."{}"", all count: {}"#,
             self.schema,
             self.tb,
             all_count
@@ -155,34 +168,34 @@ impl PgSnapshotExtractor<'_> {
     }
 
     fn build_extract_sql(&mut self, tb_meta: &PgTbMeta, has_start_value: bool) -> String {
-        let sql_util = SqlUtil::new_for_pg(tb_meta);
-        let cols_str = sql_util.build_extract_cols_str().unwrap();
-        let schema = sql_util.quote(&self.schema);
-        let tb = sql_util.quote(&self.tb);
+        let query_builder = RdbQueryBuilder::new_for_pg(tb_meta);
+        let cols_str = query_builder.build_extract_cols_str().unwrap();
 
         // SELECT col_1, col_2::text FROM tb_1 WHERE col_1 > $1 ORDER BY col_1;
         if let Some(order_col) = &tb_meta.basic.order_col {
-            let quoted_order_col = sql_util.quote(&order_col);
             if has_start_value {
                 let order_col_type = tb_meta.col_type_map.get(order_col).unwrap();
                 return format!(
-                    "SELECT {} FROM {}.{} WHERE {} > $1::{} ORDER BY {} ASC LIMIT {}",
+                    r#"SELECT {} FROM "{}"."{}" WHERE "{}" > $1::{} ORDER BY "{}" ASC LIMIT {}"#,
                     cols_str,
-                    schema,
-                    tb,
-                    quoted_order_col,
+                    self.schema,
+                    self.tb,
+                    order_col,
                     order_col_type.short_name,
-                    quoted_order_col,
+                    order_col,
                     self.slice_size
                 );
             } else {
                 return format!(
-                    "SELECT {} FROM {}.{} ORDER BY {} ASC LIMIT {}",
-                    cols_str, schema, tb, quoted_order_col, self.slice_size
+                    r#"SELECT {} FROM "{}"."{}" ORDER BY "{}" ASC LIMIT {}"#,
+                    cols_str, self.schema, self.tb, order_col, self.slice_size
                 );
             }
         } else {
-            return format!("SELECT {} FROM {}.{}", cols_str, schema, tb);
+            return format!(
+                r#"SELECT {} FROM "{}"."{}""#,
+                cols_str, self.schema, self.tb
+            );
         }
     }
 }

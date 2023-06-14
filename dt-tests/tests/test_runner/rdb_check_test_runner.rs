@@ -60,7 +60,7 @@ impl RdbCheckTestRunner {
 
     pub async fn run_revise_test(&self) -> Result<(), Error> {
         self.clear_check_log();
-        self.base.run_snapshot_test().await
+        self.base.run_snapshot_test(true).await
     }
 
     pub async fn run_review_test(&self) -> Result<(), Error> {

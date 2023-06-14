@@ -4,7 +4,7 @@ use strum::{Display, EnumString, IntoStaticStr};
 
 use crate::error::Error;
 
-#[derive(Clone, Display, EnumString, IntoStaticStr)]
+#[derive(Clone, Display, EnumString, IntoStaticStr, Debug)]
 pub enum DbType {
     #[strum(serialize = "mysql")]
     Mysql,

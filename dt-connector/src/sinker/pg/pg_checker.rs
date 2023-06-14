@@ -12,8 +12,8 @@ use sqlx::{Pool, Postgres};
 
 use crate::{
     call_batch_fn, close_conn_pool,
+    rdb_query_builder::RdbQueryBuilder,
     sinker::{base_checker::BaseChecker, base_sinker::BaseSinker, rdb_router::RdbRouter},
-    sql_util::SqlUtil,
     Sinker,
 };
 
@@ -53,10 +53,10 @@ impl PgChecker {
     async fn serial_check(&mut self, data: Vec<RowData>) -> Result<(), Error> {
         for row_data_src in data.iter() {
             let tb_meta = self.get_tb_meta(&row_data_src).await?;
-            let sql_util = SqlUtil::new_for_pg(&tb_meta);
+            let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
 
-            let (sql, cols, binds) = sql_util.get_select_query(row_data_src)?;
-            let query = SqlUtil::create_pg_query(&sql, &cols, &binds, &tb_meta);
+            let (sql, cols, binds) = query_builder.get_select_query(row_data_src)?;
+            let query = query_builder.create_pg_query(&sql, &cols, &binds);
 
             let mut rows = query.fetch(&self.conn_pool);
             if let Some(row) = rows.try_next().await.unwrap() {
@@ -78,11 +78,12 @@ impl PgChecker {
         batch_size: usize,
     ) -> Result<(), Error> {
         let tb_meta = self.get_tb_meta(&data[0]).await?;
-        let sql_util = SqlUtil::new_for_pg(&tb_meta);
+        let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
 
         // build fetch dst sql
-        let (sql, cols, binds) = sql_util.get_batch_select_query(&data, start_index, batch_size)?;
-        let query = SqlUtil::create_pg_query(&sql, &cols, &binds, &tb_meta);
+        let (sql, cols, binds) =
+            query_builder.get_batch_select_query(&data, start_index, batch_size)?;
+        let query = query_builder.create_pg_query(&sql, &cols, &binds);
 
         // fetch dst
         let mut dst_row_data_map = HashMap::new();

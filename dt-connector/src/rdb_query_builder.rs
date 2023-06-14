@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use dt_common::error::Error;
+use dt_common::{config::config_enums::DbType, error::Error, utils::sql_util::SqlUtil};
 use dt_meta::{
     adaptor::{
         pg_col_value_convertor::PgColValueConvertor,
@@ -15,22 +15,49 @@ use dt_meta::{
 };
 use sqlx::{mysql::MySqlArguments, postgres::PgArguments, query::Query, MySql, Postgres};
 
-pub struct SqlUtil<'a> {
-    rdb_tb_meta: RdbTbMeta,
+pub struct RdbQueryBuilder<'a> {
+    rdb_tb_meta: &'a RdbTbMeta,
+    db_type: DbType,
     pg_tb_meta: Option<&'a PgTbMeta>,
+    mysql_tb_meta: Option<&'a MysqlTbMeta>,
 }
 
-impl SqlUtil<'_> {
+impl RdbQueryBuilder<'_> {
+    #[inline(always)]
+    pub fn new_for_mysql(tb_meta: &MysqlTbMeta) -> RdbQueryBuilder {
+        RdbQueryBuilder {
+            rdb_tb_meta: &tb_meta.basic,
+            pg_tb_meta: Option::None,
+            mysql_tb_meta: Some(&tb_meta),
+            db_type: DbType::Mysql,
+        }
+    }
+
+    #[inline(always)]
+    pub fn new_for_pg(tb_meta: &PgTbMeta) -> RdbQueryBuilder {
+        RdbQueryBuilder {
+            rdb_tb_meta: &tb_meta.basic,
+            pg_tb_meta: Some(&tb_meta),
+            mysql_tb_meta: None,
+            db_type: DbType::Pg,
+        }
+    }
+
     #[inline(always)]
     pub fn create_mysql_query<'a>(
+        &self,
         sql: &'a str,
         cols: &'a Vec<String>,
         binds: &'a Vec<Option<&ColValue>>,
-        tb_meta: &MysqlTbMeta,
     ) -> Query<'a, MySql, MySqlArguments> {
         let mut query: Query<MySql, MySqlArguments> = sqlx::query(&sql);
         for i in 0..binds.len() {
-            let col_type = tb_meta.col_type_map.get(&cols[i]).unwrap();
+            let col_type = self
+                .mysql_tb_meta
+                .unwrap()
+                .col_type_map
+                .get(&cols[i])
+                .unwrap();
             query = query.bind_col_value(binds[i], col_type);
         }
         query
@@ -38,33 +65,17 @@ impl SqlUtil<'_> {
 
     #[inline(always)]
     pub fn create_pg_query<'a>(
+        &self,
         sql: &'a str,
         cols: &'a Vec<String>,
         binds: &'a Vec<Option<&ColValue>>,
-        tb_meta: &PgTbMeta,
     ) -> Query<'a, Postgres, PgArguments> {
         let mut query: Query<Postgres, PgArguments> = sqlx::query(sql);
         for i in 0..binds.len() {
-            let col_type = tb_meta.col_type_map.get(&cols[i]).unwrap();
+            let col_type = self.pg_tb_meta.unwrap().col_type_map.get(&cols[i]).unwrap();
             query = query.bind_col_value(binds[i], col_type);
         }
         query
-    }
-
-    #[inline(always)]
-    pub fn new_for_mysql(tb_meta: &MysqlTbMeta) -> SqlUtil {
-        SqlUtil {
-            rdb_tb_meta: tb_meta.basic.clone(),
-            pg_tb_meta: Option::None,
-        }
-    }
-
-    #[inline(always)]
-    pub fn new_for_pg(tb_meta: &PgTbMeta) -> SqlUtil {
-        SqlUtil {
-            rdb_tb_meta: tb_meta.basic.clone(),
-            pg_tb_meta: Some(&tb_meta),
-        }
     }
 
     pub fn get_query_info<'a>(
@@ -98,9 +109,9 @@ impl SqlUtil<'_> {
 
         let sql = format!(
             "DELETE FROM {}.{} WHERE ({}) IN ({})",
-            self.quote(&self.rdb_tb_meta.schema),
-            self.quote(&self.rdb_tb_meta.tb),
-            self.quote_cols(&self.rdb_tb_meta.id_cols).join(","),
+            self.escape(&self.rdb_tb_meta.schema),
+            self.escape(&self.rdb_tb_meta.tb),
+            self.escape_cols(&self.rdb_tb_meta.id_cols).join(","),
             all_placeholders.join(",")
         );
 
@@ -145,9 +156,9 @@ impl SqlUtil<'_> {
 
         let sql = format!(
             "INSERT INTO {}.{}({}) VALUES{}",
-            self.quote(&self.rdb_tb_meta.schema),
-            self.quote(&self.rdb_tb_meta.tb),
-            self.quote_cols(&self.rdb_tb_meta.cols).join(","),
+            self.escape(&self.rdb_tb_meta.schema),
+            self.escape(&self.rdb_tb_meta.tb),
+            self.escape_cols(&self.rdb_tb_meta.cols).join(","),
             row_values.join(",")
         );
 
@@ -175,9 +186,9 @@ impl SqlUtil<'_> {
 
         let sql = format!(
             "INSERT INTO {}.{}({}) VALUES({})",
-            self.quote(&self.rdb_tb_meta.schema),
-            self.quote(&self.rdb_tb_meta.tb),
-            self.quote_cols(&self.rdb_tb_meta.cols).join(","),
+            self.escape(&self.rdb_tb_meta.schema),
+            self.escape(&self.rdb_tb_meta.tb),
+            self.escape_cols(&self.rdb_tb_meta.cols).join(","),
             col_values.join(",")
         );
 
@@ -199,8 +210,8 @@ impl SqlUtil<'_> {
         let (where_sql, not_null_cols) = self.get_where_info(1, &before)?;
         let mut sql = format!(
             "DELETE FROM {}.{} WHERE {}",
-            self.quote(&self.rdb_tb_meta.schema),
-            self.quote(&self.rdb_tb_meta.tb),
+            self.escape(&self.rdb_tb_meta.schema),
+            self.escape(&self.rdb_tb_meta.tb),
             where_sql
         );
         if self.rdb_tb_meta.key_map.is_empty() {
@@ -230,7 +241,7 @@ impl SqlUtil<'_> {
             set_cols.push(col.clone());
             set_pairs.push(format!(
                 "{}={}",
-                self.quote(col),
+                self.escape(col),
                 self.get_placeholder(placeholder_index, col)
             ));
             placeholder_index += 1;
@@ -248,8 +259,8 @@ impl SqlUtil<'_> {
         let (where_sql, not_null_cols) = self.get_where_info(placeholder_index, &before)?;
         let mut sql = format!(
             "UPDATE {}.{} SET {} WHERE {}",
-            self.quote(&self.rdb_tb_meta.schema),
-            self.quote(&self.rdb_tb_meta.tb),
+            self.escape(&self.rdb_tb_meta.schema),
+            self.escape(&self.rdb_tb_meta.tb),
             set_pairs.join(","),
             where_sql,
         );
@@ -278,8 +289,8 @@ impl SqlUtil<'_> {
         let mut sql = format!(
             "SELECT {} FROM {}.{} WHERE {}",
             self.build_extract_cols_str()?,
-            self.quote(&self.rdb_tb_meta.schema),
-            self.quote(&self.rdb_tb_meta.tb),
+            self.escape(&self.rdb_tb_meta.schema),
+            self.escape(&self.rdb_tb_meta.tb),
             where_sql,
         );
 
@@ -306,8 +317,8 @@ impl SqlUtil<'_> {
         let sql = format!(
             "SELECT {} FROM {}.{} WHERE {}",
             self.build_extract_cols_str()?,
-            self.rdb_tb_meta.schema,
-            self.rdb_tb_meta.tb,
+            self.escape(&self.rdb_tb_meta.schema),
+            self.escape(&self.rdb_tb_meta.tb),
             where_sql,
         );
 
@@ -340,9 +351,9 @@ impl SqlUtil<'_> {
                 let col_type = tb_meta.col_type_map.get(col).unwrap();
                 let extract_type = PgColValueConvertor::get_extract_type(col_type);
                 let extract_col = if extract_type.is_empty() {
-                    self.quote(col)
+                    self.escape(col)
                 } else {
-                    format!("{}::{}", self.quote(col), extract_type)
+                    format!("{}::{}", self.escape(col), extract_type)
                 };
                 extract_cols.push(extract_col);
             }
@@ -364,22 +375,22 @@ impl SqlUtil<'_> {
                 where_sql += " AND";
             }
 
-            let quoted_col = self.quote(&col);
+            let escaped_col = self.escape(&col);
             let col_value = col_value_map.get(col);
             if let Some(value) = col_value {
                 if *value == ColValue::None {
-                    where_sql = format!("{} {} IS NULL", where_sql, quoted_col);
+                    where_sql = format!("{} {} IS NULL", where_sql, escaped_col);
                 } else {
                     where_sql = format!(
                         "{} {} = {}",
                         where_sql,
-                        quoted_col,
+                        escaped_col,
                         self.get_placeholder(placeholder_index, col)
                     );
                     not_null_cols.push(col.clone());
                 }
             } else {
-                where_sql = format!("{} {} IS NULL", where_sql, quoted_col);
+                where_sql = format!("{} {} IS NULL", where_sql, escaped_col);
             }
 
             placeholder_index += 1;
@@ -401,7 +412,7 @@ impl SqlUtil<'_> {
 
         Ok(format!(
             "({}) IN ({})",
-            self.quote_cols(&self.rdb_tb_meta.id_cols).join(","),
+            self.escape_cols(&self.rdb_tb_meta.id_cols).join(","),
             all_placeholders.join(",")
         ))
     }
@@ -410,7 +421,7 @@ impl SqlUtil<'_> {
     pub fn get_placeholder(&self, index: usize, col: &str) -> String {
         if let Some(tb_meta) = self.pg_tb_meta {
             let col_type = tb_meta.col_type_map.get(col).unwrap();
-            // workaround for types like bit(3)
+            // TODO: workaround for types like bit(3)
             let col_type_name = if col_type.short_name == "bit" {
                 "varbit"
             } else {
@@ -422,18 +433,11 @@ impl SqlUtil<'_> {
         "?".to_string()
     }
 
-    pub fn quote(&self, origin: &str) -> String {
-        if let Some(_tb_meta) = self.pg_tb_meta {
-            return format!(r#""{}""#, origin);
-        }
-        format!(r#"`{}`"#, origin)
+    fn escape(&self, origin: &str) -> String {
+        SqlUtil::escape_by_db_type(origin, &self.db_type)
     }
 
-    pub fn quote_cols(&self, cols: &Vec<String>) -> Vec<String> {
-        let mut quoted_cols = Vec::new();
-        for col in cols {
-            quoted_cols.push(self.quote(col));
-        }
-        quoted_cols
+    fn escape_cols(&self, cols: &Vec<String>) -> Vec<String> {
+        SqlUtil::escape_cols(cols, &self.db_type)
     }
 }

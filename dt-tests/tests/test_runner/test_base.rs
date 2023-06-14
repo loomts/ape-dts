@@ -1,5 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
+use futures::executor::block_on;
+
+use crate::test_runner::rdb_test_runner::DST;
+
 use super::{
     mongo_test_runner::MongoTestRunner, rdb_check_test_runner::RdbCheckTestRunner,
     rdb_precheck_test_runner::RdbPrecheckTestRunner, rdb_struct_test_runner::RdbStructTestRunner,
@@ -12,7 +16,24 @@ pub struct TestBase {}
 impl TestBase {
     pub async fn run_snapshot_test(test_dir: &str) {
         let runner = RdbTestRunner::new(test_dir).await.unwrap();
-        runner.run_snapshot_test().await.unwrap();
+        runner.run_snapshot_test(true).await.unwrap();
+    }
+
+    pub async fn run_snapshot_test_and_check_dst_count(
+        test_dir: &str,
+        dst_expected_counts: HashMap<&str, usize>,
+    ) {
+        let runner = RdbTestRunner::new(test_dir).await.unwrap();
+        runner.run_snapshot_test(false).await.unwrap();
+
+        let assert_dst_count = |tb: &str, count: usize| {
+            let dst_data = block_on(runner.fetch_data(tb, DST)).unwrap();
+            assert_eq!(dst_data.len(), count);
+        };
+
+        for (tb, count) in dst_expected_counts.iter() {
+            assert_dst_count(tb, *count);
+        }
     }
 
     pub async fn run_cdc_test(test_dir: &str, start_millis: u64, parse_millis: u64) {
@@ -42,7 +63,24 @@ impl TestBase {
 
     pub async fn run_mongo_snapshot_test(test_dir: &str) {
         let runner = MongoTestRunner::new(test_dir).await.unwrap();
-        runner.run_snapshot_test().await.unwrap();
+        runner.run_snapshot_test(true).await.unwrap();
+    }
+
+    pub async fn run_mongo_snapshot_test_and_check_dst_count(
+        test_dir: &str,
+        dst_expected_counts: HashMap<(&str, &str), usize>,
+    ) {
+        let runner = MongoTestRunner::new(test_dir).await.unwrap();
+        runner.run_snapshot_test(false).await.unwrap();
+
+        let assert_dst_count = |db: &str, tb: &str, count: usize| {
+            let dst_data = block_on(runner.fetch_data(db, tb, DST));
+            assert_eq!(dst_data.len(), count);
+        };
+
+        for ((db, tb), count) in dst_expected_counts.iter() {
+            assert_dst_count(db, tb, *count);
+        }
     }
 
     pub async fn run_mongo_cdc_test(test_dir: &str, start_millis: u64, parse_millis: u64) {
