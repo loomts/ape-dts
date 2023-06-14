@@ -1,11 +1,12 @@
 use dt_common::{
     config::{
+        config_enums::DbType, config_token_parser::ConfigTokenParser,
         extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
     },
     error::Error,
-    utils::time_util::TimeUtil,
+    utils::{sql_util::SqlUtil, time_util::TimeUtil},
 };
-use dt_connector::sql_util::SqlUtil;
+use dt_connector::rdb_query_builder::RdbQueryBuilder;
 use dt_meta::{mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager};
 use dt_task::task_util::TaskUtil;
 use futures::TryStreamExt;
@@ -23,8 +24,8 @@ pub struct RdbTestRunner {
     pub dst_conn_pool_pg: Option<Pool<Postgres>>,
 }
 
-const SRC: &str = "src";
-const DST: &str = "dst";
+pub const SRC: &str = "src";
+pub const DST: &str = "dst";
 
 #[allow(dead_code)]
 impl RdbTestRunner {
@@ -81,7 +82,7 @@ impl RdbTestRunner {
         })
     }
 
-    pub async fn run_snapshot_test(&self) -> Result<(), Error> {
+    pub async fn run_snapshot_test(&self, compare_data: bool) -> Result<(), Error> {
         let (src_tbs, dst_tbs, cols_list) = Self::parse_ddl(&self.base.src_ddl_sqls).unwrap();
 
         // prepare src and dst tables
@@ -90,10 +91,15 @@ impl RdbTestRunner {
 
         // start task
         self.base.start_task().await?;
-        assert!(
-            self.compare_data_for_tbs(&src_tbs, &dst_tbs, &cols_list)
-                .await?
-        );
+
+        // compare data
+        if compare_data {
+            assert!(
+                self.compare_data_for_tbs(&src_tbs, &dst_tbs, &cols_list)
+                    .await?
+            );
+        }
+
         Ok(())
     }
 
@@ -233,7 +239,7 @@ impl RdbTestRunner {
             let src_tb = &src_tbs[i];
             let dst_tb = &dst_tbs[i];
             if filtered_tbs.contains(src_tb) {
-                let dst_data = self.fetch_data(&dst_tb, "dst").await?;
+                let dst_data = self.fetch_data(&dst_tb, DST).await?;
                 if dst_data.len() > 0 {
                     return Ok(false);
                 }
@@ -295,7 +301,11 @@ impl RdbTestRunner {
         true
     }
 
-    async fn fetch_data(&self, tb: &str, from: &str) -> Result<Vec<Vec<Option<Vec<u8>>>>, Error> {
+    pub async fn fetch_data(
+        &self,
+        full_tb_name: &str,
+        from: &str,
+    ) -> Result<Vec<Vec<Option<Vec<u8>>>>, Error> {
         let conn_pool_mysql = if from == SRC {
             &self.src_conn_pool_mysql
         } else {
@@ -309,50 +319,41 @@ impl RdbTestRunner {
         };
 
         let data = if let Some(pool) = conn_pool_mysql {
-            self.fetch_data_mysql(tb, pool).await?
+            self.fetch_data_mysql(full_tb_name, pool).await?
         } else if let Some(pool) = conn_pool_pg {
-            self.fetch_data_pg(tb, pool).await?
+            self.fetch_data_pg(full_tb_name, pool).await?
         } else {
             Vec::new()
         };
         Ok(data)
     }
 
-    async fn fetch_dst_data(&self, tb: &str) -> Result<Vec<Vec<Option<Vec<u8>>>>, Error> {
-        let data = if let Some(pool) = &self.dst_conn_pool_mysql {
-            self.fetch_data_mysql(tb, pool).await?
-        } else if let Some(pool) = &self.dst_conn_pool_pg {
-            self.fetch_data_pg(tb, pool).await?
+    fn parse_full_tb_name(full_tb_name: &str, db_type: DbType) -> (String, String) {
+        let escape_pairs = SqlUtil::get_escape_pairs(&db_type);
+        let tokens = ConfigTokenParser::parse(full_tb_name, &vec!['.'], &escape_pairs);
+        let (db, tb) = if tokens.len() > 1 {
+            (tokens[0].to_string(), tokens[1].to_string())
         } else {
-            Vec::new()
+            ("".to_string(), full_tb_name.to_string())
         };
-        Ok(data)
+
+        (
+            SqlUtil::unescape(&db, &escape_pairs[0]),
+            SqlUtil::unescape(&tb, &escape_pairs[0]),
+        )
     }
 
     async fn fetch_data_mysql(
         &self,
-        tb: &str,
+        full_tb_name: &str,
         conn_pool: &Pool<MySql>,
     ) -> Result<Vec<Vec<Option<Vec<u8>>>>, Error> {
-        let tokens: Vec<&str> = tb.split(".").collect();
-        let mut db = "";
-        let mut tb = "";
-        if tokens.len() > 1 {
-            db = tokens[0];
-            tb = tokens[1];
-        }
-
+        let (db, tb) = Self::parse_full_tb_name(full_tb_name, DbType::Mysql);
         let mut meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
-        let tb_meta = meta_manager.get_tb_meta(db, tb).await?;
+        let tb_meta = meta_manager.get_tb_meta(&db, &tb).await?;
         let cols = &tb_meta.basic.cols;
-        let sql_util = SqlUtil::new_for_mysql(&tb_meta);
 
-        let sql = format!(
-            "SELECT * FROM {}.{} ORDER BY {}",
-            sql_util.quote(db),
-            sql_util.quote(tb),
-            sql_util.quote(&cols[0])
-        );
+        let sql = format!("SELECT * FROM `{}`.`{}` ORDER BY `{}`", &db, &tb, &cols[0],);
         let query = sqlx::query(&sql);
         let mut rows = query.fetch(conn_pool);
 
@@ -371,29 +372,22 @@ impl RdbTestRunner {
 
     async fn fetch_data_pg(
         &self,
-        tb: &str,
+        full_tb_name: &str,
         conn_pool: &Pool<Postgres>,
     ) -> Result<Vec<Vec<Option<Vec<u8>>>>, Error> {
-        let mut db = "public";
-        let mut tb = tb;
-        let tokens: Vec<&str> = tb.split(".").collect();
-        if tokens.len() > 1 {
-            db = tokens[0];
-            tb = tokens[1];
+        let (mut db, tb) = Self::parse_full_tb_name(full_tb_name, DbType::Pg);
+        if db.is_empty() {
+            db = "public".to_string();
         }
-
         let mut meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
-        let tb_meta = meta_manager.get_tb_meta(db, tb).await?;
+        let tb_meta = meta_manager.get_tb_meta(&db, &tb).await?;
         let cols = &tb_meta.basic.cols;
-        let sql_util = SqlUtil::new_for_pg(&tb_meta);
-        let cols_str = sql_util.build_extract_cols_str().unwrap();
+        let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
+        let cols_str = query_builder.build_extract_cols_str().unwrap();
 
         let sql = format!(
-            "SELECT {} FROM {}.{} ORDER BY {} ASC",
-            cols_str,
-            sql_util.quote(db),
-            sql_util.quote(tb),
-            sql_util.quote(&cols[0])
+            r#"SELECT {} FROM "{}"."{}" ORDER BY "{}" ASC"#,
+            cols_str, &db, &tb, &cols[0],
         );
         let query = sqlx::query(&sql);
         let mut rows = query.fetch(conn_pool);

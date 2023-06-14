@@ -38,7 +38,7 @@ impl PgMetaManager {
 
     pub fn update_tb_meta_by_oid(&mut self, oid: i32, tb_meta: PgTbMeta) -> Result<(), Error> {
         self.oid_to_tb_meta.insert(oid, tb_meta.clone());
-        let full_name = format!("{}.{}", &tb_meta.basic.schema, &tb_meta.basic.tb);
+        let full_name = format!(r#""{}"."{}""#, &tb_meta.basic.schema, &tb_meta.basic.tb);
         self.name_to_tb_meta.insert(full_name, tb_meta);
         Ok(())
     }
@@ -48,7 +48,7 @@ impl PgMetaManager {
     }
 
     pub async fn get_tb_meta(&mut self, schema: &str, tb: &str) -> Result<PgTbMeta, Error> {
-        let full_name = format!("{}.{}", schema, tb);
+        let full_name = format!(r#""{}"."{}""#, schema, tb);
         if let Some(tb_meta) = self.name_to_tb_meta.get(&full_name) {
             return Ok(tb_meta.clone());
         }
@@ -178,7 +178,7 @@ impl PgMetaManager {
     }
 
     async fn get_oid(&self, schema: &str, tb: &str) -> Result<i32, Error> {
-        let sql = format!("SELECT '{}.{}'::regclass::oid;", schema, tb);
+        let sql = format!(r#"SELECT '"{}"."{}"'::regclass::oid;"#, schema, tb);
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         if let Some(row) = rows.try_next().await.unwrap() {
             let oid: i32 = row.try_get_unchecked("oid")?;

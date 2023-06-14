@@ -13,9 +13,13 @@ use mongodb::{
     Client,
 };
 
-use crate::{extractor::base_extractor::BaseExtractor, Extractor};
+use crate::{
+    extractor::{base_extractor::BaseExtractor, snapshot_resumer::SnapshotResumer},
+    Extractor,
+};
 
 pub struct MongoSnapshotExtractor<'a> {
+    pub resumer: SnapshotResumer,
     pub buffer: &'a ConcurrentQueue<DtData>,
     pub db: String,
     pub tb: String,
@@ -42,15 +46,15 @@ impl Extractor for MongoSnapshotExtractor<'_> {
 impl MongoSnapshotExtractor<'_> {
     pub async fn extract_internal(&mut self) -> Result<(), Error> {
         log_info!("start extracting data from {}.{}", self.db, self.tb);
-        // TODO, get from task_config.ini
-        let init_start_value = "";
 
-        // filter
-        let filter = if init_start_value.is_empty() {
-            None
-        } else {
-            let start_id = ObjectId::parse_str(init_start_value).unwrap();
+        let filter = if let Some(resume_value) =
+            self.resumer
+                .get_resume_value(&self.db, &self.tb, MongoConstants::ID)
+        {
+            let start_id = ObjectId::parse_str(resume_value).unwrap();
             Some(doc! {MongoConstants::ID: {"$gt": start_id}})
+        } else {
+            None
         };
 
         // order by asc
@@ -66,6 +70,7 @@ impl MongoSnapshotExtractor<'_> {
         let mut cursor = collection.find(filter, find_options).await.unwrap();
         while cursor.advance().await.unwrap() {
             let doc = cursor.deserialize_current().unwrap();
+
             let id = doc.get_object_id(MongoConstants::ID).unwrap().to_string();
 
             let mut after = HashMap::new();
@@ -74,7 +79,7 @@ impl MongoSnapshotExtractor<'_> {
                 schema: self.db.clone(),
                 tb: self.tb.clone(),
                 row_type: RowType::Insert,
-                position: id,
+                position: format!("{}:{}", MongoConstants::ID, id),
                 after: Some(after),
                 before: None,
             };

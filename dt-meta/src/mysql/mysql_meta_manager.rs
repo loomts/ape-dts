@@ -72,7 +72,7 @@ impl<'a> MysqlMetaManager {
         let mut cols = Vec::new();
         let mut col_type_map = HashMap::new();
 
-        let sql = format!("DESC {}.{}", schema, tb);
+        let sql = format!("DESC `{}`.`{}`", schema, tb);
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let col_name: String = row.try_get("Field")?;
@@ -93,7 +93,7 @@ impl<'a> MysqlMetaManager {
 
         if cols.is_empty() {
             return Err(Error::MetadataError {
-                error: format!("failed to get table metadata for: {}.{}", schema, tb),
+                error: format!("failed to get table metadata for: `{}`.`{}`", schema, tb),
             });
         }
         Ok((cols, col_type_map))
@@ -206,7 +206,7 @@ impl<'a> MysqlMetaManager {
         tb: &str,
     ) -> Result<HashMap<String, Vec<String>>, Error> {
         let mut key_map: HashMap<String, Vec<String>> = HashMap::new();
-        let sql = format!("SHOW INDEXES FROM {}.{}", schema, tb);
+        let sql = format!("SHOW INDEXES FROM `{}`.`{}`", schema, tb);
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let non_unique: i8 = row.try_get("Non_unique")?;

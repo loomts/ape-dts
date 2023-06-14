@@ -7,12 +7,16 @@ use std::{
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
     config::{
-        extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
+        config_enums::DbType, extractor_config::ExtractorConfig, sinker_config::SinkerConfig,
+        task_config::TaskConfig,
     },
     error::Error,
     syncer::Syncer,
 };
-use dt_connector::{extractor::rdb_filter::RdbFilter, Extractor};
+use dt_connector::{
+    extractor::{rdb_filter::RdbFilter, snapshot_resumer::SnapshotResumer},
+    Extractor,
+};
 use dt_meta::{dt_data::DtData, row_type::RowType};
 use dt_pipeline::pipeline::Pipeline;
 use futures::future::join;
@@ -56,7 +60,7 @@ impl TaskRunner {
 
     async fn start_multi_task(&self, url: &str) -> Result<(), Error> {
         let db_type = self.config.extractor.get_db_type();
-        let mut filter = RdbFilter::from_config(&self.config.filter)?;
+        let mut filter = RdbFilter::from_config(&self.config.filter, db_type.clone())?;
         let dbs = ExtractorUtil::list_dbs(url, &db_type).await?;
         for db in dbs.iter() {
             if filter.filter_db(db) {
@@ -162,6 +166,11 @@ impl TaskRunner {
         shut_down: &'a AtomicBool,
         syncer: Arc<Mutex<Syncer>>,
     ) -> Result<Box<dyn Extractor + 'a + Send>, Error> {
+        let resumer = SnapshotResumer {
+            resumer_values: self.config.resumer.resume_values.clone(),
+            db_type: extractor_config.get_db_type(),
+        };
+
         let extractor: Box<dyn Extractor + Send> = match extractor_config {
             ExtractorConfig::MysqlSnapshot { url, db, tb } => {
                 let extractor = ExtractorUtil::create_mysql_snapshot_extractor(
@@ -169,6 +178,7 @@ impl TaskRunner {
                     db,
                     tb,
                     self.config.pipeline.buffer_size,
+                    resumer.clone(),
                     &buffer,
                     &self.config.runtime.log_level,
                     &shut_down,
@@ -200,7 +210,7 @@ impl TaskRunner {
                 binlog_position,
                 server_id,
             } => {
-                let filter = RdbFilter::from_config(&self.config.filter)?;
+                let filter = RdbFilter::from_config(&self.config.filter, DbType::Mysql)?;
                 let extractor = ExtractorUtil::create_mysql_cdc_extractor(
                     &url,
                     &binlog_filename,
@@ -221,6 +231,7 @@ impl TaskRunner {
                     db,
                     tb,
                     self.config.pipeline.buffer_size,
+                    resumer.clone(),
                     &buffer,
                     &self.config.runtime.log_level,
                     &shut_down,
@@ -252,7 +263,7 @@ impl TaskRunner {
                 start_lsn,
                 heartbeat_interval_secs,
             } => {
-                let filter = RdbFilter::from_config(&self.config.filter)?;
+                let filter = RdbFilter::from_config(&self.config.filter, DbType::Pg)?;
                 let extractor = ExtractorUtil::create_pg_cdc_extractor(
                     &url,
                     &slot_name,
@@ -269,14 +280,20 @@ impl TaskRunner {
             }
 
             ExtractorConfig::MongoSnapshot { url, db, tb } => {
-                let extractor =
-                    ExtractorUtil::create_mongo_snapshot_extractor(url, db, tb, buffer, shut_down)
-                        .await?;
+                let extractor = ExtractorUtil::create_mongo_snapshot_extractor(
+                    url,
+                    db,
+                    tb,
+                    resumer.clone(),
+                    buffer,
+                    shut_down,
+                )
+                .await?;
                 Box::new(extractor)
             }
 
             ExtractorConfig::MongoCdc { url, resume_token } => {
-                let filter = RdbFilter::from_config(&self.config.filter)?;
+                let filter = RdbFilter::from_config(&self.config.filter, DbType::Mongo)?;
                 let extractor = ExtractorUtil::create_mongo_cdc_extractor(
                     url,
                     resume_token,
@@ -289,7 +306,7 @@ impl TaskRunner {
             }
 
             ExtractorConfig::MysqlBasic { url, db } => {
-                let filter = RdbFilter::from_config(&self.config.filter)?;
+                let filter = RdbFilter::from_config(&self.config.filter, DbType::Mysql)?;
                 let extractor = ExtractorUtil::create_mysql_struct_extractor(
                     url,
                     db,
@@ -303,7 +320,7 @@ impl TaskRunner {
             }
 
             ExtractorConfig::PgBasic { url, db } => {
-                let filter = RdbFilter::from_config(&self.config.filter)?;
+                let filter = RdbFilter::from_config(&self.config.filter, DbType::Pg)?;
                 let extractor = ExtractorUtil::create_pg_struct_extractor(
                     url,
                     db,

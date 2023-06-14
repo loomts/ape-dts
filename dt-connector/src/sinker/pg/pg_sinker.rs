@@ -1,11 +1,11 @@
 use crate::{
     call_batch_fn, close_conn_pool,
+    rdb_query_builder::RdbQueryBuilder,
     sinker::{base_sinker::BaseSinker, rdb_router::RdbRouter},
-    sql_util::SqlUtil,
     Sinker,
 };
 
-use dt_common::{error::Error, log_error};
+use dt_common::{config::config_enums::DbType, error::Error, log_error, utils::sql_util::SqlUtil};
 use sqlx::{Pool, Postgres};
 
 use dt_meta::{
@@ -62,14 +62,14 @@ impl PgSinker {
     async fn serial_sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
         for row_data in data.iter() {
             let tb_meta = self.get_tb_meta(&row_data).await?;
-            let sql_util = SqlUtil::new_for_pg(&tb_meta);
+            let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
 
             let (sql, cols, binds) = if row_data.row_type == RowType::Insert {
-                self.get_insert_query(&sql_util, &tb_meta, row_data)?
+                self.get_insert_query(&query_builder, &tb_meta, row_data)?
             } else {
-                sql_util.get_query_info(&row_data)?
+                query_builder.get_query_info(&row_data)?
             };
-            let query = SqlUtil::create_pg_query(&sql, &cols, &binds, &tb_meta);
+            let query = query_builder.create_pg_query(&sql, &cols, &binds);
             query.execute(&self.conn_pool).await.unwrap();
         }
         Ok(())
@@ -82,10 +82,11 @@ impl PgSinker {
         batch_size: usize,
     ) -> Result<(), Error> {
         let tb_meta = self.get_tb_meta(&data[0]).await?;
-        let sql_util = SqlUtil::new_for_pg(&tb_meta);
+        let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
 
-        let (sql, cols, binds) = sql_util.get_batch_delete_query(&data, start_index, batch_size)?;
-        let query = SqlUtil::create_pg_query(&sql, &cols, &binds, &tb_meta);
+        let (sql, cols, binds) =
+            query_builder.get_batch_delete_query(&data, start_index, batch_size)?;
+        let query = query_builder.create_pg_query(&sql, &cols, &binds);
 
         query.execute(&self.conn_pool).await.unwrap();
         Ok(())
@@ -98,10 +99,11 @@ impl PgSinker {
         batch_size: usize,
     ) -> Result<(), Error> {
         let tb_meta = self.get_tb_meta(&data[0]).await?;
-        let sql_util = SqlUtil::new_for_pg(&tb_meta);
+        let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
 
-        let (sql, cols, binds) = sql_util.get_batch_insert_query(&data, start_index, batch_size)?;
-        let query = SqlUtil::create_pg_query(&sql, &cols, &binds, &tb_meta);
+        let (sql, cols, binds) =
+            query_builder.get_batch_insert_query(&data, start_index, batch_size)?;
+        let query = query_builder.create_pg_query(&sql, &cols, &binds);
 
         let result = query.execute(&self.conn_pool).await;
         if let Err(error) = result {
@@ -119,20 +121,20 @@ impl PgSinker {
 
     fn get_insert_query<'a>(
         &self,
-        sql_util: &SqlUtil,
+        query_builder: &RdbQueryBuilder,
         tb_meta: &PgTbMeta,
         row_data: &'a RowData,
     ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
-        let (mut sql, mut cols, mut binds) = sql_util.get_insert_query(row_data)?;
+        let (mut sql, mut cols, mut binds) = query_builder.get_insert_query(row_data)?;
 
         let mut placeholder_index = cols.len() + 1;
         let after = row_data.after.as_ref().unwrap();
         let mut set_pairs = Vec::new();
         for col in tb_meta.basic.cols.iter() {
             let set_pair = format!(
-                "{}={}",
-                sql_util.quote(&col),
-                sql_util.get_placeholder(placeholder_index, col)
+                r#""{}"={}"#,
+                col,
+                query_builder.get_placeholder(placeholder_index, col)
             );
             set_pairs.push(set_pair);
             cols.push(col.clone());
@@ -143,7 +145,7 @@ impl PgSinker {
         sql = format!(
             "{} ON CONFLICT ({}) DO UPDATE SET {}",
             sql,
-            sql_util.quote_cols(&tb_meta.basic.id_cols).join(","),
+            SqlUtil::escape_cols(&tb_meta.basic.id_cols, &DbType::Pg).join(","),
             set_pairs.join(",")
         );
         Ok((sql, cols, binds))

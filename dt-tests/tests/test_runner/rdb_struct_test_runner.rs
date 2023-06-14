@@ -137,7 +137,8 @@ impl RdbStructTestRunner {
         AtomicBool,
     ) {
         let config = TaskConfig::new(&self.base.base.task_config_file);
-        let filter = RdbFilter::from_config(&config.filter).unwrap();
+        let filter =
+            RdbFilter::from_config(&config.filter, config.extractor.get_db_type()).unwrap();
         let buffer: ConcurrentQueue<DtData> = ConcurrentQueue::bounded(10000);
         let shut_down = AtomicBool::new(false);
         let log_level = "info".to_string();

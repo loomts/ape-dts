@@ -16,6 +16,7 @@ use dt_connector::extractor::{
         pg_snapshot_extractor::PgSnapshotExtractor, pg_struct_extractor::PgStructExtractor,
     },
     rdb_filter::RdbFilter,
+    snapshot_resumer::SnapshotResumer,
 };
 use dt_meta::{
     dt_data::DtData, mysql::mysql_meta_manager::MysqlMetaManager,
@@ -111,7 +112,7 @@ impl ExtractorUtil {
         let mut tbs = Vec::new();
         let conn_pool = TaskUtil::create_mysql_conn_pool(url, 1, false).await?;
 
-        let sql = format!("SHOW TABLES IN {}", db);
+        let sql = format!("SHOW TABLES IN `{}`", db);
         let mut rows = sqlx::query(&sql).fetch(&conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let tb: String = row.try_get(0)?;
@@ -195,6 +196,7 @@ impl ExtractorUtil {
         db: &str,
         tb: &str,
         slice_size: usize,
+        resumer: SnapshotResumer,
         buffer: &'a ConcurrentQueue<DtData>,
         log_level: &str,
         shut_down: &'a AtomicBool,
@@ -207,6 +209,7 @@ impl ExtractorUtil {
         Ok(MysqlSnapshotExtractor {
             conn_pool: conn_pool.clone(),
             meta_manager,
+            resumer,
             buffer,
             db: db.to_string(),
             tb: tb.to_string(),
@@ -264,6 +267,7 @@ impl ExtractorUtil {
         db: &str,
         tb: &str,
         slice_size: usize,
+        resumer: SnapshotResumer,
         buffer: &'a ConcurrentQueue<DtData>,
         log_level: &str,
         shut_down: &'a AtomicBool,
@@ -275,6 +279,7 @@ impl ExtractorUtil {
         Ok(PgSnapshotExtractor {
             conn_pool: conn_pool.clone(),
             meta_manager,
+            resumer,
             buffer,
             slice_size,
             schema: db.to_string(),
@@ -287,12 +292,14 @@ impl ExtractorUtil {
         url: &str,
         db: &str,
         tb: &str,
+        resumer: SnapshotResumer,
         buffer: &'a ConcurrentQueue<DtData>,
         shut_down: &'a AtomicBool,
     ) -> Result<MongoSnapshotExtractor<'a>, Error> {
         let mongo_client = TaskUtil::create_mongo_client(url).await.unwrap();
         Ok(MongoSnapshotExtractor {
             buffer,
+            resumer,
             db: db.to_string(),
             tb: tb.to_string(),
             shut_down: &shut_down,

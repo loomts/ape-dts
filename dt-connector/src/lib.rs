@@ -1,7 +1,7 @@
 pub mod check_log;
 pub mod extractor;
+pub mod rdb_query_builder;
 pub mod sinker;
-pub mod sql_util;
 
 use async_trait::async_trait;
 use check_log::check_log::CheckLog;

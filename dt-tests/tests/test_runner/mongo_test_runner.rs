@@ -24,6 +24,9 @@ pub struct MongoTestRunner {
     dst_mongo_client: Option<Client>,
 }
 
+pub const SRC: &str = "src";
+pub const DST: &str = "dst";
+
 #[allow(dead_code)]
 impl MongoTestRunner {
     pub async fn new(relative_test_dir: &str) -> Result<Self, Error> {
@@ -102,7 +105,7 @@ impl MongoTestRunner {
         self.base.wait_task_finish(&task).await
     }
 
-    pub async fn run_snapshot_test(&self) -> Result<(), Error> {
+    pub async fn run_snapshot_test(&self, compare_data: bool) -> Result<(), Error> {
         self.execute_test_ddl_sqls().await?;
 
         let src_mongo_client = self.src_mongo_client.as_ref().unwrap();
@@ -112,7 +115,10 @@ impl MongoTestRunner {
 
         self.base.start_task().await?;
 
-        self.compare_data_for_tbs().await;
+        if compare_data {
+            self.compare_data_for_tbs().await;
+        }
+
         Ok(())
     }
 
@@ -219,12 +225,13 @@ impl MongoTestRunner {
     }
 
     async fn execute_insert(&self, client: &Client, db: &str, sql: &str) -> Result<(), Error> {
+        // example: db.tb_2.insertOne({ "name": "a", "age": "1" })
         let re = Regex::new(r"db.(\w+).insertOne\(([\w\W]+)\)").unwrap();
         let cap = re.captures(sql).unwrap();
         let tb = cap.get(1).unwrap().as_str();
-        let doc = cap.get(2).unwrap().as_str();
+        let doc_content = cap.get(2).unwrap().as_str();
 
-        let doc = Document::from(serde_json::from_str(doc).unwrap());
+        let doc = Document::from(serde_json::from_str(doc_content).unwrap());
         client
             .database(db)
             .collection::<Document>(tb)
@@ -277,11 +284,8 @@ impl MongoTestRunner {
     }
 
     async fn compare_tb_data(&self, db: &str, tb: &str) {
-        let src_mongo_client = self.src_mongo_client.as_ref().unwrap();
-        let dst_mongo_client = self.dst_mongo_client.as_ref().unwrap();
-
-        let src_data = self.fetch_data(src_mongo_client, db, tb).await;
-        let dst_data = self.fetch_data(dst_mongo_client, db, tb).await;
+        let src_data = self.fetch_data(db, tb, SRC).await;
+        let dst_data = self.fetch_data(db, tb, DST).await;
 
         assert_eq!(src_data.len(), dst_data.len());
         for id in src_data.keys() {
@@ -289,7 +293,13 @@ impl MongoTestRunner {
         }
     }
 
-    async fn fetch_data(&self, client: &Client, db: &str, tb: &str) -> HashMap<String, Document> {
+    pub async fn fetch_data(&self, db: &str, tb: &str, from: &str) -> HashMap<String, Document> {
+        let client = if from == SRC {
+            self.src_mongo_client.as_ref().unwrap()
+        } else {
+            self.dst_mongo_client.as_ref().unwrap()
+        };
+
         let collection = client.database(db).collection::<Document>(tb);
         let find_options = FindOptions::builder()
             .sort(doc! {MongoConstants::ID: 1})

@@ -21,7 +21,7 @@ use dt_meta::{
 use crate::{
     check_log::{check_log::CheckLog, log_type::LogType},
     extractor::{base_check_extractor::BaseCheckExtractor, base_extractor::BaseExtractor},
-    sql_util::SqlUtil,
+    rdb_query_builder::RdbQueryBuilder,
     BatchCheckExtractor, Extractor,
 };
 
@@ -72,13 +72,13 @@ impl BatchCheckExtractor for PgCheckExtractor<'_> {
             .await?;
         let check_row_datas = self.build_check_row_datas(check_logs, &tb_meta)?;
 
-        let sql_util = SqlUtil::new_for_pg(&tb_meta);
+        let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
         let (sql, cols, binds) = if check_logs.len() == 1 {
-            sql_util.get_select_query(&check_row_datas[0])?
+            query_builder.get_select_query(&check_row_datas[0])?
         } else {
-            sql_util.get_batch_select_query(&check_row_datas, 0, check_row_datas.len())?
+            query_builder.get_batch_select_query(&check_row_datas, 0, check_row_datas.len())?
         };
-        let query = SqlUtil::create_pg_query(&sql, &cols, &binds, &tb_meta);
+        let query = query_builder.create_pg_query(&sql, &cols, &binds);
 
         let mut rows = query.fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
