@@ -4,7 +4,7 @@ members = [
     "dt-common",
     "dt-meta",
     # "dt-struct",
-    # "dt-precheck",
+    "dt-precheck",
     "dt-connector",
     "dt-pipeline",
     "dt-task",

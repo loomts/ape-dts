@@ -1,16 +1,18 @@
 use std::vec;
 
-use dt_common::config::{
-    config_enums::DbType, extractor_config::ExtractorConfig, sinker_config::SinkerConfig,
-    task_config::TaskConfig,
+use dt_common::{
+    config::{
+        config_enums::DbType, extractor_config::ExtractorConfig, sinker_config::SinkerConfig,
+        task_config::TaskConfig,
+    },
+    utils::rdb_filter::RdbFilter,
 };
 
 use crate::{
-    checker::{
-        mysql_checker::MySqlChecker, postgresql_checker::PostgresqlChecker, traits::Checker,
-    },
+    checker::{mysql_checker::MySqlChecker, pg_checker::PostgresqlChecker, traits::Checker},
     config::precheck_config::PrecheckConfig,
     error::Error,
+    fetcher::{mysql::mysql_fetcher::MysqlFetcher, postgresql::pg_fetcher::PgFetcher},
     meta::check_result::CheckResult,
 };
 
@@ -66,26 +68,41 @@ impl CheckerConnector {
             println!("build checker failed, maybe config is wrong");
             return None;
         }
+        let filter =
+            RdbFilter::from_config(&self.task_config.filter, db_type_option.unwrap().clone())
+                .unwrap();
         let checker: Option<Box<dyn Checker + Send>> = match db_type_option.unwrap() {
             DbType::Mysql => Some(Box::new(MySqlChecker {
-                pool: None,
-                source_config: self.task_config.extractor.clone(),
                 filter_config: self.task_config.filter.clone(),
-                sinker_config: self.task_config.sinker.clone(),
-                router_config: self.task_config.router.clone(),
                 precheck_config: self.precheck_config.clone(),
-                db_type_option: None,
+                db_type_option: Some(db_type_option.unwrap().clone()),
                 is_source,
+                fetcher: MysqlFetcher {
+                    pool: None,
+                    source_config: self.task_config.extractor.clone(),
+                    filter_config: self.task_config.filter.clone(),
+                    sinker_config: self.task_config.sinker.clone(),
+                    router_config: self.task_config.router.clone(),
+                    db_type_option: Some(db_type_option.unwrap().clone()),
+                    is_source,
+                    filter,
+                },
             })),
             DbType::Pg => Some(Box::new(PostgresqlChecker {
-                pool: None,
-                source_config: self.task_config.extractor.clone(),
                 filter_config: self.task_config.filter.clone(),
-                sinker_config: self.task_config.sinker.clone(),
-                router_config: self.task_config.router.clone(),
                 precheck_config: self.precheck_config.clone(),
-                db_type_option: None,
+                db_type_option: Some(db_type_option.unwrap().clone()),
                 is_source,
+                fetcher: PgFetcher {
+                    pool: None,
+                    source_config: self.task_config.extractor.clone(),
+                    filter_config: self.task_config.filter.clone(),
+                    sinker_config: self.task_config.sinker.clone(),
+                    router_config: self.task_config.router.clone(),
+                    db_type_option: Some(db_type_option.unwrap().clone()),
+                    is_source,
+                    filter,
+                },
             })),
             _ => None,
         };

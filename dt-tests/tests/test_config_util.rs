@@ -263,4 +263,9 @@ impl TestConfigUtil {
         File::create(&dst_task_config).unwrap().set_len(0).unwrap();
         ini.write(dst_task_config).unwrap();
     }
+
+    pub fn should_do_clean_or_not() -> bool {
+        let opt = env::var("do_clean_after_test");
+        opt.is_ok_and(|x| x == "true")
+    }
 }

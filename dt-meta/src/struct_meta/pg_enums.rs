@@ -18,4 +18,15 @@ impl ConstraintTypeEnum {
         }
         Some(result)
     }
+
+    pub fn to_str(&self) -> Option<String> {
+        let result: String;
+        match self {
+            ConstraintTypeEnum::Primary => result = String::from("p"),
+            ConstraintTypeEnum::Unique => result = String::from("u"),
+            ConstraintTypeEnum::Foregin => result = String::from("f"),
+            ConstraintTypeEnum::Check => result = String::from("c"),
+        }
+        Some(result)
+    }
 }

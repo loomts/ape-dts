@@ -1,1 +1,0 @@
-create schema precheck_it_pg2pg_2_2;

@@ -18,12 +18,13 @@ use mysql_binlog_connector_rust::{
     },
 };
 
-use dt_common::{error::Error, log_info, utils::position_util::PositionUtil};
-
-use crate::{
-    extractor::{base_extractor::BaseExtractor, rdb_filter::RdbFilter},
-    Extractor,
+use dt_common::{
+    error::Error,
+    log_info,
+    utils::{position_util::PositionUtil, rdb_filter::RdbFilter},
 };
+
+use crate::{extractor::base_extractor::BaseExtractor, Extractor};
 
 pub struct MysqlCdcExtractor<'a> {
     pub meta_manager: MysqlMetaManager,
@@ -199,10 +200,11 @@ impl MysqlCdcExtractor<'_> {
     }
 
     async fn push_row_to_buf(&mut self, row_data: RowData) -> Result<(), Error> {
-        if self
-            .filter
-            .filter_event(&row_data.schema, &row_data.tb, &row_data.row_type)
-        {
+        if self.filter.filter_event(
+            &row_data.schema,
+            &row_data.tb,
+            &row_data.row_type.to_string(),
+        ) {
             return Ok(());
         }
         BaseExtractor::push_row(&self.buffer, row_data).await

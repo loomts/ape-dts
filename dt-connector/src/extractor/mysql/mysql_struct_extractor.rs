@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::atomic::AtomicBool};
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
-use dt_common::{error::Error, log_info};
+use dt_common::{error::Error, log_info, utils::rdb_filter::RdbFilter};
 
 use dt_meta::{
     ddl_data::DdlData,
@@ -13,10 +13,7 @@ use dt_meta::{
 use futures::TryStreamExt;
 use sqlx::{mysql::MySqlRow, MySql, Pool, Row};
 
-use crate::{
-    extractor::{base_extractor::BaseExtractor, rdb_filter::RdbFilter},
-    Extractor,
-};
+use crate::{extractor::base_extractor::BaseExtractor, Extractor};
 
 pub struct MysqlStructExtractor<'a> {
     pub conn_pool: Pool<MySql>,

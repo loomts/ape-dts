@@ -8,8 +8,8 @@ pub mod checker;
 pub mod config;
 pub mod connector;
 pub mod error;
+pub mod fetcher;
 pub mod meta;
-pub mod test;
 
 pub fn do_precheck(config: &str) {
     let task_config = TaskConfig::new(&config);
