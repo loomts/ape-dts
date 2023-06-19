@@ -7,15 +7,15 @@ use dt_common::{
         task_config::TaskConfig,
     },
     error::Error,
+    utils::rdb_filter::RdbFilter,
 };
-use dt_connector::extractor::rdb_filter::RdbFilter;
 use dt_meta::{dt_data::DtData, struct_meta::database_model::StructModel};
 use dt_task::extractor_util::ExtractorUtil;
 
 use super::rdb_test_runner::RdbTestRunner;
 
 pub struct RdbStructTestRunner {
-    base: RdbTestRunner,
+    pub base: RdbTestRunner,
 }
 
 impl RdbStructTestRunner {

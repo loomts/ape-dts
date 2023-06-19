@@ -23,5 +23,7 @@ Session.vim
 /images/**/dt-struct
 /images/**/dt-precheck
 /logs
-/tmp
 .cargo-ok
+
+## Integration Test
+/tmp

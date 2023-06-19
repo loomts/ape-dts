@@ -202,6 +202,15 @@ impl RdbTestRunner {
         self.execute_dst_sqls(&self.base.dst_ddl_sqls).await
     }
 
+    pub async fn execute_clean_sqls(&self) -> Result<(), Error> {
+        if TestConfigUtil::should_do_clean_or_not() {
+            self.execute_src_sqls(&self.base.src_clean_sqls).await?;
+            self.execute_dst_sqls(&self.base.dst_clean_sqls).await
+        } else {
+            Ok(())
+        }
+    }
+
     async fn execute_src_sqls(&self, sqls: &Vec<String>) -> Result<(), Error> {
         if let Some(pool) = &self.src_conn_pool_mysql {
             Self::execute_sqls_mysql(sqls, pool).await?;

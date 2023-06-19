@@ -2,22 +2,23 @@ use std::collections::HashSet;
 
 use async_trait::async_trait;
 use dt_common::config::{config_enums::DbType, filter_config::FilterConfig};
-use dt_meta::struct_meta::db_table_model::DbTable;
-use regex::Regex;
+use dt_meta::struct_meta::{db_table_model::DbTable, pg_enums::ConstraintTypeEnum};
 
 use crate::{
     config::precheck_config::PrecheckConfig,
     error::Error,
-    fetcher::{mysql::mysql_fetcher::MysqlFetcher, traits::Fetcher},
-    meta::{check_item::CheckItem, check_result::CheckResult},
+    fetcher::{postgresql::pg_fetcher::PgFetcher, traits::Fetcher},
+    meta::check_item::CheckItem,
+    meta::check_result::CheckResult,
 };
 
 use super::traits::Checker;
 
-const MYSQL_SUPPORT_DB_VERSION_REGEX: &str = r"8\..*";
+const PG_SUPPORT_DB_VERSION_NUM_MIN: i32 = 140000;
+const PG_SUPPORT_DB_VERSION_NUM_MAX: i32 = 149999;
 
-pub struct MySqlChecker {
-    pub fetcher: MysqlFetcher,
+pub struct PostgresqlChecker {
+    pub fetcher: PgFetcher,
     pub filter_config: FilterConfig,
     pub precheck_config: PrecheckConfig,
     pub is_source: bool,
@@ -25,7 +26,7 @@ pub struct MySqlChecker {
 }
 
 #[async_trait]
-impl Checker for MySqlChecker {
+impl Checker for PostgresqlChecker {
     async fn build_connection(&mut self) -> Result<CheckResult, Error> {
         let mut check_error = None;
         let result = self.fetcher.build_connection().await;
@@ -42,7 +43,7 @@ impl Checker for MySqlChecker {
         ))
     }
 
-    // support MySQL 8.*
+    // Supported PostgreSQL 14.*
     async fn check_database_version(&mut self) -> Result<CheckResult, Error> {
         let mut check_error: Option<Error> = None;
 
@@ -51,13 +52,15 @@ impl Checker for MySqlChecker {
             Ok(version) => {
                 if version.is_empty() {
                     check_error = Some(Error::PreCheckError {
-                        error: format!("found no version info."),
+                        error: format!("found no version info"),
                     });
                 } else {
-                    let re = Regex::new(MYSQL_SUPPORT_DB_VERSION_REGEX).unwrap();
-                    if !re.is_match(version.as_str()) {
+                    let version_i32: i32 = version.parse().unwrap();
+                    if version_i32 < PG_SUPPORT_DB_VERSION_NUM_MIN
+                        || version_i32 > PG_SUPPORT_DB_VERSION_NUM_MAX
+                    {
                         check_error = Some(Error::PreCheckError {
-                            error: format!("mysql version:[{}] is invalid.", version),
+                            error: format!("version:{} is not supported yet", version_i32),
                         });
                     }
                 }
@@ -84,7 +87,7 @@ impl Checker for MySqlChecker {
         let mut check_error: Option<Error> = None;
 
         if !self.is_source {
-            // do nothing when the database is a target
+            // do nothing when the database is target
             return Ok(CheckResult::build_with_err(
                 CheckItem::CheckIfDatabaseSupportCdc,
                 self.is_source,
@@ -93,54 +96,66 @@ impl Checker for MySqlChecker {
             ));
         }
 
-        let mut errs: Vec<String> = vec![];
-        let cdc_configs = vec!["log_bin", "binlog_format", "binlog_row_image"]
+        // check the cdc settings
+        let configs: Vec<String> = vec!["wal_level", "max_wal_senders", "max_replication_slots"]
             .iter()
             .map(|c| c.to_string())
-            .collect::<Vec<String>>();
-        let result = self.fetcher.fetch_configuration(cdc_configs).await;
+            .collect();
+        let (mut max_replication_slots_i32, mut err_msgs): (i32, Vec<String>) = (0, vec![]);
+        let result = self.fetcher.fetch_configuration(configs).await;
         match result {
-            Ok(configs) => {
-                for (k, v) in configs {
+            Ok(rows) => {
+                for (k, v) in rows {
                     match k.as_str() {
-                        "log_bin" => {
-                            if v.to_lowercase() != "on" {
-                                errs.push(format!(
-                                    "log_bin setting:[{}] is not 'on'.",
-                                    v.to_lowercase()
-                                ));
+                        "wal_level" => {
+                            if v.to_lowercase() != "logical" {
+                                err_msgs.push(format!(
+                                    "wal_level should not be '{}', need to be 'logical'.",
+                                    v
+                                ))
                             }
                         }
-                        "binlog_row_image" => {
-                            if v.to_lowercase() != "full" {
-                                errs.push(format!(
-                                    "binlog_row_image setting:[{}] is not 'full'",
-                                    v.to_lowercase()
-                                ));
+                        "max_replication_slots" => {
+                            max_replication_slots_i32 = v.parse().unwrap();
+                            if max_replication_slots_i32 < 1 {
+                                err_msgs.push(format!(
+                                    "max_replication_slots needs to be greater than 0. current is '{}'",
+                                    max_replication_slots_i32
+                                ))
                             }
                         }
-                        "binlog_format" => {
-                            if v.to_lowercase() != "row" {
-                                errs.push(format!(
-                                    "binlog_format setting:[{}] is not 'row'.",
-                                    v.to_lowercase()
-                                ));
+                        "max_wal_senders" => {
+                            let sender_i32: i32 = v.parse().unwrap();
+                            if sender_i32 < 1 {
+                                err_msgs.push(format!(
+                                    "max_wel_senders needs to be greater than 0, current is '{}'",
+                                    sender_i32
+                                ))
                             }
                         }
-                        _ => {
-                            return Err(Error::PreCheckError {
-                                error: "find database cdc settings meet unknown error".to_string(),
-                            })
-                        }
+                        _ => {}
                     }
                 }
             }
             Err(e) => return Err(e),
         }
-        if errs.len() > 0 {
+        if err_msgs.len() > 0 {
             check_error = Some(Error::PreCheckError {
-                error: errs.join(";"),
-            })
+                error: err_msgs.join(";"),
+            });
+        }
+
+        if check_error.is_none() {
+            // check the slot count is less than max_replication_slots or not
+            let slot_result = self.fetcher.fetch_slot_names().await;
+            match slot_result {
+                Ok(slots) => {
+                    if max_replication_slots_i32 == (slots.len() as i32) {
+                        check_error = Some(Error::PreCheckError { error: format!("the current number of slots:[{}] has reached max_replication_slots, and new slots cannot be created", max_replication_slots_i32) });
+                    }
+                }
+                Err(e) => check_error = Some(Error::from(e)),
+            }
         }
 
         Ok(CheckResult::build_with_err(
@@ -154,7 +169,7 @@ impl Checker for MySqlChecker {
     async fn check_struct_existed_or_not(&mut self) -> Result<CheckResult, Error> {
         let mut check_error: Option<Error> = None;
 
-        let (mut models, mut err_msgs): (Vec<DbTable>, Vec<String>) = (Vec::new(), Vec::new());
+        let (mut db_tables, mut err_msgs): (Vec<DbTable>, Vec<String>) = (Vec::new(), Vec::new());
         match &self.filter_config {
             FilterConfig::Rdb {
                 do_dbs,
@@ -164,16 +179,22 @@ impl Checker for MySqlChecker {
                 do_events: _,
             } => {
                 if !do_tbs.is_empty() {
-                    DbTable::from_str(do_tbs, &mut models)
+                    DbTable::from_str(do_tbs, &mut db_tables)
                 } else if !do_dbs.is_empty() {
-                    DbTable::from_str(do_dbs, &mut models)
+                    DbTable::from_str(do_dbs, &mut db_tables)
                 }
             }
         }
-        let (dbs, tb_dbs, tbs) = DbTable::get_config_maps(&models).unwrap();
-        let mut all_db_names = Vec::new();
-        all_db_names.extend(&dbs);
-        all_db_names.extend(&tb_dbs);
+        let (schemas, tb_schemas, tbs) = DbTable::get_config_maps(&db_tables).unwrap();
+        let mut all_schemas = Vec::new();
+        all_schemas.extend(&schemas);
+        all_schemas.extend(&tb_schemas);
+        if all_schemas.len() <= 0 {
+            println!("found no schema need to do migrate, very strange");
+            return Err(Error::PreCheckError {
+                error: String::from("found no schema need to do migrate"),
+            });
+        }
 
         if (self.is_source || !self.precheck_config.do_struct_init) && tbs.len() > 0 {
             // When a specific table to be migrated is specified and the following conditions are met, check the existence of the table
@@ -182,19 +203,19 @@ impl Checker for MySqlChecker {
             let current_tbs: HashSet<String>;
             let mut not_existed_tbs: HashSet<String> = HashSet::new();
 
-            let tables_result = self.fetcher.fetch_tables().await;
-            match tables_result {
+            let table_result = self.fetcher.fetch_tables().await;
+            match table_result {
                 Ok(tables) => {
                     current_tbs = tables
                         .iter()
-                        .map(|t| format!("{}.{}", t.database_name, t.table_name))
-                        .collect()
+                        .map(|t| format!("{}.{}", t.schema_name, t.table_name))
+                        .collect();
                 }
                 Err(e) => return Err(e),
             }
-            for tb in tbs {
-                if !current_tbs.contains(&tb) {
-                    not_existed_tbs.insert(tb);
+            for tb_key in tbs {
+                if !current_tbs.contains(&tb_key) {
+                    not_existed_tbs.insert(tb_key);
                 }
             }
             if not_existed_tbs.len() > 0 {
@@ -209,26 +230,26 @@ impl Checker for MySqlChecker {
             }
         }
 
-        if all_db_names.len() > 0 {
-            let current_dbs: HashSet<String>;
-            let mut not_existed_dbs: HashSet<String> = HashSet::new();
+        if all_schemas.len() > 0 {
+            let current_schemas: HashSet<String>;
+            let mut not_existed_schema: HashSet<String> = HashSet::new();
 
-            let dbs_result = self.fetcher.fetch_databases().await;
-            match dbs_result {
-                Ok(dbs) => {
-                    current_dbs = dbs.iter().map(|d| d.database_name.clone()).collect();
+            let schema_result = self.fetcher.fetch_schemas().await;
+            match schema_result {
+                Ok(schemas) => {
+                    current_schemas = schemas.iter().map(|s| s.schema_name.clone()).collect();
                 }
                 Err(e) => return Err(e),
             }
-            for db_name in all_db_names {
-                if !current_dbs.contains(db_name) {
-                    not_existed_dbs.insert(db_name.clone());
+            for schema in all_schemas {
+                if !current_schemas.contains(schema) {
+                    not_existed_schema.insert(schema.clone());
                 }
             }
-            if not_existed_dbs.len() > 0 {
+            if not_existed_schema.len() > 0 {
                 err_msgs.push(format!(
-                    "databases not existed: [{}]",
-                    not_existed_dbs
+                    "schemas not existed: [{}]",
+                    not_existed_schema
                         .iter()
                         .map(|e| e.to_string())
                         .collect::<Vec<String>>()
@@ -251,6 +272,7 @@ impl Checker for MySqlChecker {
     }
 
     async fn check_table_structs(&mut self) -> Result<CheckResult, Error> {
+        // all tables have a pk, and have no fk
         let mut check_error: Option<Error> = None;
 
         if !self.is_source {
@@ -263,7 +285,7 @@ impl Checker for MySqlChecker {
             ));
         }
 
-        let mut models: Vec<DbTable> = Vec::new();
+        let (mut db_tables, mut err_msgs): (Vec<DbTable>, Vec<String>) = (Vec::new(), Vec::new());
         match &self.filter_config {
             FilterConfig::Rdb {
                 do_dbs,
@@ -273,47 +295,50 @@ impl Checker for MySqlChecker {
                 do_events: _,
             } => {
                 if !do_tbs.is_empty() {
-                    DbTable::from_str(do_tbs, &mut models)
+                    DbTable::from_str(do_tbs, &mut db_tables)
                 } else if !do_dbs.is_empty() {
-                    DbTable::from_str(do_dbs, &mut models)
+                    DbTable::from_str(do_dbs, &mut db_tables)
                 }
             }
         }
-        let (dbs, tb_dbs, _) = DbTable::get_config_maps(&models).unwrap();
-        let mut all_db_names = Vec::new();
-        all_db_names.extend(&dbs);
-        all_db_names.extend(&tb_dbs);
+        let (schemas, tb_schemas, _) = DbTable::get_config_maps(&db_tables).unwrap();
+        let mut all_schemas = Vec::new();
+        all_schemas.extend(&schemas);
+        all_schemas.extend(&tb_schemas);
+        if all_schemas.len() <= 0 {
+            println!("found no schema need to do migrate, very strange");
+            return Err(Error::PreCheckError {
+                error: String::from("found no schema need to do migrate"),
+            });
+        }
 
-        let (mut has_pk_tables, mut has_fk_tables, mut no_pk_tables, mut err_msgs): (
-            HashSet<String>,
-            HashSet<String>,
-            HashSet<String>,
-            Vec<String>,
-        ) = (HashSet::new(), HashSet::new(), HashSet::new(), Vec::new());
+        let current_tables: HashSet<String>;
+        let (mut has_pk_tables, mut has_fk_tables): (HashSet<String>, HashSet<String>) =
+            (HashSet::new(), HashSet::new());
 
-        let constraints_result = self.fetcher.fetch_constraints().await;
-        match constraints_result {
-            Ok(constraints) => {
-                for constraint in constraints {
-                    let db_tb_name =
-                        format!("{}.{}", constraint.database_name, constraint.table_name);
-                    match constraint.constraint_type.as_str() {
-                        "PRIMARY KEY" => has_pk_tables.insert(db_tb_name),
-                        "FOREIGN KEY" => has_fk_tables.insert(db_tb_name),
-                        _ => true,
-                    };
-                }
+        let table_result = self.fetcher.fetch_tables().await;
+        match table_result {
+            Ok(tables) => {
+                current_tables = tables
+                    .iter()
+                    .map(|t| format!("{}.{}", t.schema_name, t.table_name))
+                    .collect();
             }
             Err(e) => return Err(e),
         }
 
-        let tables_result = self.fetcher.fetch_tables().await;
-        match tables_result {
-            Ok(tables) => {
-                for table in tables {
-                    let db_tb_name = format!("{}.{}", table.database_name, table.table_name);
-                    if !has_pk_tables.contains(&db_tb_name) {
-                        no_pk_tables.insert(db_tb_name);
+        let constraint_result = self.fetcher.fetch_constraints().await;
+        match constraint_result {
+            Ok(constraints) => {
+                // Todo: for more test here
+                for c in constraints {
+                    let schema_table_name = format!("{}.{}", c.schema_name, c.table_name);
+                    if c.constraint_type == ConstraintTypeEnum::Primary.to_str().unwrap() {
+                        has_pk_tables.insert(schema_table_name);
+                    } else if c.constraint_type.to_string()
+                        == ConstraintTypeEnum::Foregin.to_str().unwrap()
+                    {
+                        has_fk_tables.insert(schema_table_name);
                     }
                 }
             }
@@ -328,7 +353,13 @@ impl Checker for MySqlChecker {
                     .map(|e| e.to_string())
                     .collect::<Vec<String>>()
                     .join(";")
-            ))
+            ));
+        }
+        let mut no_pk_tables: HashSet<String> = HashSet::new();
+        for current_table in current_tables {
+            if !has_pk_tables.contains(&current_table) {
+                no_pk_tables.insert(current_table);
+            }
         }
         if no_pk_tables.len() > 0 {
             err_msgs.push(format!(
@@ -338,7 +369,7 @@ impl Checker for MySqlChecker {
                     .map(|e| e.to_string())
                     .collect::<Vec<String>>()
                     .join(";")
-            ))
+            ));
         }
         if err_msgs.len() > 0 {
             check_error = Some(Error::PreCheckError {

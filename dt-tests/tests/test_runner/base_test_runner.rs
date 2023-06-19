@@ -16,6 +16,8 @@ pub struct BaseTestRunner {
     pub dst_dml_sqls: Vec<String>,
     pub src_ddl_sqls: Vec<String>,
     pub dst_ddl_sqls: Vec<String>,
+    pub src_clean_sqls: Vec<String>,
+    pub dst_clean_sqls: Vec<String>,
     pub updated_config_fields: HashMap<String, String>,
 }
 
@@ -44,7 +46,14 @@ impl BaseTestRunner {
             &project_root,
         );
 
-        let (src_dml_sqls, dst_dml_sqls, src_ddl_sqls, dst_ddl_sqls) = Self::load_sqls(&test_dir);
+        let (
+            src_dml_sqls,
+            dst_dml_sqls,
+            src_ddl_sqls,
+            dst_ddl_sqls,
+            src_clean_sqls,
+            dst_clean_sqls,
+        ) = Self::load_sqls(&test_dir);
 
         Ok(Self {
             task_config_file: dst_task_config_file,
@@ -53,6 +62,8 @@ impl BaseTestRunner {
             dst_dml_sqls,
             src_ddl_sqls,
             dst_ddl_sqls,
+            src_clean_sqls,
+            dst_clean_sqls,
             updated_config_fields,
         })
     }
@@ -113,13 +124,23 @@ impl BaseTestRunner {
         lines
     }
 
-    fn load_sqls(test_dir: &str) -> (Vec<String>, Vec<String>, Vec<String>, Vec<String>) {
+    fn load_sqls(
+        test_dir: &str,
+    ) -> (
+        Vec<String>,
+        Vec<String>,
+        Vec<String>,
+        Vec<String>,
+        Vec<String>,
+        Vec<String>,
+    ) {
         let load = |sql_file: &str| -> Vec<String> {
-            if !Self::check_file_exists(sql_file) {
+            let full_sql_path = format!("{}/{}", test_dir, sql_file);
+            if !Self::check_file_exists(&full_sql_path) {
                 return Vec::new();
             }
 
-            let mut lines = Self::load_file(sql_file);
+            let mut lines = Self::load_file(&full_sql_path);
             let mut sqls = Vec::new();
             for sql in lines.drain(..) {
                 let sql = sql.trim();
@@ -131,16 +152,14 @@ impl BaseTestRunner {
             sqls
         };
 
-        let src_ddl_file = format!("{}/src_ddl.sql", test_dir);
-        let dst_ddl_file = format!("{}/dst_ddl.sql", test_dir);
-        let src_dml_file = format!("{}/src_dml.sql", test_dir);
-        let dst_dml_file = format!("{}/dst_dml.sql", test_dir);
-
-        let src_dml_sqls = load(&src_dml_file);
-        let dst_dml_sqls = load(&dst_dml_file);
-        let src_ddl_sqls = load(&src_ddl_file);
-        let dst_ddl_sqls = load(&dst_ddl_file);
-        (src_dml_sqls, dst_dml_sqls, src_ddl_sqls, dst_ddl_sqls)
+        (
+            load("src_dml.sql"),
+            load("dst_dml.sql"),
+            load("src_ddl.sql"),
+            load("dst_ddl.sql"),
+            load("src_clean.sql"),
+            load("dst_clean.sql"),
+        )
     }
 
     pub fn check_file_exists(file: &str) -> bool {

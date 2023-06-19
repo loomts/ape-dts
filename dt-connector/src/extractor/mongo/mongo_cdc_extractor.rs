@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::atomic::AtomicBool};
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
-use dt_common::{constants::MongoConstants, error::Error, log_info};
+use dt_common::{constants::MongoConstants, error::Error, log_info, utils::rdb_filter::RdbFilter};
 use dt_meta::{col_value::ColValue, dt_data::DtData, row_data::RowData, row_type::RowType};
 use mongodb::{
     bson::doc,
@@ -12,10 +12,7 @@ use mongodb::{
 };
 use serde_json::json;
 
-use crate::{
-    extractor::{base_extractor::BaseExtractor, rdb_filter::RdbFilter},
-    Extractor,
-};
+use crate::{extractor::base_extractor::BaseExtractor, Extractor};
 
 pub struct MongoCdcExtractor<'a> {
     pub buffer: &'a ConcurrentQueue<DtData>,
@@ -130,10 +127,11 @@ impl MongoCdcExtractor<'_> {
 
 impl MongoCdcExtractor<'_> {
     async fn push_row_to_buf(&mut self, row_data: RowData) -> Result<(), Error> {
-        if self
-            .filter
-            .filter_event(&row_data.schema, &row_data.tb, &row_data.row_type)
-        {
+        if self.filter.filter_event(
+            &row_data.schema,
+            &row_data.tb,
+            &row_data.row_type.to_string(),
+        ) {
             return Ok(());
         }
         BaseExtractor::push_row(&self.buffer, row_data).await

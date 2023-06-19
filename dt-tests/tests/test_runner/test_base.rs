@@ -94,11 +94,15 @@ impl TestBase {
     pub async fn run_mysql_struct_test(test_dir: &str) {
         let mut runner = RdbStructTestRunner::new(test_dir).await.unwrap();
         runner.run_mysql_struct_test().await.unwrap();
+
+        runner.base.execute_clean_sqls().await.unwrap();
     }
 
     pub async fn run_pg_struct_test(test_dir: &str) {
         let mut runner = RdbStructTestRunner::new(test_dir).await.unwrap();
         runner.run_pg_struct_test().await.unwrap();
+
+        runner.base.execute_clean_sqls().await.unwrap();
     }
 
     pub async fn run_precheck_test(
@@ -119,5 +123,7 @@ impl TestBase {
                 &dst_expected_results,
             )
             .await;
+
+        runner.base.execute_clean_sqls().await.unwrap();
     }
 }

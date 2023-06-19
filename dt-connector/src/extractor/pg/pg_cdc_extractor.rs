@@ -28,13 +28,10 @@ use dt_common::{
     error::Error,
     log_error, log_info,
     syncer::Syncer,
-    utils::{position_util::PositionUtil, time_util::TimeUtil},
+    utils::{position_util::PositionUtil, rdb_filter::RdbFilter, time_util::TimeUtil},
 };
 
-use crate::{
-    extractor::{pg::pg_cdc_client::PgCdcClient, rdb_filter::RdbFilter},
-    Extractor,
-};
+use crate::{extractor::pg::pg_cdc_client::PgCdcClient, Extractor};
 use dt_meta::{
     adaptor::pg_col_value_convertor::PgColValueConvertor,
     col_value::ColValue,
@@ -347,10 +344,11 @@ impl PgCdcExtractor<'_> {
     }
 
     async fn push_row_to_buf(&mut self, row_data: RowData) -> Result<(), Error> {
-        if self
-            .filter
-            .filter_event(&row_data.schema, &row_data.tb, &row_data.row_type)
-        {
+        if self.filter.filter_event(
+            &row_data.schema,
+            &row_data.tb,
+            &row_data.row_type.to_string(),
+        ) {
             return Ok(());
         }
         self.buffer.push(DtData::Dml { row_data }).unwrap();

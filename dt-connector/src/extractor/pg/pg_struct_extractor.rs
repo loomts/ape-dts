@@ -5,7 +5,7 @@ use std::{
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
-use dt_common::{error::Error, log_info};
+use dt_common::{error::Error, log_info, utils::rdb_filter::RdbFilter};
 
 use dt_meta::{
     ddl_data::DdlData,
@@ -20,10 +20,7 @@ use dt_meta::{
 use futures::TryStreamExt;
 use sqlx::{postgres::PgRow, Pool, Postgres, Row};
 
-use crate::{
-    extractor::{base_extractor::BaseExtractor, rdb_filter::RdbFilter},
-    Extractor,
-};
+use crate::{extractor::base_extractor::BaseExtractor, Extractor};
 
 pub struct PgStructExtractor<'a> {
     pub conn_pool: Pool<Postgres>,

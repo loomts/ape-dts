@@ -12,11 +12,9 @@ use dt_common::{
     },
     error::Error,
     syncer::Syncer,
+    utils::rdb_filter::RdbFilter,
 };
-use dt_connector::{
-    extractor::{rdb_filter::RdbFilter, snapshot_resumer::SnapshotResumer},
-    Extractor,
-};
+use dt_connector::{extractor::snapshot_resumer::SnapshotResumer, Extractor};
 use dt_meta::{dt_data::DtData, row_type::RowType};
 use dt_pipeline::pipeline::Pipeline;
 use futures::future::join;
@@ -90,7 +88,7 @@ impl TaskRunner {
             // start a task for each tb
             let tbs = ExtractorUtil::list_tbs(url, db, &db_type).await?;
             for tb in tbs.iter() {
-                if filter.filter_event(db, tb, &RowType::Insert) {
+                if filter.filter_event(db, tb, &RowType::Insert.to_string()) {
                     continue;
                 }
 
