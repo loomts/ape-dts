@@ -37,21 +37,13 @@ impl Fetcher for PgFetcher {
         let mut connection_url = String::from("");
 
         if self.is_source {
-            match &self.source_config {
-                ExtractorConfig::PgBasic { url, .. } => {
-                    connection_url = String::from(url);
-                    self.db_type_option = Some(DbType::Pg);
-                }
-                _ => {}
-            };
-        } else {
-            match &self.sinker_config {
-                SinkerConfig::PgBasic { url, .. } => {
-                    connection_url = String::from(url);
-                    self.db_type_option = Some(DbType::Pg);
-                }
-                _ => {}
-            };
+            if let ExtractorConfig::PgBasic { url, .. } = &self.source_config {
+                connection_url = String::from(url);
+                self.db_type_option = Some(DbType::Pg);
+            }
+        } else if let SinkerConfig::PgBasic { url, .. } = &self.sinker_config {
+            connection_url = String::from(url);
+            self.db_type_option = Some(DbType::Pg);
         }
         if !connection_url.is_empty() {
             let db_pool_result = PgPoolOptions::new()
@@ -74,7 +66,7 @@ impl Fetcher for PgFetcher {
         let results = self.fetch_all(sql, "pg query database version").await;
         match results {
             Ok(rows) => {
-                if rows.len() > 0 {
+                if !rows.is_empty() {
                     version = rows.get(0).unwrap().get("current_setting");
                 }
             }
@@ -217,11 +209,10 @@ impl Fetcher for PgFetcher {
 
 impl PgFetcher {
     async fn fetch_all(&self, sql: String, mut sql_msg: &str) -> Result<Vec<PgRow>, Error> {
-        let pg_pool;
-        match &self.pool {
-            Some(pool) => pg_pool = pool,
+        let pg_pool = match &self.pool {
+            Some(pool) => pool,
             None => return Err(Error::from(sqlx::Error::PoolClosed)),
-        }
+        };
 
         sql_msg = if sql_msg.is_empty() { "sql" } else { sql_msg };
         println!("{}: {}", sql_msg, sql);
@@ -242,15 +233,15 @@ impl PgFetcher {
             Some(pool) => {
                 sql_msg = if sql_msg.is_empty() { "sql" } else { sql_msg };
                 println!("{}: {}", sql_msg, sql);
-                return Ok(query(sql).fetch(pool));
+                Ok(query(sql).fetch(pool))
             }
-            None => return Err(Error::from(sqlx::Error::PoolClosed)),
+            None => Err(Error::from(sqlx::Error::PoolClosed)),
         }
     }
 
     pub async fn fetch_slot_names(&self) -> Result<Vec<String>, Error> {
         let mut slots: Vec<String> = vec![];
-        let slot_query = format!("select slot_name from pg_catalog.pg_replication_slots");
+        let slot_query = "select slot_name from pg_catalog.pg_replication_slots".to_string();
 
         let result = self.fetch_all(slot_query, "pg query slots").await;
         match result {

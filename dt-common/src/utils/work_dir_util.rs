@@ -4,22 +4,19 @@ impl WorkDirUtil {
     pub fn get_project_root() -> Option<String> {
         let mut project_root: Option<String> = None;
 
-        match project_root::get_project_root() {
-            Ok(pr) => project_root = Some(String::from(pr.to_str().unwrap())),
-            Err(_) => {}
+        if let Ok(pr) = project_root::get_project_root() {
+            project_root = Some(String::from(pr.to_str().unwrap()));
         }
 
         project_root
     }
 
     pub fn get_absolute_by_relative(relative_path: &str) -> Option<String> {
-        let path;
-
-        if !relative_path.starts_with("/") {
-            path = format!("/{}", relative_path);
+        let path = if !relative_path.starts_with('/') {
+            format!("/{}", relative_path)
         } else {
-            path = String::from(relative_path);
-        }
+            String::from(relative_path)
+        };
 
         Some(format!(
             "{}{}",

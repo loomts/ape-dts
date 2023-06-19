@@ -22,12 +22,12 @@ pub struct BaseCheckExtractor<'a> {
 impl BaseCheckExtractor<'_> {
     pub async fn extract(
         &mut self,
-        extractor: &mut Box<&mut (dyn BatchCheckExtractor + Send)>,
+        extractor: &mut (dyn BatchCheckExtractor + Send),
     ) -> Result<(), Error> {
         let mut log_reader = LogReader::new(&self.check_log_dir);
         let mut batch = Vec::new();
 
-        while let Some(log) = log_reader.next() {
+        while let Some(log) = log_reader.nextval() {
             if log.trim().is_empty() {
                 continue;
             }
@@ -52,10 +52,10 @@ impl BaseCheckExtractor<'_> {
     }
 
     async fn batch_extract_and_clear(
-        extractor: &mut Box<&mut (dyn BatchCheckExtractor + Send)>,
+        extractor: &mut (dyn BatchCheckExtractor + Send),
         batch: &mut Vec<CheckLog>,
     ) {
-        extractor.batch_extract(&batch).await.unwrap();
+        extractor.batch_extract(batch).await.unwrap();
         batch.clear();
     }
 

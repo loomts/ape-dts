@@ -45,7 +45,7 @@ impl RdbMetaManager {
 
     pub fn parse_rdb_cols(
         key_map: &HashMap<String, Vec<String>>,
-        cols: &Vec<String>,
+        cols: &[String],
     ) -> Result<(Option<String>, String, Vec<String>), Error> {
         let mut id_cols = Vec::new();
         if let Some(cols) = key_map.get("primary") {
@@ -67,7 +67,7 @@ impl RdbMetaManager {
         };
 
         if id_cols.is_empty() {
-            id_cols = cols.clone();
+            id_cols = cols.to_owned();
         }
 
         let partition_col = id_cols[0].clone();

@@ -47,8 +47,8 @@ impl KafkaRouter {
             return Ok(map);
         }
 
-        for name in config_str.split(",") {
-            let tokens: Vec<&str> = name.split(":").collect();
+        for name in config_str.split(',') {
+            let tokens: Vec<&str> = name.split(':').collect();
 
             if tokens.len() != 2 {
                 return Err(Error::ConfigError {
@@ -56,7 +56,7 @@ impl KafkaRouter {
                 });
             }
             map.insert(
-                tokens.get(0).unwrap().to_string(),
+                tokens.first().unwrap().to_string(),
                 tokens.get(1).unwrap().to_string(),
             );
         }

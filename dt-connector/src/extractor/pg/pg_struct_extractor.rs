@@ -79,7 +79,7 @@ impl PgStructExtractor<'_> {
                 meta: Some(meta),
                 ddl_type: DdlType::Unknown,
             };
-            BaseExtractor::push_dt_data(&self.buffer, DtData::Ddl { ddl_data })
+            BaseExtractor::push_dt_data(self.buffer, DtData::Ddl { ddl_data })
                 .await
                 .unwrap();
         }
@@ -126,7 +126,7 @@ impl PgStructExtractor<'_> {
             };
         }
 
-        if table_used_seqs.len() > 0 {
+        if !table_used_seqs.is_empty() {
             // query target seq
             let sql = format!("SELECT sequence_catalog,sequence_schema,sequence_name,data_type,start_value,minimum_value,maximum_value,increment,cycle_option 
                 FROM information_schema.sequences 
@@ -199,19 +199,16 @@ impl PgStructExtractor<'_> {
                     continue;
                 }
 
-                if !seq_owners.contains_key(&schema_seq_name) {
-                    seq_owners.insert(
-                        schema_seq_name,
-                        StructModel::SequenceOwnerModel {
-                            sequence_name: seq_name,
-                            database_name: String::new(),
-                            schema_name,
-                            owner_table_name: Self::get_str_with_null(&row, "table_name").unwrap(),
-                            owner_table_column_name: Self::get_str_with_null(&row, "column_name")
-                                .unwrap(),
-                        },
-                    );
-                }
+                seq_owners
+                    .entry(schema_seq_name)
+                    .or_insert(StructModel::SequenceOwnerModel {
+                        sequence_name: seq_name,
+                        database_name: String::new(),
+                        schema_name,
+                        owner_table_name: Self::get_str_with_null(&row, "table_name").unwrap(),
+                        owner_table_column_name: Self::get_str_with_null(&row, "column_name")
+                            .unwrap(),
+                    });
             }
         }
 
@@ -268,11 +265,8 @@ impl PgStructExtractor<'_> {
 
             let schema_table_name = format!("{}.{}", schema_name, table_name);
             if let Some(model) = results.get_mut(&schema_table_name) {
-                match model {
-                    StructModel::TableModel { columns, .. } => {
-                        columns.push(column);
-                    }
-                    _ => {}
+                if let StructModel::TableModel { columns, .. } = model {
+                    columns.push(column);
                 }
             } else {
                 results.insert(
@@ -456,9 +450,8 @@ impl PgStructExtractor<'_> {
         match col_type {
             ColType::Text => {
                 let str_val_option: Option<String> = row.get(col_name);
-                match str_val_option {
-                    Some(s) => str_val = s,
-                    None => {}
+                if let Some(s) = str_val_option {
+                    str_val = s
                 }
             }
             ColType::Char => {
@@ -514,13 +507,10 @@ impl PgStructExtractor<'_> {
         is_identity: Option<String>,
         identity_generation: Option<String>,
     ) -> Option<String> {
-        match is_identity {
-            Some(i) => {
-                if i.to_lowercase() == "yes" && identity_generation.is_some() {
-                    return identity_generation;
-                }
+        if let Some(i) = is_identity {
+            if i.to_lowercase() == "yes" && identity_generation.is_some() {
+                return identity_generation;
             }
-            None => {}
         }
         None
     }
@@ -533,7 +523,7 @@ impl PgStructExtractor<'_> {
         if default_value.is_empty() || !default_value.starts_with("nextval(") {
             return None;
         }
-        let arr_tmp: Vec<&str> = default_value.split("'").collect();
+        let arr_tmp: Vec<&str> = default_value.split('\'').collect();
         if arr_tmp.len() != 3 {
             println!(
                 "default_value:[{}] is like a sequence used, but not valid in process.",
@@ -542,14 +532,14 @@ impl PgStructExtractor<'_> {
             return None;
         }
         let mut seq_name = arr_tmp[1];
-        if seq_name.contains(".") {
-            let real_name_start_index = seq_name.find(".").unwrap() + 1;
+        if seq_name.contains('.') {
+            let real_name_start_index = seq_name.find('.').unwrap() + 1;
             seq_name = &seq_name[real_name_start_index..seq_name.len()];
         }
-        if seq_name.starts_with("\"") && seq_name.ends_with("\"") {
+        if seq_name.starts_with('\"') && seq_name.ends_with('\"') {
             let (start_index, end_index) = (
-                seq_name.find("\"").unwrap() + 1,
-                seq_name.rfind("\"").unwrap(),
+                seq_name.find('\"').unwrap() + 1,
+                seq_name.rfind('\"').unwrap(),
             );
             seq_name = &seq_name[start_index..end_index];
         }

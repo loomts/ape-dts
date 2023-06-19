@@ -7,9 +7,9 @@ pub struct PositionUtil {}
 impl PositionUtil {
     pub fn parse(position: &str) -> HashMap<String, String> {
         let mut result = HashMap::new();
-        let tokens: Vec<&str> = position.split(",").collect();
+        let tokens: Vec<&str> = position.split(',').collect();
         for token in tokens.iter() {
-            let pair: Vec<&str> = token.split(":").collect();
+            let pair: Vec<&str> = token.split(':').collect();
             result.insert(pair[0].to_string(), pair[1].to_string());
         }
         result

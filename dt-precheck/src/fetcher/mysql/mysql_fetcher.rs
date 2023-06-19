@@ -37,21 +37,13 @@ impl Fetcher for MysqlFetcher {
         let mut connection_url = String::from("");
 
         if self.is_source {
-            match &self.source_config {
-                ExtractorConfig::MysqlBasic { url, .. } => {
-                    connection_url = String::from(url);
-                    self.db_type_option = Some(DbType::Mysql);
-                }
-                _ => {}
-            };
-        } else {
-            match &self.sinker_config {
-                SinkerConfig::MysqlBasic { url, .. } => {
-                    connection_url = String::from(url);
-                    self.db_type_option = Some(DbType::Mysql);
-                }
-                _ => {}
-            };
+            if let ExtractorConfig::MysqlBasic { url, .. } = &self.source_config {
+                connection_url = String::from(url);
+                self.db_type_option = Some(DbType::Mysql);
+            }
+        } else if let SinkerConfig::MysqlBasic { url, .. } = &self.sinker_config {
+            connection_url = String::from(url);
+            self.db_type_option = Some(DbType::Mysql);
         }
         if !connection_url.is_empty() {
             let db_pool_result = MySqlPoolOptions::new()
@@ -68,13 +60,13 @@ impl Fetcher for MysqlFetcher {
     }
 
     async fn fetch_version(&mut self) -> Result<String, Error> {
-        let sql = format!("select version()");
+        let sql = "select version()".to_string();
         let mut version: String = String::from("");
 
         let result = self.fetch_all(sql, "mysql query database version").await;
         match result {
             Ok(rows) => {
-                if rows.len() > 0 {
+                if !rows.is_empty() {
                     let version_str: String = rows.get(0).unwrap().get("version()");
                     version = version_str;
                 }
@@ -82,7 +74,7 @@ impl Fetcher for MysqlFetcher {
             Err(e) => return Err(e),
         }
 
-        Ok(String::from(version))
+        Ok(version)
     }
 
     async fn fetch_configuration(
@@ -212,11 +204,10 @@ impl Fetcher for MysqlFetcher {
 
 impl MysqlFetcher {
     async fn fetch_all(&self, sql: String, mut sql_msg: &str) -> Result<Vec<MySqlRow>, Error> {
-        let mysql_pool;
-        match &self.pool {
-            Some(pool) => mysql_pool = pool,
+        let mysql_pool = match &self.pool {
+            Some(pool) => pool,
             None => return Err(Error::from(sqlx::Error::PoolClosed)),
-        }
+        };
 
         sql_msg = if sql_msg.is_empty() { "sql" } else { sql_msg };
         println!("{}: {}", sql_msg, sql);
@@ -237,9 +228,9 @@ impl MysqlFetcher {
             Some(pool) => {
                 sql_msg = if sql_msg.is_empty() { "sql" } else { sql_msg };
                 println!("{}: {}", sql_msg, sql);
-                return Ok(query(sql).fetch(pool));
+                Ok(query(sql).fetch(pool))
             }
-            None => return Err(Error::from(sqlx::Error::PoolClosed)),
+            None => Err(Error::from(sqlx::Error::PoolClosed)),
         }
     }
 }

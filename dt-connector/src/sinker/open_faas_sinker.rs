@@ -35,8 +35,8 @@ impl OpenFaasSinker {
         batch_size: usize,
     ) -> Result<(), Error> {
         let mut messages = Vec::new();
-        for i in start_index..start_index + batch_size {
-            messages.push(&data[i]);
+        for rd in data.iter().skip(start_index).take(batch_size) {
+            messages.push(rd);
         }
 
         let response = self

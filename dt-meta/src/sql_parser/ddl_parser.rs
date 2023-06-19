@@ -29,7 +29,7 @@ impl DdlParser {
     pub fn parse(sql: &str) -> Result<(DdlType, Option<String>, Option<String>), Error> {
         let sql = Self::remove_comments(sql);
         let input = sql.trim().as_bytes();
-        match sql_query(input.as_ref()) {
+        match sql_query(input) {
             Ok((_, o)) => Ok(o),
             Err(_) => Err(Error::Unexpected {
                 error: format!("failed to parse sql: {}", sql),
@@ -40,11 +40,12 @@ impl DdlParser {
     fn remove_comments(sql: &str) -> Cow<str> {
         // "create /*some comments,*/table/*some comments*/ `aaa`.`bbb`"
         let regex = Regex::new(r"(/\*([^*]|\*+[^*/*])*\*+/)|(--[^\n]*\n)").unwrap();
-        regex.replace_all(&sql, "")
+        regex.replace_all(sql, "")
     }
 }
 
 /// parse ddl sql and return: (ddl_type, schema, table)
+#[allow(clippy::type_complexity)]
 pub fn sql_query(i: &[u8]) -> IResult<&[u8], (DdlType, Option<String>, Option<String>)> {
     alt((
         map(create_database, |r| {
@@ -195,10 +196,9 @@ pub fn schema_table_reference(i: &[u8]) -> IResult<&[u8], (Option<String>, Strin
         )),
         |tup| {
             let name = String::from(str::from_utf8(tup.2).unwrap());
-            let schema = match tup.0 {
-                Some((schema, _)) => Some(String::from(str::from_utf8(schema).unwrap())),
-                None => None,
-            };
+            let schema = tup
+                .0
+                .map(|(schema, _)| String::from(str::from_utf8(schema).unwrap()));
             (schema, name)
         },
     )(i)
@@ -206,7 +206,7 @@ pub fn schema_table_reference(i: &[u8]) -> IResult<&[u8], (Option<String>, Strin
 
 #[inline]
 pub fn is_sql_identifier(chr: u8) -> bool {
-    is_alphanumeric(chr) || chr == '_' as u8 || chr == '@' as u8
+    is_alphanumeric(chr) || chr == b'_' || chr == b'@'
 }
 
 pub fn sql_identifier(i: &[u8]) -> IResult<&[u8], &[u8]> {

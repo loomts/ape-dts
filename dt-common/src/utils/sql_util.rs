@@ -9,14 +9,14 @@ const PG_ESCAPE: char = '"';
 
 impl SqlUtil {
     pub fn is_escaped(token: &str, escape_pair: &(char, char)) -> bool {
-        return token.starts_with(escape_pair.0) && token.ends_with(escape_pair.1);
+        token.starts_with(escape_pair.0) && token.ends_with(escape_pair.1)
     }
 
     pub fn escape(token: &str, escape_pair: &(char, char)) -> String {
         if !Self::is_escaped(token, escape_pair) {
             return format!(r#"{}{}{}"#, escape_pair.0, token, escape_pair.1);
         }
-        return token.to_string();
+        token.to_string()
     }
 
     pub fn escape_by_db_type(token: &str, db_type: &DbType) -> String {
@@ -42,7 +42,7 @@ impl SqlUtil {
         for col in cols {
             escaped_cols.push(Self::escape_by_db_type(col, db_type));
         }
-        return escaped_cols;
+        escaped_cols
     }
 
     pub fn get_escape_pairs(db_type: &DbType) -> Vec<(char, char)> {
@@ -53,7 +53,7 @@ impl SqlUtil {
         }
     }
 
-    pub fn is_valid_token(token: &str, db_type: &DbType, escape_pairs: &Vec<(char, char)>) -> bool {
+    pub fn is_valid_token(token: &str, db_type: &DbType, escape_pairs: &[(char, char)]) -> bool {
         let max_token_len = match db_type {
             DbType::Mysql | DbType::Pg => 64,
             // TODO
@@ -64,7 +64,7 @@ impl SqlUtil {
             match db_type {
                 DbType::Mysql | DbType::Pg => {
                     let pattern = format!(r"^[a-zA-Z0-9_\?\*]{{1,{}}}$", max_token_len);
-                    return Regex::new(&pattern).unwrap().is_match(token);
+                    Regex::new(&pattern).unwrap().is_match(token)
                 }
                 // TODO
                 _ => true,
@@ -77,7 +77,7 @@ impl SqlUtil {
                 let unescaped_token = Self::unescape(token, escape_pair);
                 return !unescaped_token.contains(escape_pair.0)
                     && !unescaped_token.contains(escape_pair.1)
-                    && unescaped_token.len() > 0
+                    && !unescaped_token.is_empty()
                     && unescaped_token.len() <= max_token_len;
             }
         }

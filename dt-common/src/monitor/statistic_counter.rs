@@ -44,7 +44,7 @@ impl StatisticCounter {
     fn remove_outdated_counters(&mut self) {
         let mut outdate_count = 0;
         for counter in self.counters.iter() {
-            if self.check_outdate(&counter) {
+            if self.check_outdate(counter) {
                 outdate_count += 1;
             } else {
                 break;

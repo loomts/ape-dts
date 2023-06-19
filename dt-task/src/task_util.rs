@@ -66,12 +66,12 @@ impl TaskUtil {
         let log_level = &config.runtime.log_level;
         let meta_manager = match &config.sinker {
             SinkerConfig::Mysql { url, .. } | SinkerConfig::MysqlCheck { url, .. } => {
-                let mysql_meta_manager = Self::create_mysql_meta_manager(&url, &log_level).await?;
+                let mysql_meta_manager = Self::create_mysql_meta_manager(url, log_level).await?;
                 RdbMetaManager::from_mysql(mysql_meta_manager)
             }
 
             SinkerConfig::Pg { url, .. } | SinkerConfig::PgCheck { url, .. } => {
-                let pg_meta_manager = Self::create_pg_meta_manager(&url, &log_level).await?;
+                let pg_meta_manager = Self::create_pg_meta_manager(url, log_level).await?;
                 RdbMetaManager::from_pg(pg_meta_manager)
             }
 

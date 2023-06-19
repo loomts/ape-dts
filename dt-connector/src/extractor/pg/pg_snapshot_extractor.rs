@@ -51,7 +51,8 @@ impl Extractor for PgSnapshotExtractor<'_> {
         if self.conn_pool.is_closed() {
             return Ok(());
         }
-        return Ok(self.conn_pool.close().await);
+        self.conn_pool.close().await;
+        Ok(())
     }
 }
 
@@ -67,7 +68,7 @@ impl PgSnapshotExtractor<'_> {
 
             let resume_value = if let Some(value) =
                 self.resumer
-                    .get_resume_value(&self.schema, &self.tb, &order_col)
+                    .get_resume_value(&self.schema, &self.tb, order_col)
             {
                 PgColValueConvertor::from_str(order_col_type, &value, &mut self.meta_manager)
                     .unwrap()
@@ -75,7 +76,7 @@ impl PgSnapshotExtractor<'_> {
                 ColValue::None
             };
 
-            self.extract_by_slices(&tb_meta, &order_col, order_col_type, resume_value)
+            self.extract_by_slices(&tb_meta, order_col, order_col_type, resume_value)
                 .await?;
         } else {
             self.extract_all(&tb_meta).await?;
@@ -95,7 +96,7 @@ impl PgSnapshotExtractor<'_> {
         let sql = self.build_extract_sql(tb_meta, false);
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
-            let row_data = RowData::from_pg_row(&row, &tb_meta);
+            let row_data = RowData::from_pg_row(&row, tb_meta);
             BaseExtractor::push_row(self.buffer, row_data)
                 .await
                 .unwrap();
@@ -139,7 +140,7 @@ impl PgSnapshotExtractor<'_> {
             let mut rows = query.fetch(&self.conn_pool);
             let mut slice_count = 0usize;
             while let Some(row) = rows.try_next().await.unwrap() {
-                let mut row_data = RowData::from_pg_row(&row, &tb_meta);
+                let mut row_data = RowData::from_pg_row(&row, tb_meta);
                 start_value =
                     PgColValueConvertor::from_query(&row, order_col, order_col_type).unwrap();
                 if let Some(value) = start_value.to_option_string() {
@@ -175,7 +176,7 @@ impl PgSnapshotExtractor<'_> {
         if let Some(order_col) = &tb_meta.basic.order_col {
             if has_start_value {
                 let order_col_type = tb_meta.col_type_map.get(order_col).unwrap();
-                return format!(
+                format!(
                     r#"SELECT {} FROM "{}"."{}" WHERE "{}" > $1::{} ORDER BY "{}" ASC LIMIT {}"#,
                     cols_str,
                     self.schema,
@@ -184,18 +185,18 @@ impl PgSnapshotExtractor<'_> {
                     order_col_type.short_name,
                     order_col,
                     self.slice_size
-                );
+                )
             } else {
-                return format!(
+                format!(
                     r#"SELECT {} FROM "{}"."{}" ORDER BY "{}" ASC LIMIT {}"#,
                     cols_str, self.schema, self.tb, order_col, self.slice_size
-                );
+                )
             }
         } else {
-            return format!(
+            format!(
                 r#"SELECT {} FROM "{}"."{}""#,
                 cols_str, self.schema, self.tb
-            );
+            )
         }
     }
 }

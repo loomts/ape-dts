@@ -33,7 +33,7 @@ impl SnapshotResumer {
     }
 
     fn get_combinations(a: &[String], b: &[String]) -> Vec<Vec<String>> {
-        if a.len() == 0 || a.len() != b.len() {
+        if a.is_empty() || a.len() != b.len() {
             return vec![];
         }
 
@@ -52,7 +52,7 @@ impl SnapshotResumer {
             result_2.extend(sub.clone());
             results.push(result_2)
         }
-        return results;
+        results
     }
 }
 

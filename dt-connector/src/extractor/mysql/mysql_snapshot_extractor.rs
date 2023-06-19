@@ -50,7 +50,8 @@ impl Extractor for MysqlSnapshotExtractor<'_> {
         if self.conn_pool.is_closed() {
             return Ok(());
         }
-        return Ok(self.conn_pool.close().await);
+        self.conn_pool.close().await;
+        Ok(())
     }
 }
 
@@ -61,14 +62,12 @@ impl MysqlSnapshotExtractor<'_> {
         if let Some(order_col) = &tb_meta.basic.order_col {
             let order_col_type = tb_meta.col_type_map.get(order_col).unwrap();
 
-            let resume_value = if let Some(value) = self
-                .resumer
-                .get_resume_value(&self.db, &self.tb, &order_col)
-            {
-                MysqlColValueConvertor::from_str(order_col_type, &value).unwrap()
-            } else {
-                ColValue::None
-            };
+            let resume_value =
+                if let Some(value) = self.resumer.get_resume_value(&self.db, &self.tb, order_col) {
+                    MysqlColValueConvertor::from_str(order_col_type, &value).unwrap()
+                } else {
+                    ColValue::None
+                };
 
             self.extract_by_slices(&tb_meta, order_col, order_col_type, resume_value)
                 .await?;
@@ -90,7 +89,7 @@ impl MysqlSnapshotExtractor<'_> {
         let sql = format!("SELECT * FROM `{}`.`{}`", self.db, self.tb);
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
-            let row_data = RowData::from_mysql_row(&row, &tb_meta);
+            let row_data = RowData::from_mysql_row(&row, tb_meta);
             BaseExtractor::push_row(self.buffer, row_data)
                 .await
                 .unwrap();
@@ -135,13 +134,13 @@ impl MysqlSnapshotExtractor<'_> {
             let query = if let ColValue::None = start_value {
                 sqlx::query(&sql1)
             } else {
-                sqlx::query(&sql2).bind_col_value(Some(&start_value_for_bind), &order_col_type)
+                sqlx::query(&sql2).bind_col_value(Some(&start_value_for_bind), order_col_type)
             };
 
             let mut rows = query.fetch(&self.conn_pool);
             let mut slice_count = 0usize;
             while let Some(row) = rows.try_next().await.unwrap() {
-                let mut row_data = RowData::from_mysql_row(&row, &tb_meta);
+                let mut row_data = RowData::from_mysql_row(&row, tb_meta);
                 start_value =
                     MysqlColValueConvertor::from_query(&row, order_col, order_col_type).unwrap();
                 if let Some(value) = start_value.to_option_string() {

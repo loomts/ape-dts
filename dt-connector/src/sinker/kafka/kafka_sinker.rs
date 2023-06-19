@@ -35,23 +35,21 @@ impl Sinker for KafkaSinker {
 impl KafkaSinker {
     async fn send(
         &mut self,
-        data: &mut Vec<RowData>,
+        data: &mut [RowData],
         sinked_count: usize,
         batch_size: usize,
     ) -> Result<(), Error> {
         let mut topics = Vec::new();
-        for i in sinked_count..sinked_count + batch_size {
-            let row_data = &data[i];
-            let topic = self.kafka_router.get_route(&row_data.schema, &row_data.tb);
+        for rd in data.iter().skip(sinked_count).take(batch_size) {
+            let topic = self.kafka_router.get_route(&rd.schema, &rd.tb);
             topics.push(topic);
         }
 
         let mut messages = Vec::new();
-        for i in sinked_count..sinked_count + batch_size {
-            let row_data = &data[i];
+        for (i, rd) in data.iter().skip(sinked_count).take(batch_size).enumerate() {
             messages.push(Record {
                 key: (),
-                value: row_data.to_string(),
+                value: rd.to_string(),
                 topic: &topics[i - sinked_count],
                 partition: -1,
             });

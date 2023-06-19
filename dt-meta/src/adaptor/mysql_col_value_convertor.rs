@@ -73,33 +73,33 @@ impl MysqlColValueConvertor {
         match value {
             ColumnValue::Tiny(v) => {
                 if *col_type == MysqlColType::UnsignedTiny {
-                    return ColValue::UnsignedTiny(v as u8);
+                    ColValue::UnsignedTiny(v as u8)
                 } else {
-                    return ColValue::Tiny(v);
+                    ColValue::Tiny(v)
                 }
             }
 
             ColumnValue::Short(v) => {
                 if *col_type == MysqlColType::UnsignedShort {
-                    return ColValue::UnsignedShort(v as u16);
+                    ColValue::UnsignedShort(v as u16)
                 } else {
-                    return ColValue::Short(v);
+                    ColValue::Short(v)
                 }
             }
 
             ColumnValue::Long(v) => {
                 if *col_type == MysqlColType::UnsignedLong {
-                    return ColValue::UnsignedLong(v as u32);
+                    ColValue::UnsignedLong(v as u32)
                 } else {
-                    return ColValue::Long(v);
+                    ColValue::Long(v)
                 }
             }
 
             ColumnValue::LongLong(v) => {
                 if *col_type == MysqlColType::UnsignedLongLong {
-                    return ColValue::UnsignedLongLong(v as u64);
+                    ColValue::UnsignedLongLong(v as u64)
                 } else {
-                    return ColValue::LongLong(v);
+                    ColValue::LongLong(v)
                 }
             }
 
@@ -118,10 +118,10 @@ impl MysqlColValueConvertor {
                 {
                     // the value parsed from binlog is in millis with UTC
                     let dt = Utc.timestamp_nanos(v * 1000 + timezone_diff_utc_seconds * 1000000000);
-                    return ColValue::Timestamp(dt.to_string().replace(" UTC", ""));
+                    ColValue::Timestamp(dt.to_string().replace(" UTC", ""))
                 } else {
                     let dt = Utc.timestamp_nanos(v * 1000);
-                    return ColValue::Timestamp(dt.to_string().replace(" UTC", ""));
+                    ColValue::Timestamp(dt.to_string().replace(" UTC", ""))
                 }
             }
 
@@ -136,7 +136,7 @@ impl MysqlColValueConvertor {
                         return ColValue::Blob(final_v);
                     }
                 }
-                return ColValue::Blob(v);
+                ColValue::Blob(v)
             }
 
             ColumnValue::Blob(v) => ColValue::Blob(v),
@@ -234,7 +234,7 @@ impl MysqlColValueConvertor {
         col_type: &MysqlColType,
     ) -> Result<ColValue, Error> {
         let value: Option<Vec<u8>> = row.get_unchecked(col);
-        if let None = value {
+        if value.is_none() {
             return Ok(ColValue::None);
         }
 
@@ -324,7 +324,7 @@ impl MysqlColValueConvertor {
             }
             MysqlColType::Bit => {
                 let value: u64 = row.try_get(col)?;
-                return Ok(ColValue::Bit(value as u64));
+                return Ok(ColValue::Bit(value));
             }
             MysqlColType::Set => {
                 let value: String = row.try_get(col)?;

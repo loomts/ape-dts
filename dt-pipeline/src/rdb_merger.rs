@@ -112,7 +112,7 @@ impl RdbMerger {
     fn check_collision(
         &mut self,
         buffer: &HashMap<u128, RowData>,
-        id_cols: &Vec<String>,
+        id_cols: &[String],
         row_data: &RowData,
         hash_code: u128,
     ) -> bool {
@@ -199,5 +199,11 @@ impl TbMergedData {
 
     pub fn get_unmerged_rows(&mut self) -> Vec<RowData> {
         self.unmerged_rows.as_slice().to_vec()
+    }
+}
+
+impl Default for TbMergedData {
+    fn default() -> Self {
+        Self::new()
     }
 }

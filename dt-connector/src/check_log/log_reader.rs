@@ -28,7 +28,7 @@ impl LogReader {
         }
     }
 
-    pub fn next(&mut self) -> Option<String> {
+    pub fn nextval(&mut self) -> Option<String> {
         if self.file_index >= self.files.len() {
             return Option::None;
         }
@@ -55,7 +55,7 @@ impl LogReader {
             } else {
                 self.lines = None;
                 self.file_index += 1;
-                return self.next();
+                return self.nextval();
             }
         }
         None

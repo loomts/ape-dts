@@ -28,7 +28,7 @@ impl Parallelizer for SnapshotParallelizer {
     async fn sink_dml(
         &mut self,
         data: Vec<RowData>,
-        sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
+        sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
     ) -> Result<(), Error> {
         let sub_datas = Self::partition(data, self.parallel_size)?;
         self.base_parallelizer
@@ -39,7 +39,7 @@ impl Parallelizer for SnapshotParallelizer {
     async fn sink_ddl(
         &mut self,
         _data: Vec<DdlData>,
-        _sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
+        _sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
     ) -> Result<(), Error> {
         Ok(())
     }
@@ -61,10 +61,8 @@ impl SnapshotParallelizer {
             sub_datas.push(Vec::with_capacity(avg_size));
         }
 
-        let mut i = 0;
-        for row_data in data {
+        for (i, row_data) in data.into_iter().enumerate() {
             sub_datas[i / avg_size].push(row_data);
-            i += 1;
         }
         Ok(sub_datas)
     }

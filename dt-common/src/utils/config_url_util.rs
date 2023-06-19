@@ -13,7 +13,7 @@ impl ConfigUrlUtil {
         match database_url.split(':').nth(1) {
             Some(username) => {
                 let byte_arr = username.as_bytes();
-                return Some(String::from_utf8(byte_arr[2..].to_vec()).unwrap());
+                Some(String::from_utf8(byte_arr[2..].to_vec()).unwrap())
             }
             None => None,
         }

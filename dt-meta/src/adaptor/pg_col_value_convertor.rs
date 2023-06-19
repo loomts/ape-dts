@@ -38,10 +38,8 @@ impl PgColValueConvertor {
             _ => "",
         };
 
-        if extract_type.is_empty() {
-            if col_type.is_array() || col_type.is_user_defined() {
-                return "text".to_string();
-            }
+        if extract_type.is_empty() && (col_type.is_array() || col_type.is_user_defined()) {
+            return "text".to_string();
         }
         extract_type.to_string()
     }
@@ -126,7 +124,7 @@ impl PgColValueConvertor {
         // plus aliases from the shorter names produced by older wal2json
         // let value = value.unwrap();
         let value_str = std::str::from_utf8(value).unwrap();
-        return Self::from_str(col_type, value_str, meta_manager);
+        Self::from_str(col_type, value_str, meta_manager)
     }
 
     pub fn from_query(
@@ -135,7 +133,7 @@ impl PgColValueConvertor {
         col_type: &PgColType,
     ) -> Result<ColValue, Error> {
         let value: Option<Vec<u8>> = row.get_unchecked(col_name);
-        if let None = value {
+        if value.is_none() {
             return Ok(ColValue::None);
         }
 

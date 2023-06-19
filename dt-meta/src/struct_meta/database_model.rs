@@ -95,12 +95,12 @@ pub enum IndexKind {
 
 impl PartialEq for IndexKind {
     fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (IndexKind::PrimaryKey, IndexKind::PrimaryKey) => true,
-            (IndexKind::Unique, IndexKind::Unique) => true,
-            (IndexKind::Index, IndexKind::Index) => true,
-            _ => false,
-        }
+        matches!(
+            (self, other),
+            (IndexKind::PrimaryKey, IndexKind::PrimaryKey)
+                | (IndexKind::Unique, IndexKind::Unique)
+                | (IndexKind::Index, IndexKind::Index)
+        )
     }
 }
 
@@ -141,18 +141,18 @@ impl PartialEq for StructModel {
             ) => {
                 if schema1.is_empty() && schema2.is_empty() {
                     // suck as mysql
-                    return db1 == db2
+                    db1 == db2
                         && table1 == table2
                         && engine1 == engine2
                         && comment1 == comment2
-                        && column1 == column2;
+                        && column1 == column2
                 } else {
                     // such as postgresql
-                    return schema1 == schema2
+                    schema1 == schema2
                         && table1 == table2
                         && engine1 == engine2
                         && comment1 == comment2
-                        && column1 == column2;
+                        && column1 == column2
                 }
             }
             (
@@ -175,18 +175,18 @@ impl PartialEq for StructModel {
             ) => {
                 if schema1.is_empty() && schema2.is_empty() {
                     // suck as mysql
-                    return db1 == db2
+                    db1 == db2
                         && table1 == table2
                         && constraint1 == constraint2
                         && type1 == type2
-                        && d1 == d2;
+                        && d1 == d2
                 } else {
                     // such as postgresql
-                    return schema1 == schema2
+                    schema1 == schema2
                         && table1 == table2
                         && constraint1 == constraint2
                         && type1 == type2
-                        && d1 == d2;
+                        && d1 == d2
                 }
             }
             (
@@ -217,7 +217,7 @@ impl PartialEq for StructModel {
             ) => {
                 if schema1.is_empty() && schema2.is_empty() {
                     // suck as mysql
-                    return db1 == db2
+                    db1 == db2
                         && table1 == table2
                         && index1 == index2
                         && kind1 == kind2
@@ -225,10 +225,10 @@ impl PartialEq for StructModel {
                         && comment1 == comment2
                         && space1 == space2
                         && d1 == d2
-                        && c1 == c2;
+                        && c1 == c2
                 } else {
                     // such as postgresql
-                    return schema1 == schema2
+                    schema1 == schema2
                         && table1 == table2
                         && index1 == index2
                         && kind1 == kind2
@@ -236,7 +236,7 @@ impl PartialEq for StructModel {
                         && comment1 == comment2
                         && space1 == space2
                         && d1 == d2
-                        && c1 == c2;
+                        && c1 == c2
                 }
             }
             (
@@ -257,10 +257,10 @@ impl PartialEq for StructModel {
             ) => {
                 if schema1.is_empty() && schema2.is_empty() {
                     // suck as mysql
-                    return db1 == db2 && table1 == table2 && col1 == col2 && c1 == c2;
+                    db1 == db2 && table1 == table2 && col1 == col2 && c1 == c2
                 } else {
                     // such as postgresql
-                    return schema1 == schema2 && table1 == table2 && col1 == col2 && c1 == c2;
+                    schema1 == schema2 && table1 == table2 && col1 == col2 && c1 == c2
                 }
             }
             (
@@ -289,24 +289,24 @@ impl PartialEq for StructModel {
             ) => {
                 if schema1.is_empty() && schema2.is_empty() {
                     // suck as mysql
-                    return db1 == db2
+                    db1 == db2
                         && seq1 == seq2
                         && type1 == type2
                         && s1 == s2
                         && i1 == i2
                         && min1 == min2
                         && max1 == max2
-                        && c1 == c2;
+                        && c1 == c2
                 } else {
                     // such as postgresql
-                    return schema1 == schema2
+                    schema1 == schema2
                         && seq1 == seq2
                         && type1 == type2
                         // && s1 == s2 // startvalue is not match most of time
                         && i1 == i2
                         && min1 == min2
                         && max1 == max2
-                        && c1 == c2;
+                        && c1 == c2
                 }
             }
             (
@@ -327,10 +327,10 @@ impl PartialEq for StructModel {
             ) => {
                 if schema1.is_empty() && schema2.is_empty() {
                     // suck as mysql
-                    return db1 == db2 && seq1 == seq2 && ot1 == ot2 && oc1 == oc2;
+                    db1 == db2 && seq1 == seq2 && ot1 == ot2 && oc1 == oc2
                 } else {
                     // such as postgresql
-                    return schema1 == schema2 && seq1 == seq2 && ot1 == ot2 && oc1 == oc2;
+                    schema1 == schema2 && seq1 == seq2 && ot1 == ot2 && oc1 == oc2
                 }
             }
             _ => false,
@@ -340,14 +340,13 @@ impl PartialEq for StructModel {
 
 impl StructModel {
     pub fn to_log_string(&self) -> String {
-        let str;
         match self {
-            Self::DatabaseModel { name } => str = format!("database:[name:{}]", name),
+            Self::DatabaseModel { name } => format!("database:[name:{}]", name),
             Self::SchemaModel {
                 database_name,
                 schema_name,
             } => {
-                str = format!(
+                format!(
                     "schema:[database:{}, schema:{}]",
                     database_name, schema_name
                 )
@@ -360,7 +359,7 @@ impl StructModel {
                 table_comment: _,
                 columns: _,
             } => {
-                str = format!(
+                format!(
                     "table:[database:{}, schema:{}, table_name:{}]",
                     database_name, schema_name, table_name
                 )
@@ -377,7 +376,7 @@ impl StructModel {
                 definition: _,
                 columns: _,
             } => {
-                str = format!(
+                format!(
                     "index:[database:{}, schema:{}, table:{}, index:{}]",
                     database_name, schema_name, table_name, index_name
                 )
@@ -390,7 +389,7 @@ impl StructModel {
                 constraint_type: _,
                 definition: _,
             } => {
-                str = format!(
+                format!(
                     "constraint:[database:{}, schema:{}, table:{}, constaint:{}]",
                     database_name, schema_name, table_name, constraint_name
                 )
@@ -402,7 +401,7 @@ impl StructModel {
                 column_name,
                 comment: _,
             } => {
-                str = format!(
+                format!(
                     "comment:[database:{}, schema:{}, table:{}, column:{}]",
                     database_name, schema_name, table_name, column_name
                 )
@@ -418,7 +417,7 @@ impl StructModel {
                 max_value: _,
                 is_circle: _,
             } => {
-                str = format!(
+                format!(
                     "sequence:[database:{}, schema:{}, sequence:{}]",
                     database_name, schema_name, sequence_name
                 )
@@ -430,7 +429,7 @@ impl StructModel {
                 owner_table_name,
                 owner_table_column_name,
             } => {
-                str = format!(
+                format!(
                     "sequence-owner:[database:{}, schema:{}, sequence:{}, table:{}, col:{}]",
                     database_name,
                     schema_name,
@@ -439,8 +438,7 @@ impl StructModel {
                     owner_table_column_name
                 )
             }
-            _ => str = format!("{:?}", self),
+            _ => format!("{:?}", self),
         }
-        str
     }
 }

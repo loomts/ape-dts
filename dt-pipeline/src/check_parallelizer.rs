@@ -32,7 +32,7 @@ impl Parallelizer for CheckParallelizer {
     async fn sink_dml(
         &mut self,
         data: Vec<RowData>,
-        sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
+        sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
     ) -> Result<(), Error> {
         let mut merged_datas = self.merger.merge(data).await?;
         for (_full_tb, tb_merged_data) in merged_datas.iter_mut() {
@@ -57,7 +57,7 @@ impl Parallelizer for CheckParallelizer {
     async fn sink_ddl(
         &mut self,
         _data: Vec<DdlData>,
-        _sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
+        _sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
     ) -> Result<(), Error> {
         Ok(())
     }

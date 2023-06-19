@@ -52,12 +52,12 @@ impl Checker for PostgresqlChecker {
             Ok(version) => {
                 if version.is_empty() {
                     check_error = Some(Error::PreCheckError {
-                        error: format!("found no version info"),
+                        error: "found no version info".to_string(),
                     });
                 } else {
                     let version_i32: i32 = version.parse().unwrap();
-                    if version_i32 < PG_SUPPORT_DB_VERSION_NUM_MIN
-                        || version_i32 > PG_SUPPORT_DB_VERSION_NUM_MAX
+                    if !(PG_SUPPORT_DB_VERSION_NUM_MIN..=PG_SUPPORT_DB_VERSION_NUM_MAX)
+                        .contains(&version_i32)
                     {
                         check_error = Some(Error::PreCheckError {
                             error: format!("version:{} is not supported yet", version_i32),
@@ -139,7 +139,7 @@ impl Checker for PostgresqlChecker {
             }
             Err(e) => return Err(e),
         }
-        if err_msgs.len() > 0 {
+        if !err_msgs.is_empty() {
             check_error = Some(Error::PreCheckError {
                 error: err_msgs.join(";"),
             });
@@ -154,7 +154,7 @@ impl Checker for PostgresqlChecker {
                         check_error = Some(Error::PreCheckError { error: format!("the current number of slots:[{}] has reached max_replication_slots, and new slots cannot be created", max_replication_slots_i32) });
                     }
                 }
-                Err(e) => check_error = Some(Error::from(e)),
+                Err(e) => check_error = Some(e),
             }
         }
 
@@ -189,36 +189,33 @@ impl Checker for PostgresqlChecker {
         let mut all_schemas = Vec::new();
         all_schemas.extend(&schemas);
         all_schemas.extend(&tb_schemas);
-        if all_schemas.len() <= 0 {
+        if all_schemas.is_empty() {
             println!("found no schema need to do migrate, very strange");
             return Err(Error::PreCheckError {
                 error: String::from("found no schema need to do migrate"),
             });
         }
 
-        if (self.is_source || !self.precheck_config.do_struct_init) && tbs.len() > 0 {
+        if (self.is_source || !self.precheck_config.do_struct_init) && !tbs.is_empty() {
             // When a specific table to be migrated is specified and the following conditions are met, check the existence of the table
             // 1. this check is for the source database
             // 2. this check is for the sink database, and specified no structure initialization
-            let current_tbs: HashSet<String>;
             let mut not_existed_tbs: HashSet<String> = HashSet::new();
 
             let table_result = self.fetcher.fetch_tables().await;
-            match table_result {
-                Ok(tables) => {
-                    current_tbs = tables
-                        .iter()
-                        .map(|t| format!("{}.{}", t.schema_name, t.table_name))
-                        .collect();
-                }
+            let current_tbs: HashSet<String> = match table_result {
+                Ok(tables) => tables
+                    .iter()
+                    .map(|t| format!("{}.{}", t.schema_name, t.table_name))
+                    .collect(),
                 Err(e) => return Err(e),
-            }
+            };
             for tb_key in tbs {
                 if !current_tbs.contains(&tb_key) {
                     not_existed_tbs.insert(tb_key);
                 }
             }
-            if not_existed_tbs.len() > 0 {
+            if !not_existed_tbs.is_empty() {
                 err_msgs.push(format!(
                     "tables not existed: [{}]",
                     not_existed_tbs
@@ -230,23 +227,20 @@ impl Checker for PostgresqlChecker {
             }
         }
 
-        if all_schemas.len() > 0 {
-            let current_schemas: HashSet<String>;
+        if !all_schemas.is_empty() {
             let mut not_existed_schema: HashSet<String> = HashSet::new();
-
             let schema_result = self.fetcher.fetch_schemas().await;
-            match schema_result {
-                Ok(schemas) => {
-                    current_schemas = schemas.iter().map(|s| s.schema_name.clone()).collect();
-                }
+            let current_schemas: HashSet<String> = match schema_result {
+                Ok(schemas) => schemas.iter().map(|s| s.schema_name.clone()).collect(),
                 Err(e) => return Err(e),
-            }
+            };
+
             for schema in all_schemas {
                 if !current_schemas.contains(schema) {
                     not_existed_schema.insert(schema.clone());
                 }
             }
-            if not_existed_schema.len() > 0 {
+            if !not_existed_schema.is_empty() {
                 err_msgs.push(format!(
                     "schemas not existed: [{}]",
                     not_existed_schema
@@ -257,7 +251,7 @@ impl Checker for PostgresqlChecker {
                 ));
             }
         }
-        if err_msgs.len() > 0 {
+        if !err_msgs.is_empty() {
             check_error = Some(Error::PreCheckError {
                 error: err_msgs.join("."),
             })
@@ -305,39 +299,33 @@ impl Checker for PostgresqlChecker {
         let mut all_schemas = Vec::new();
         all_schemas.extend(&schemas);
         all_schemas.extend(&tb_schemas);
-        if all_schemas.len() <= 0 {
+        if all_schemas.is_empty() {
             println!("found no schema need to do migrate, very strange");
             return Err(Error::PreCheckError {
                 error: String::from("found no schema need to do migrate"),
             });
         }
 
-        let current_tables: HashSet<String>;
         let (mut has_pk_tables, mut has_fk_tables): (HashSet<String>, HashSet<String>) =
             (HashSet::new(), HashSet::new());
 
         let table_result = self.fetcher.fetch_tables().await;
-        match table_result {
-            Ok(tables) => {
-                current_tables = tables
-                    .iter()
-                    .map(|t| format!("{}.{}", t.schema_name, t.table_name))
-                    .collect();
-            }
+        let current_tables: HashSet<String> = match table_result {
+            Ok(tables) => tables
+                .iter()
+                .map(|t| format!("{}.{}", t.schema_name, t.table_name))
+                .collect(),
             Err(e) => return Err(e),
-        }
+        };
 
         let constraint_result = self.fetcher.fetch_constraints().await;
         match constraint_result {
             Ok(constraints) => {
-                // Todo: for more test here
                 for c in constraints {
                     let schema_table_name = format!("{}.{}", c.schema_name, c.table_name);
                     if c.constraint_type == ConstraintTypeEnum::Primary.to_str().unwrap() {
                         has_pk_tables.insert(schema_table_name);
-                    } else if c.constraint_type.to_string()
-                        == ConstraintTypeEnum::Foregin.to_str().unwrap()
-                    {
+                    } else if c.constraint_type == ConstraintTypeEnum::Foregin.to_str().unwrap() {
                         has_fk_tables.insert(schema_table_name);
                     }
                 }
@@ -345,7 +333,7 @@ impl Checker for PostgresqlChecker {
             Err(e) => return Err(e),
         }
 
-        if has_fk_tables.len() > 0 {
+        if !has_fk_tables.is_empty() {
             err_msgs.push(format!(
                 "foreign keys are not supported, but these tables have foreign keys:[{}]",
                 has_fk_tables
@@ -361,7 +349,7 @@ impl Checker for PostgresqlChecker {
                 no_pk_tables.insert(current_table);
             }
         }
-        if no_pk_tables.len() > 0 {
+        if !no_pk_tables.is_empty() {
             err_msgs.push(format!(
                 "primary key are needed, but these tables don't have a primary key:[{}]",
                 no_pk_tables
@@ -371,7 +359,7 @@ impl Checker for PostgresqlChecker {
                     .join(";")
             ));
         }
-        if err_msgs.len() > 0 {
+        if !err_msgs.is_empty() {
             check_error = Some(Error::PreCheckError {
                 error: err_msgs.join(";"),
             })

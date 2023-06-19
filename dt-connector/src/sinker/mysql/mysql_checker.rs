@@ -30,7 +30,7 @@ pub struct MysqlChecker {
 #[async_trait]
 impl Sinker for MysqlChecker {
     async fn sink_dml(&mut self, mut data: Vec<RowData>, batch: bool) -> Result<(), Error> {
-        if data.len() == 0 {
+        if data.is_empty() {
             return Ok(());
         }
 
@@ -54,7 +54,7 @@ impl Sinker for MysqlChecker {
 impl MysqlChecker {
     async fn serial_check(&mut self, data: Vec<RowData>) -> Result<(), Error> {
         for row_data_src in data.iter() {
-            let tb_meta = self.get_tb_meta(&row_data_src).await?;
+            let tb_meta = self.get_tb_meta(row_data_src).await?;
             let query_builder = RdbQueryBuilder::new_for_mysql(&tb_meta);
 
             let (sql, cols, binds) = query_builder.get_select_query(row_data_src)?;
@@ -64,10 +64,10 @@ impl MysqlChecker {
             if let Some(row) = rows.try_next().await.unwrap() {
                 let row_data_dst = RowData::from_mysql_row(&row, &tb_meta);
                 if !BaseChecker::compare_row_data(row_data_src, &row_data_dst) {
-                    BaseChecker::log_diff(&row_data_src, &tb_meta.basic);
+                    BaseChecker::log_diff(row_data_src, &tb_meta.basic);
                 }
             } else {
-                BaseChecker::log_miss(&row_data_src, &tb_meta.basic);
+                BaseChecker::log_miss(row_data_src, &tb_meta.basic);
             }
         }
         Ok(())
@@ -75,7 +75,7 @@ impl MysqlChecker {
 
     async fn batch_check(
         &mut self,
-        data: &mut Vec<RowData>,
+        data: &mut [RowData],
         start_index: usize,
         batch_size: usize,
     ) -> Result<(), Error> {
@@ -84,7 +84,7 @@ impl MysqlChecker {
 
         // build fetch dst sql
         let (sql, cols, binds) =
-            query_builder.get_batch_select_query(&data, start_index, batch_size)?;
+            query_builder.get_batch_select_query(data, start_index, batch_size)?;
         let query = query_builder.create_mysql_query(&sql, &cols, &binds);
 
         // fetch dst
@@ -97,7 +97,7 @@ impl MysqlChecker {
         }
 
         BaseChecker::batch_compare_row_datas(
-            &data,
+            data,
             &dst_row_data_map,
             &tb_meta.basic,
             start_index,

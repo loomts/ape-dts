@@ -78,7 +78,7 @@ impl TaskConfig {
                     binlog_filename: ini.get(EXTRACTOR, "binlog_filename").unwrap(),
                     binlog_position: ini.getuint(EXTRACTOR, "binlog_position").unwrap().unwrap()
                         as u32,
-                    server_id: ini.getuint(EXTRACTOR, "server_id").unwrap().unwrap() as u64,
+                    server_id: ini.getuint(EXTRACTOR, "server_id").unwrap().unwrap(),
                 }),
 
                 ExtractType::CheckLog => Ok(ExtractorConfig::MysqlCheck {
@@ -107,7 +107,7 @@ impl TaskConfig {
                     heartbeat_interval_secs: ini
                         .getuint(EXTRACTOR, "heartbeat_interval_secs")
                         .unwrap()
-                        .unwrap() as u64,
+                        .unwrap(),
                 }),
 
                 ExtractType::CheckLog => Ok(ExtractorConfig::PgCheck {
@@ -196,14 +196,14 @@ impl TaskConfig {
             DbType::Kafka => Ok(SinkerConfig::Kafka {
                 url,
                 batch_size,
-                ack_timeout_secs: ini.getuint(SINKER, "ack_timeout_secs").unwrap().unwrap() as u64,
+                ack_timeout_secs: ini.getuint(SINKER, "ack_timeout_secs").unwrap().unwrap(),
                 required_acks: ini.get(SINKER, "required_acks").unwrap(),
             }),
 
             DbType::OpenFaas => Ok(SinkerConfig::OpenFaas {
                 url,
                 batch_size,
-                timeout_secs: ini.getuint(SINKER, "timeout_secs").unwrap().unwrap() as u64,
+                timeout_secs: ini.getuint(SINKER, "timeout_secs").unwrap().unwrap(),
             }),
 
             DbType::Foxlake => Ok(SinkerConfig::Foxlake {
@@ -228,7 +228,7 @@ impl TaskConfig {
             checkpoint_interval_secs: ini
                 .getuint(PIPELINE, "checkpoint_interval_secs")
                 .unwrap()
-                .unwrap() as u64,
+                .unwrap(),
             batch_sink_interval_secs,
         }
     }

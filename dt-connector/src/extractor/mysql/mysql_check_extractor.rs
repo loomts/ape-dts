@@ -40,13 +40,12 @@ impl Extractor for MysqlCheckExtractor<'_> {
 
         let mut base_check_extractor = BaseCheckExtractor {
             check_log_dir: self.check_log_dir.clone(),
-            buffer: &self.buffer,
+            buffer: self.buffer,
             batch_size: self.batch_size,
-            shut_down: &self.shut_down,
+            shut_down: self.shut_down,
         };
 
-        let mut batch_extractor: Box<&mut (dyn BatchCheckExtractor + Send)> = Box::new(self);
-        base_check_extractor.extract(&mut batch_extractor).await
+        base_check_extractor.extract(self).await
     }
 
     async fn close(&mut self) -> Result<(), Error> {
@@ -56,8 +55,8 @@ impl Extractor for MysqlCheckExtractor<'_> {
 
 #[async_trait]
 impl BatchCheckExtractor for MysqlCheckExtractor<'_> {
-    async fn batch_extract(&mut self, check_logs: &Vec<CheckLog>) -> Result<(), Error> {
-        if check_logs.len() == 0 {
+    async fn batch_extract(&mut self, check_logs: &[CheckLog]) -> Result<(), Error> {
+        if check_logs.is_empty() {
             return Ok(());
         }
 
@@ -95,7 +94,7 @@ impl BatchCheckExtractor for MysqlCheckExtractor<'_> {
 
 impl MysqlCheckExtractor<'_> {
     fn build_check_row_datas(
-        check_logs: &Vec<CheckLog>,
+        check_logs: &[CheckLog],
         tb_meta: &MysqlTbMeta,
     ) -> Result<Vec<RowData>, Error> {
         let mut result = Vec::new();

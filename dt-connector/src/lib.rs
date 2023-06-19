@@ -26,5 +26,5 @@ pub trait Extractor {
 
 #[async_trait]
 pub trait BatchCheckExtractor {
-    async fn batch_extract(&mut self, check_logs: &Vec<CheckLog>) -> Result<(), Error>;
+    async fn batch_extract(&mut self, check_logs: &[CheckLog]) -> Result<(), Error>;
 }

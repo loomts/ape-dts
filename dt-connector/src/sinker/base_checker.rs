@@ -10,21 +10,20 @@ pub struct BaseChecker {}
 impl BaseChecker {
     #[inline(always)]
     pub fn batch_compare_row_datas(
-        src_data: &Vec<RowData>,
+        src_data: &[RowData],
         dst_row_data_map: &HashMap<u128, RowData>,
         tb_meta: &RdbTbMeta,
         start_index: usize,
         batch_size: usize,
     ) {
-        for i in start_index..start_index + batch_size {
-            let row_data_src = &src_data[i];
+        for row_data_src in src_data.iter().skip(start_index).take(batch_size) {
             let hash_code = row_data_src.get_hash_code(tb_meta);
             if let Some(row_data_dst) = dst_row_data_map.get(&hash_code) {
                 if !Self::compare_row_data(row_data_src, row_data_dst) {
-                    Self::log_diff(&row_data_src, tb_meta);
+                    Self::log_diff(row_data_src, tb_meta);
                 }
             } else {
-                Self::log_miss(&row_data_src, tb_meta);
+                Self::log_miss(row_data_src, tb_meta);
             }
         }
     }

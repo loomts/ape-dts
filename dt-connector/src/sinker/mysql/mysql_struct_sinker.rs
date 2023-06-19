@@ -55,7 +55,7 @@ impl MysqlStructSinker {
                 let (column_str, pk_arr, global_charset, global_collation) =
                     Self::build_sql_with_table_columns(columns).unwrap();
                 let mut pk_str = String::from("");
-                if pk_arr.len() > 0 {
+                if !pk_arr.is_empty() {
                     pk_str = format!(
                         ",PRIMARY KEY ({})",
                         pk_arr
@@ -88,11 +88,7 @@ impl MysqlStructSinker {
                     }
                     Err(e) => {
                         return {
-                            println!(
-                                "create table sql:[{}],execute failed:{}",
-                                sql,
-                                e.to_string()
-                            );
+                            println!("create table sql:[{}],execute failed:{}", sql, e);
                             Err(Error::from(e))
                         }
                     }
@@ -133,11 +129,8 @@ impl MysqlStructSinker {
                 //     lock_option(Todo:):
                 //         LOCK [=] {DEFAULT | NONE | SHARED | EXCLUSIVE}
                 let mut index_kind_str = String::from("");
-                match index_kind {
-                    IndexKind::Unique => {
-                        index_kind_str = String::from("UNIQUE");
-                    }
-                    _ => {}
+                if let IndexKind::Unique = index_kind {
+                    index_kind_str = String::from("UNIQUE");
                 }
                 columns.sort_by(|a, b| a.seq_in_index.cmp(&b.seq_in_index));
                 let mut sql = format!(
@@ -166,11 +159,7 @@ impl MysqlStructSinker {
                     }
                     Err(e) => {
                         return {
-                            println!(
-                                "create index sql:[{}],execute failed:{}",
-                                sql,
-                                e.to_string()
-                            );
+                            println!("create index sql:[{}],execute failed:{}", sql, e);
                             Err(Error::from(e))
                         }
                     }
@@ -223,12 +212,11 @@ impl MysqlStructSinker {
         }
 
         for col in cols {
-            let nullable: String;
-            if col.is_nullable.to_lowercase() == "no" {
-                nullable = String::from("NOT NULL");
+            let nullable = if col.is_nullable.to_lowercase() == "no" {
+                String::from("NOT NULL")
             } else {
-                nullable = String::from("NULL");
-            }
+                String::from("NULL")
+            };
             result_str.push_str(
                 format!(" `{}` {} {} ", col.column_name, col.column_type, nullable).as_str(),
             );
@@ -257,19 +245,19 @@ impl MysqlStructSinker {
             if global_collation.is_empty() && !col.collation.is_empty() {
                 result_str.push_str(format!("COLLATE {} ", col.collation).as_str())
             }
-            result_str.push_str(",");
+            result_str.push(',');
             if col.column_key == "PRI" {
                 pk_str.push(String::from(col.column_name.as_str()));
             }
         }
-        if result_str.ends_with(",") {
+        if result_str.ends_with(',') {
             result_str = result_str[0..result_str.len() - 1].to_string();
         }
         Ok((result_str, pk_str, global_charset, global_collation))
     }
 
     fn sort_and_dedup(arr: &mut Vec<String>) {
-        arr.sort_by(|a, b| a.cmp(b));
+        arr.sort();
         arr.dedup();
     }
 }

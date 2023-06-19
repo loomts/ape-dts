@@ -51,7 +51,7 @@ impl Checker for MySqlChecker {
             Ok(version) => {
                 if version.is_empty() {
                     check_error = Some(Error::PreCheckError {
-                        error: format!("found no version info."),
+                        error: "found no version info.".to_string(),
                     });
                 } else {
                     let re = Regex::new(MYSQL_SUPPORT_DB_VERSION_REGEX).unwrap();
@@ -137,7 +137,7 @@ impl Checker for MySqlChecker {
             }
             Err(e) => return Err(e),
         }
-        if errs.len() > 0 {
+        if !errs.is_empty() {
             check_error = Some(Error::PreCheckError {
                 error: errs.join(";"),
             })
@@ -175,29 +175,26 @@ impl Checker for MySqlChecker {
         all_db_names.extend(&dbs);
         all_db_names.extend(&tb_dbs);
 
-        if (self.is_source || !self.precheck_config.do_struct_init) && tbs.len() > 0 {
+        if (self.is_source || !self.precheck_config.do_struct_init) && !tbs.is_empty() {
             // When a specific table to be migrated is specified and the following conditions are met, check the existence of the table
             // 1. this check is for the source database
             // 2. this check is for the sink database, and specified no structure initialization
-            let current_tbs: HashSet<String>;
             let mut not_existed_tbs: HashSet<String> = HashSet::new();
 
             let tables_result = self.fetcher.fetch_tables().await;
-            match tables_result {
-                Ok(tables) => {
-                    current_tbs = tables
-                        .iter()
-                        .map(|t| format!("{}.{}", t.database_name, t.table_name))
-                        .collect()
-                }
+            let current_tbs: HashSet<String> = match tables_result {
+                Ok(tables) => tables
+                    .iter()
+                    .map(|t| format!("{}.{}", t.database_name, t.table_name))
+                    .collect(),
                 Err(e) => return Err(e),
-            }
+            };
             for tb in tbs {
                 if !current_tbs.contains(&tb) {
                     not_existed_tbs.insert(tb);
                 }
             }
-            if not_existed_tbs.len() > 0 {
+            if !not_existed_tbs.is_empty() {
                 err_msgs.push(format!(
                     "tables not existed: [{}]",
                     not_existed_tbs
@@ -209,23 +206,20 @@ impl Checker for MySqlChecker {
             }
         }
 
-        if all_db_names.len() > 0 {
-            let current_dbs: HashSet<String>;
+        if !all_db_names.is_empty() {
             let mut not_existed_dbs: HashSet<String> = HashSet::new();
 
             let dbs_result = self.fetcher.fetch_databases().await;
-            match dbs_result {
-                Ok(dbs) => {
-                    current_dbs = dbs.iter().map(|d| d.database_name.clone()).collect();
-                }
+            let current_dbs: HashSet<String> = match dbs_result {
+                Ok(dbs) => dbs.iter().map(|d| d.database_name.clone()).collect(),
                 Err(e) => return Err(e),
-            }
+            };
             for db_name in all_db_names {
                 if !current_dbs.contains(db_name) {
                     not_existed_dbs.insert(db_name.clone());
                 }
             }
-            if not_existed_dbs.len() > 0 {
+            if !not_existed_dbs.is_empty() {
                 err_msgs.push(format!(
                     "databases not existed: [{}]",
                     not_existed_dbs
@@ -236,7 +230,7 @@ impl Checker for MySqlChecker {
                 ));
             }
         }
-        if err_msgs.len() > 0 {
+        if !err_msgs.is_empty() {
             check_error = Some(Error::PreCheckError {
                 error: err_msgs.join("."),
             })
@@ -320,7 +314,7 @@ impl Checker for MySqlChecker {
             Err(e) => return Err(e),
         }
 
-        if has_fk_tables.len() > 0 {
+        if !has_fk_tables.is_empty() {
             err_msgs.push(format!(
                 "foreign keys are not supported, but these tables have foreign keys:[{}]",
                 has_fk_tables
@@ -330,7 +324,7 @@ impl Checker for MySqlChecker {
                     .join(";")
             ))
         }
-        if no_pk_tables.len() > 0 {
+        if !no_pk_tables.is_empty() {
             err_msgs.push(format!(
                 "primary key are needed, but these tables don't have a primary key:[{}]",
                 no_pk_tables
@@ -340,7 +334,7 @@ impl Checker for MySqlChecker {
                     .join(";")
             ))
         }
-        if err_msgs.len() > 0 {
+        if !err_msgs.is_empty() {
             check_error = Some(Error::PreCheckError {
                 error: err_msgs.join(";"),
             })

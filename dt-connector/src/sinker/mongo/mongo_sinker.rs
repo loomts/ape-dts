@@ -21,7 +21,7 @@ pub struct MongoSinker {
 #[async_trait]
 impl Sinker for MongoSinker {
     async fn sink_dml(&mut self, mut data: Vec<RowData>, batch: bool) -> Result<(), Error> {
-        if data.len() == 0 {
+        if data.is_empty() {
             return Ok(());
         }
 
@@ -102,7 +102,7 @@ impl MongoSinker {
 
     async fn batch_delete(
         &mut self,
-        data: &mut Vec<RowData>,
+        data: &mut [RowData],
         start_index: usize,
         batch_size: usize,
     ) -> Result<(), Error> {
@@ -110,9 +110,8 @@ impl MongoSinker {
         let collection = self.mongo_client.database(&db).collection::<Document>(&tb);
 
         let mut ids = Vec::new();
-        for i in start_index..start_index + batch_size {
-            let row_data = &data[i];
-            let before = row_data.before.as_ref().unwrap();
+        for rd in data.iter().skip(start_index).take(batch_size) {
+            let before = rd.before.as_ref().unwrap();
             if let Some(ColValue::MongoDoc(doc)) = before.get(MongoConstants::DOC) {
                 ids.push(doc.get_object_id(MongoConstants::ID).unwrap());
             }
@@ -129,7 +128,7 @@ impl MongoSinker {
 
     async fn batch_insert(
         &mut self,
-        data: &mut Vec<RowData>,
+        data: &mut [RowData],
         start_index: usize,
         batch_size: usize,
     ) -> Result<(), Error> {
@@ -138,9 +137,8 @@ impl MongoSinker {
         let collection = self.mongo_client.database(db).collection::<Document>(tb);
 
         let mut docs = Vec::new();
-        for i in start_index..start_index + batch_size {
-            let row_data = &data[i];
-            let after = row_data.after.as_ref().unwrap();
+        for rd in data.iter().skip(start_index).take(batch_size) {
+            let after = rd.after.as_ref().unwrap();
             // TODO, support mysql / pg -> mongo
             if let Some(ColValue::MongoDoc(doc)) = after.get(MongoConstants::DOC) {
                 docs.push(doc);

@@ -29,7 +29,7 @@ pub struct PgSinker {
 #[async_trait]
 impl Sinker for PgSinker {
     async fn sink_dml(&mut self, mut data: Vec<RowData>, batch: bool) -> Result<(), Error> {
-        if data.len() == 0 {
+        if data.is_empty() {
             return Ok(());
         }
 
@@ -61,13 +61,13 @@ impl Sinker for PgSinker {
 impl PgSinker {
     async fn serial_sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
         for row_data in data.iter() {
-            let tb_meta = self.get_tb_meta(&row_data).await?;
+            let tb_meta = self.get_tb_meta(row_data).await?;
             let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
 
             let (sql, cols, binds) = if row_data.row_type == RowType::Insert {
                 self.get_insert_query(&query_builder, &tb_meta, row_data)?
             } else {
-                query_builder.get_query_info(&row_data)?
+                query_builder.get_query_info(row_data)?
             };
             let query = query_builder.create_pg_query(&sql, &cols, &binds);
             query.execute(&self.conn_pool).await.unwrap();
@@ -77,7 +77,7 @@ impl PgSinker {
 
     async fn batch_delete(
         &mut self,
-        data: &mut Vec<RowData>,
+        data: &mut [RowData],
         start_index: usize,
         batch_size: usize,
     ) -> Result<(), Error> {
@@ -85,7 +85,7 @@ impl PgSinker {
         let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
 
         let (sql, cols, binds) =
-            query_builder.get_batch_delete_query(&data, start_index, batch_size)?;
+            query_builder.get_batch_delete_query(data, start_index, batch_size)?;
         let query = query_builder.create_pg_query(&sql, &cols, &binds);
 
         query.execute(&self.conn_pool).await.unwrap();
@@ -94,7 +94,7 @@ impl PgSinker {
 
     async fn batch_insert(
         &mut self,
-        data: &mut Vec<RowData>,
+        data: &mut [RowData],
         start_index: usize,
         batch_size: usize,
     ) -> Result<(), Error> {
@@ -102,7 +102,7 @@ impl PgSinker {
         let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
 
         let (sql, cols, binds) =
-            query_builder.get_batch_insert_query(&data, start_index, batch_size)?;
+            query_builder.get_batch_insert_query(data, start_index, batch_size)?;
         let query = query_builder.create_pg_query(&sql, &cols, &binds);
 
         let result = query.execute(&self.conn_pool).await;
@@ -119,6 +119,7 @@ impl PgSinker {
         Ok(())
     }
 
+    #[allow(clippy::type_complexity)]
     fn get_insert_query<'a>(
         &self,
         query_builder: &RdbQueryBuilder,
