@@ -60,12 +60,12 @@ impl Pipeline<'_> {
                 Vec::new()
             } else {
                 last_sink_time = Instant::now();
-                self.parallelizer.drain(&self.buffer).await.unwrap()
+                self.parallelizer.drain(self.buffer).await.unwrap()
             };
 
             // process all row_datas in buffer at a time
             let mut sink_count = 0;
-            if data.len() > 0 {
+            if !data.is_empty() {
                 let (count, last_received, last_commit);
                 if data[0].is_ddl() {
                     (count, last_received, last_commit) = self.sink_ddl(data).await.unwrap();

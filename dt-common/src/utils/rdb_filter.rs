@@ -90,7 +90,7 @@ impl RdbFilter {
         set: &HashSet<(String, String)>,
         db: &str,
         tb: &str,
-        escape_pairs: &Vec<(char, char)>,
+        escape_pairs: &[(char, char)],
     ) -> bool {
         for i in set.iter() {
             if Self::match_token(&i.0, db, escape_pairs)
@@ -102,7 +102,7 @@ impl RdbFilter {
         false
     }
 
-    fn contain_db(set: &HashSet<String>, item: &str, escape_pairs: &Vec<(char, char)>) -> bool {
+    fn contain_db(set: &HashSet<String>, item: &str, escape_pairs: &[(char, char)]) -> bool {
         for i in set.iter() {
             if Self::match_token(i, item, escape_pairs) {
                 return true;
@@ -111,7 +111,7 @@ impl RdbFilter {
         false
     }
 
-    fn match_token(pattern: &str, item: &str, escape_pairs: &Vec<(char, char)>) -> bool {
+    fn match_token(pattern: &str, item: &str, escape_pairs: &[(char, char)]) -> bool {
         // if pattern is quoted by escapes, it is considered as exactly match
         // example: mysql table name : `aaa*`, it can only match the table `aaa*`, it won't match `aaa_bbb`
         for escape_pair in escape_pairs.iter() {
@@ -123,9 +123,9 @@ impl RdbFilter {
         // * : matching mutiple chars
         // ? : for matching 0-1 chars
         let mut pattern = pattern
-            .replace(".", "\\.")
-            .replace("*", ".*")
-            .replace("?", ".?");
+            .replace('.', "\\.")
+            .replace('*', ".*")
+            .replace('?', ".?");
         pattern = format!(r"^{}$", pattern);
         if Regex::new(&pattern).unwrap().is_match(item) {
             return true;
@@ -134,13 +134,13 @@ impl RdbFilter {
     }
 
     fn get_delimiters() -> Vec<char> {
-        return vec![',', '.'];
+        vec![',', '.']
     }
 
     fn parse_pair_tokens(
         config_str: &str,
         db_type: &DbType,
-        escape_pairs: &Vec<(char, char)>,
+        escape_pairs: &[(char, char)],
     ) -> Result<HashSet<(String, String)>, Error> {
         let mut results = HashSet::new();
         let tokens = Self::parse_config(config_str, db_type, escape_pairs)?;
@@ -155,7 +155,7 @@ impl RdbFilter {
     fn parse_individual_tokens(
         config_str: &str,
         db_type: &DbType,
-        escape_pairs: &Vec<(char, char)>,
+        escape_pairs: &[(char, char)],
     ) -> Result<HashSet<String>, Error> {
         let tokens = Self::parse_config(config_str, db_type, escape_pairs)?;
         let results: HashSet<String> = HashSet::from_iter(tokens.into_iter());
@@ -165,7 +165,7 @@ impl RdbFilter {
     fn parse_config(
         config_str: &str,
         db_type: &DbType,
-        escape_pairs: &Vec<(char, char)>,
+        escape_pairs: &[(char, char)],
     ) -> Result<Vec<String>, Error> {
         if config_str.is_empty() {
             return Ok(Vec::new());

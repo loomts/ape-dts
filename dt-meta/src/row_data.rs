@@ -37,7 +37,7 @@ impl RowData {
     pub fn from_pg_row(row: &PgRow, tb_meta: &PgTbMeta) -> Self {
         let mut after = HashMap::new();
         for (col_name, col_type) in &tb_meta.col_type_map {
-            let col_value = PgColValueConvertor::from_query(row, &col_name, &col_type).unwrap();
+            let col_value = PgColValueConvertor::from_query(row, col_name, col_type).unwrap();
             after.insert(col_name.to_string(), col_value);
         }
         Self::build_insert_row_data(after, &tb_meta.basic)
@@ -54,6 +54,7 @@ impl RowData {
         }
     }
 
+    #[allow(clippy::inherent_to_string)]
     pub fn to_string(&self) -> String {
         json!(self).to_string()
     }

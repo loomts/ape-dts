@@ -63,7 +63,7 @@ impl ExtractorUtil {
         let sql = "SELECT schema_name
             FROM information_schema.schemata
             WHERE catalog_name = current_database()";
-        let mut rows = sqlx::query(&sql).fetch(&conn_pool);
+        let mut rows = sqlx::query(sql).fetch(&conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let schema: String = row.try_get(0)?;
             if PG_SYS_SCHEMAS.contains(&schema.as_str()) {
@@ -97,8 +97,8 @@ impl ExtractorUtil {
         let mut dbs = Vec::new();
         let conn_pool = TaskUtil::create_mysql_conn_pool(url, 1, false).await?;
 
-        let sql = format!("SHOW DATABASES");
-        let mut rows = sqlx::query(&sql).fetch(&conn_pool);
+        let sql = "SHOW DATABASES";
+        let mut rows = sqlx::query(sql).fetch(&conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let db: String = row.try_get(0)?;
             if MYSQL_SYS_DBS.contains(&db.as_str()) {
@@ -138,6 +138,7 @@ impl ExtractorUtil {
         Ok(tbs)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_mysql_cdc_extractor<'a>(
         url: &str,
         binlog_filename: &str,
@@ -160,10 +161,11 @@ impl ExtractorUtil {
             binlog_filename: binlog_filename.to_string(),
             binlog_position,
             server_id,
-            shut_down: &shut_down,
+            shut_down,
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_pg_cdc_extractor<'a>(
         url: &str,
         slot_name: &str,
@@ -186,12 +188,13 @@ impl ExtractorUtil {
             url: url.to_string(),
             slot_name: slot_name.to_string(),
             start_lsn: start_lsn.to_string(),
-            shut_down: &shut_down,
+            shut_down,
             syncer,
             heartbeat_interval_secs,
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_mysql_snapshot_extractor<'a>(
         url: &str,
         db: &str,
@@ -215,7 +218,7 @@ impl ExtractorUtil {
             db: db.to_string(),
             tb: tb.to_string(),
             slice_size,
-            shut_down: &shut_down,
+            shut_down,
         })
     }
 
@@ -237,7 +240,7 @@ impl ExtractorUtil {
             buffer,
             check_log_dir: check_log_dir.to_string(),
             batch_size,
-            shut_down: &shut_down,
+            shut_down,
         })
     }
 
@@ -259,10 +262,11 @@ impl ExtractorUtil {
             check_log_dir: check_log_dir.to_string(),
             buffer,
             batch_size,
-            shut_down: &shut_down,
+            shut_down,
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_pg_snapshot_extractor<'a>(
         url: &str,
         db: &str,
@@ -285,7 +289,7 @@ impl ExtractorUtil {
             slice_size,
             schema: db.to_string(),
             tb: tb.to_string(),
-            shut_down: &shut_down,
+            shut_down,
         })
     }
 
@@ -303,7 +307,7 @@ impl ExtractorUtil {
             resumer,
             db: db.to_string(),
             tb: tb.to_string(),
-            shut_down: &shut_down,
+            shut_down,
             mongo_client,
         })
     }
@@ -320,7 +324,7 @@ impl ExtractorUtil {
             buffer,
             filter,
             resume_token: resume_token.to_string(),
-            shut_down: &shut_down,
+            shut_down,
             mongo_client,
         })
     }
@@ -338,11 +342,11 @@ impl ExtractorUtil {
         let conn_pool = TaskUtil::create_mysql_conn_pool(url, 2, enable_sqlx_log).await?;
 
         Ok(MysqlStructExtractor {
-            conn_pool: conn_pool.clone(),
+            conn_pool,
             buffer,
             db: db.to_string(),
             filter,
-            shut_down: &shut_down,
+            shut_down,
         })
     }
 
@@ -359,11 +363,11 @@ impl ExtractorUtil {
         let conn_pool = TaskUtil::create_pg_conn_pool(url, 2, enable_sqlx_log).await?;
 
         Ok(PgStructExtractor {
-            conn_pool: conn_pool.clone(),
+            conn_pool,
             buffer,
             db: db.to_string(),
             filter,
-            shut_down: &shut_down,
+            shut_down,
         })
     }
 }

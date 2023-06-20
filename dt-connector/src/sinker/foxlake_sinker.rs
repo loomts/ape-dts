@@ -17,7 +17,7 @@ pub struct FoxlakeSinker {
 #[async_trait]
 impl Sinker for FoxlakeSinker {
     async fn sink_dml(&mut self, data: Vec<RowData>, _batch: bool) -> Result<(), Error> {
-        if data.len() == 0 {
+        if data.is_empty() {
             return Ok(());
         }
 
@@ -29,14 +29,14 @@ impl Sinker for FoxlakeSinker {
         let mut content = String::new();
         for i in data.iter() {
             content.push_str(&i.to_string());
-            content.push_str("\n");
+            content.push('\n');
         }
         self.put_to_file(&key, &content).await.unwrap();
         Ok(())
     }
 
     async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> Result<(), Error> {
-        if data.len() == 0 {
+        if data.is_empty() {
             return Ok(());
         }
 
@@ -51,7 +51,7 @@ impl Sinker for FoxlakeSinker {
         let mut content = String::new();
         for i in data.iter() {
             content.push_str(&i.to_string());
-            content.push_str("\n");
+            content.push('\n');
         }
         self.put_to_file(&key, &content).await.unwrap();
         Ok(())

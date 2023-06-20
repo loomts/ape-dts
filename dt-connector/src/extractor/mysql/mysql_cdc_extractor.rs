@@ -113,7 +113,7 @@ impl MysqlCdcExtractor<'_> {
                 for event in w.rows.iter_mut() {
                     let table_map_event = table_map_event_map.get(&w.table_id).unwrap();
                     let col_values = self
-                        .parse_row_data(&table_map_event, &w.included_columns, event)
+                        .parse_row_data(table_map_event, &w.included_columns, event)
                         .await?;
                     let row_data = RowData {
                         schema: table_map_event.database_name.clone(),
@@ -123,7 +123,7 @@ impl MysqlCdcExtractor<'_> {
                         after: Some(col_values),
                         position: position.clone(),
                     };
-                    let _ = self.push_row_to_buf(row_data).await?;
+                    self.push_row_to_buf(row_data).await?;
                 }
             }
 
@@ -131,10 +131,10 @@ impl MysqlCdcExtractor<'_> {
                 for event in u.rows.iter_mut() {
                     let table_map_event = table_map_event_map.get(&u.table_id).unwrap();
                     let col_values_before = self
-                        .parse_row_data(&table_map_event, &u.included_columns_before, &mut event.0)
+                        .parse_row_data(table_map_event, &u.included_columns_before, &mut event.0)
                         .await?;
                     let col_values_after = self
-                        .parse_row_data(&table_map_event, &u.included_columns_after, &mut event.1)
+                        .parse_row_data(table_map_event, &u.included_columns_after, &mut event.1)
                         .await?;
                     let row_data = RowData {
                         schema: table_map_event.database_name.clone(),
@@ -144,7 +144,7 @@ impl MysqlCdcExtractor<'_> {
                         after: Some(col_values_after),
                         position: position.clone(),
                     };
-                    let _ = self.push_row_to_buf(row_data).await?;
+                    self.push_row_to_buf(row_data).await?;
                 }
             }
 
@@ -152,7 +152,7 @@ impl MysqlCdcExtractor<'_> {
                 for event in d.rows.iter_mut() {
                     let table_map_event = table_map_event_map.get(&d.table_id).unwrap();
                     let col_values = self
-                        .parse_row_data(&table_map_event, &d.included_columns, event)
+                        .parse_row_data(table_map_event, &d.included_columns, event)
                         .await?;
                     let row_data = RowData {
                         schema: table_map_event.database_name.clone(),
@@ -162,7 +162,7 @@ impl MysqlCdcExtractor<'_> {
                         after: Option::None,
                         position: position.clone(),
                     };
-                    let _ = self.push_row_to_buf(row_data).await?;
+                    self.push_row_to_buf(row_data).await?;
                 }
             }
 
@@ -181,7 +181,7 @@ impl MysqlCdcExtractor<'_> {
                             ddl_data.schema = schema;
                         }
                     }
-                    BaseExtractor::push_dt_data(&self.buffer, DtData::Ddl { ddl_data }).await?;
+                    BaseExtractor::push_dt_data(self.buffer, DtData::Ddl { ddl_data }).await?;
                 }
             }
 
@@ -190,7 +190,7 @@ impl MysqlCdcExtractor<'_> {
                     xid: xid.xid.to_string(),
                     position: position.to_string(),
                 };
-                BaseExtractor::push_dt_data(&self.buffer, commit).await?;
+                BaseExtractor::push_dt_data(self.buffer, commit).await?;
             }
 
             _ => {}
@@ -207,7 +207,7 @@ impl MysqlCdcExtractor<'_> {
         ) {
             return Ok(());
         }
-        BaseExtractor::push_row(&self.buffer, row_data).await
+        BaseExtractor::push_row(self.buffer, row_data).await
     }
 
     async fn parse_row_data(

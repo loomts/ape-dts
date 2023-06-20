@@ -18,3 +18,9 @@ impl Counter {
         self.value += value;
     }
 }
+
+impl Default for Counter {
+    fn default() -> Self {
+        Self::new()
+    }
+}

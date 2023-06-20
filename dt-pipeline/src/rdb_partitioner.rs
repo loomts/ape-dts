@@ -72,10 +72,10 @@ impl RdbPartitioner {
         }
         // no need to check parition_col if key_map is not empty,
         // in which case partition_col is one of the key cols and has been checked
-        if tb_meta.key_map.is_empty() {
-            if before.get(&tb_meta.partition_col) != after.get(&tb_meta.partition_col) {
-                return Ok(false);
-            }
+        if tb_meta.key_map.is_empty()
+            && before.get(&tb_meta.partition_col) != after.get(&tb_meta.partition_col)
+        {
+            return Ok(false);
         }
 
         Ok(true)

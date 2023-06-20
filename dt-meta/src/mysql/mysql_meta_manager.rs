@@ -138,21 +138,21 @@ impl<'a> MysqlMetaManager {
             }
 
             "varbinary" => {
-                let length = self.get_col_length(&row).await?;
+                let length = self.get_col_length(row).await?;
                 MysqlColType::VarBinary {
                     length: length as u16,
                 }
             }
 
             "binary" => {
-                let length = self.get_col_length(&row).await?;
+                let length = self.get_col_length(row).await?;
                 MysqlColType::Binary {
                     length: length as u8,
                 }
             }
 
             "varchar" | "char" | "tinytext" | "mediumtext" | "longtext" | "text" => {
-                let length = self.get_col_length(&row).await?;
+                let length = self.get_col_length(row).await?;
                 MysqlColType::String {
                     length,
                     charset: row.try_get(CHARACTER_SET_NAME)?,
@@ -229,7 +229,7 @@ impl<'a> MysqlMetaManager {
 
     async fn init_version(&mut self) -> Result<(), Error> {
         let sql = "SELECT VERSION()";
-        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+        let mut rows = sqlx::query(sql).fetch(&self.conn_pool);
         if let Some(row) = rows.try_next().await.unwrap() {
             self.version = row.try_get(0)?;
             return Ok(());

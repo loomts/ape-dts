@@ -9,9 +9,6 @@ pub enum DtData {
 
 impl DtData {
     pub fn is_ddl(&self) -> bool {
-        match &self {
-            DtData::Ddl { .. } => true,
-            _ => false,
-        }
+        matches!(self, DtData::Ddl { .. })
     }
 }

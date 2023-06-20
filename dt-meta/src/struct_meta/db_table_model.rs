@@ -7,13 +7,13 @@ pub struct DbTable {
 }
 
 impl DbTable {
-    pub fn from_str(str: &String, modes: &mut Vec<Self>) -> () {
+    pub fn from_str(str: &String, modes: &mut Vec<Self>) {
         if str.is_empty() {
             return;
         }
-        for db_table in str.split(",") {
-            if db_table.contains(".") {
-                let db_table_vec: Vec<&str> = db_table.split(".").collect();
+        for db_table in str.split(',') {
+            if db_table.contains('.') {
+                let db_table_vec: Vec<&str> = db_table.split('.').collect();
                 if db_table_vec.len() != 2 {
                     continue;
                 }
@@ -32,7 +32,7 @@ impl DbTable {
         }
     }
 
-    pub fn get_db_names(arr: &Vec<DbTable>) -> Result<Vec<String>, Error> {
+    pub fn get_db_names(arr: &[DbTable]) -> Result<Vec<String>, Error> {
         Ok(arr
             .iter()
             .filter(|x| !x.database_name.is_empty())
@@ -40,7 +40,7 @@ impl DbTable {
             .collect())
     }
 
-    pub fn get_tb_names(arr: &Vec<DbTable>) -> Result<(Vec<String>, Vec<String>), Error> {
+    pub fn get_tb_names(arr: &[DbTable]) -> Result<(Vec<String>, Vec<String>), Error> {
         Ok((
             arr.iter()
                 .filter(|x| !x.is_all && !x.table_name.is_empty())
@@ -54,8 +54,9 @@ impl DbTable {
     }
 
     // Returns: Vec<String, do_dbs's database names>, Vec<String, do_tbs's database_names>, Vec<String, do_tbs's table names>
+    #[allow(clippy::type_complexity)]
     pub fn get_config_maps(
-        arr: &Vec<DbTable>,
+        arr: &[DbTable],
     ) -> Result<(Vec<String>, Vec<String>, Vec<String>), Error> {
         Ok((
             arr.iter()

@@ -36,7 +36,7 @@ impl Parallelizer for MergeParallelizer {
     async fn sink_dml(
         &mut self,
         data: Vec<RowData>,
-        sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
+        sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
     ) -> Result<(), Error> {
         let mut merged_datas = self.merger.merge(data).await?;
         self.sink_internal(&mut merged_datas, sinkers, DELETE)
@@ -51,7 +51,7 @@ impl Parallelizer for MergeParallelizer {
     async fn sink_ddl(
         &mut self,
         data: Vec<DdlData>,
-        sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
+        sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
     ) -> Result<(), Error> {
         // ddl should always be excuted serially
         self.base_parallelizer
@@ -65,7 +65,7 @@ impl MergeParallelizer {
     async fn sink_internal(
         &self,
         merged_datas: &mut HashMap<String, TbMergedData>,
-        sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
+        sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
         sink_type: &str,
     ) -> Result<(), Error> {
         let parallel_size = sinkers.len();
@@ -77,7 +77,7 @@ impl MergeParallelizer {
                 INSERT => tb_merged_data.get_insert_rows(),
                 _ => tb_merged_data.get_unmerged_rows(),
             };
-            if data.len() == 0 {
+            if data.is_empty() {
                 continue;
             }
 

@@ -9,24 +9,20 @@ pub enum ConstraintTypeEnum {
 
 impl ConstraintTypeEnum {
     pub fn to_charval(&self) -> Option<String> {
-        let result: String;
-        match self {
-            ConstraintTypeEnum::Primary => result = String::from("112"),
-            ConstraintTypeEnum::Unique => result = String::from("117"),
-            ConstraintTypeEnum::Foregin => result = String::from("102"),
-            ConstraintTypeEnum::Check => result = String::from("99"),
-        }
-        Some(result)
+        Some(match self {
+            ConstraintTypeEnum::Primary => String::from("112"),
+            ConstraintTypeEnum::Unique => String::from("117"),
+            ConstraintTypeEnum::Foregin => String::from("102"),
+            ConstraintTypeEnum::Check => String::from("99"),
+        })
     }
 
     pub fn to_str(&self) -> Option<String> {
-        let result: String;
-        match self {
-            ConstraintTypeEnum::Primary => result = String::from("p"),
-            ConstraintTypeEnum::Unique => result = String::from("u"),
-            ConstraintTypeEnum::Foregin => result = String::from("f"),
-            ConstraintTypeEnum::Check => result = String::from("c"),
-        }
-        Some(result)
+        Some(match self {
+            ConstraintTypeEnum::Primary => String::from("p"),
+            ConstraintTypeEnum::Unique => String::from("u"),
+            ConstraintTypeEnum::Foregin => String::from("f"),
+            ConstraintTypeEnum::Check => String::from("c"),
+        })
     }
 }

@@ -29,7 +29,7 @@ pub struct MysqlSinker {
 #[async_trait]
 impl Sinker for MysqlSinker {
     async fn sink_dml(&mut self, mut data: Vec<RowData>, batch: bool) -> Result<(), Error> {
-        if data.len() == 0 {
+        if data.is_empty() {
             return Ok(());
         }
 
@@ -61,10 +61,10 @@ impl Sinker for MysqlSinker {
 impl MysqlSinker {
     async fn serial_sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
         for row_data in data.iter() {
-            let tb_meta = self.get_tb_meta(&row_data).await?;
+            let tb_meta = self.get_tb_meta(row_data).await?;
             let query_builder = RdbQueryBuilder::new_for_mysql(&tb_meta);
 
-            let (mut sql, cols, binds) = query_builder.get_query_info(&row_data)?;
+            let (mut sql, cols, binds) = query_builder.get_query_info(row_data)?;
             sql = self.handle_dialect(&sql);
             let query = query_builder.create_mysql_query(&sql, &cols, &binds);
             query.execute(&self.conn_pool).await.unwrap();
@@ -74,7 +74,7 @@ impl MysqlSinker {
 
     async fn batch_delete(
         &mut self,
-        data: &mut Vec<RowData>,
+        data: &mut [RowData],
         start_index: usize,
         batch_size: usize,
     ) -> Result<(), Error> {
@@ -82,7 +82,7 @@ impl MysqlSinker {
         let query_builder = RdbQueryBuilder::new_for_mysql(&tb_meta);
 
         let (sql, cols, binds) =
-            query_builder.get_batch_delete_query(&data, start_index, batch_size)?;
+            query_builder.get_batch_delete_query(data, start_index, batch_size)?;
         let query = query_builder.create_mysql_query(&sql, &cols, &binds);
 
         query.execute(&self.conn_pool).await.unwrap();
@@ -91,7 +91,7 @@ impl MysqlSinker {
 
     async fn batch_insert(
         &mut self,
-        data: &mut Vec<RowData>,
+        data: &mut [RowData],
         start_index: usize,
         batch_size: usize,
     ) -> Result<(), Error> {
@@ -99,7 +99,7 @@ impl MysqlSinker {
         let query_builder = RdbQueryBuilder::new_for_mysql(&tb_meta);
 
         let (mut sql, cols, binds) =
-            query_builder.get_batch_insert_query(&data, start_index, batch_size)?;
+            query_builder.get_batch_insert_query(data, start_index, batch_size)?;
         sql = self.handle_dialect(&sql);
         let query = query_builder.create_mysql_query(&sql, &cols, &binds);
 

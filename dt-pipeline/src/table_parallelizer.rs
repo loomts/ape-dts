@@ -27,7 +27,7 @@ impl Parallelizer for TableParallelizer {
     async fn sink_dml(
         &mut self,
         data: Vec<RowData>,
-        sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
+        sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
     ) -> Result<(), Error> {
         let sub_datas = Self::partition_dml(data)?;
         self.base_parallelizer
@@ -38,7 +38,7 @@ impl Parallelizer for TableParallelizer {
     async fn sink_ddl(
         &mut self,
         data: Vec<DdlData>,
-        sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
+        sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
     ) -> Result<(), Error> {
         let sub_datas = Self::partition_ddl(data)?;
         self.base_parallelizer
@@ -60,8 +60,7 @@ impl TableParallelizer {
             }
         }
 
-        let sub_datas = sub_data_map.into_iter().map(|(_, v)| v).collect();
-        Ok(sub_datas)
+        Ok(sub_data_map.into_values().collect())
     }
 
     /// partition ddl vec into sub vecs by schema
@@ -75,7 +74,6 @@ impl TableParallelizer {
             }
         }
 
-        let sub_datas = sub_data_map.into_iter().map(|(_, v)| v).collect();
-        Ok(sub_datas)
+        Ok(sub_data_map.into_values().collect())
     }
 }

@@ -33,7 +33,7 @@ impl BaseParallelizer {
     pub async fn sink_dml(
         &self,
         mut sub_datas: Vec<Vec<RowData>>,
-        sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
+        sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
         parallel_size: usize,
         batch: bool,
     ) -> Result<(), Error> {
@@ -57,7 +57,7 @@ impl BaseParallelizer {
     pub async fn sink_ddl(
         &self,
         mut sub_datas: Vec<Vec<DdlData>>,
-        sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
+        sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
         parallel_size: usize,
         batch: bool,
     ) -> Result<(), Error> {

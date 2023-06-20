@@ -20,7 +20,7 @@ impl PgMetaManager {
     pub fn new(conn_pool: Pool<Postgres>) -> Self {
         let type_registry = TypeRegistry::new(conn_pool.clone());
         PgMetaManager {
-            conn_pool: conn_pool.clone(),
+            conn_pool,
             type_registry,
             name_to_tb_meta: HashMap::new(),
             oid_to_tb_meta: HashMap::new(),

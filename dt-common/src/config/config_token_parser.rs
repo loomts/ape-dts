@@ -1,11 +1,7 @@
 pub struct ConfigTokenParser {}
 
 impl ConfigTokenParser {
-    pub fn parse(
-        config: &str,
-        delimiters: &Vec<char>,
-        escape_pairs: &Vec<(char, char)>,
-    ) -> Vec<String> {
+    pub fn parse(config: &str, delimiters: &[char], escape_pairs: &[(char, char)]) -> Vec<String> {
         let chars: Vec<char> = config.chars().collect();
         let mut start_index = 0;
         let mut tokens = Vec::new();
@@ -23,14 +19,14 @@ impl ConfigTokenParser {
             start_index = next_index + 1;
         }
 
-        return tokens;
+        tokens
     }
 
     fn read_token(
-        chars: &Vec<char>,
+        chars: &[char],
         start_index: usize,
-        delimiters: &Vec<char>,
-        escape_pairs: &Vec<(char, char)>,
+        delimiters: &[char],
+        escape_pairs: &[(char, char)],
     ) -> (String, usize) {
         // read token surrounded by escapes: `db.2`
         for (escape_left, escape_right) in escape_pairs.iter() {
@@ -46,17 +42,16 @@ impl ConfigTokenParser {
     }
 
     fn read_token_to_delimiter(
-        chars: &Vec<char>,
+        chars: &[char],
         start_index: usize,
-        delimiters: &Vec<char>,
+        delimiters: &[char],
     ) -> (String, usize) {
         let mut token = String::new();
-        for i in start_index..chars.len() {
-            let c = chars[i];
-            if delimiters.contains(&c) {
+        for c in chars.iter().skip(start_index) {
+            if delimiters.contains(c) {
                 break;
             } else {
-                token.push(c);
+                token.push(*c);
             }
         }
 
@@ -65,23 +60,22 @@ impl ConfigTokenParser {
     }
 
     fn read_token_with_escape(
-        chars: &Vec<char>,
+        chars: &[char],
         start_index: usize,
         escape_pair: (char, char),
     ) -> (String, usize) {
         let mut start = false;
         let mut token = String::new();
-        for i in start_index..chars.len() {
-            let c = chars[i];
-            if start && c == escape_pair.1 {
-                token.push(c);
+        for c in chars.iter().skip(start_index) {
+            if start && *c == escape_pair.1 {
+                token.push(*c);
                 break;
             }
-            if c == escape_pair.0 {
+            if *c == escape_pair.0 {
                 start = true;
             }
             if start {
-                token.push(c);
+                token.push(*c);
             }
         }
 

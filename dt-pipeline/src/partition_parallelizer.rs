@@ -28,7 +28,7 @@ impl Parallelizer for PartitionParallelizer {
             match &dt_data {
                 DtData::Dml { row_data } => {
                     if self.parallel_size > 1
-                        && !self.partitioner.can_be_partitioned(&row_data).await?
+                        && !self.partitioner.can_be_partitioned(row_data).await?
                     {
                         data.push(dt_data);
                         break;
@@ -50,7 +50,7 @@ impl Parallelizer for PartitionParallelizer {
     async fn sink_dml(
         &mut self,
         data: Vec<RowData>,
-        sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
+        sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
     ) -> Result<(), Error> {
         let sub_datas = self.partitioner.partition(data, self.parallel_size).await?;
         self.base_parallelizer
@@ -61,7 +61,7 @@ impl Parallelizer for PartitionParallelizer {
     async fn sink_ddl(
         &mut self,
         _data: Vec<DdlData>,
-        _sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
+        _sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
     ) -> Result<(), Error> {
         Ok(())
     }

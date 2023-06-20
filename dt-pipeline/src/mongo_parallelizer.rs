@@ -30,7 +30,7 @@ impl Parallelizer for MongoParallelizer {
     async fn sink_dml(
         &mut self,
         data: Vec<RowData>,
-        sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
+        sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
     ) -> Result<(), Error> {
         let mut sub_datas = Self::partition_dml_by_tb(data)?;
         let mut inserts = Vec::new();
@@ -56,7 +56,7 @@ impl Parallelizer for MongoParallelizer {
     async fn sink_ddl(
         &mut self,
         _data: Vec<DdlData>,
-        _sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
+        _sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
     ) -> Result<(), Error> {
         Ok(())
     }
@@ -75,8 +75,7 @@ impl MongoParallelizer {
             }
         }
 
-        let sub_datas = sub_data_map.into_iter().map(|(_, v)| v).collect();
-        Ok(sub_datas)
+        Ok(sub_data_map.into_values().collect())
     }
 
     /// partition dmls of the same table into insert vec and delete vec

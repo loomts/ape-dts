@@ -46,12 +46,11 @@ impl fmt::Display for Error {
             | Error::IoError { error }
             | Error::EnvVarError { error }
             | Error::SqlxError { error } => {
-                let msg: String;
-                if !error.is_empty() {
-                    msg = error.clone();
+                let msg: String = if !error.is_empty() {
+                    error.clone()
                 } else {
-                    msg = String::from("unknown error")
-                }
+                    String::from("unknown error")
+                };
                 msg.fmt(f)
             }
         }

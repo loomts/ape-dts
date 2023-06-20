@@ -66,11 +66,7 @@ impl PgStructSinker {
                     }
                     Err(e) => {
                         return {
-                            println!(
-                                "create table sql:[{}],execute failed:{}",
-                                sql,
-                                e.to_string()
-                            );
+                            println!("create table sql:[{}],execute failed:{}", sql, e);
                             Err(Error::from(e))
                         }
                     }
@@ -97,7 +93,7 @@ impl PgStructSinker {
                     }
                     Err(e) => {
                         return {
-                            println!("add index sql:[{}],execute failed:{}", sql, e.to_string());
+                            println!("add index sql:[{}],execute failed:{}", sql, e);
                             Err(Error::from(e))
                         }
                     }
@@ -129,11 +125,7 @@ impl PgStructSinker {
                     }
                     Err(e) => {
                         return {
-                            println!(
-                                "add costraint sql:[{}],execute failed:{}",
-                                sql,
-                                e.to_string()
-                            );
+                            println!("add costraint sql:[{}],execute failed:{}", sql, e);
                             Err(Error::from(e))
                         }
                     }
@@ -169,9 +161,7 @@ impl PgStructSinker {
                         return {
                             println!(
                                 "add sequence:[{}], sql:[{}],execute failed:{}",
-                                sequence_name,
-                                create_sql,
-                                e.to_string()
+                                sequence_name, create_sql, e
                             );
                             Err(Error::from(e))
                         }
@@ -210,7 +200,7 @@ impl PgStructSinker {
                                     "add ownership for sequence:[{}], sql:[{}], execute success,execute failed:{}",
                                     sequence_name,
                                     create_owner_sql,
-                                    e.to_string()
+                                    e
                                 );
                                 Err(Error::from(e))
                             }
@@ -233,18 +223,17 @@ impl PgStructSinker {
                 if (table_name.is_empty() && column_name.is_empty()) || comment.is_empty() {
                     return Ok(());
                 }
-                let sql;
-                if !column_name.is_empty() {
-                    sql = format!(
+                let sql = if !column_name.is_empty() {
+                    format!(
                         "COMMENT ON COLUMN \"{}\".\"{}\".\"{}\" IS '{}'",
                         schema_name, table_name, column_name, comment
                     )
                 } else {
-                    sql = format!(
+                    format!(
                         "COMMENT ON TABLE \"{}\".\"{}\" is '{}'",
                         schema_name, table_name, comment
                     )
-                }
+                };
                 match query(&sql).execute(&self.conn_pool).await {
                     Ok(_) => {
                         return {
@@ -254,11 +243,7 @@ impl PgStructSinker {
                     }
                     Err(e) => {
                         return {
-                            println!(
-                                "create comment sql:[{}],execute failed:{}",
-                                sql,
-                                e.to_string()
-                            );
+                            println!("create comment sql:[{}],execute failed:{}", sql, e);
                             Err(Error::from(e))
                         }
                     }
@@ -292,9 +277,9 @@ impl PgStructSinker {
                 }
                 None => {}
             }
-            result_str.push_str(",");
+            result_str.push(',');
         }
-        if result_str.ends_with(",") {
+        if result_str.ends_with(',') {
             result_str = result_str[0..result_str.len() - 1].to_string();
         }
         Some(result_str)

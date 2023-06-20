@@ -187,16 +187,14 @@ impl CheckerConnector {
                     }
                 }
                 if error_count > 0 {
-                    return Err(Error::PreCheckError {
+                    Err(Error::PreCheckError {
                         error: "precheck not passed.".to_string(),
-                    });
+                    })
                 } else {
-                    return Ok(());
+                    Ok(())
                 }
             }
-            Err(e) => {
-                return Err(e);
-            }
+            Err(e) => Err(e),
         }
     }
 }

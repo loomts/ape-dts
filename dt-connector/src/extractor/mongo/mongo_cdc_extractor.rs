@@ -54,72 +54,68 @@ impl MongoCdcExtractor<'_> {
         let mut change_stream = self.mongo_client.watch(None, stream_options).await.unwrap();
         loop {
             let result = change_stream.next_if_any().await.unwrap();
-            match result {
-                Some(doc) => {
-                    let resume_token = doc.id;
-                    let (mut db, mut tb) = (String::new(), String::new());
-                    if let Some(ns) = doc.ns {
-                        db = ns.db.clone();
-                        if let Some(coll) = ns.coll {
-                            tb = coll.clone();
-                        }
+            if let Some(doc) = result {
+                let resume_token = doc.id;
+                let (mut db, mut tb) = (String::new(), String::new());
+                if let Some(ns) = doc.ns {
+                    db = ns.db.clone();
+                    if let Some(coll) = ns.coll {
+                        tb = coll.clone();
                     }
-
-                    let mut row_type = RowType::Insert;
-                    let mut before = HashMap::new();
-                    let mut after = HashMap::new();
-
-                    match doc.operation_type {
-                        OperationType::Insert => {
-                            after.insert(
-                                MongoConstants::DOC.to_string(),
-                                ColValue::MongoDoc(doc.full_document.unwrap()),
-                            );
-                        }
-
-                        OperationType::Delete => {
-                            row_type = RowType::Delete;
-                            before.insert(
-                                MongoConstants::DOC.to_string(),
-                                ColValue::MongoDoc(doc.document_key.unwrap()),
-                            );
-                        }
-
-                        OperationType::Update | OperationType::Replace => {
-                            row_type = RowType::Update;
-                            let id = doc
-                                .full_document
-                                .as_ref()
-                                .unwrap()
-                                .get_object_id(MongoConstants::ID)
-                                .unwrap();
-                            let before_doc = doc! {MongoConstants::ID: id};
-                            let after_doc = doc.full_document.unwrap();
-                            before.insert(
-                                MongoConstants::DOC.to_string(),
-                                ColValue::MongoDoc(before_doc),
-                            );
-                            after.insert(
-                                MongoConstants::DOC.to_string(),
-                                ColValue::MongoDoc(after_doc),
-                            );
-                        }
-
-                        _ => {}
-                    }
-
-                    let row_data = RowData {
-                        schema: db,
-                        tb,
-                        row_type,
-                        position: json!(resume_token).to_string(),
-                        before: Some(before),
-                        after: Some(after),
-                    };
-                    self.push_row_to_buf(row_data).await.unwrap();
                 }
 
-                None => {}
+                let mut row_type = RowType::Insert;
+                let mut before = HashMap::new();
+                let mut after = HashMap::new();
+
+                match doc.operation_type {
+                    OperationType::Insert => {
+                        after.insert(
+                            MongoConstants::DOC.to_string(),
+                            ColValue::MongoDoc(doc.full_document.unwrap()),
+                        );
+                    }
+
+                    OperationType::Delete => {
+                        row_type = RowType::Delete;
+                        before.insert(
+                            MongoConstants::DOC.to_string(),
+                            ColValue::MongoDoc(doc.document_key.unwrap()),
+                        );
+                    }
+
+                    OperationType::Update | OperationType::Replace => {
+                        row_type = RowType::Update;
+                        let id = doc
+                            .full_document
+                            .as_ref()
+                            .unwrap()
+                            .get_object_id(MongoConstants::ID)
+                            .unwrap();
+                        let before_doc = doc! {MongoConstants::ID: id};
+                        let after_doc = doc.full_document.unwrap();
+                        before.insert(
+                            MongoConstants::DOC.to_string(),
+                            ColValue::MongoDoc(before_doc),
+                        );
+                        after.insert(
+                            MongoConstants::DOC.to_string(),
+                            ColValue::MongoDoc(after_doc),
+                        );
+                    }
+
+                    _ => {}
+                }
+
+                let row_data = RowData {
+                    schema: db,
+                    tb,
+                    row_type,
+                    position: json!(resume_token).to_string(),
+                    before: Some(before),
+                    after: Some(after),
+                };
+                self.push_row_to_buf(row_data).await.unwrap();
             }
         }
     }
@@ -134,6 +130,6 @@ impl MongoCdcExtractor<'_> {
         ) {
             return Ok(());
         }
-        BaseExtractor::push_row(&self.buffer, row_data).await
+        BaseExtractor::push_row(self.buffer, row_data).await
     }
 }

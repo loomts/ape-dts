@@ -133,7 +133,7 @@ impl TaskRunner {
         }));
 
         let mut extractor = self
-            .create_extractor(&extractor_config, &buffer, &shut_down, syncer.clone())
+            .create_extractor(extractor_config, &buffer, &shut_down, syncer.clone())
             .await?;
 
         let sinkers = SinkerUtil::create_sinkers(&self.config).await?;
@@ -177,9 +177,9 @@ impl TaskRunner {
                     tb,
                     self.config.pipeline.buffer_size,
                     resumer.clone(),
-                    &buffer,
+                    buffer,
                     &self.config.runtime.log_level,
-                    &shut_down,
+                    shut_down,
                 )
                 .await?;
                 Box::new(extractor)
@@ -191,12 +191,12 @@ impl TaskRunner {
                 batch_size,
             } => {
                 let extractor = ExtractorUtil::create_mysql_check_extractor(
-                    &url,
-                    &check_log_dir,
+                    url,
+                    check_log_dir,
                     *batch_size,
-                    &buffer,
+                    buffer,
                     &self.config.runtime.log_level,
-                    &shut_down,
+                    shut_down,
                 )
                 .await?;
                 Box::new(extractor)
@@ -210,14 +210,14 @@ impl TaskRunner {
             } => {
                 let filter = RdbFilter::from_config(&self.config.filter, DbType::Mysql)?;
                 let extractor = ExtractorUtil::create_mysql_cdc_extractor(
-                    &url,
-                    &binlog_filename,
+                    url,
+                    binlog_filename,
                     *binlog_position,
                     *server_id,
-                    &buffer,
+                    buffer,
                     filter,
                     &self.config.runtime.log_level,
-                    &shut_down,
+                    shut_down,
                 )
                 .await?;
                 Box::new(extractor)
@@ -230,9 +230,9 @@ impl TaskRunner {
                     tb,
                     self.config.pipeline.buffer_size,
                     resumer.clone(),
-                    &buffer,
+                    buffer,
                     &self.config.runtime.log_level,
-                    &shut_down,
+                    shut_down,
                 )
                 .await?;
                 Box::new(extractor)
@@ -244,12 +244,12 @@ impl TaskRunner {
                 batch_size,
             } => {
                 let extractor = ExtractorUtil::create_pg_check_extractor(
-                    &url,
-                    &check_log_dir,
+                    url,
+                    check_log_dir,
                     *batch_size,
-                    &buffer,
+                    buffer,
                     &self.config.runtime.log_level,
-                    &shut_down,
+                    shut_down,
                 )
                 .await?;
                 Box::new(extractor)
@@ -263,14 +263,14 @@ impl TaskRunner {
             } => {
                 let filter = RdbFilter::from_config(&self.config.filter, DbType::Pg)?;
                 let extractor = ExtractorUtil::create_pg_cdc_extractor(
-                    &url,
-                    &slot_name,
-                    &start_lsn,
+                    url,
+                    slot_name,
+                    start_lsn,
                     *heartbeat_interval_secs,
-                    &buffer,
+                    buffer,
                     filter,
                     &self.config.runtime.log_level,
-                    &shut_down,
+                    shut_down,
                     syncer,
                 )
                 .await?;
@@ -308,10 +308,10 @@ impl TaskRunner {
                 let extractor = ExtractorUtil::create_mysql_struct_extractor(
                     url,
                     db,
-                    &buffer,
+                    buffer,
                     filter,
                     &self.config.runtime.log_level,
-                    &shut_down,
+                    shut_down,
                 )
                 .await?;
                 Box::new(extractor)
@@ -322,10 +322,10 @@ impl TaskRunner {
                 let extractor = ExtractorUtil::create_pg_struct_extractor(
                     url,
                     db,
-                    &buffer,
+                    buffer,
                     filter,
                     &self.config.runtime.log_level,
-                    &shut_down,
+                    shut_down,
                 )
                 .await?;
                 Box::new(extractor)
@@ -336,7 +336,7 @@ impl TaskRunner {
 
     fn init_log4rs(&self) -> Result<(), Error> {
         let log4rs_file = &self.config.runtime.log4rs_file;
-        if !fs::metadata(log4rs_file).is_ok() {
+        if fs::metadata(log4rs_file).is_err() {
             return Ok(());
         }
 

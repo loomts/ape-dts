@@ -53,7 +53,7 @@ impl MysqlStructExtractor<'_> {
                 meta: Some(meta),
                 ddl_type: DdlType::Unknown,
             };
-            BaseExtractor::push_dt_data(&self.buffer, DtData::Ddl { ddl_data })
+            BaseExtractor::push_dt_data(self.buffer, DtData::Ddl { ddl_data })
                 .await
                 .unwrap();
         }
@@ -96,11 +96,8 @@ impl MysqlStructExtractor<'_> {
             };
 
             if let Some(model) = results.get_mut(&full_tb_name) {
-                match model {
-                    StructModel::TableModel { columns, .. } => {
-                        columns.push(column);
-                    }
-                    _ => {}
+                if let StructModel::TableModel { columns, .. } = model {
+                    columns.push(column);
                 }
             } else {
                 results.insert(
@@ -147,11 +144,8 @@ impl MysqlStructExtractor<'_> {
             };
 
             if let Some(model) = results.get_mut(&full_index_name) {
-                match model {
-                    StructModel::IndexModel { columns, .. } => {
-                        columns.push(column);
-                    }
-                    _ => {}
+                if let StructModel::IndexModel { columns, .. } = model {
+                    columns.push(column);
                 }
             } else {
                 results.insert(
@@ -194,9 +188,8 @@ impl MysqlStructExtractor<'_> {
     fn get_str_with_null(row: &MySqlRow, col_name: &str) -> Result<String, Error> {
         let mut str_val = String::from("");
         let str_val_option = row.get(col_name);
-        match str_val_option {
-            Some(s) => str_val = s,
-            None => {}
+        if let Some(s) = str_val_option {
+            str_val = s;
         }
         Ok(str_val)
     }

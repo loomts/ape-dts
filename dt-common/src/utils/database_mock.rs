@@ -33,16 +33,12 @@ impl DatabaseMockUtils {
                     .connect(connection_url.as_str())
                     .await;
                 match db_pool_result {
-                    Ok(pool) => {
-                        return Ok(Self {
-                            mysql_pool: Option::Some(pool),
-                            pg_pool: None,
-                            db_type,
-                        })
-                    }
-                    Err(error) => {
-                        return Err(error);
-                    }
+                    Ok(pool) => Ok(Self {
+                        mysql_pool: Option::Some(pool),
+                        pg_pool: None,
+                        db_type,
+                    }),
+                    Err(error) => Err(error),
                 }
             }
             DbType::Pg => {
@@ -52,16 +48,12 @@ impl DatabaseMockUtils {
                     .connect(connection_url.as_str())
                     .await;
                 match db_pool_result {
-                    Ok(pool) => {
-                        return Ok(Self {
-                            mysql_pool: None,
-                            pg_pool: Option::Some(pool),
-                            db_type,
-                        })
-                    }
-                    Err(error) => {
-                        return Err(error);
-                    }
+                    Ok(pool) => Ok(Self {
+                        mysql_pool: None,
+                        pg_pool: Option::Some(pool),
+                        db_type,
+                    }),
+                    Err(error) => Err(error),
                 }
             }
             _ => Ok(Self {
@@ -96,44 +88,38 @@ impl DatabaseMockUtils {
             return Ok(());
         }
         let file = File::open(absolute_path).unwrap();
-        for line in BufReader::new(file).lines() {
-            if let Ok(sql) = line {
-                if sql.is_empty() || sql.starts_with("--") {
-                    continue;
-                }
-                match self.db_type {
-                    DbType::Mysql => {
-                        let pool: &Pool<MySql>;
-                        match &self.mysql_pool {
-                            Some(p) => pool = p,
-                            _ => return Ok(()),
-                        }
-                        _ = sqlx::query(&sql).execute(pool).await;
-                    }
-                    DbType::Pg => {
-                        let pool: &Pool<Postgres>;
-                        match &self.pg_pool {
-                            Some(p) => pool = p,
-                            _ => return Ok(()),
-                        }
-                        _ = sqlx::query(&sql).execute(pool).await;
-                    }
-                    _ => return Ok(()),
-                }
-                println!("executed sql: {}", sql);
+        for sql in BufReader::new(file).lines().flatten() {
+            if sql.is_empty() || sql.starts_with("--") {
+                continue;
             }
+            match self.db_type {
+                DbType::Mysql => {
+                    let pool: &Pool<MySql> = match &self.mysql_pool {
+                        Some(p) => p,
+                        _ => return Ok(()),
+                    };
+                    _ = sqlx::query(&sql).execute(pool).await;
+                }
+                DbType::Pg => {
+                    let pool: &Pool<Postgres> = match &self.pg_pool {
+                        Some(p) => p,
+                        _ => return Ok(()),
+                    };
+                    _ = sqlx::query(&sql).execute(pool).await;
+                }
+                _ => return Ok(()),
+            }
+            println!("executed sql: {}", sql);
         }
         Ok(())
     }
 
     pub async fn release_pool(self) {
-        match self.mysql_pool {
-            Some(p) => p.close().await,
-            None => (),
+        if let Some(p) = self.mysql_pool {
+            p.close().await;
         }
-        match self.pg_pool {
-            Some(p) => p.close().await,
-            None => (),
+        if let Some(p) = self.pg_pool {
+            p.close().await;
         }
     }
 }

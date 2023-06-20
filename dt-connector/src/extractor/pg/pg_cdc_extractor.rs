@@ -64,7 +64,8 @@ impl Extractor for PgCdcExtractor<'_> {
             self.start_lsn,
             self.heartbeat_interval_secs
         );
-        Ok(self.extract_internal().await.unwrap())
+        self.extract_internal().await.unwrap();
+        Ok(())
     }
 
     async fn close(&mut self) -> Result<(), Error> {
@@ -329,7 +330,7 @@ impl PgCdcExtractor<'_> {
 
                 TupleData::Text(value) => {
                     let col_value =
-                        PgColValueConvertor::from_wal(&col_type, &value, &mut self.meta_manager)?;
+                        PgColValueConvertor::from_wal(col_type, value, &mut self.meta_manager)?;
                     col_values.insert(col.to_string(), col_value);
                 }
 

@@ -16,14 +16,14 @@ pub struct CheckResult {
 
 impl CheckResult {
     pub fn build(check_item: CheckItem, is_source: bool) -> Self {
-        return Self {
+        Self {
             check_type_name: check_item.to_string(),
             check_desc: String::from(""),
             is_validate: true,
             error_msg: String::from(""),
             is_source,
             advise_msg: String::from(""),
-        };
+        }
     }
 
     pub fn build_with_err(
@@ -42,7 +42,7 @@ impl CheckResult {
         match check_item {
             CheckItem::CheckDatabaseConnection => {
                 check_desc = format!("check if the {} database can be connected.", source_or_sink);
-                advise_msg = format!("(1)check whether the account password is correct.(2)check if the network configuration is correct.");
+                advise_msg = "(1)check whether the account password is correct.(2)check if the network configuration is correct.".to_string();
             }
             CheckItem::CheckIfDatabaseSupportCdc => {
                 check_desc = format!(
@@ -50,36 +50,38 @@ impl CheckResult {
                     source_or_sink
                 );
                 match db_type {
-                    DbType::Mysql => advise_msg = format!("(1)open 'log_bin' configuration. (2)set 'binlog_format' configuration to 'row'. (3)set 'binlog_row_image' configuration to 'full'."),
-                    DbType::Pg => advise_msg = format!("(1)set 'wal_level' configuration to 'logical'. (2)make sure that the number of 'max_replication_slots' configured is sufficient. (3)make sure that the number of 'max_wal_senders' configured is sufficient."),
+                    DbType::Mysql => advise_msg = "(1)open 'log_bin' configuration. (2)set 'binlog_format' configuration to 'row'. (3)set 'binlog_row_image' configuration to 'full'.".to_string(),
+                    DbType::Pg => advise_msg = "(1)set 'wal_level' configuration to 'logical'. (2)make sure that the number of 'max_replication_slots' configured is sufficient. (3)make sure that the number of 'max_wal_senders' configured is sufficient.".to_string(),
                     _ => {}
                 }
             }
             CheckItem::CheckAccountPermission => {
                 // Todo:
-                check_desc = format!("check account permission");
-                advise_msg = format!("advise account permission");
+                check_desc = "check account permission".to_string();
+                advise_msg = "advise account permission".to_string();
             }
             CheckItem::CheckIfStructExisted => {
                 check_desc = format!(
                     "check whether the data structure of the {} database is existed",
                     source_or_sink
                 );
-                advise_msg = format!("manually created the missing struct.");
+                advise_msg = "manually created the missing struct.".to_string();
             }
             CheckItem::CheckIfTableStructSupported => {
                 check_desc = format!(
                     "check whether the data structure of the {} database to be migrated supports",
                     source_or_sink
                 );
-                advise_msg = format!("no primary key tables and foreign key tables are currently not supported.these tables can be removed from the migration object.");
+                advise_msg = "no primary key tables and foreign key tables are currently not supported.these tables can be removed from the migration object.".to_string();
             }
             CheckItem::CheckDatabaseVersionSupported => {
                 check_desc = format!("check if the {} database version supports.", source_or_sink);
                 let mut advise_version = String::new();
                 match db_type {
-                    DbType::Mysql => advise_version = format!("currently supports version '8.*'."),
-                    DbType::Pg => advise_version = format!("currently supports version '14.*'."),
+                    DbType::Mysql => {
+                        advise_version = "currently supports version '8.*'.".to_string()
+                    }
+                    DbType::Pg => advise_version = "currently supports version '14.*'.".to_string(),
                     _ => {}
                 }
                 advise_msg = format!("{} wait for the next release.", advise_version);

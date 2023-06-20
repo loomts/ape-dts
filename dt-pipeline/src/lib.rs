@@ -27,12 +27,12 @@ pub trait Parallelizer {
     async fn sink_ddl(
         &mut self,
         data: Vec<DdlData>,
-        sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
+        sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
     ) -> Result<(), Error>;
 
     async fn sink_dml(
         &mut self,
         data: Vec<RowData>,
-        sinkers: &Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
+        sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
     ) -> Result<(), Error>;
 }

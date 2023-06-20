@@ -15,6 +15,7 @@ pub struct CheckLog {
 const NULL_VALUE_LEN: i32 = -1;
 
 impl CheckLog {
+    #[allow(clippy::inherent_to_string)]
     pub fn to_string(&self) -> String {
         // example: 3,db1|3,tb1|4,col1|3,abc|4,col2|-1,
         let mut str = format!(
@@ -98,42 +99,37 @@ impl CheckLog {
         }
     }
 
-    fn read_token(
-        chars: &Vec<char>,
-        start_index: usize,
-        split_char: char,
-    ) -> (Option<String>, usize) {
+    fn read_token(chars: &[char], start_index: usize, split_char: char) -> (Option<String>, usize) {
         // example 1: "4,abcd"
         // example 2: "-1,"
-        let (token_len, next_index) = Self::read_token_by_end_char(&chars, start_index, split_char);
+        let (token_len, next_index) = Self::read_token_by_end_char(chars, start_index, split_char);
         let token_len = token_len.parse::<i32>().unwrap();
         if token_len == NULL_VALUE_LEN {
             return (Option::None, next_index);
         }
-        let (token, next_index) = Self::read_token_by_len(&chars, next_index, token_len);
+        let (token, next_index) = Self::read_token_by_len(chars, next_index, token_len);
         (Some(token), next_index)
     }
 
-    fn read_token_by_len(chars: &Vec<char>, start_index: usize, len: i32) -> (String, usize) {
+    fn read_token_by_len(chars: &[char], start_index: usize, len: i32) -> (String, usize) {
         let len = cmp::max(len, 0) as usize;
         let slice = &chars[start_index..start_index + len];
-        let token: String = slice.into_iter().collect();
+        let token: String = slice.iter().collect();
         let next_index = start_index + len + 1;
         (token, next_index)
     }
 
     fn read_token_by_end_char(
-        chars: &Vec<char>,
+        chars: &[char],
         start_index: usize,
         end_char: char,
     ) -> (String, usize) {
         let mut token = String::new();
-        for i in start_index..chars.len() {
-            let c = chars[i];
-            if c == end_char {
+        for c in chars.iter().skip(start_index) {
+            if *c == end_char {
                 break;
             } else {
-                token.push(c);
+                token.push(*c);
             }
         }
 

@@ -31,9 +31,9 @@ impl RdbRouter {
         }
 
         if let Some(map) = self.tb_map.get(&full_name) {
-            let tokens = map.split(".").collect::<Vec<&str>>();
+            let tokens = map.split('.').collect::<Vec<&str>>();
             let result = (
-                tokens.get(0).unwrap().to_string(),
+                tokens.first().unwrap().to_string(),
                 tokens.get(1).unwrap().to_string(),
             );
             self.cache.insert(full_name, result.clone());
@@ -46,7 +46,7 @@ impl RdbRouter {
             return result;
         }
 
-        return (db.to_string(), tb.to_string());
+        (db.to_string(), tb.to_string())
     }
 
     fn parse_str(config_str: &str, name_type: RouteType) -> Result<HashMap<String, String>, Error> {
@@ -55,8 +55,8 @@ impl RdbRouter {
             return Ok(map);
         }
 
-        for name in config_str.split(",") {
-            let tokens: Vec<&str> = name.split(":").collect();
+        for name in config_str.split(',') {
+            let tokens: Vec<&str> = name.split(':').collect();
 
             if tokens.len() != 2
                 || !Self::is_valid_name(tokens[0], &name_type)
@@ -67,7 +67,7 @@ impl RdbRouter {
                 });
             }
             map.insert(
-                tokens.get(0).unwrap().to_string(),
+                tokens.first().unwrap().to_string(),
                 tokens.get(1).unwrap().to_string(),
             );
         }
@@ -80,7 +80,7 @@ impl RdbRouter {
             RouteType::Db => re.is_match(name),
 
             RouteType::Tb => {
-                let tokens: Vec<&str> = name.split(".").collect();
+                let tokens: Vec<&str> = name.split('.').collect();
                 if tokens.len() != 2 {
                     return false;
                 }

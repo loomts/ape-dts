@@ -40,11 +40,10 @@ impl TypeRegistry {
             GROUP BY id) e
             ON (t.oid = e.id)
             WHERE n.nspname != 'pg_toast'";
-        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+        let mut rows = sqlx::query(sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let col_type = self.parse_col_meta(&row)?;
-            self.oid_to_type
-                .insert(col_type.oid.clone(), col_type.clone());
+            self.oid_to_type.insert(col_type.oid, col_type.clone());
             self.name_to_type
                 .insert(col_type.long_name.clone(), col_type.clone());
         }
@@ -61,7 +60,7 @@ impl TypeRegistry {
         let modifiers: i32 = row.get_unchecked("modifiers");
         let category: String = row.get_unchecked("category");
         let enum_values: Option<Vec<u8>> = row.get_unchecked("enum_values");
-        let enum_values = if None == enum_values {
+        let enum_values = if enum_values.is_none() {
             None
         } else {
             let enum_values: Vec<String> = row.try_get("enum_values")?;

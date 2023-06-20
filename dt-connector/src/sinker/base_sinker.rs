@@ -54,7 +54,7 @@ impl BaseSinker {
     ) -> Result<MysqlTbMeta, Error> {
         let (db, tb) = router.get_route(&row_data.schema, &row_data.tb);
         let tb_meta = meta_manager.get_tb_meta(&db, &tb).await?;
-        return Ok(tb_meta);
+        Ok(tb_meta)
     }
 
     #[inline(always)]
@@ -65,6 +65,6 @@ impl BaseSinker {
     ) -> Result<PgTbMeta, Error> {
         let (db, tb) = router.get_route(&row_data.schema, &row_data.tb);
         let tb_meta = meta_manager.get_tb_meta(&db, &tb).await?;
-        return Ok(tb_meta);
+        Ok(tb_meta)
     }
 }
