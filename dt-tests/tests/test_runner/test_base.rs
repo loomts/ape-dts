@@ -113,7 +113,9 @@ impl TestBase {
     ) {
         let runner = RdbPrecheckTestRunner::new(test_dir).await.unwrap();
         runner.base.execute_test_ddl_sqls().await.unwrap();
-        let results = runner.run_check().await;
+        let results: Vec<
+            Result<dt_precheck::meta::check_result::CheckResult, dt_precheck::error::Error>,
+        > = runner.run_check().await;
 
         runner
             .validate(

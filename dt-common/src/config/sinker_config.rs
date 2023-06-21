@@ -2,6 +2,11 @@ use super::config_enums::{ConflictPolicyEnum, DbType};
 
 #[derive(Clone)]
 pub enum SinkerConfig {
+    Basic {
+        url: String,
+        db_type: DbType,
+    },
+
     Mysql {
         url: String,
         batch_size: usize,
@@ -29,12 +34,12 @@ pub enum SinkerConfig {
         check_log_dir: Option<String>,
     },
 
-    MysqlBasic {
+    MysqlStruct {
         url: String,
         conflict_policy: ConflictPolicyEnum,
     },
 
-    PgBasic {
+    PgStruct {
         url: String,
         conflict_policy: ConflictPolicyEnum,
     },
@@ -71,8 +76,9 @@ impl SinkerConfig {
             Self::Kafka { .. } => DbType::Kafka,
             Self::OpenFaas { .. } => DbType::OpenFaas,
             Self::Foxlake { .. } => DbType::Foxlake,
-            Self::MysqlBasic { .. } => DbType::Mysql,
-            Self::PgBasic { .. } => DbType::Pg,
+            Self::MysqlStruct { .. } => DbType::Mysql,
+            Self::PgStruct { .. } => DbType::Pg,
+            Self::Basic { db_type, .. } => db_type.clone(),
         }
     }
 }

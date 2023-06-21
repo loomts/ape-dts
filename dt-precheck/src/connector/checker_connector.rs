@@ -31,7 +31,7 @@ impl CheckerConnector {
 
     pub fn valid_config(&self) -> Result<bool, Error> {
         match &self.task_config.extractor {
-            ExtractorConfig::MysqlBasic { url, .. } | ExtractorConfig::PgBasic { url, .. } => {
+            ExtractorConfig::Basic { url, .. } => {
                 if url.is_empty() {
                     return Ok(false);
                 }
@@ -39,7 +39,7 @@ impl CheckerConnector {
             _ => {}
         }
         match &self.task_config.sinker {
-            SinkerConfig::MysqlBasic { url, .. } | SinkerConfig::PgBasic { url, .. } => {
+            SinkerConfig::Basic { url, .. } => {
                 if url.is_empty() {
                     return Ok(false);
                 }
@@ -53,14 +53,12 @@ impl CheckerConnector {
         let mut db_type_option: Option<&DbType> = None;
         if is_source {
             match &self.task_config.extractor {
-                ExtractorConfig::MysqlBasic { .. } => db_type_option = Some(&DbType::Mysql),
-                ExtractorConfig::PgBasic { .. } => db_type_option = Some(&DbType::Pg),
+                ExtractorConfig::Basic { db_type, .. } => db_type_option = Some(db_type),
                 _ => {}
             }
         } else {
             match &self.task_config.sinker {
-                SinkerConfig::MysqlBasic { .. } => db_type_option = Some(&DbType::Mysql),
-                SinkerConfig::PgBasic { .. } => db_type_option = Some(&DbType::Pg),
+                SinkerConfig::Basic { db_type, .. } => db_type_option = Some(db_type),
                 _ => {}
             }
         }

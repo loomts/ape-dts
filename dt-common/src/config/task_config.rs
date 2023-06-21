@@ -87,10 +87,12 @@ impl TaskConfig {
                     batch_size: ini.getuint(EXTRACTOR, BATCH_SIZE).unwrap().unwrap() as usize,
                 }),
 
-                ExtractType::Basic => Ok(ExtractorConfig::MysqlBasic {
+                ExtractType::Struct => Ok(ExtractorConfig::MysqlStruct {
                     url,
                     db: String::new(),
                 }),
+
+                ExtractType::Basic => Ok(ExtractorConfig::Basic { url, db_type }),
             },
 
             DbType::Pg => match extract_type {
@@ -116,10 +118,12 @@ impl TaskConfig {
                     batch_size: ini.getuint(EXTRACTOR, BATCH_SIZE).unwrap().unwrap() as usize,
                 }),
 
-                ExtractType::Basic => Ok(ExtractorConfig::PgBasic {
+                ExtractType::Struct => Ok(ExtractorConfig::PgStruct {
                     url,
                     db: String::new(),
                 }),
+
+                ExtractType::Basic => Ok(ExtractorConfig::Basic { url, db_type }),
             },
 
             DbType::Mongo => match extract_type {
@@ -164,10 +168,12 @@ impl TaskConfig {
                     check_log_dir: ini.get(SINKER, CHECK_LOG_DIR),
                 }),
 
-                SinkType::Basic => Ok(SinkerConfig::MysqlBasic {
+                SinkType::Struct => Ok(SinkerConfig::MysqlStruct {
                     url,
                     conflict_policy,
                 }),
+
+                SinkType::Basic => Ok(SinkerConfig::Basic { url, db_type }),
             },
 
             DbType::Pg => match sink_type {
@@ -179,10 +185,12 @@ impl TaskConfig {
                     check_log_dir: ini.get(SINKER, CHECK_LOG_DIR),
                 }),
 
-                SinkType::Basic => Ok(SinkerConfig::PgBasic {
+                SinkType::Struct => Ok(SinkerConfig::PgStruct {
                     url,
                     conflict_policy,
                 }),
+
+                SinkType::Basic => Ok(SinkerConfig::Basic { url, db_type }),
             },
 
             DbType::Mongo => match sink_type {

@@ -27,18 +27,17 @@ pub struct MySqlChecker {
 #[async_trait]
 impl Checker for MySqlChecker {
     async fn build_connection(&mut self) -> Result<CheckResult, Error> {
-        let mut check_error = None;
         let result = self.fetcher.build_connection().await;
         match result {
             Ok(_) => {}
-            Err(e) => check_error = Some(e),
+            Err(e) => return Err(e),
         }
 
         Ok(CheckResult::build_with_err(
             CheckItem::CheckDatabaseConnection,
             self.is_source,
             self.db_type_option.clone(),
-            check_error,
+            None,
         ))
     }
 

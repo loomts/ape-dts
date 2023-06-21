@@ -1,0 +1,14 @@
+9,test_db_1|12,no_pk_one_uk|3,f_1|1,4|3,f_2|1,1
+9,test_db_1|12,no_pk_one_uk|3,f_1|1,6|3,f_2|1,1
+9,test_db_1|12,no_pk_one_uk|3,f_1|1,5|3,f_2|1,1
+9,test_db_1|15,one_pk_multi_uk|3,f_0|1,4
+9,test_db_1|15,one_pk_multi_uk|3,f_0|1,5
+9,test_db_1|15,one_pk_multi_uk|3,f_0|1,6
+9,test_db_1|12,one_pk_no_uk|3,f_0|1,4
+9,test_db_1|12,one_pk_no_uk|3,f_0|1,5
+9,test_db_1|12,one_pk_no_uk|3,f_0|1,6
+9,test_db_1|14,no_pk_multi_uk|3,f_1|1,4|3,f_2|1,1
+9,test_db_1|14,no_pk_multi_uk|3,f_1|1,6|3,f_2|1,1
+9,test_db_1|14,no_pk_multi_uk|3,f_1|1,5|3,f_2|1,1
+9,test_db_1|31,col_has_special_character_table|5,p,k,1|11,pk1,value,2|5,p\k&2|11,pk2,value,2
+9,test_db_1|31,col_has_special_character_table|5,p,k,1|11,pk1,value,4|5,p\k&2|11,pk2,value,4

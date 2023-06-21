@@ -38,6 +38,7 @@ pub enum StructModel {
         columns: Vec<IndexColumn>,
     },
     CommentModel {
+        comment_type: CommentType,
         database_name: String,
         schema_name: String,
         table_name: String,
@@ -91,6 +92,7 @@ pub enum IndexKind {
     PrimaryKey,
     Unique,
     Index,
+    Unkown,
 }
 
 impl PartialEq for IndexKind {
@@ -100,6 +102,21 @@ impl PartialEq for IndexKind {
             (IndexKind::PrimaryKey, IndexKind::PrimaryKey)
                 | (IndexKind::Unique, IndexKind::Unique)
                 | (IndexKind::Index, IndexKind::Index)
+        )
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum CommentType {
+    Table,
+    Column,
+}
+
+impl PartialEq for CommentType {
+    fn eq(&self, other: &Self) -> bool {
+        matches!(
+            (self, other),
+            (CommentType::Table, CommentType::Table) | (CommentType::Column, CommentType::Column)
         )
     }
 }
@@ -241,6 +258,7 @@ impl PartialEq for StructModel {
             }
             (
                 StructModel::CommentModel {
+                    comment_type: ct1,
                     database_name: db1,
                     schema_name: schema1,
                     table_name: table1,
@@ -248,6 +266,7 @@ impl PartialEq for StructModel {
                     comment: c1,
                 },
                 StructModel::CommentModel {
+                    comment_type: ct2,
                     database_name: db2,
                     schema_name: schema2,
                     table_name: table2,
@@ -257,10 +276,10 @@ impl PartialEq for StructModel {
             ) => {
                 if schema1.is_empty() && schema2.is_empty() {
                     // suck as mysql
-                    db1 == db2 && table1 == table2 && col1 == col2 && c1 == c2
+                    ct1 == ct2 && db1 == db2 && table1 == table2 && col1 == col2 && c1 == c2
                 } else {
                     // such as postgresql
-                    schema1 == schema2 && table1 == table2 && col1 == col2 && c1 == c2
+                    ct1 == ct2 && schema1 == schema2 && table1 == table2 && col1 == col2 && c1 == c2
                 }
             }
             (
@@ -395,6 +414,7 @@ impl StructModel {
                 )
             }
             Self::CommentModel {
+                comment_type: _,
                 database_name,
                 schema_name,
                 table_name,

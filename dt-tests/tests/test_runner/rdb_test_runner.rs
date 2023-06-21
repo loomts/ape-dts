@@ -43,16 +43,27 @@ impl RdbTestRunner {
             ExtractorConfig::MysqlCdc { url, .. }
             | ExtractorConfig::MysqlSnapshot { url, .. }
             | ExtractorConfig::MysqlCheck { url, .. }
-            | ExtractorConfig::MysqlBasic { url, .. } => {
+            | ExtractorConfig::MysqlStruct { url, .. } => {
                 src_conn_pool_mysql = Some(TaskUtil::create_mysql_conn_pool(&url, 1, false).await?);
             }
 
             ExtractorConfig::PgCdc { url, .. }
             | ExtractorConfig::PgSnapshot { url, .. }
             | ExtractorConfig::PgCheck { url, .. }
-            | ExtractorConfig::PgBasic { url, .. } => {
+            | ExtractorConfig::PgStruct { url, .. } => {
                 src_conn_pool_pg = Some(TaskUtil::create_pg_conn_pool(&url, 1, false).await?);
             }
+
+            ExtractorConfig::Basic { url, db_type, .. } => match db_type {
+                DbType::Mysql => {
+                    src_conn_pool_mysql =
+                        Some(TaskUtil::create_mysql_conn_pool(&url, 1, false).await?);
+                }
+                DbType::Pg => {
+                    src_conn_pool_pg = Some(TaskUtil::create_pg_conn_pool(&url, 1, false).await?);
+                }
+                _ => {}
+            },
 
             _ => {}
         }
@@ -60,15 +71,26 @@ impl RdbTestRunner {
         match config.sinker {
             SinkerConfig::Mysql { url, .. }
             | SinkerConfig::MysqlCheck { url, .. }
-            | SinkerConfig::MysqlBasic { url, .. } => {
+            | SinkerConfig::MysqlStruct { url, .. } => {
                 dst_conn_pool_mysql = Some(TaskUtil::create_mysql_conn_pool(&url, 1, false).await?);
             }
 
             SinkerConfig::Pg { url, .. }
             | SinkerConfig::PgCheck { url, .. }
-            | SinkerConfig::PgBasic { url, .. } => {
+            | SinkerConfig::PgStruct { url, .. } => {
                 dst_conn_pool_pg = Some(TaskUtil::create_pg_conn_pool(&url, 1, false).await?);
             }
+
+            SinkerConfig::Basic { url, db_type, .. } => match db_type {
+                DbType::Mysql => {
+                    dst_conn_pool_mysql =
+                        Some(TaskUtil::create_mysql_conn_pool(&url, 1, false).await?);
+                }
+                DbType::Pg => {
+                    dst_conn_pool_pg = Some(TaskUtil::create_pg_conn_pool(&url, 1, false).await?);
+                }
+                _ => {}
+            },
 
             _ => {}
         }
