@@ -3,7 +3,6 @@
 members = [
     "dt-common",
     "dt-meta",
-    # "dt-struct",
     "dt-precheck",
     "dt-connector",
     "dt-pipeline",

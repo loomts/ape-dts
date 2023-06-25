@@ -158,6 +158,65 @@ impl MysqlStructFetcher {
         Ok(results)
     }
 
+    // Check Constraint: https://dev.mysql.com/doc/refman/8.0/en/create-table-check-constraints.html
+    pub async fn get_constraint(
+        &mut self,
+        struct_model: &Option<StructModel>,
+    ) -> Result<HashMap<String, StructModel>, Error> {
+        let struct_model = match struct_model {
+            Some(model) => model.clone(),
+            None => StructModel::ConstraintModel {
+                database_name: self.db.clone(),
+                schema_name: String::from(""),
+                table_name: String::from(""),
+                constraint_name: String::from(""),
+                constraint_type: String::from(""),
+                definition: String::from(""),
+            },
+        };
+        let sql = self.sql_builder(&struct_model);
+        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+
+        let mut results: HashMap<String, StructModel> = HashMap::new();
+
+        while let Some(row) = rows.try_next().await.unwrap() {
+            let (database_name, table_name, constraint_name, check_clause): (
+                String,
+                String,
+                String,
+                String,
+            ) = (
+                Self::get_str_with_null(&row, "CONSTRAINT_SCHEMA").unwrap(),
+                Self::get_str_with_null(&row, "TABLE_NAME").unwrap(),
+                Self::get_str_with_null(&row, "CONSTRAINT_NAME").unwrap(),
+                Self::get_str_with_null(&row, "CHECK_CLAUSE").unwrap(),
+            );
+
+            if let Some(filter) = &mut self.filter {
+                if database_name.is_empty()
+                    || table_name.is_empty()
+                    || constraint_name.is_empty()
+                    || check_clause.is_empty()
+                    || filter.filter_tb(&database_name, &table_name)
+                {
+                    continue;
+                }
+            }
+            results.insert(
+                format!("{}.{}", database_name, table_name),
+                StructModel::ConstraintModel {
+                    database_name,
+                    schema_name: String::from(""),
+                    table_name,
+                    constraint_name,
+                    constraint_type: String::from("check"),
+                    definition: check_clause,
+                },
+            );
+        }
+        Ok(results)
+    }
+
     pub async fn fetch_with_model(
         mut self,
         struct_model: &StructModel,
@@ -166,6 +225,7 @@ impl MysqlStructFetcher {
         let result = match struct_model {
             StructModel::TableModel { .. } => self.get_table(&model_option).await,
             StructModel::IndexModel { .. } => self.get_index(&model_option).await,
+            StructModel::ConstraintModel { .. } => self.get_constraint(&model_option).await,
             _ => {
                 let result: HashMap<String, StructModel> = HashMap::new();
                 Ok(result)
@@ -190,7 +250,7 @@ impl MysqlStructFetcher {
                 table_comment: _,
                 columns: _,
             } => {
-                let mut s = format!("select t.table_schema,t.table_name,t.engine,t.table_comment,c.column_name,c.ordinal_position,c.column_default,c.is_nullable,c.column_type,c.column_key,c.extra,c.column_comment,c.character_set_name,c.collation_name 
+                let mut s = format!("select t.table_schema,t.table_name,t.engine,t.table_comment,c.column_name,c.ordinal_position,c.column_default,c.is_nullable,c.column_type,c.column_key,c.extra,c.column_comment,c.character_set_name,c.collation_name,c.GENERATION_EXPRESSION
 from information_schema.tables t left join information_schema.columns c on t.table_schema = c.table_schema and t.table_name = c.table_name where t.table_schema ='{}'",database_name);
                 if !table_name.is_empty() {
                     s = format!("{} and t.table_name = '{}' ", s, table_name);
@@ -224,6 +284,26 @@ WHERE index_name != 'PRIMARY' and table_schema ='{}'", database_name);
                     "{} ORDER BY table_schema, table_name, index_name, seq_in_index ",
                     s
                 )
+            }
+            StructModel::ConstraintModel {
+                database_name,
+                schema_name: _,
+                table_name,
+                constraint_name,
+                constraint_type: _,
+                definition: _,
+            } => {
+                let mut s = format!("select tc.constraint_schema, tc.table_name, tc.constraint_name, tc.constraint_type,cc.check_clause 
+from information_schema.table_constraints tc left join information_schema.check_constraints cc 
+on tc.constraint_schema = cc.constraint_schema and tc.constraint_name = cc.constraint_name 
+where tc.constraint_schema = '{}' and tc.constraint_type='CHECK' ", database_name);
+                if !table_name.is_empty() && !constraint_name.is_empty() {
+                    s = format!(
+                        "{} and tc.constraint_name = '{}' and tc.table_name = '{}' ",
+                        s, constraint_name, table_name
+                    );
+                }
+                s
             }
             _ => String::from(""),
         };

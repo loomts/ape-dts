@@ -50,6 +50,10 @@ impl MysqlStructExtractor<'_> {
             self.push_dt_data(&meta).await;
         }
 
+        for (_, meta) in mysql_fetcher.get_constraint(&None).await.unwrap() {
+            self.push_dt_data(&meta).await;
+        }
+
         BaseExtractor::wait_task_finish(self.buffer, self.shut_down).await
     }
 

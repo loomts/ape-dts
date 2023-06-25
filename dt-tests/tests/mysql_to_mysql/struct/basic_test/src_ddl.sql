@@ -22,3 +22,6 @@ CREATE INDEX index_index ON struct_it_mysql2mysql_1.full_index_type (index_col);
 CREATE INDEX simple_index ON struct_it_mysql2mysql_1.full_index_type (simple_index_col);
 
 CREATE INDEX composite_index ON struct_it_mysql2mysql_1.full_index_type (composite_index_col1, composite_index_col2, composite_index_col3);
+
+-- full constraint
+CREATE TABLE struct_it_mysql2mysql_1.constraint_table (id INT PRIMARY KEY AUTO_INCREMENT,username VARCHAR(50) NOT NULL UNIQUE,password VARCHAR(50) NOT NULL,email VARCHAR(100) NOT NULL,age INT,gender ENUM('Male', 'Female', 'Other') NOT NULL,created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,CONSTRAINT chk_age CHECK (age >= 18),CONSTRAINT chk_email CHECK (email LIKE '%@%.%'));
