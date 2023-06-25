@@ -174,7 +174,7 @@ impl MysqlStructSinker {
                 definition,
             } => {
                 // check for escapes
-                let check_clause = if definition.contains("\\") {
+                let check_clause = if definition.contains('\\') {
                     self.remove_escape_for_dst(String::from(definition.as_str()))
                         .await?
                 } else {
