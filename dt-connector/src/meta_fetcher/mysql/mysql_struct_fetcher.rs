@@ -70,7 +70,7 @@ impl MysqlStructFetcher {
                     full_tb_name,
                     StructModel::TableModel {
                         database_name: db.clone(),
-                        schema_name: db,
+                        schema_name: String::from(""),
                         table_name: tb,
                         engine_name,
                         table_comment,
@@ -103,7 +103,6 @@ impl MysqlStructFetcher {
             },
         };
         let sql = self.sql_builder(&struct_model);
-
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
 
         let mut results: HashMap<String, StructModel> = HashMap::new();
@@ -174,11 +173,7 @@ impl MysqlStructFetcher {
         };
         match result {
             Ok(r) => {
-                let result_option = if let Some(first_model) = r.values().next() {
-                    Some(first_model.to_owned())
-                } else {
-                    None
-                };
+                let result_option = r.values().next().map(|f| f.to_owned());
                 Ok(result_option)
             }
             Err(e) => Err(e),
@@ -200,12 +195,15 @@ from information_schema.tables t left join information_schema.columns c on t.tab
                 if !table_name.is_empty() {
                     s = format!("{} and t.table_name = '{}' ", s, table_name);
                 }
-                s
+                format!(
+                    " {} order by t.table_schema, t.table_name, c.ordinal_position ",
+                    s
+                )
             }
             StructModel::IndexModel {
                 database_name,
                 schema_name: _,
-                table_name: _,
+                table_name,
                 index_name,
                 index_kind: _,
                 index_type: _,
@@ -216,10 +214,16 @@ from information_schema.tables t left join information_schema.columns c on t.tab
             } => {
                 let mut s = format!("select table_schema,table_name,non_unique,index_name, seq_in_index,column_name,index_type,is_visible,comment from information_schema.statistics 
 WHERE index_name != 'PRIMARY' and table_schema ='{}'", database_name);
+                if !table_name.is_empty() {
+                    s = format!("{} and table_name = '{}' ", s, table_name);
+                }
                 if !index_name.is_empty() {
                     s = format!("{} and index_name = '{}' ", s, index_name);
                 }
-                format!("{} ORDER BY table_schema, table_name, index_name ", s)
+                format!(
+                    "{} ORDER BY table_schema, table_name, index_name, seq_in_index ",
+                    s
+                )
             }
             _ => String::from(""),
         };

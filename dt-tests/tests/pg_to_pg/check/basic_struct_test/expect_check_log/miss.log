@@ -1,0 +1,8 @@
+sequence:[database:postgres, schema:struct_check_test_1, sequence:not_match_missing_id_seq]
+table:[database:struct_check_test_1, schema:struct_check_test_1, table_name:not_match_missing, columns size:3]
+sequence-owner:[database:, schema:struct_check_test_1, sequence:not_match_missing_id_seq, table:not_match_missing, col:id]
+constraint:[database:, schema:struct_check_test_1, table:not_match_missing, constaint:not_match_missing_pkey, constraint_type:112, definition:PRIMARY KEY (id)]
+index:[database:, schema:struct_check_test_1, table:full_index_type, index:index_not_match_name, definition:CREATE UNIQUE INDEX index_not_match_name ON struct_check_test_1.full_index_type USING btree (unique_col)]
+index:[database:, schema:struct_check_test_1, table:full_index_type, index:index_not_match_missing, definition:CREATE INDEX index_not_match_missing ON struct_check_test_1.full_index_type USING btree (index_col)]
+index:[database:, schema:struct_check_test_1, table:not_match_missing, index:not_match_missing_pkey, definition:CREATE UNIQUE INDEX not_match_missing_pkey ON struct_check_test_1.not_match_missing USING btree (id)]
+comment:[database:, schema:struct_check_test_1, table:not_match_comment, column:id, comment:This is the primary key column.]

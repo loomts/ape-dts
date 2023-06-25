@@ -111,25 +111,25 @@ impl PgChecker {
     }
 
     async fn serial_ddl_check(&mut self, data: Vec<DdlData>) -> Result<(), Error> {
-        for data_src in data.iter() {
-            if let Some(data_model_src) = &data_src.meta {
-                let mysql_struct_fetcher = PgStructFetcher {
+        for data_src in data {
+            if let Some(data_model_src) = data_src.meta {
+                let pg_struct_fetcher = PgStructFetcher {
                     conn_pool: self.conn_pool.to_owned(),
                     db: String::from(""),
                     filter: None,
                 };
-                let model_dst_option = mysql_struct_fetcher
-                    .fetch_with_model(data_model_src)
+                let model_dst_option = pg_struct_fetcher
+                    .fetch_with_model(&data_model_src)
                     .await
                     .ok()
                     .flatten();
 
                 if let Some(data_model_dst) = model_dst_option {
-                    if !BaseChecker::compare_ddl_data(data_model_src, &data_model_dst) {
-                        BaseChecker::log_diff_struct(data_model_src, &data_model_dst);
+                    if !BaseChecker::compare_ddl_data(&data_model_src, &data_model_dst) {
+                        BaseChecker::log_diff_struct(&data_model_src, &data_model_dst);
                     }
                 } else {
-                    BaseChecker::log_miss_struct(data_model_src);
+                    BaseChecker::log_miss_struct(&data_model_src);
                 }
             }
         }

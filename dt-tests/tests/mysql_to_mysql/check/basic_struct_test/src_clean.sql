@@ -1,1 +1,1 @@
-DROP DATABASE IF EXISTS test_db_1;
+drop database if exists struct_check_test_1;

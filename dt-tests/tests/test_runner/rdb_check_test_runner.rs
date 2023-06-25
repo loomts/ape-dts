@@ -55,6 +55,8 @@ impl RdbCheckTestRunner {
             assert!(actual_miss_logs.contains(&log))
         }
 
+        self.base.execute_clean_sqls().await?;
+
         Ok(())
     }
 

@@ -61,7 +61,7 @@ impl PgStructFetcher {
                 StructModel::SequenceModel {
                     sequence_name: seq_name,
                     database_name: Self::get_str_with_null(&row, "sequence_catalog").unwrap(),
-                    schema_name: self.db.clone(),
+                    schema_name,
                     data_type: Self::get_str_with_null(&row, "data_type").unwrap(),
                     start_value: row.get("start_value"),
                     increment: row.get("increment"),
@@ -449,11 +449,7 @@ impl PgStructFetcher {
         };
         match result {
             Ok(r) => {
-                let result_option = if let Some(first_model) = r.values().next() {
-                    Some(first_model.to_owned())
-                } else {
-                    None
-                };
+                let result_option = r.values().next().map(|f| f.to_owned());
                 Ok(result_option)
             }
             Err(e) => Err(e),
@@ -549,7 +545,10 @@ FROM information_schema.columns c WHERE table_schema ='{}' ", schema_name);
                 if !table_name.is_empty() {
                     s = format!("{} and table_name = '{}' ", s, table_name);
                 }
-                format!("{} ORDER BY table_schema, table_name, column_name ", s)
+                format!(
+                    "{} ORDER BY table_schema, table_name, c.ordinal_position ",
+                    s
+                )
             }
             StructModel::ConstraintModel {
                 database_name: _,
@@ -583,7 +582,7 @@ FROM pg_indexes WHERE schemaname = '{}'", schema_name);
                 if !index_name.is_empty() {
                     s = format!("{} and indexname= '{}' ", s, index_name);
                 }
-                s
+                format!(" {} order by schemaname, tablename, indexname ", s)
             }
             StructModel::CommentModel {
                 comment_type,
@@ -592,31 +591,28 @@ FROM pg_indexes WHERE schemaname = '{}'", schema_name);
                 table_name,
                 column_name,
                 comment: _,
-            } => {
-                let s = match comment_type {
-                    CommentType::Table => {
-                        let mut s = format!("SELECT n.nspname, c.relname, d.description FROM pg_class c LEFT JOIN pg_namespace n on n.oid = c.relnamespace
+            } => match comment_type {
+                CommentType::Table => {
+                    let mut s = format!("SELECT n.nspname, c.relname, d.description FROM pg_class c LEFT JOIN pg_namespace n on n.oid = c.relnamespace
 LEFT JOIN pg_description d ON c.oid = d.objoid AND d.objsubid = 0 WHERE n.nspname ='{}' AND d.description IS NOT null", schema_name);
-                        if !table_name.is_empty() {
-                            s = format!("{} and c.relname = '{}' ", s, table_name);
-                        }
-                        s
+                    if !table_name.is_empty() {
+                        s = format!("{} and c.relname = '{}' ", s, table_name);
                     }
-                    CommentType::Column => {
-                        let mut s = format!("SELECT n.nspname,c.relname, col_description(a.attrelid, a.attnum)as comment,format_type(a.atttypid, a.atttypmod)as type,a.attname as name,a.attnotnull as notnull
+                    s
+                }
+                CommentType::Column => {
+                    let mut s = format!("SELECT n.nspname,c.relname, col_description(a.attrelid, a.attnum)as comment,format_type(a.atttypid, a.atttypmod)as type,a.attname as name,a.attnotnull as notnull
 FROM pg_class c LEFT JOIN pg_attribute a on a.attrelid =c.oid LEFT JOIN pg_namespace n on n.oid = c.relnamespace WHERE n.nspname ='{}' 
 AND a.attnum >0 and col_description(a.attrelid, a.attnum) is not null", schema_name);
-                        if !table_name.is_empty() && !column_name.is_empty() {
-                            s = format!(
-                                "{} and c.relname = '{}' and a.attname = '{}' ",
-                                s, table_name, column_name
-                            );
-                        }
-                        s
+                    if !table_name.is_empty() && !column_name.is_empty() {
+                        s = format!(
+                            "{} and c.relname = '{}' and a.attname = '{}' ",
+                            s, table_name, column_name
+                        );
                     }
-                };
-                s
-            }
+                    s
+                }
+            },
             StructModel::SequenceModel {
                 sequence_name,
                 database_name: _,
@@ -636,7 +632,7 @@ join pg_depend as dep on (seq.relfilenode = dep.objid)
 join pg_class as tab on (dep.refobjid = tab.relfilenode) 
  where ns.nspname='{}' and dep.deptype='a' ", schema_name);
                 if !sequence_name.is_empty() {
-                    s = format!("{} and obj.sequence_name = '{}' ", s, schema_name);
+                    s = format!("{} and obj.sequence_name = '{}' ", s, sequence_name);
                 }
                 s
             }

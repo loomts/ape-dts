@@ -376,11 +376,14 @@ impl StructModel {
                 table_name,
                 engine_name: _,
                 table_comment: _,
-                columns: _,
+                columns,
             } => {
                 format!(
-                    "table:[database:{}, schema:{}, table_name:{}]",
-                    database_name, schema_name, table_name
+                    "table:[database:{}, schema:{}, table_name:{}, columns size:{}]",
+                    database_name,
+                    schema_name,
+                    table_name,
+                    columns.len()
                 )
             }
             Self::IndexModel {
@@ -392,12 +395,12 @@ impl StructModel {
                 index_type: _,
                 comment: _,
                 tablespace: _,
-                definition: _,
+                definition,
                 columns: _,
             } => {
                 format!(
-                    "index:[database:{}, schema:{}, table:{}, index:{}]",
-                    database_name, schema_name, table_name, index_name
+                    "index:[database:{}, schema:{}, table:{}, index:{}, definition:{}]",
+                    database_name, schema_name, table_name, index_name, definition
                 )
             }
             Self::ConstraintModel {
@@ -405,12 +408,12 @@ impl StructModel {
                 schema_name,
                 table_name,
                 constraint_name,
-                constraint_type: _,
-                definition: _,
+                constraint_type,
+                definition,
             } => {
                 format!(
-                    "constraint:[database:{}, schema:{}, table:{}, constaint:{}]",
-                    database_name, schema_name, table_name, constraint_name
+                    "constraint:[database:{}, schema:{}, table:{}, constaint:{}, constraint_type:{}, definition:{}]",
+                    database_name, schema_name, table_name, constraint_name, constraint_type, definition
                 )
             }
             Self::CommentModel {
@@ -419,11 +422,11 @@ impl StructModel {
                 schema_name,
                 table_name,
                 column_name,
-                comment: _,
+                comment,
             } => {
                 format!(
-                    "comment:[database:{}, schema:{}, table:{}, column:{}]",
-                    database_name, schema_name, table_name, column_name
+                    "comment:[database:{}, schema:{}, table:{}, column:{}, comment:{}]",
+                    database_name, schema_name, table_name, column_name, comment
                 )
             }
             Self::SequenceModel {
