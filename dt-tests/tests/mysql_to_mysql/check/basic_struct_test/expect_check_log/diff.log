@@ -1,0 +1,3 @@
+[CompareFrom]table:[database:struct_check_test_1, schema:, table_name:not_match_column, columns size:25]; [CompareTo]table:[database:struct_check_test_1, schema:, table_name:not_match_column, columns size:23]
+[CompareFrom]table:[database:struct_check_test_1, schema:, table_name:not_match_index, columns size:9]; [CompareTo]table:[database:struct_check_test_1, schema:, table_name:not_match_index, columns size:9]
+[CompareFrom]index:[database:struct_check_test_1, schema:, table:not_match_index, index:i4_order, definition:]; [CompareTo]index:[database:struct_check_test_1, schema:, table:not_match_index, index:i4_order, definition:]

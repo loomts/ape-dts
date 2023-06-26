@@ -44,8 +44,8 @@ impl TaskRunner {
         }
 
         match &self.config.extractor {
-            ExtractorConfig::MysqlBasic { url, .. }
-            | ExtractorConfig::PgBasic { url, .. }
+            ExtractorConfig::MysqlStruct { url, .. }
+            | ExtractorConfig::PgStruct { url, .. }
             | ExtractorConfig::MysqlSnapshot { url, .. }
             | ExtractorConfig::PgSnapshot { url, .. }
             | ExtractorConfig::MongoSnapshot { url, .. } => self.start_multi_task(url).await?,
@@ -67,12 +67,12 @@ impl TaskRunner {
 
             // start a task for each db
             let db_extractor_config = match &self.config.extractor {
-                ExtractorConfig::MysqlBasic { url, .. } => Some(ExtractorConfig::MysqlBasic {
+                ExtractorConfig::MysqlStruct { url, .. } => Some(ExtractorConfig::MysqlStruct {
                     url: url.clone(),
                     db: db.clone(),
                 }),
 
-                ExtractorConfig::PgBasic { url, .. } => Some(ExtractorConfig::PgBasic {
+                ExtractorConfig::PgStruct { url, .. } => Some(ExtractorConfig::PgStruct {
                     url: url.clone(),
                     db: db.clone(),
                 }),
@@ -303,7 +303,7 @@ impl TaskRunner {
                 Box::new(extractor)
             }
 
-            ExtractorConfig::MysqlBasic { url, db } => {
+            ExtractorConfig::MysqlStruct { url, db } => {
                 let filter = RdbFilter::from_config(&self.config.filter, DbType::Mysql)?;
                 let extractor = ExtractorUtil::create_mysql_struct_extractor(
                     url,
@@ -317,7 +317,7 @@ impl TaskRunner {
                 Box::new(extractor)
             }
 
-            ExtractorConfig::PgBasic { url, db } => {
+            ExtractorConfig::PgStruct { url, db } => {
                 let filter = RdbFilter::from_config(&self.config.filter, DbType::Pg)?;
                 let extractor = ExtractorUtil::create_pg_struct_extractor(
                     url,
@@ -329,6 +329,11 @@ impl TaskRunner {
                 )
                 .await?;
                 Box::new(extractor)
+            }
+            _ => {
+                return Err(Error::ConfigError {
+                    error: String::from("extractor_config type is not supported."),
+                })
             }
         };
         Ok(extractor)

@@ -30,21 +30,15 @@ impl CheckerConnector {
     }
 
     pub fn valid_config(&self) -> Result<bool, Error> {
-        match &self.task_config.extractor {
-            ExtractorConfig::MysqlBasic { url, .. } | ExtractorConfig::PgBasic { url, .. } => {
-                if url.is_empty() {
-                    return Ok(false);
-                }
+        if let ExtractorConfig::Basic { url, .. } = &self.task_config.extractor {
+            if url.is_empty() {
+                return Ok(false);
             }
-            _ => {}
         }
-        match &self.task_config.sinker {
-            SinkerConfig::MysqlBasic { url, .. } | SinkerConfig::PgBasic { url, .. } => {
-                if url.is_empty() {
-                    return Ok(false);
-                }
+        if let SinkerConfig::Basic { url, .. } = &self.task_config.sinker {
+            if url.is_empty() {
+                return Ok(false);
             }
-            _ => {}
         }
         Ok(true)
     }
@@ -52,17 +46,11 @@ impl CheckerConnector {
     pub fn build_checker(&self, is_source: bool) -> Option<Box<dyn Checker + Send>> {
         let mut db_type_option: Option<&DbType> = None;
         if is_source {
-            match &self.task_config.extractor {
-                ExtractorConfig::MysqlBasic { .. } => db_type_option = Some(&DbType::Mysql),
-                ExtractorConfig::PgBasic { .. } => db_type_option = Some(&DbType::Pg),
-                _ => {}
+            if let ExtractorConfig::Basic { db_type, .. } = &self.task_config.extractor {
+                db_type_option = Some(db_type)
             }
-        } else {
-            match &self.task_config.sinker {
-                SinkerConfig::MysqlBasic { .. } => db_type_option = Some(&DbType::Mysql),
-                SinkerConfig::PgBasic { .. } => db_type_option = Some(&DbType::Pg),
-                _ => {}
-            }
+        } else if let SinkerConfig::Basic { db_type, .. } = &self.task_config.sinker {
+            db_type_option = Some(db_type)
         }
         if db_type_option.is_none() {
             println!("build checker failed, maybe config is wrong");

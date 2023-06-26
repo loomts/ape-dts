@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
 use dt_common::{log_diff, log_miss};
-use dt_meta::{rdb_tb_meta::RdbTbMeta, row_data::RowData};
+use dt_meta::{
+    rdb_tb_meta::RdbTbMeta, row_data::RowData, struct_meta::database_model::StructModel,
+};
 
 use crate::check_log::{check_log::CheckLog, log_type::LogType};
 
@@ -45,6 +47,11 @@ impl BaseChecker {
     }
 
     #[inline(always)]
+    pub fn compare_ddl_data(ddl_data_src: &StructModel, ddl_data_dst: &StructModel) -> bool {
+        ddl_data_src == ddl_data_dst
+    }
+
+    #[inline(always)]
     pub fn log_miss(row_data: &RowData, tb_meta: &RdbTbMeta) {
         // TODO, batch write
         let check_log = CheckLog::from_row_data(row_data, tb_meta, LogType::Miss);
@@ -55,5 +62,19 @@ impl BaseChecker {
     pub fn log_diff(row_data: &RowData, tb_meta: &RdbTbMeta) {
         let check_log = CheckLog::from_row_data(row_data, tb_meta, LogType::Diff);
         log_diff!("{}", check_log.to_string());
+    }
+
+    #[inline(always)]
+    pub fn log_miss_struct(struct_model: &StructModel) {
+        log_miss!("{}", struct_model.to_log_string());
+    }
+
+    #[inline(always)]
+    pub fn log_diff_struct(src_struct_model: &StructModel, dst_struct_model: &StructModel) {
+        log_diff!(
+            "[CompareFrom]{}; [CompareTo]{}",
+            src_struct_model.to_log_string(),
+            dst_struct_model.to_log_string()
+        );
     }
 }

@@ -83,6 +83,10 @@ build: ## Build
 clean: ## Clean
 	cargo clean
 
+.PHONE: lint
+lint:
+	cargo clippy --workspace
+
 .PHONY: test 
 test: CARGO_INCREMENTAL=0
 test: RUSTFLAGS='-Cinstrument-coverage'

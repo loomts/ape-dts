@@ -8,7 +8,7 @@ use dt_meta::{
     struct_meta::database_model::{Column, IndexKind, StructModel},
 };
 
-use sqlx::{query, MySql, Pool};
+use sqlx::{query, MySql, Pool, Row};
 
 use async_trait::async_trait;
 
@@ -65,7 +65,7 @@ impl MysqlStructSinker {
                             .join(",")
                     )
                 }
-                // Todo: table partition; column visible, generated
+                // Todo: table partition; column visible, generated(information_schema.column.GENERATION_EXPRESSION)
                 let mut sql = format!(
                     "CREATE TABLE `{}`.`{}` ({}{}) ENGINE={} ",
                     database_name, table_name, column_str, pk_str, engine_name
@@ -165,9 +165,67 @@ impl MysqlStructSinker {
                     }
                 }
             }
+            StructModel::ConstraintModel {
+                database_name,
+                schema_name: _,
+                table_name,
+                constraint_name,
+                constraint_type: _,
+                definition,
+            } => {
+                // check for escapes
+                let check_clause = if definition.contains('\\') {
+                    self.remove_escape_for_dst(String::from(definition.as_str()))
+                        .await?
+                } else {
+                    String::from(definition.as_str())
+                };
+
+                let sql = format!(
+                    "ALTER TABLE `{}`.`{}` ADD CONSTRAINT `{}` CHECK {} ",
+                    database_name, table_name, constraint_name, check_clause
+                );
+                match query(&sql).execute(&self.conn_pool).await {
+                    Ok(_) => {
+                        return {
+                            println!("create check constraint sql:[{}],execute success", sql);
+                            Ok(())
+                        }
+                    }
+                    Err(e) => {
+                        return {
+                            println!("create check constraint sql:[{}],execute failed:{}", sql, e);
+                            Err(Error::from(e))
+                        }
+                    }
+                }
+            }
             _ => {}
         }
         Ok(())
+    }
+
+    // use mysql's native select 'xx' to remove the escape characters stored in the string by mysql
+    async fn remove_escape_for_dst(&self, text: String) -> Result<String, Error> {
+        if text.is_empty() {
+            return Ok(text);
+        }
+
+        let sql = format!("select '{}' as result", text);
+        let rows_result = query(&sql).fetch_all(&self.conn_pool).await;
+        match rows_result {
+            Ok(rows) => {
+                if !rows.is_empty() {
+                    let result: String = rows.get(0).unwrap().get("result");
+                    return Ok(result);
+                }
+            }
+            Err(e) => {
+                return Err(Error::from(e));
+            }
+        }
+
+        Ok(text)
     }
 
     /**

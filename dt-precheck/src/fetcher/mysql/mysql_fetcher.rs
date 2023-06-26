@@ -37,25 +37,25 @@ impl Fetcher for MysqlFetcher {
         let mut connection_url = String::from("");
 
         if self.is_source {
-            if let ExtractorConfig::MysqlBasic { url, .. } = &self.source_config {
+            if let ExtractorConfig::Basic { url, db_type } = &self.source_config {
                 connection_url = String::from(url);
-                self.db_type_option = Some(DbType::Mysql);
+                self.db_type_option = Some(db_type.to_owned());
             }
-        } else if let SinkerConfig::MysqlBasic { url, .. } = &self.sinker_config {
+        } else if let SinkerConfig::Basic { url, db_type } = &self.sinker_config {
             connection_url = String::from(url);
-            self.db_type_option = Some(DbType::Mysql);
+            self.db_type_option = Some(db_type.to_owned());
         }
-        if !connection_url.is_empty() {
-            let db_pool_result = MySqlPoolOptions::new()
-                .max_connections(8)
-                .acquire_timeout(Duration::from_secs(5))
-                .connect(connection_url.as_str())
-                .await;
-            match db_pool_result {
-                Ok(pool) => self.pool = Option::Some(pool),
-                Err(error) => return Err(Error::from(error)),
-            }
+
+        let db_pool_result = MySqlPoolOptions::new()
+            .max_connections(8)
+            .acquire_timeout(Duration::from_secs(5))
+            .connect(connection_url.as_str())
+            .await;
+        match db_pool_result {
+            Ok(pool) => self.pool = Option::Some(pool),
+            Err(error) => return Err(Error::from(error)),
         }
+
         Ok(())
     }
 

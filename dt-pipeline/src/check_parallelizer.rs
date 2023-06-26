@@ -56,9 +56,11 @@ impl Parallelizer for CheckParallelizer {
 
     async fn sink_ddl(
         &mut self,
-        _data: Vec<DdlData>,
-        _sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
+        data: Vec<DdlData>,
+        sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
     ) -> Result<(), Error> {
-        Ok(())
+        self.base_parallelizer
+            .sink_ddl(vec![data], sinkers, 1, false)
+            .await
     }
 }

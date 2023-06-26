@@ -151,7 +151,7 @@ impl SinkerUtil {
                 .await?
             }
 
-            SinkerConfig::MysqlBasic {
+            SinkerConfig::MysqlStruct {
                 url,
                 conflict_policy,
             } => {
@@ -164,7 +164,7 @@ impl SinkerUtil {
                 .await?
             }
 
-            SinkerConfig::PgBasic {
+            SinkerConfig::PgStruct {
                 url,
                 conflict_policy,
             } => {
@@ -176,6 +176,8 @@ impl SinkerUtil {
                 )
                 .await?
             }
+
+            _ => vec![],
         };
         Ok(sinkers)
     }

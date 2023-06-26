@@ -36,7 +36,7 @@ impl RdbStructTestRunner {
                 continue;
             }
 
-            let mut src_extractor = ExtractorUtil::create_mysql_struct_extractor(
+            let mut src_fetcher = ExtractorUtil::create_mysql_struct_extractor(
                 &src_url,
                 db,
                 &buffer,
@@ -44,9 +44,10 @@ impl RdbStructTestRunner {
                 &log_level,
                 &shut_down,
             )
-            .await?;
+            .await?
+            .build_fetcher();
 
-            let mut dst_extractor = ExtractorUtil::create_mysql_struct_extractor(
+            let mut dst_fetcher = ExtractorUtil::create_mysql_struct_extractor(
                 &dst_url,
                 db,
                 &buffer,
@@ -54,14 +55,15 @@ impl RdbStructTestRunner {
                 &log_level,
                 &shut_down,
             )
-            .await?;
+            .await?
+            .build_fetcher();
 
-            let src_models = src_extractor.get_table().await.unwrap();
-            let dst_models = dst_extractor.get_table().await.unwrap();
+            let src_models = src_fetcher.get_table(&None).await.unwrap();
+            let dst_models = dst_fetcher.get_table(&None).await.unwrap();
             self.compare_models(&src_models, &dst_models);
 
-            let src_models = src_extractor.get_index().await.unwrap();
-            let dst_models = dst_extractor.get_index().await.unwrap();
+            let src_models = src_fetcher.get_index(&None).await.unwrap();
+            let dst_models = dst_fetcher.get_index(&None).await.unwrap();
             self.compare_models(&src_models, &dst_models);
         }
 
@@ -80,7 +82,7 @@ impl RdbStructTestRunner {
                 continue;
             }
 
-            let mut src_extractor = ExtractorUtil::create_pg_struct_extractor(
+            let mut src_fetcher = ExtractorUtil::create_pg_struct_extractor(
                 &src_url,
                 db,
                 &buffer,
@@ -88,9 +90,10 @@ impl RdbStructTestRunner {
                 &log_level,
                 &shut_down,
             )
-            .await?;
+            .await?
+            .build_fetcher();
 
-            let mut dst_extractor = ExtractorUtil::create_pg_struct_extractor(
+            let mut dst_fetcher = ExtractorUtil::create_pg_struct_extractor(
                 &dst_url,
                 db,
                 &buffer,
@@ -98,27 +101,35 @@ impl RdbStructTestRunner {
                 &log_level,
                 &shut_down,
             )
-            .await?;
+            .await?
+            .build_fetcher();
 
-            let src_models = src_extractor.get_table().await.unwrap();
-            let dst_models = dst_extractor.get_table().await.unwrap();
+            let src_models = src_fetcher.get_table(&None).await.unwrap();
+            let dst_models = dst_fetcher.get_table(&None).await.unwrap();
             self.compare_models(&src_models, &dst_models);
 
-            let src_models = src_extractor.get_index().await.unwrap();
-            let dst_models = dst_extractor.get_index().await.unwrap();
+            let src_models = src_fetcher.get_index(&None).await.unwrap();
+            let dst_models = dst_fetcher.get_index(&None).await.unwrap();
             self.compare_models(&src_models, &dst_models);
 
-            let src_models = src_extractor.get_sequence().await.unwrap();
-            let dst_models = dst_extractor.get_sequence().await.unwrap();
-            self.compare_models(&src_models.0, &dst_models.0);
-            self.compare_models(&src_models.1, &dst_models.1);
-
-            let src_models = src_extractor.get_constraint().await.unwrap();
-            let dst_models = dst_extractor.get_constraint().await.unwrap();
+            let src_models = src_fetcher.get_sequence(&None).await.unwrap();
+            let dst_models = dst_fetcher.get_sequence(&None).await.unwrap();
             self.compare_models(&src_models, &dst_models);
 
-            let src_models = src_extractor.get_comment().await.unwrap();
-            let dst_models = dst_extractor.get_comment().await.unwrap();
+            let src_models = src_fetcher.get_sequence_owner(&None).await.unwrap();
+            let dst_models = dst_fetcher.get_sequence_owner(&None).await.unwrap();
+            self.compare_models(&src_models, &dst_models);
+
+            let src_models = src_fetcher.get_constraint(&None).await.unwrap();
+            let dst_models = dst_fetcher.get_constraint(&None).await.unwrap();
+            self.compare_models(&src_models, &dst_models);
+
+            let src_models = src_fetcher.get_table_comment(&None).await.unwrap();
+            let dst_models = dst_fetcher.get_table_comment(&None).await.unwrap();
+            self.compare_models(&src_models, &dst_models);
+
+            let src_models = src_fetcher.get_column_comment(&None).await.unwrap();
+            let dst_models = dst_fetcher.get_column_comment(&None).await.unwrap();
             self.compare_models(&src_models, &dst_models);
         }
 
@@ -144,12 +155,12 @@ impl RdbStructTestRunner {
         let log_level = "info".to_string();
 
         let (src_url, dbs) = match &config.extractor {
-            ExtractorConfig::MysqlBasic { url, .. } => (
+            ExtractorConfig::MysqlStruct { url, .. } => (
                 url.to_string(),
                 ExtractorUtil::list_dbs(url, &DbType::Mysql).await.unwrap(),
             ),
 
-            ExtractorConfig::PgBasic { url, .. } => (
+            ExtractorConfig::PgStruct { url, .. } => (
                 url.to_string(),
                 ExtractorUtil::list_dbs(url, &DbType::Pg).await.unwrap(),
             ),
@@ -158,8 +169,8 @@ impl RdbStructTestRunner {
         };
 
         let dst_url = match &config.sinker {
-            SinkerConfig::MysqlBasic { url, .. } => url.to_string(),
-            SinkerConfig::PgBasic { url, .. } => url.to_string(),
+            SinkerConfig::MysqlStruct { url, .. } => url.to_string(),
+            SinkerConfig::PgStruct { url, .. } => url.to_string(),
             _ => String::new(),
         };
 

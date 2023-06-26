@@ -2,12 +2,17 @@ use super::config_enums::DbType;
 
 #[derive(Clone)]
 pub enum ExtractorConfig {
-    MysqlBasic {
+    Basic {
+        url: String,
+        db_type: DbType,
+    },
+
+    MysqlStruct {
         url: String,
         db: String,
     },
 
-    PgBasic {
+    PgStruct {
         url: String,
         db: String,
     },
@@ -65,17 +70,18 @@ pub enum ExtractorConfig {
 impl ExtractorConfig {
     pub fn get_db_type(&self) -> DbType {
         match self {
-            Self::MysqlBasic { .. }
+            Self::MysqlStruct { .. }
             | Self::MysqlSnapshot { .. }
             | Self::MysqlCdc { .. }
             | Self::MysqlCheck { .. } => DbType::Mysql,
 
-            Self::PgBasic { .. }
+            Self::PgStruct { .. }
             | Self::PgSnapshot { .. }
             | Self::PgCdc { .. }
             | Self::PgCheck { .. } => DbType::Pg,
 
             Self::MongoSnapshot { .. } | Self::MongoCdc { .. } => DbType::Mongo,
+            Self::Basic { db_type, .. } => db_type.clone(),
         }
     }
 }

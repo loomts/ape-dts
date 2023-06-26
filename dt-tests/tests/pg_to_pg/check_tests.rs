@@ -8,6 +8,12 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn check_basic_test() {
-        TestBase::run_check_test("pg_to_pg/check_basic_test").await;
+        TestBase::run_check_test("pg_to_pg/check/basic_test").await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn check_struct_basic_test() {
+        TestBase::run_check_test("pg_to_pg/check/basic_struct_test").await;
     }
 }

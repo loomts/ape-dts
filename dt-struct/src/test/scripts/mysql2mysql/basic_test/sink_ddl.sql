@@ -1,1 +1,0 @@
-create database struct_it_mysql2mysql_1;
