@@ -325,7 +325,7 @@ impl ExtractorUtil {
             buffer,
             filter,
             resume_token: resume_token.to_string(),
-            start_timestamp: start_timestamp.clone(),
+            start_timestamp: *start_timestamp,
             shut_down,
             mongo_client,
         })

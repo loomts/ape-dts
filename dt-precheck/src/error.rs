@@ -12,6 +12,8 @@ pub enum Error {
     EnvVarError { error: String },
 
     SqlxError { error: String },
+
+    MongoError { error: String },
 }
 
 impl From<std::io::Error> for Error {
@@ -38,6 +40,14 @@ impl From<sqlx::Error> for Error {
     }
 }
 
+impl From<mongodb::error::Error> for Error {
+    fn from(err: mongodb::error::Error) -> Self {
+        Self::MongoError {
+            error: err.to_string(),
+        }
+    }
+}
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -45,7 +55,8 @@ impl fmt::Display for Error {
             | Error::PreCheckError { error }
             | Error::IoError { error }
             | Error::EnvVarError { error }
-            | Error::SqlxError { error } => {
+            | Error::SqlxError { error }
+            | Error::MongoError { error } => {
                 let msg: String = if !error.is_empty() {
                     error.clone()
                 } else {
