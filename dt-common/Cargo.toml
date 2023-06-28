@@ -15,7 +15,7 @@ serde ={ workspace = true }
 serde_json = { workspace = true }
 byteorder = { workspace = true }
 chrono =  { workspace = true }
-mysql-binlog-connector-rust = { workspace = true }
+mysql-binlog-connector-rust = { workspace = true, path = "../mysql-binlog-connector-rust"}
 mongodb = { workspace = true }
 bytes = { workspace = true }
 futures = { workspace = true }

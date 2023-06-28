@@ -44,31 +44,31 @@ RUN --mount=type=cache,target=$CARGO_HOME/git,rw \
     --mount=type=cache,target=$CARGO_HOME/registry,rw \
     cargo update
 
-RUN --mount=type=cache,target=$CARGO_HOME/git,rw \
-    --mount=type=cache,target=$CARGO_HOME/registry,rw \
-    --mount=type=cache,target=/app/target,rw \
-    cargo build --release ${BUILD_ARGS} && \
-    mkdir -p bin/ && \
-    cp /app/target/release/${MODULE_NAME} bin/
-
 # RUN --mount=type=cache,target=$CARGO_HOME/git,rw \
 #     --mount=type=cache,target=$CARGO_HOME/registry,rw \
 #     --mount=type=cache,target=/app/target,rw \
-#     bash -c export BUILD_ARGS="${BUILD_ARGS} --bin ${MODULE_NAME}" ; \
-#     if [ "${TARGETPLATFORM}" != "${BUILDPLATFORM}" ] || [ "${LIBC}" == "musl" ]; then \
-#         if [ "${TARGETPLATFORM}" == "linux/amd64" ]; then \
-#             BUILD_TARGET="x86_64-unknown-${LIBC}" ; \
-#         elif [ "${TARGETOS}/${TARGETARCH}" == "linux/arm64" ]; then \
-#             BUILD_TARGET="aarch64-unknown-${LIBC}" ; \
-#         fi ; \
-#     fi ; \
-#     set -x ; \
-#     if [ -n "${BUILD_TARGET}" ]; then \
-#         BUILD_ARGS="${BUILD_ARGS} --target ${BUILD_TARGET}" ; \
-#     fi ; \
 #     cargo build --release ${BUILD_ARGS} && \
 #     mkdir -p bin/ && \
 #     cp /app/target/release/${MODULE_NAME} bin/
+
+RUN --mount=type=cache,target=$CARGO_HOME/git,rw \
+    --mount=type=cache,target=$CARGO_HOME/registry,rw \
+    --mount=type=cache,target=/app/target,rw \
+    bash -c export BUILD_ARGS="${BUILD_ARGS} --bin ${MODULE_NAME}" ; \
+    if [ "${TARGETPLATFORM}" != "${BUILDPLATFORM}" ] || [ "${LIBC}" == "musl" ]; then \
+        if [ "${TARGETPLATFORM}" == "linux/amd64" ]; then \
+            BUILD_TARGET="x86_64-unknown-${LIBC}" ; \
+        elif [ "${TARGETOS}/${TARGETARCH}" == "linux/arm64" ]; then \
+            BUILD_TARGET="aarch64-unknown-${LIBC}" ; \
+        fi ; \
+    fi ; \
+    set -x ; \
+    if [ -n "${BUILD_TARGET}" ]; then \
+        BUILD_ARGS="${BUILD_ARGS} --target ${BUILD_TARGET}" ; \
+    fi ; \
+    cargo build --release ${BUILD_ARGS} && \
+    mkdir -p bin/ && \
+    cp /app/target/release/${MODULE_NAME} bin/
 
 ######
 # Use distroless as minimal base image to package the binary
