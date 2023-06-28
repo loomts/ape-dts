@@ -9,10 +9,16 @@ use dt_common::{
 };
 
 use crate::{
-    checker::{mysql_checker::MySqlChecker, pg_checker::PostgresqlChecker, traits::Checker},
+    checker::{
+        mongo_checker::MongoChecker, mysql_checker::MySqlChecker, pg_checker::PostgresqlChecker,
+        traits::Checker,
+    },
     config::precheck_config::PrecheckConfig,
     error::Error,
-    fetcher::{mysql::mysql_fetcher::MysqlFetcher, postgresql::pg_fetcher::PgFetcher},
+    fetcher::{
+        mongo::mongo_fetcher::MongoFetcher, mysql::mysql_fetcher::MysqlFetcher,
+        postgresql::pg_fetcher::PgFetcher,
+    },
     meta::check_result::CheckResult,
 };
 
@@ -91,6 +97,22 @@ impl CheckerConnector {
                     is_source,
                     filter,
                 },
+            })),
+            DbType::Mongo => Some(Box::new(MongoChecker {
+                fetcher: MongoFetcher {
+                    pool: None,
+                    source_config: self.task_config.extractor.clone(),
+                    filter_config: self.task_config.filter.clone(),
+                    sinker_config: self.task_config.sinker.clone(),
+                    router_config: self.task_config.router.clone(),
+                    is_source,
+                    db_type_option: Some(db_type_option.unwrap().clone()),
+                    filter,
+                },
+                filter_config: self.task_config.filter.clone(),
+                precheck_config: self.precheck_config.clone(),
+                is_source,
+                db_type_option: Some(db_type_option.unwrap().clone()),
             })),
             _ => None,
         };
