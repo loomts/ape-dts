@@ -5,7 +5,7 @@ use concurrent_queue::ConcurrentQueue;
 use dt_common::{constants::MongoConstants, error::Error, log_info, utils::rdb_filter::RdbFilter};
 use dt_meta::{col_value::ColValue, dt_data::DtData, row_data::RowData, row_type::RowType};
 use mongodb::{
-    bson::doc,
+    bson::{doc, Timestamp},
     change_stream::event::{OperationType, ResumeToken},
     options::{ChangeStreamOptions, FullDocumentBeforeChangeType, FullDocumentType},
     Client,
@@ -19,6 +19,7 @@ pub struct MongoCdcExtractor<'a> {
     pub filter: RdbFilter,
     pub shut_down: &'a AtomicBool,
     pub resume_token: String,
+    pub start_timestamp: i64,
     pub mongo_client: Client,
 }
 
@@ -45,7 +46,16 @@ impl MongoCdcExtractor<'_> {
             let token: ResumeToken = serde_json::from_str(&self.resume_token).unwrap();
             Some(token)
         };
+        let start_timestamp_option = if self.start_timestamp > 0 {
+            Some(Timestamp {
+                time: self.start_timestamp as u32,
+                increment: 0,
+            })
+        } else {
+            None
+        };
         let stream_options = ChangeStreamOptions::builder()
+            .start_at_operation_time(start_timestamp_option)
             .start_after(start_after)
             .full_document(Some(FullDocumentType::UpdateLookup))
             .full_document_before_change(Some(FullDocumentBeforeChangeType::WhenAvailable))

@@ -16,4 +16,4 @@ tokio = { workspace = true }
 configparser = { workspace = true }
 futures = { workspace = true }
 regex = { workspace = true }
-
+mongodb = { workspace = true }
