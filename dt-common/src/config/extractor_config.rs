@@ -64,6 +64,7 @@ pub enum ExtractorConfig {
     MongoCdc {
         url: String,
         resume_token: String,
+        start_timestamp: i64,
     },
 }
 

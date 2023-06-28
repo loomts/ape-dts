@@ -290,11 +290,16 @@ impl TaskRunner {
                 Box::new(extractor)
             }
 
-            ExtractorConfig::MongoCdc { url, resume_token } => {
+            ExtractorConfig::MongoCdc {
+                url,
+                resume_token,
+                start_timestamp,
+            } => {
                 let filter = RdbFilter::from_config(&self.config.filter, DbType::Mongo)?;
                 let extractor = ExtractorUtil::create_mongo_cdc_extractor(
                     url,
                     resume_token,
+                    start_timestamp,
                     buffer,
                     filter,
                     shut_down,
