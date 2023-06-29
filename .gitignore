@@ -1,6 +1,5 @@
 ## File system
 .DS_Store
-mysql-binlog-connector-rust
 
 ## Editor
 *.swp
