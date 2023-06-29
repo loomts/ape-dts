@@ -18,7 +18,7 @@
 
 VERSION ?= 0.1.0
 CONFIG_PATH ?= ./images/example/mysql_snapshot_sample.yaml
-MODULE_NAME ?= ape-dts
+MODULE_NAME ?= dt-main
 GIT_BRANCH ?= main
 
 export RUSTUP_DIST_SERVER=https://mirrors.ustc.edu.cn/rust-static
@@ -75,9 +75,17 @@ help: ## Display this help.
 
 CARGO_BUILD_ARGS ?=
 
+.PHONY: init
+init: ## Build
+	git submodule update --init
+
 .PHONY: build
 build: ## Build
 	cargo build $(CARGO_BUILD_ARGS)
+
+.PHONY: build-release
+build-release: ## Build release
+	cargo build --release $(CARGO_BUILD_ARGS)
 
 .PHONE: clean
 clean: ## Clean
@@ -98,7 +106,6 @@ test: ## Run tests.
 test-cover: grcov test  ## Run tests with coverage report
 	grcov . --binary-path ./target/debug/deps/ -s . -t html --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o target/coverage/html
 
-
 ##@ Container images
 
 DOCKER_BUILD_ARGS ?=
@@ -111,7 +118,6 @@ install-docker-buildx: ## Create `docker buildx` builder.
 	else \
 	  echo "Buildx builder $(BUILDX_BUILDER) already exists"; \
 	fi
-	
 
 .PHONY: docker-build
 docker-build: DOCKER_BUILD_ARGS += --cache-to type=gha,mode=max --cache-from type=gha --build-arg MODULE_NAME=$(MODULE_NAME) --build-arg APT_MIRROR=$(APT_MIRROR) #--no-cache
@@ -122,8 +128,6 @@ else
 	$(DOCKER) buildx build --platform ${PLATFORMS} --tag $(IMG):$(IMG_TAG) $(DOCKER_BUILD_ARGS) .
 endif
 
-
-
 .PHONY: docker-push
 docker-push: docker-build ## Push docker image.
 ifneq ($(BUILDX_ENABLED), true)
@@ -131,7 +135,6 @@ ifneq ($(BUILDX_ENABLED), true)
 else
 	$(DOCKER) buildx build --platform ${PLATFORMS} --tag $(IMG):$(IMG_TAG) $(DOCKER_BUILD_ARGS) --push .
 endif
-
 
 ##@ Tools
 
