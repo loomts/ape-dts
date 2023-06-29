@@ -18,7 +18,7 @@
 
 VERSION ?= 0.1.0
 CONFIG_PATH ?= ./images/example/mysql_snapshot_sample.yaml
-MODULE_NAME ?= ape-dts
+MODULE_NAME ?= dt-main
 GIT_BRANCH ?= main
 
 export RUSTUP_DIST_SERVER=https://mirrors.ustc.edu.cn/rust-static
@@ -72,6 +72,10 @@ help: ## Display this help.
 
 CARGO_BUILD_ARGS ?=
 
+.PHONY: init
+init: ## Build
+	git submodule update --init
+
 .PHONY: build
 build: ## Build
 	cargo build --release $(CARGO_BUILD_ARGS)
@@ -79,6 +83,10 @@ build: ## Build
 .PHONY: build-debug
 build-debug: ## Build
 	cargo build $(CARGO_BUILD_ARGS)
+
+.PHONY: build-release
+build-release: ## Build release
+	cargo build --release $(CARGO_BUILD_ARGS)
 
 .PHONE: clean
 clean: ## Clean
