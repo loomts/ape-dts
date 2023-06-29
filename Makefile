@@ -40,13 +40,10 @@ define BUILDX_ERROR
 buildx not enabled, refusing to run this recipe
 endef
 
-
 APT_MIRROR ?= mirrors.aliyun.com
 IMG ?= apecloud/ape-dts
 IMG_TAG ?= latest
 PLATFORMS ?= linux/arm64,linux/amd64
-
-
 
 .DEFAULT_GOAL := help
 
@@ -77,6 +74,10 @@ CARGO_BUILD_ARGS ?=
 
 .PHONY: build
 build: ## Build
+	cargo build --release $(CARGO_BUILD_ARGS)
+
+.PHONY: build-debug
+build: ## Build
 	cargo build $(CARGO_BUILD_ARGS)
 
 .PHONE: clean
@@ -98,7 +99,6 @@ test: ## Run tests.
 test-cover: grcov test  ## Run tests with coverage report
 	grcov . --binary-path ./target/debug/deps/ -s . -t html --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o target/coverage/html
 
-
 ##@ Container images
 
 DOCKER_BUILD_ARGS ?=
@@ -111,7 +111,6 @@ install-docker-buildx: ## Create `docker buildx` builder.
 	else \
 	  echo "Buildx builder $(BUILDX_BUILDER) already exists"; \
 	fi
-	
 
 .PHONY: docker-build
 docker-build: DOCKER_BUILD_ARGS += --cache-to type=gha,mode=max --cache-from type=gha --build-arg MODULE_NAME=$(MODULE_NAME) --build-arg APT_MIRROR=$(APT_MIRROR) #--no-cache
@@ -122,8 +121,6 @@ else
 	$(DOCKER) buildx build --platform ${PLATFORMS} --tag $(IMG):$(IMG_TAG) $(DOCKER_BUILD_ARGS) .
 endif
 
-
-
 .PHONY: docker-push
 docker-push: docker-build ## Push docker image.
 ifneq ($(BUILDX_ENABLED), true)
@@ -131,7 +128,6 @@ ifneq ($(BUILDX_ENABLED), true)
 else
 	$(DOCKER) buildx build --platform ${PLATFORMS} --tag $(IMG):$(IMG_TAG) $(DOCKER_BUILD_ARGS) --push .
 endif
-
 
 ##@ Tools
 
