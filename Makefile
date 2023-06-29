@@ -77,7 +77,7 @@ build: ## Build
 	cargo build --release $(CARGO_BUILD_ARGS)
 
 .PHONY: build-debug
-build: ## Build
+build-debug: ## Build
 	cargo build $(CARGO_BUILD_ARGS)
 
 .PHONE: clean
