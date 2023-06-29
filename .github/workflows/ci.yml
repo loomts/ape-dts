@@ -6,14 +6,19 @@ on:
       - main
   pull_request:
 
-jobs:
+env:
+  GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
 
+jobs:
   test:
     name: Test Suite
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          submodules: 'recursive'
+          token: ${{ env.GITHUB_TOKEN }}
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
