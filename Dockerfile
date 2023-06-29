@@ -14,7 +14,7 @@ ARG LIBC=gnu # gnu or musl, switch to musl if using alpine distritubtion image
 ARG APT_MIRROR=mirrors.ustc.edu.cn
 ARG RUSTUP_DIST_SERVER=https://mirrors.ustc.edu.cn/rust-static
 ARG BUILD_ARGS
-ARG MODULE_NAME="ape-dts"
+ARG MODULE_NAME="dt-main"
 
 
 ENV RUSTUP_DIST_SERVER=${RUSTUP_DIST_SERVER}
@@ -78,7 +78,7 @@ FROM ${DIST_IMG} as dist
 #TARGETOS - OS component from --platform, e.g. linux
 #TARGETARCH - Architecture from --platform, e.g. arm64
 ARG LOCAL_CONFIG_PATH="./images/example/mysql_snapshot_sample.yaml"
-ARG MODULE_NAME="ape-dts"
+ARG MODULE_NAME="dt-main"
 ARG APT_MIRROR=mirrors.ustc.edu.cn
 
 ENV CONFIG_PATH=config_example 
