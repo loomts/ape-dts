@@ -1,5 +1,7 @@
 ARG DIST_IMG=gcr.io/distroless/cc:nonroot
-# ARG DIST_IMG=alpine
+# #  debug while developing
+# ARG DIST_IMG=gcr.io/distroless/cc:debug
+
 ARG RUST_VERSION=1.69.0
 # ARG RUST_IMG_ALT=-slim-bullseye
 ARG RUST_IMG_ALT=-bullseye
@@ -36,9 +38,6 @@ RUN --mount=type=cache,target=$CARGO_HOME/git,rw \
 
 WORKDIR /app
 COPY . ./
-
-# RUN --mount=type=bind,target=.,rw \
-#     --mount=type=cache,target=/app/target,rw \
 
 RUN --mount=type=cache,target=$CARGO_HOME/git,rw \
     --mount=type=cache,target=$CARGO_HOME/registry,rw \
@@ -81,10 +80,8 @@ ARG LOCAL_CONFIG_PATH="./images/example/mysql_snapshot_sample.yaml"
 ARG MODULE_NAME="dt-main"
 ARG APT_MIRROR=mirrors.ustc.edu.cn
 
-ENV CONFIG_PATH=config_example 
-
-COPY ${LOCAL_CONFIG_PATH} /${CONFIG_PATH}
+COPY ${LOCAL_CONFIG_PATH} /config_example
 COPY log4rs.yaml /log4rs.yaml
 COPY --from=builder /app/bin/${MODULE_NAME} /ape-dts
 
-CMD ["/ape-dts", "/${CONFIG_PATH}"]
+ENTRYPOINT [ "/ape-dts" ]

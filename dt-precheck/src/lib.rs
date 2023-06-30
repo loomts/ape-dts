@@ -11,22 +11,16 @@ pub mod error;
 pub mod fetcher;
 pub mod meta;
 
-pub fn do_precheck(config: &str) {
+pub async fn do_precheck(config: &str) {
     let task_config = TaskConfig::new(config);
     let precheck_config = PrecheckTaskConfig::new(config).unwrap();
 
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap();
+    let checker_connector = CheckerConnector::build(precheck_config.precheck, task_config);
+    let result = checker_connector.verify_check_result().await;
+    if let Err(e) = result {
+        println!("precheck not passed.");
+        panic!("precheck meet error: {}", e);
+    }
 
-    rt.block_on(async {
-        let checker_connector = CheckerConnector::build(precheck_config.precheck, task_config);
-        let result = checker_connector.verify_check_result().await;
-        if let Err(e) = result {
-            println!("precheck not passed.");
-            panic!("precheck meet error: {}", e);
-        }
-    });
     println!("precheck passed.");
 }

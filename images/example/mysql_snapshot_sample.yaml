@@ -1,15 +1,38 @@
-src_url: mysql://root:123456@127.0.0.1:3306?ssl-mode=disabled
-dst_url: mysql://root:123456@127.0.0.1:3306
-src_pool_size: 5
-dst_pool_size: 5
-buffer_size: 2
-filter:
-  do_dbs: 
-  ignore_dbs: 
-  do_tbs: source_db.dts_test
-  ignore_tbs: 
-  do_events: insert
-router:
-  db_map: 
-  tb_map: source_db.dts_test:target_db.dts_test
-  field_map: f
+[extractor]
+extract_type=basic
+db_type=mysql
+url=mysql://{precheck_mysql2mysql_source_user}:{precheck_mysql2mysql_source_password}@{precheck_mysql2mysql_source_url}?ssl-mode=disabled
+
+[sinker]
+sink_type=basic
+db_type=mysql
+url=mysql://{precheck_mysql2mysql_sink_user}:{precheck_mysql2mysql_sink_password}@{precheck_mysql2mysql_sink_url}
+batch_size=1
+
+[filter]
+do_dbs=
+ignore_dbs=
+do_tbs=precheck_it_mysql2mysql_1.table_test
+ignore_tbs=
+do_events=
+
+[router]
+db_map=
+tb_map=
+field_map=
+
+[runtime]
+log_level=info
+log_dir=./logs
+log4rs_file=./log4rs.yaml
+
+[pipeline]
+type=
+checkpoint_interval_secs=1
+buffer_size=1
+parallel_size=1
+parallel_type=rdb_merge
+
+[precheck]
+do_struct_init=true
+do_cdc=true
