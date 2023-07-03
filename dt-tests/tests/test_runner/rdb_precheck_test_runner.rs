@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use dt_common::{config::task_config::TaskConfig, error::Error};
 
 use dt_precheck::{
-    config::task_config::PrecheckTaskConfig, connector::checker_connector::CheckerConnector,
+    builder::prechecker_builder::PrecheckerBuilder, config::task_config::PrecheckTaskConfig,
     meta::check_result::CheckResult,
 };
 
@@ -11,7 +11,7 @@ use super::rdb_test_runner::RdbTestRunner;
 
 pub struct RdbPrecheckTestRunner {
     pub base: RdbTestRunner,
-    checker_connector: CheckerConnector,
+    checker_connector: PrecheckerBuilder,
 }
 
 impl RdbPrecheckTestRunner {
@@ -21,7 +21,7 @@ impl RdbPrecheckTestRunner {
         let task_config = TaskConfig::new(&base.base.task_config_file);
         let precheck_config = PrecheckTaskConfig::new(&base.base.task_config_file).unwrap();
         let checker_connector =
-            CheckerConnector::build(precheck_config.precheck.clone(), task_config.clone());
+            PrecheckerBuilder::build(precheck_config.precheck.clone(), task_config.clone());
 
         Ok(Self {
             base,

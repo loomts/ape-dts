@@ -10,11 +10,11 @@ use crate::{
     meta::{check_item::CheckItem, check_result::CheckResult},
 };
 
-use super::traits::Checker;
+use super::traits::Prechecker;
 
 const MONGO_SUPPORTED_VERSION_REGEX: &str = r"5.*|6.0.*";
 
-pub struct MongoChecker {
+pub struct MongoPrechecker {
     pub fetcher: MongoFetcher,
     pub filter_config: FilterConfig,
     pub precheck_config: PrecheckConfig,
@@ -23,7 +23,7 @@ pub struct MongoChecker {
 }
 
 #[async_trait]
-impl Checker for MongoChecker {
+impl Prechecker for MongoPrechecker {
     async fn build_connection(&mut self) -> Result<CheckResult, Error> {
         let result = self.fetcher.build_connection().await;
         match result {

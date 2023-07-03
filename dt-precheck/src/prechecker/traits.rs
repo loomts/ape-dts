@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use crate::{error::Error, meta::check_result::CheckResult};
 
 #[async_trait]
-pub trait Checker {
+pub trait Prechecker {
     async fn build_connection(&mut self) -> Result<CheckResult, Error>;
 
     async fn check_database_version(&mut self) -> Result<CheckResult, Error>;

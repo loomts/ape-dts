@@ -12,12 +12,12 @@ use crate::{
     meta::check_result::CheckResult,
 };
 
-use super::traits::Checker;
+use super::traits::Prechecker;
 
 const PG_SUPPORT_DB_VERSION_NUM_MIN: i32 = 140000;
 const PG_SUPPORT_DB_VERSION_NUM_MAX: i32 = 149999;
 
-pub struct PostgresqlChecker {
+pub struct PostgresqlPrechecker {
     pub fetcher: PgFetcher,
     pub filter_config: FilterConfig,
     pub precheck_config: PrecheckConfig,
@@ -26,7 +26,7 @@ pub struct PostgresqlChecker {
 }
 
 #[async_trait]
-impl Checker for PostgresqlChecker {
+impl Prechecker for PostgresqlPrechecker {
     async fn build_connection(&mut self) -> Result<CheckResult, Error> {
         let mut check_error = None;
         let result = self.fetcher.build_connection().await;
