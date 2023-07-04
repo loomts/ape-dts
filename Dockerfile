@@ -1,6 +1,5 @@
-ARG DIST_IMG=gcr.io/distroless/cc:nonroot
-# #  debug while developing
-# ARG DIST_IMG=gcr.io/distroless/cc:debug
+# ARG DIST_IMG=gcr.io/distroless/cc:nonroot
+ARG DIST_IMG=gcr.io/distroless/cc:debug
 
 ARG RUST_VERSION=1.69.0
 # ARG RUST_IMG_ALT=-slim-bullseye
@@ -39,9 +38,9 @@ RUN --mount=type=cache,target=$CARGO_HOME/git,rw \
 WORKDIR /app
 COPY . ./
 
-RUN --mount=type=cache,target=$CARGO_HOME/git,rw \
-    --mount=type=cache,target=$CARGO_HOME/registry,rw \
-    cargo update
+# RUN --mount=type=cache,target=$CARGO_HOME/git,rw \
+#     --mount=type=cache,target=$CARGO_HOME/registry,rw \
+#     cargo update
 
 # RUN --mount=type=cache,target=$CARGO_HOME/git,rw \
 #     --mount=type=cache,target=$CARGO_HOME/registry,rw \

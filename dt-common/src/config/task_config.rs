@@ -144,9 +144,13 @@ impl TaskConfig {
                         }
                         Err(_) => 0,
                     };
+                    let resume_token: String = match ini.get(EXTRACTOR, "resume_token") {
+                        Some(val) => val,
+                        None => String::from(""),
+                    };
                     Ok(ExtractorConfig::MongoCdc {
                         url,
-                        resume_token: ini.get(EXTRACTOR, "resume_token").unwrap(),
+                        resume_token,
                         start_timestamp,
                     })
                 }

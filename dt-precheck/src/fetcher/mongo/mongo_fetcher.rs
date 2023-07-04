@@ -58,7 +58,7 @@ impl Fetcher for MongoFetcher {
     }
 
     async fn fetch_version(&mut self) -> Result<String, Error> {
-        let db = match self.get_random_db().await {
+        let db = match self.get_random_db() {
             Ok(db_name) => db_name,
             Err(e) => return Err(e),
         };
@@ -123,28 +123,113 @@ impl MongoFetcher {
         }
     }
 
-    pub async fn get_random_db(&mut self) -> Result<String, Error> {
-        let db = String::from("");
+    pub fn get_random_db(&mut self) -> Result<String, Error> {
+        let mut db = String::from("");
 
-        let client = match &self.pool {
-            Some(pool) => pool,
-            None => {
-                return Err(Error::Unexpected {
-                    error: String::from("client is closed."),
-                })
-            }
-        };
-        let databases_result = client.list_database_names(None, None).await;
-        match databases_result {
-            Ok(databases) => {
-                for db in databases {
-                    if !&self.filter.filter_db(db.as_str()) {
-                        return Ok(db);
+        match &self.filter_config {
+            FilterConfig::Rdb { do_dbs, do_tbs, .. } => {
+                if !do_dbs.is_empty() {
+                    for do_db in do_dbs.split(',') {
+                        if !self.filter.filter_db(do_db) {
+                            db = String::from(do_db);
+                            break;
+                        }
                     }
                 }
+                if db.is_empty() && !do_tbs.is_empty() {
+                    for do_tb in do_tbs.split(',') {
+                        let do_tb_string = do_tb.to_string();
+                        let db_tb_vec_tmp: Vec<&str> = do_tb_string.split('.').collect();
+                        if db_tb_vec_tmp.len() == 2
+                            && !self.filter.filter_tb(db_tb_vec_tmp[0], db_tb_vec_tmp[1])
+                        {
+                            db = String::from(db_tb_vec_tmp[0]);
+                            break;
+                        }
+                    }
+                };
             }
-            Err(e) => return Err(Error::from(e)),
         }
+        if db == "*" {
+            db = String::from("admin");
+        }
+
         Ok(db)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn generate_mongo_fetcher(
+        do_dbs: &str,
+        do_tbs: &str,
+        ignore_dbs: &str,
+        ignore_tbs: &str,
+    ) -> MongoFetcher {
+        let filter_config = FilterConfig::Rdb {
+            do_dbs: String::from(do_dbs),
+            ignore_dbs: String::from(ignore_dbs),
+            do_tbs: String::from(do_tbs),
+            ignore_tbs: String::from(ignore_tbs),
+            do_events: String::from("insert,update,delete"),
+        };
+
+        MongoFetcher {
+            pool: None,
+            source_config: ExtractorConfig::Basic {
+                url: String::from(""),
+                db_type: DbType::Mongo,
+            },
+            filter_config: filter_config.clone(),
+            sinker_config: SinkerConfig::Basic {
+                url: String::from(""),
+                db_type: DbType::Mongo,
+            },
+            router_config: RouterConfig::Rdb {
+                db_map: String::from(""),
+                tb_map: String::from(""),
+                field_map: String::from(""),
+            },
+            is_source: true,
+            db_type_option: Some(DbType::Mongo),
+            filter: RdbFilter::from_config(&filter_config, DbType::Mongo).unwrap(),
+        }
+    }
+
+    #[test]
+    fn get_random_db_test() {
+        let mut target_db: String;
+
+        target_db = generate_mongo_fetcher("db1,db2,db3", "", "", "")
+            .get_random_db()
+            .unwrap();
+        assert_eq!(target_db, "db1");
+
+        target_db = generate_mongo_fetcher("db1,db2,db3", "", "db1,db2", "")
+            .get_random_db()
+            .unwrap();
+        assert_eq!(target_db, "db3");
+
+        target_db = generate_mongo_fetcher(
+            "db1,db2",
+            "db1.table1,db3.table1,db4.table2",
+            "db1,db2",
+            "db3.table1",
+        )
+        .get_random_db()
+        .unwrap();
+        assert_eq!(target_db, "db4");
+
+        target_db = generate_mongo_fetcher("*", "", "db1,db2", "")
+            .get_random_db()
+            .unwrap();
+        assert_eq!(target_db, "admin");
+
+        target_db = generate_mongo_fetcher("", "db1.table1,*.*", "db1", "")
+            .get_random_db()
+            .unwrap();
+        assert_eq!(target_db, "admin");
     }
 }

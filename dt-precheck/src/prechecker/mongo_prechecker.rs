@@ -80,36 +80,34 @@ impl Prechecker for MongoPrechecker {
 
         // 1. replSet used
         // 2. the specify url is the master
-        let random_db = self.fetcher.get_random_db().await?;
+        let random_db = self.fetcher.get_random_db()?;
         let rs_status = self
             .fetcher
-            .execute_for_db(random_db.clone(), "replSetGetStatus")
-            .await;
-        let ok = match rs_status {
-            Ok(status) => status.get("ok").and_then(Bson::as_f64).unwrap_or(0.0),
-            Err(e) => {
-                println!("{}", e);
-                0.0
-            }
-        };
-        if ok < 1.0 {
+            .execute_for_db(random_db.clone(), "hello")
+            .await?;
+
+        let (ok, primary, me): (bool, &str, &str) = (
+            rs_status.get("ok").and_then(Bson::as_f64).unwrap_or(0.0) >= 1.0,
+            rs_status
+                .get("primary")
+                .and_then(Bson::as_str)
+                .unwrap_or(""),
+            rs_status.get("me").and_then(Bson::as_str).unwrap_or(""),
+        );
+
+        let mut err_msg = "";
+        if !ok {
+            err_msg = "fetching mongodb instance status with 'db.hello()' failed.";
+        } else if primary.is_empty() || me.is_empty() {
+            err_msg = "mongodb is not a replicaSet architecture.";
+        } else if primary != me {
+            err_msg = "the mongodb instance is not a master.";
+        }
+
+        if !err_msg.is_empty() {
             check_error = Some(Error::PreCheckError {
-                error: String::from("the mongodb instance does not have a replica set enabled."),
+                error: String::from(err_msg),
             });
-        } else {
-            let is_master = self
-                .fetcher
-                .execute_for_db(random_db.clone(), "isMaster")
-                .await?;
-            let flag = is_master
-                .get("ismaster")
-                .and_then(Bson::as_bool)
-                .unwrap_or(false);
-            if !flag {
-                check_error = Some(Error::PreCheckError {
-                    error: String::from("the mongodb instance is not a master."),
-                });
-            }
         }
 
         Ok(CheckResult::build_with_err(
