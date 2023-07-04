@@ -118,22 +118,22 @@ impl MongoCdcExtractor<'_> {
 
                     OperationType::Update | OperationType::Replace => {
                         row_type = RowType::Update;
-                        let id = doc
-                            .full_document
-                            .as_ref()
-                            .unwrap()
-                            .get_object_id(MongoConstants::ID)
-                            .unwrap();
-                        let before_doc = doc! {MongoConstants::ID: id};
-                        let after_doc = doc.full_document.unwrap();
-                        before.insert(
-                            MongoConstants::DOC.to_string(),
-                            ColValue::MongoDoc(before_doc),
-                        );
-                        after.insert(
-                            MongoConstants::DOC.to_string(),
-                            ColValue::MongoDoc(after_doc),
-                        );
+
+                        if let Some(document) = doc.full_document {
+                            let id = document.get_object_id(MongoConstants::ID).unwrap();
+
+                            let before_doc = doc! {MongoConstants::ID: id};
+                            let after_doc = document;
+
+                            before.insert(
+                                MongoConstants::DOC.to_string(),
+                                ColValue::MongoDoc(before_doc),
+                            );
+                            after.insert(
+                                MongoConstants::DOC.to_string(),
+                                ColValue::MongoDoc(after_doc),
+                            );
+                        }
                     }
 
                     _ => {}
