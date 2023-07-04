@@ -12,11 +12,11 @@ use crate::{
     meta::{check_item::CheckItem, check_result::CheckResult},
 };
 
-use super::traits::Checker;
+use super::traits::Prechecker;
 
 const MYSQL_SUPPORT_DB_VERSION_REGEX: &str = r"8\..*";
 
-pub struct MySqlChecker {
+pub struct MySqlPrechecker {
     pub fetcher: MysqlFetcher,
     pub filter_config: FilterConfig,
     pub precheck_config: PrecheckConfig,
@@ -25,7 +25,7 @@ pub struct MySqlChecker {
 }
 
 #[async_trait]
-impl Checker for MySqlChecker {
+impl Prechecker for MySqlPrechecker {
     async fn build_connection(&mut self) -> Result<CheckResult, Error> {
         let result = self.fetcher.build_connection().await;
         match result {

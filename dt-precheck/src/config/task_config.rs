@@ -29,13 +29,19 @@ impl PrecheckTaskConfig {
     }
 
     fn load_precheck_config(ini: &Ini) -> Result<PrecheckConfig, Error> {
-        Ok(PrecheckConfig {
-            do_struct_init: ini
-                .get(PRECHECK, "do_struct_init")
-                .unwrap()
-                .parse()
-                .unwrap(),
-            do_cdc: ini.get(PRECHECK, "do_cdc").unwrap().parse().unwrap(),
-        })
+        let (do_struct_opt, do_cdc_opt): (Option<String>, Option<String>) = (
+            ini.get(PRECHECK, "do_struct_init"),
+            ini.get(PRECHECK, "do_cdc"),
+        );
+        if let (Some(do_struct), Some(do_cdc)) = (do_struct_opt, do_cdc_opt) {
+            Ok(PrecheckConfig {
+                do_struct_init: do_struct.parse().unwrap(),
+                do_cdc: do_cdc.parse().unwrap(),
+            })
+        } else {
+            Err(Error::Unexpected {
+                error: String::from("config is not valid for precheck."),
+            })
+        }
     }
 }

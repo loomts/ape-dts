@@ -315,6 +315,7 @@ impl ExtractorUtil {
     pub async fn create_mongo_cdc_extractor<'a>(
         url: &str,
         resume_token: &str,
+        start_timestamp: &i64,
         buffer: &'a ConcurrentQueue<DtData>,
         filter: RdbFilter,
         shut_down: &'a AtomicBool,
@@ -324,6 +325,7 @@ impl ExtractorUtil {
             buffer,
             filter,
             resume_token: resume_token.to_string(),
+            start_timestamp: *start_timestamp,
             shut_down,
             mongo_client,
         })

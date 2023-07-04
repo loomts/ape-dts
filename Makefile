@@ -40,13 +40,10 @@ define BUILDX_ERROR
 buildx not enabled, refusing to run this recipe
 endef
 
-
 APT_MIRROR ?= mirrors.aliyun.com
 IMG ?= apecloud/ape-dts
 IMG_TAG ?= latest
 PLATFORMS ?= linux/arm64,linux/amd64
-
-
 
 .DEFAULT_GOAL := help
 
@@ -81,6 +78,10 @@ init: ## Build
 
 .PHONY: build
 build: ## Build
+	cargo build --release $(CARGO_BUILD_ARGS)
+
+.PHONY: build-debug
+build-debug: ## Build
 	cargo build $(CARGO_BUILD_ARGS)
 
 .PHONY: build-release

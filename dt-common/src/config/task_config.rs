@@ -133,10 +133,29 @@ impl TaskConfig {
                     tb: String::new(),
                 }),
 
-                ExtractType::Cdc => Ok(ExtractorConfig::MongoCdc {
-                    url,
-                    resume_token: ini.get(EXTRACTOR, "resume_token").unwrap(),
-                }),
+                ExtractType::Cdc => {
+                    let start_timestamp: i64 = match ini.getint(EXTRACTOR, "start_timestamp") {
+                        Ok(ts_option) => {
+                            if let Some(ts) = ts_option {
+                                ts
+                            } else {
+                                0
+                            }
+                        }
+                        Err(_) => 0,
+                    };
+                    let resume_token: String = match ini.get(EXTRACTOR, "resume_token") {
+                        Some(val) => val,
+                        None => String::from(""),
+                    };
+                    Ok(ExtractorConfig::MongoCdc {
+                        url,
+                        resume_token,
+                        start_timestamp,
+                    })
+                }
+
+                ExtractType::Basic => Ok(ExtractorConfig::Basic { url, db_type }),
 
                 _ => Err(Error::Unexpected {
                     error: "extractor db type not supported".to_string(),
@@ -195,6 +214,8 @@ impl TaskConfig {
 
             DbType::Mongo => match sink_type {
                 SinkType::Write => Ok(SinkerConfig::Mongo { url, batch_size }),
+
+                SinkType::Basic => Ok(SinkerConfig::Basic { url, db_type }),
 
                 _ => Err(Error::Unexpected {
                     error: "sinker db type not supported".to_string(),

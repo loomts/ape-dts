@@ -11,8 +11,9 @@ async fn main() {
     }
 
     let task_config = args[1].clone();
+
     if PrecheckTaskConfig::new(&task_config).is_ok() {
-        do_precheck(&task_config);
+        do_precheck(&task_config).await;
     } else {
         let runner = TaskRunner::new(task_config).await;
         runner.start_task(true).await.unwrap()

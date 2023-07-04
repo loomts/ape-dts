@@ -9,19 +9,25 @@ use dt_common::{
 };
 
 use crate::{
-    checker::{mysql_checker::MySqlChecker, pg_checker::PostgresqlChecker, traits::Checker},
     config::precheck_config::PrecheckConfig,
     error::Error,
-    fetcher::{mysql::mysql_fetcher::MysqlFetcher, postgresql::pg_fetcher::PgFetcher},
+    fetcher::{
+        mongo::mongo_fetcher::MongoFetcher, mysql::mysql_fetcher::MysqlFetcher,
+        postgresql::pg_fetcher::PgFetcher,
+    },
     meta::check_result::CheckResult,
+    prechecker::{
+        mongo_prechecker::MongoPrechecker, mysql_prechecker::MySqlPrechecker,
+        pg_prechecker::PostgresqlPrechecker, traits::Prechecker,
+    },
 };
 
-pub struct CheckerConnector {
+pub struct PrecheckerBuilder {
     precheck_config: PrecheckConfig,
     task_config: TaskConfig,
 }
 
-impl CheckerConnector {
+impl PrecheckerBuilder {
     pub fn build(precheck_config: PrecheckConfig, task_config: TaskConfig) -> Self {
         Self {
             precheck_config,
@@ -43,7 +49,7 @@ impl CheckerConnector {
         Ok(true)
     }
 
-    pub fn build_checker(&self, is_source: bool) -> Option<Box<dyn Checker + Send>> {
+    pub fn build_checker(&self, is_source: bool) -> Option<Box<dyn Prechecker + Send>> {
         let mut db_type_option: Option<&DbType> = None;
         if is_source {
             if let ExtractorConfig::Basic { db_type, .. } = &self.task_config.extractor {
@@ -59,8 +65,8 @@ impl CheckerConnector {
         let filter =
             RdbFilter::from_config(&self.task_config.filter, db_type_option.unwrap().clone())
                 .unwrap();
-        let checker: Option<Box<dyn Checker + Send>> = match db_type_option.unwrap() {
-            DbType::Mysql => Some(Box::new(MySqlChecker {
+        let checker: Option<Box<dyn Prechecker + Send>> = match db_type_option.unwrap() {
+            DbType::Mysql => Some(Box::new(MySqlPrechecker {
                 filter_config: self.task_config.filter.clone(),
                 precheck_config: self.precheck_config.clone(),
                 db_type_option: Some(db_type_option.unwrap().clone()),
@@ -76,7 +82,7 @@ impl CheckerConnector {
                     filter,
                 },
             })),
-            DbType::Pg => Some(Box::new(PostgresqlChecker {
+            DbType::Pg => Some(Box::new(PostgresqlPrechecker {
                 filter_config: self.task_config.filter.clone(),
                 precheck_config: self.precheck_config.clone(),
                 db_type_option: Some(db_type_option.unwrap().clone()),
@@ -91,6 +97,22 @@ impl CheckerConnector {
                     is_source,
                     filter,
                 },
+            })),
+            DbType::Mongo => Some(Box::new(MongoPrechecker {
+                fetcher: MongoFetcher {
+                    pool: None,
+                    source_config: self.task_config.extractor.clone(),
+                    filter_config: self.task_config.filter.clone(),
+                    sinker_config: self.task_config.sinker.clone(),
+                    router_config: self.task_config.router.clone(),
+                    is_source,
+                    db_type_option: Some(db_type_option.unwrap().clone()),
+                    filter,
+                },
+                filter_config: self.task_config.filter.clone(),
+                precheck_config: self.precheck_config.clone(),
+                is_source,
+                db_type_option: Some(db_type_option.unwrap().clone()),
             })),
             _ => None,
         };
