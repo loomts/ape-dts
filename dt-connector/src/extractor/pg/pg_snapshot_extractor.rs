@@ -1,4 +1,4 @@
-use std::sync::atomic::AtomicBool;
+use std::sync::{atomic::AtomicBool, Arc};
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
@@ -24,19 +24,19 @@ use crate::{
     Extractor,
 };
 
-pub struct PgSnapshotExtractor<'a> {
+pub struct PgSnapshotExtractor {
     pub conn_pool: Pool<Postgres>,
     pub meta_manager: PgMetaManager,
     pub resumer: SnapshotResumer,
-    pub buffer: &'a ConcurrentQueue<DtData>,
+    pub buffer: Arc<ConcurrentQueue<DtData>>,
     pub slice_size: usize,
     pub schema: String,
     pub tb: String,
-    pub shut_down: &'a AtomicBool,
+    pub shut_down: Arc<AtomicBool>,
 }
 
 #[async_trait]
-impl Extractor for PgSnapshotExtractor<'_> {
+impl Extractor for PgSnapshotExtractor {
     async fn extract(&mut self) -> Result<(), Error> {
         log_info!(
             r#"PgSnapshotExtractor starts, schema: "{}", tb: "{}", slice_size: {}"#,
@@ -56,7 +56,7 @@ impl Extractor for PgSnapshotExtractor<'_> {
     }
 }
 
-impl PgSnapshotExtractor<'_> {
+impl PgSnapshotExtractor {
     async fn extract_internal(&mut self) -> Result<(), Error> {
         let tb_meta = self
             .meta_manager
@@ -82,7 +82,7 @@ impl PgSnapshotExtractor<'_> {
             self.extract_all(&tb_meta).await?;
         }
 
-        BaseExtractor::wait_task_finish(self.buffer, self.shut_down).await
+        BaseExtractor::wait_task_finish(self.buffer.as_ref(), self.shut_down.as_ref()).await
     }
 
     async fn extract_all(&mut self, tb_meta: &PgTbMeta) -> Result<(), Error> {
@@ -97,7 +97,7 @@ impl PgSnapshotExtractor<'_> {
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let row_data = RowData::from_pg_row(&row, tb_meta);
-            BaseExtractor::push_row(self.buffer, row_data)
+            BaseExtractor::push_row(self.buffer.as_ref(), row_data)
                 .await
                 .unwrap();
             all_count += 1;
@@ -146,7 +146,7 @@ impl PgSnapshotExtractor<'_> {
                 if let Some(value) = start_value.to_option_string() {
                     row_data.position = format!("{}:{}", order_col, value)
                 }
-                BaseExtractor::push_row(self.buffer, row_data)
+                BaseExtractor::push_row(self.buffer.as_ref(), row_data)
                     .await
                     .unwrap();
                 slice_count += 1;

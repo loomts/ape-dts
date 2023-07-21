@@ -17,6 +17,9 @@ use dt_connector::extractor::{
         pg_cdc_extractor::PgCdcExtractor, pg_check_extractor::PgCheckExtractor,
         pg_snapshot_extractor::PgSnapshotExtractor, pg_struct_extractor::PgStructExtractor,
     },
+    redis::{
+        redis_cdc_extractor::RedisCdcExtractor, redis_snapshot_extractor::RedisSnapshotExtractor,
+    },
     snapshot_resumer::SnapshotResumer,
 };
 use dt_meta::{
@@ -139,16 +142,16 @@ impl ExtractorUtil {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub async fn create_mysql_cdc_extractor<'a>(
+    pub async fn create_mysql_cdc_extractor(
         url: &str,
         binlog_filename: &str,
         binlog_position: u32,
         server_id: u64,
-        buffer: &'a ConcurrentQueue<DtData>,
+        buffer: Arc<ConcurrentQueue<DtData>>,
         filter: RdbFilter,
         log_level: &str,
-        shut_down: &'a AtomicBool,
-    ) -> Result<MysqlCdcExtractor<'a>, Error> {
+        shut_down: Arc<AtomicBool>,
+    ) -> Result<MysqlCdcExtractor, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool = TaskUtil::create_mysql_conn_pool(url, 2, enable_sqlx_log).await?;
         let meta_manager = MysqlMetaManager::new(conn_pool).init().await?;
@@ -166,17 +169,17 @@ impl ExtractorUtil {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub async fn create_pg_cdc_extractor<'a>(
+    pub async fn create_pg_cdc_extractor(
         url: &str,
         slot_name: &str,
         start_lsn: &str,
         heartbeat_interval_secs: u64,
-        buffer: &'a ConcurrentQueue<DtData>,
+        buffer: Arc<ConcurrentQueue<DtData>>,
         filter: RdbFilter,
         log_level: &str,
-        shut_down: &'a AtomicBool,
+        shut_down: Arc<AtomicBool>,
         syncer: Arc<Mutex<Syncer>>,
-    ) -> Result<PgCdcExtractor<'a>, Error> {
+    ) -> Result<PgCdcExtractor, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool = TaskUtil::create_pg_conn_pool(url, 2, enable_sqlx_log).await?;
         let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
@@ -195,16 +198,16 @@ impl ExtractorUtil {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub async fn create_mysql_snapshot_extractor<'a>(
+    pub async fn create_mysql_snapshot_extractor(
         url: &str,
         db: &str,
         tb: &str,
         slice_size: usize,
         resumer: SnapshotResumer,
-        buffer: &'a ConcurrentQueue<DtData>,
+        buffer: Arc<ConcurrentQueue<DtData>>,
         log_level: &str,
-        shut_down: &'a AtomicBool,
-    ) -> Result<MysqlSnapshotExtractor<'a>, Error> {
+        shut_down: Arc<AtomicBool>,
+    ) -> Result<MysqlSnapshotExtractor, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         // max_connections: 1 for extracting data from table, 1 for db-meta-manager
         let conn_pool = TaskUtil::create_mysql_conn_pool(url, 2, enable_sqlx_log).await?;
@@ -222,14 +225,14 @@ impl ExtractorUtil {
         })
     }
 
-    pub async fn create_mysql_check_extractor<'a>(
+    pub async fn create_mysql_check_extractor(
         url: &str,
         check_log_dir: &str,
         batch_size: usize,
-        buffer: &'a ConcurrentQueue<DtData>,
+        buffer: Arc<ConcurrentQueue<DtData>>,
         log_level: &str,
-        shut_down: &'a AtomicBool,
-    ) -> Result<MysqlCheckExtractor<'a>, Error> {
+        shut_down: Arc<AtomicBool>,
+    ) -> Result<MysqlCheckExtractor, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool = TaskUtil::create_mysql_conn_pool(url, 2, enable_sqlx_log).await?;
         let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
@@ -244,14 +247,14 @@ impl ExtractorUtil {
         })
     }
 
-    pub async fn create_pg_check_extractor<'a>(
+    pub async fn create_pg_check_extractor(
         url: &str,
         check_log_dir: &str,
         batch_size: usize,
-        buffer: &'a ConcurrentQueue<DtData>,
+        buffer: Arc<ConcurrentQueue<DtData>>,
         log_level: &str,
-        shut_down: &'a AtomicBool,
-    ) -> Result<PgCheckExtractor<'a>, Error> {
+        shut_down: Arc<AtomicBool>,
+    ) -> Result<PgCheckExtractor, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool = TaskUtil::create_pg_conn_pool(url, 2, enable_sqlx_log).await?;
         let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
@@ -267,16 +270,16 @@ impl ExtractorUtil {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub async fn create_pg_snapshot_extractor<'a>(
+    pub async fn create_pg_snapshot_extractor(
         url: &str,
         db: &str,
         tb: &str,
         slice_size: usize,
         resumer: SnapshotResumer,
-        buffer: &'a ConcurrentQueue<DtData>,
+        buffer: Arc<ConcurrentQueue<DtData>>,
         log_level: &str,
-        shut_down: &'a AtomicBool,
-    ) -> Result<PgSnapshotExtractor<'a>, Error> {
+        shut_down: Arc<AtomicBool>,
+    ) -> Result<PgSnapshotExtractor, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool = TaskUtil::create_pg_conn_pool(url, 2, enable_sqlx_log).await?;
         let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
@@ -293,14 +296,14 @@ impl ExtractorUtil {
         })
     }
 
-    pub async fn create_mongo_snapshot_extractor<'a>(
+    pub async fn create_mongo_snapshot_extractor(
         url: &str,
         db: &str,
         tb: &str,
         resumer: SnapshotResumer,
-        buffer: &'a ConcurrentQueue<DtData>,
-        shut_down: &'a AtomicBool,
-    ) -> Result<MongoSnapshotExtractor<'a>, Error> {
+        buffer: Arc<ConcurrentQueue<DtData>>,
+        shut_down: Arc<AtomicBool>,
+    ) -> Result<MongoSnapshotExtractor, Error> {
         let mongo_client = TaskUtil::create_mongo_client(url).await.unwrap();
         Ok(MongoSnapshotExtractor {
             buffer,
@@ -312,14 +315,14 @@ impl ExtractorUtil {
         })
     }
 
-    pub async fn create_mongo_cdc_extractor<'a>(
+    pub async fn create_mongo_cdc_extractor(
         url: &str,
         resume_token: &str,
         start_timestamp: &i64,
-        buffer: &'a ConcurrentQueue<DtData>,
+        buffer: Arc<ConcurrentQueue<DtData>>,
         filter: RdbFilter,
-        shut_down: &'a AtomicBool,
-    ) -> Result<MongoCdcExtractor<'a>, Error> {
+        shut_down: Arc<AtomicBool>,
+    ) -> Result<MongoCdcExtractor, Error> {
         let mongo_client = TaskUtil::create_mongo_client(url).await.unwrap();
         Ok(MongoCdcExtractor {
             buffer,
@@ -331,14 +334,14 @@ impl ExtractorUtil {
         })
     }
 
-    pub async fn create_mysql_struct_extractor<'a>(
+    pub async fn create_mysql_struct_extractor(
         url: &str,
         db: &str,
-        buffer: &'a ConcurrentQueue<DtData>,
+        buffer: Arc<ConcurrentQueue<DtData>>,
         filter: RdbFilter,
         log_level: &str,
-        shut_down: &'a AtomicBool,
-    ) -> Result<MysqlStructExtractor<'a>, Error> {
+        shut_down: Arc<AtomicBool>,
+    ) -> Result<MysqlStructExtractor, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         // TODO, pass max_connections as parameter
         let conn_pool = TaskUtil::create_mysql_conn_pool(url, 2, enable_sqlx_log).await?;
@@ -352,14 +355,14 @@ impl ExtractorUtil {
         })
     }
 
-    pub async fn create_pg_struct_extractor<'a>(
+    pub async fn create_pg_struct_extractor(
         url: &str,
         db: &str,
-        buffer: &'a ConcurrentQueue<DtData>,
+        buffer: Arc<ConcurrentQueue<DtData>>,
         filter: RdbFilter,
         log_level: &str,
-        shut_down: &'a AtomicBool,
-    ) -> Result<PgStructExtractor<'a>, Error> {
+        shut_down: Arc<AtomicBool>,
+    ) -> Result<PgStructExtractor, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         // TODO, pass max_connections as parameter
         let conn_pool = TaskUtil::create_pg_conn_pool(url, 2, enable_sqlx_log).await?;
@@ -370,6 +373,40 @@ impl ExtractorUtil {
             db: db.to_string(),
             filter,
             shut_down,
+        })
+    }
+
+    pub async fn create_redis_snapshot_extractor(
+        url: &str,
+        buffer: Arc<ConcurrentQueue<DtData>>,
+        shut_down: Arc<AtomicBool>,
+    ) -> Result<RedisSnapshotExtractor, Error> {
+        let conn = TaskUtil::create_redis_conn(url).await?;
+        Ok(RedisSnapshotExtractor {
+            conn,
+            buffer,
+            shut_down,
+        })
+    }
+
+    pub async fn create_redis_cdc_extractor(
+        url: &str,
+        run_id: &str,
+        repl_offset: u64,
+        heartbeat_interval_secs: u64,
+        buffer: Arc<ConcurrentQueue<DtData>>,
+        shut_down: Arc<AtomicBool>,
+        syncer: Arc<Mutex<Syncer>>,
+    ) -> Result<RedisCdcExtractor, Error> {
+        let conn = TaskUtil::create_redis_conn(url).await?;
+        Ok(RedisCdcExtractor {
+            conn,
+            buffer,
+            run_id: run_id.to_string(),
+            repl_offset,
+            heartbeat_interval_secs,
+            shut_down,
+            syncer,
         })
     }
 }

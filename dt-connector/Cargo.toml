@@ -36,3 +36,4 @@ kafka = { workspace = true }
 url = { workspace = true }
 log = { workspace = true }
 log4rs = { workspace = true }
+redis = { workspace = true }

@@ -17,8 +17,11 @@ use dt_common::{
 use dt_connector::{extractor::snapshot_resumer::SnapshotResumer, Extractor};
 use dt_meta::{dt_data::DtData, row_type::RowType};
 use dt_pipeline::pipeline::Pipeline;
-use futures::future::join;
+use futures::{future::join, FutureExt};
 use log4rs::config::RawConfig;
+use tokio::try_join;
+
+use crate::task_util::TaskUtil;
 
 use super::{extractor_util::ExtractorUtil, pipeline_util::PipelineUtil, sinker_util::SinkerUtil};
 
@@ -126,44 +129,52 @@ impl TaskRunner {
     }
 
     async fn start_single_task(&self, extractor_config: &ExtractorConfig) -> Result<(), Error> {
-        let buffer = ConcurrentQueue::bounded(self.config.pipeline.buffer_size);
-        let shut_down = AtomicBool::new(false);
+        let buffer = Arc::new(ConcurrentQueue::bounded(self.config.pipeline.buffer_size));
+        let shut_down = Arc::new(AtomicBool::new(false));
         let syncer = Arc::new(Mutex::new(Syncer {
             checkpoint_position: String::new(),
         }));
 
         let mut extractor = self
-            .create_extractor(extractor_config, &buffer, &shut_down, syncer.clone())
+            .create_extractor(
+                extractor_config,
+                buffer.clone(),
+                shut_down.clone(),
+                syncer.clone(),
+            )
             .await?;
 
         let sinkers = SinkerUtil::create_sinkers(&self.config).await?;
         let parallelizer = PipelineUtil::create_parallelizer(&self.config).await?;
         let mut pipeline = Pipeline {
-            buffer: &buffer,
+            buffer,
             parallelizer,
             sinkers,
-            shut_down: &shut_down,
+            shut_down: shut_down.clone(),
             checkpoint_interval_secs: self.config.pipeline.checkpoint_interval_secs,
             batch_sink_interval_secs: self.config.pipeline.batch_sink_interval_secs,
             syncer,
         };
 
-        let result = join(extractor.extract(), pipeline.start()).await;
-        pipeline.stop().await?;
-        extractor.close().await?;
-        if result.0.is_err() {
-            return result.0;
-        }
-        result.1
+        let f1 = tokio::spawn(async move {
+            extractor.extract().await.unwrap();
+            extractor.close().await.unwrap();
+        });
+        let f2 = tokio::spawn(async move {
+            pipeline.start().await.unwrap();
+            pipeline.stop().await.unwrap();
+        });
+        try_join!(f1, f2);
+        Ok(())
     }
 
-    async fn create_extractor<'a>(
+    async fn create_extractor(
         &self,
         extractor_config: &ExtractorConfig,
-        buffer: &'a ConcurrentQueue<DtData>,
-        shut_down: &'a AtomicBool,
+        buffer: Arc<ConcurrentQueue<DtData>>,
+        shut_down: Arc<AtomicBool>,
         syncer: Arc<Mutex<Syncer>>,
-    ) -> Result<Box<dyn Extractor + 'a + Send>, Error> {
+    ) -> Result<Box<dyn Extractor + Send>, Error> {
         let resumer = SnapshotResumer {
             resumer_values: self.config.resumer.resume_values.clone(),
             db_type: extractor_config.get_db_type(),
@@ -335,6 +346,32 @@ impl TaskRunner {
                 .await?;
                 Box::new(extractor)
             }
+
+            ExtractorConfig::RedisSnapshot { url } => {
+                let extractor =
+                    ExtractorUtil::create_redis_snapshot_extractor(url, buffer, shut_down).await?;
+                Box::new(extractor)
+            }
+
+            ExtractorConfig::RedisCdc {
+                url,
+                run_id,
+                repl_offset,
+                heartbeat_interval_secs,
+            } => {
+                let extractor = ExtractorUtil::create_redis_cdc_extractor(
+                    url,
+                    run_id,
+                    *repl_offset,
+                    *heartbeat_interval_secs,
+                    buffer,
+                    shut_down,
+                    syncer,
+                )
+                .await?;
+                Box::new(extractor)
+            }
+
             _ => {
                 return Err(Error::ConfigError {
                     error: String::from("extractor_config type is not supported."),

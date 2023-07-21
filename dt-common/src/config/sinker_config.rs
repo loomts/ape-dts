@@ -65,6 +65,11 @@ pub enum SinkerConfig {
         region: String,
         root_dir: String,
     },
+
+    Redis {
+        url: String,
+        batch_size: usize,
+    },
 }
 
 impl SinkerConfig {
@@ -78,6 +83,7 @@ impl SinkerConfig {
             Self::Foxlake { .. } => DbType::Foxlake,
             Self::MysqlStruct { .. } => DbType::Mysql,
             Self::PgStruct { .. } => DbType::Pg,
+            Self::Redis { .. } => DbType::Redis,
             Self::Basic { db_type, .. } => db_type.clone(),
         }
     }

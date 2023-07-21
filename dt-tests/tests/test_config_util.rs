@@ -133,6 +133,14 @@ impl TestConfigUtil {
                 ));
             }
 
+            DbType::Redis => {
+                update_configs.push((
+                    EXTRACTOR.to_string(),
+                    URL.to_string(),
+                    env::var("redis_extractor_url").unwrap(),
+                ));
+            }
+
             _ => {}
         }
 
@@ -158,6 +166,14 @@ impl TestConfigUtil {
                     SINKER.to_string(),
                     URL.to_string(),
                     env::var("mongo_sinker_url").unwrap(),
+                ));
+            }
+
+            DbType::Redis => {
+                update_configs.push((
+                    SINKER.to_string(),
+                    URL.to_string(),
+                    env::var("redis_sinker_url").unwrap(),
                 ));
             }
 

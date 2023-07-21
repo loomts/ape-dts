@@ -19,17 +19,17 @@ use dt_meta::{ddl_data::DdlData, dt_data::DtData, row_data::RowData};
 
 use crate::Parallelizer;
 
-pub struct Pipeline<'a> {
-    pub buffer: &'a ConcurrentQueue<DtData>,
+pub struct Pipeline {
+    pub buffer: Arc<ConcurrentQueue<DtData>>,
     pub parallelizer: Box<dyn Parallelizer + Send>,
     pub sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
-    pub shut_down: &'a AtomicBool,
+    pub shut_down: Arc<AtomicBool>,
     pub checkpoint_interval_secs: u64,
     pub batch_sink_interval_secs: u64,
     pub syncer: Arc<Mutex<Syncer>>,
 }
 
-impl Pipeline<'_> {
+impl Pipeline {
     pub async fn stop(&mut self) -> Result<(), Error> {
         for sinker in self.sinkers.iter_mut() {
             sinker.lock().await.close().await.unwrap();
@@ -60,14 +60,16 @@ impl Pipeline<'_> {
                 Vec::new()
             } else {
                 last_sink_time = Instant::now();
-                self.parallelizer.drain(self.buffer).await.unwrap()
+                self.parallelizer.drain(self.buffer.as_ref()).await.unwrap()
             };
 
             // process all row_datas in buffer at a time
             let mut sink_count = 0;
             if !data.is_empty() {
                 let (count, last_received, last_commit);
-                if data[0].is_ddl() {
+                if data[0].is_raw() {
+                    (count, last_received, last_commit) = self.sink_raw(data).await.unwrap();
+                } else if data[0].is_ddl() {
                     (count, last_received, last_commit) = self.sink_ddl(data).await.unwrap();
                 } else {
                     (count, last_received, last_commit) = self.sink_dml(data).await.unwrap();
@@ -94,6 +96,21 @@ impl Pipeline<'_> {
         }
 
         Ok(())
+    }
+
+    async fn sink_raw(
+        &mut self,
+        all_data: Vec<DtData>,
+    ) -> Result<(usize, Option<String>, Option<String>), Error> {
+        let (data, last_received_position, last_commit_position) = Self::fetch_raw(all_data);
+        let count = data.len();
+        if count > 0 {
+            self.parallelizer
+                .sink_raw(data, &self.sinkers)
+                .await
+                .unwrap()
+        }
+        Ok((count, last_received_position, last_commit_position))
     }
 
     async fn sink_dml(
@@ -124,6 +141,30 @@ impl Pipeline<'_> {
                 .unwrap()
         }
         Ok((count, last_received_position, last_commit_position))
+    }
+
+    fn fetch_raw(mut data: Vec<DtData>) -> (Vec<DtData>, Option<String>, Option<String>) {
+        let mut raw_data = Vec::new();
+        let mut last_received_position = Option::None;
+        let mut last_commit_position = Option::None;
+        for i in data.drain(..) {
+            match &i {
+                DtData::Commit { position, .. } => {
+                    last_commit_position = Some(position.to_string());
+                    last_received_position = last_commit_position.clone();
+                    continue;
+                }
+
+                DtData::Redis { entry } => {
+                    last_received_position = Some(entry.position.to_string());
+                    raw_data.push(i);
+                }
+
+                _ => {}
+            }
+        }
+
+        (raw_data, last_received_position, last_commit_position)
     }
 
     fn fetch_dml(mut data: Vec<DtData>) -> (Vec<RowData>, Option<String>, Option<String>) {

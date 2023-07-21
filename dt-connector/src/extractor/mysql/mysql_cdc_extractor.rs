@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::atomic::AtomicBool};
+use std::{
+    collections::HashMap,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use async_recursion::async_recursion;
 use async_trait::async_trait;
@@ -26,21 +29,21 @@ use dt_common::{
 
 use crate::{extractor::base_extractor::BaseExtractor, Extractor};
 
-pub struct MysqlCdcExtractor<'a> {
+pub struct MysqlCdcExtractor {
     pub meta_manager: MysqlMetaManager,
-    pub buffer: &'a ConcurrentQueue<DtData>,
+    pub buffer: Arc<ConcurrentQueue<DtData>>,
     pub filter: RdbFilter,
     pub url: String,
     pub binlog_filename: String,
     pub binlog_position: u32,
     pub server_id: u64,
-    pub shut_down: &'a AtomicBool,
+    pub shut_down: Arc<AtomicBool>,
 }
 
 const QUERY_BEGIN: &str = "BEGIN";
 
 #[async_trait]
-impl Extractor for MysqlCdcExtractor<'_> {
+impl Extractor for MysqlCdcExtractor {
     async fn extract(&mut self) -> Result<(), Error> {
         log_info!(
             "MysqlCdcExtractor starts, binlog_filename: {}, binlog_position: {}",
@@ -55,7 +58,7 @@ impl Extractor for MysqlCdcExtractor<'_> {
     }
 }
 
-impl MysqlCdcExtractor<'_> {
+impl MysqlCdcExtractor {
     async fn extract_internal(&mut self) -> Result<(), Error> {
         let mut client = BinlogClient {
             url: self.url.clone(),
@@ -181,7 +184,8 @@ impl MysqlCdcExtractor<'_> {
                             ddl_data.schema = schema;
                         }
                     }
-                    BaseExtractor::push_dt_data(self.buffer, DtData::Ddl { ddl_data }).await?;
+                    BaseExtractor::push_dt_data(self.buffer.as_ref(), DtData::Ddl { ddl_data })
+                        .await?;
                 }
             }
 
@@ -190,7 +194,7 @@ impl MysqlCdcExtractor<'_> {
                     xid: xid.xid.to_string(),
                     position: position.to_string(),
                 };
-                BaseExtractor::push_dt_data(self.buffer, commit).await?;
+                BaseExtractor::push_dt_data(self.buffer.as_ref(), commit).await?;
             }
 
             _ => {}
@@ -207,7 +211,7 @@ impl MysqlCdcExtractor<'_> {
         ) {
             return Ok(());
         }
-        BaseExtractor::push_row(self.buffer, row_data).await
+        BaseExtractor::push_row(self.buffer.as_ref(), row_data).await
     }
 
     async fn parse_row_data(

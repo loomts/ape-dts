@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::atomic::AtomicBool};
+use std::{
+    collections::HashMap,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
@@ -31,6 +34,8 @@ impl RdbStructTestRunner {
         let (src_url, dst_url, log_level, dbs, mut filter, buffer, shut_down) =
             self.build_extractor_parameters().await;
 
+        let buffer = Arc::new(buffer);
+        let shut_down = Arc::new(shut_down);
         for db in dbs.iter() {
             if filter.filter_db(db) {
                 continue;
@@ -39,10 +44,10 @@ impl RdbStructTestRunner {
             let mut src_fetcher = ExtractorUtil::create_mysql_struct_extractor(
                 &src_url,
                 db,
-                &buffer,
+                buffer.clone(),
                 filter.clone(),
                 &log_level,
-                &shut_down,
+                shut_down.clone(),
             )
             .await?
             .build_fetcher();
@@ -50,10 +55,10 @@ impl RdbStructTestRunner {
             let mut dst_fetcher = ExtractorUtil::create_mysql_struct_extractor(
                 &dst_url,
                 db,
-                &buffer,
+                buffer.clone(),
                 filter.clone(),
                 &log_level,
-                &shut_down,
+                shut_down.clone(),
             )
             .await?
             .build_fetcher();
@@ -77,6 +82,8 @@ impl RdbStructTestRunner {
         let (src_url, dst_url, log_level, dbs, mut filter, buffer, shut_down) =
             self.build_extractor_parameters().await;
 
+        let buffer = Arc::new(buffer);
+        let shut_down = Arc::new(shut_down);
         for db in dbs.iter() {
             if filter.filter_db(db) {
                 continue;
@@ -85,10 +92,10 @@ impl RdbStructTestRunner {
             let mut src_fetcher = ExtractorUtil::create_pg_struct_extractor(
                 &src_url,
                 db,
-                &buffer,
+                buffer.clone(),
                 filter.clone(),
                 &log_level,
-                &shut_down,
+                shut_down.clone(),
             )
             .await?
             .build_fetcher();
@@ -96,10 +103,10 @@ impl RdbStructTestRunner {
             let mut dst_fetcher = ExtractorUtil::create_pg_struct_extractor(
                 &dst_url,
                 db,
-                &buffer,
+                buffer.clone(),
                 filter.clone(),
                 &log_level,
-                &shut_down,
+                shut_down.clone(),
             )
             .await?
             .build_fetcher();
