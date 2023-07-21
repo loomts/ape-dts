@@ -5,10 +5,11 @@ use configparser::ini::Ini;
 use crate::error::Error;
 
 use super::{
-    config_enums::{ConflictPolicyEnum, DbType, ExtractType, ParallelType, SinkType},
+    config_enums::{ConflictPolicyEnum, DbType, ExtractType, ParallelType, PipelineType, SinkType},
     extractor_config::ExtractorConfig,
     filter_config::FilterConfig,
-    pipeline_config::PipelineConfig,
+    parallelizer_config::ParallelizerConfig,
+    pipeline_config::{ExtraConfig, PipelineConfig},
     resumer_config::ResumerConfig,
     router_config::RouterConfig,
     runtime_config::RuntimeConfig,
@@ -20,6 +21,7 @@ pub struct TaskConfig {
     pub extractor: ExtractorConfig,
     pub sinker: SinkerConfig,
     pub runtime: RuntimeConfig,
+    pub parallelizer: ParallelizerConfig,
     pub pipeline: PipelineConfig,
     pub filter: FilterConfig,
     pub router: RouterConfig,
@@ -31,7 +33,9 @@ const CHECK_LOG_DIR: &str = "check_log_dir";
 const SINKER: &str = "sinker";
 const DB_TYPE: &str = "db_type";
 const URL: &str = "url";
+const PARALLELIZER: &str = "parallelizer";
 const PIPELINE: &str = "pipeline";
+const PIPELINE_TYPE: &str = "type";
 const RUNTIME: &str = "runtime";
 const FILTER: &str = "filter";
 const ROUTER: &str = "router";
@@ -50,8 +54,9 @@ impl TaskConfig {
 
         Self {
             extractor: Self::load_extractor_config(&ini).unwrap(),
-            pipeline: Self::load_pipeline_config(&ini),
+            parallelizer: Self::load_paralleizer_config(&ini),
             sinker: Self::load_sinker_config(&ini).unwrap(),
+            pipeline: Self::load_pipeline_config(&ini),
             runtime: Self::load_runtime_config(&ini).unwrap(),
             filter: Self::load_filter_config(&ini).unwrap(),
             router: Self::load_router_config(&ini).unwrap(),
@@ -175,7 +180,8 @@ impl TaskConfig {
         let batch_size: usize = Self::get_optional_value(ini, SINKER, BATCH_SIZE);
 
         let conflict_policy_str: String = Self::get_optional_value(ini, SINKER, "conflict_policy");
-        let conflict_policy = ConflictPolicyEnum::from_str(&conflict_policy_str).unwrap();
+        let conflict_policy = ConflictPolicyEnum::from_str(&conflict_policy_str)
+            .unwrap_or(ConflictPolicyEnum::Interrupt);
 
         match db_type {
             DbType::Mysql => match sink_type {
@@ -246,19 +252,45 @@ impl TaskConfig {
         }
     }
 
+    fn load_paralleizer_config(ini: &Ini) -> ParallelizerConfig {
+        ParallelizerConfig {
+            parallel_size: ini.getuint(PARALLELIZER, "parallel_size").unwrap().unwrap() as usize,
+            parallel_type: ParallelType::from_str(&ini.get(PARALLELIZER, "parallel_type").unwrap())
+                .unwrap(),
+        }
+    }
+
     fn load_pipeline_config(ini: &Ini) -> PipelineConfig {
+        let pipeline_type: PipelineType = match &ini.get(PIPELINE, PIPELINE_TYPE) {
+            Some(t) => PipelineType::from_str(t).unwrap(),
+            None => PipelineType::Basic,
+        };
+
+        let buffer_size = ini.getuint(PIPELINE, "buffer_size").unwrap().unwrap() as usize;
         let batch_sink_interval_secs: u64 =
             Self::get_optional_value(ini, PIPELINE, "batch_sink_interval_secs");
+        let checkpoint_interval_secs = ini
+            .getuint(PIPELINE, "checkpoint_interval_secs")
+            .unwrap()
+            .unwrap_or(1);
+
+        let extra_config = match pipeline_type {
+            PipelineType::Transaction => ExtraConfig::Transaction {
+                transaction_db: ini.get(PIPELINE, "transaction_db").unwrap(),
+                transaction_table: ini.get(PIPELINE, "transaction_table").unwrap(),
+                transaction_express: ini.get(PIPELINE, "transaction_express").unwrap(),
+                transaction_command: ini.get(PIPELINE, "transaction_command").unwrap(),
+                white_nodes: ini.get(PIPELINE, "white_nodes").unwrap(),
+                black_nodes: ini.get(PIPELINE, "black_nodes").unwrap(),
+            },
+            _ => ExtraConfig::Basic {},
+        };
+
         PipelineConfig {
-            buffer_size: ini.getuint(PIPELINE, "buffer_size").unwrap().unwrap() as usize,
-            parallel_size: ini.getuint(PIPELINE, "parallel_size").unwrap().unwrap() as usize,
-            parallel_type: ParallelType::from_str(&ini.get(PIPELINE, "parallel_type").unwrap())
-                .unwrap(),
-            checkpoint_interval_secs: ini
-                .getuint(PIPELINE, "checkpoint_interval_secs")
-                .unwrap()
-                .unwrap(),
+            buffer_size,
+            checkpoint_interval_secs,
             batch_sink_interval_secs,
+            extra_config,
         }
     }
 
@@ -311,10 +343,11 @@ impl TaskConfig {
 
 #[cfg(test)]
 mod tests {
+    use std::{fs, path::PathBuf};
+
     use crate::utils::work_dir_util::WorkDirUtil;
 
     use super::*;
-    use std::{fs, path::PathBuf};
 
     #[test]
     fn task_config_new_test() {
@@ -335,5 +368,89 @@ mod tests {
             TaskConfig::new(&dir_entry.path().to_string_lossy().to_string());
         }
         assert!(true)
+    }
+
+    fn mock_props(confs: &str) -> PipelineConfig {
+        let mut inis = Ini::new();
+        inis.read(String::from(confs)).unwrap();
+        TaskConfig::load_pipeline_config(&inis)
+    }
+
+    #[test]
+    fn load_pipeline_config_test() {
+        let mut conf: &str = "
+        [pipeline]
+        type=basic
+
+        buffer_size=4
+        checkpoint_interval_secs=1
+        batch_sink_interval_secs=10
+        ";
+        let mut pipeline_config = mock_props(conf);
+        assert_eq!(
+            pipeline_config.get_pipeline_type().to_string(),
+            PipelineType::Basic.to_string()
+        );
+        assert_eq!(pipeline_config.buffer_size, 4);
+        assert_eq!(pipeline_config.checkpoint_interval_secs, 1);
+        assert_eq!(pipeline_config.batch_sink_interval_secs, 10);
+
+        conf = "
+        [pipeline]
+        type=basic
+
+        buffer_size=4
+        ";
+        pipeline_config = mock_props(conf);
+        assert_eq!(
+            pipeline_config.get_pipeline_type().to_string(),
+            PipelineType::Basic.to_string()
+        );
+        assert_eq!(pipeline_config.buffer_size, 4);
+        assert_eq!(pipeline_config.checkpoint_interval_secs, 1);
+        assert_eq!(pipeline_config.batch_sink_interval_secs, 0);
+
+        conf = "
+        [pipeline]
+        type=transaction
+        buffer_size=4
+
+        transaction_db=ape_dt
+        transaction_table=ape_dt_topo1_node1_node2
+        transaction_express=ape_dt_(?<topology>.*)_(?<source>.*)_(?<sink>.*)
+        transaction_command=update ape_dt_topo1_node1_node2 set n = n + 1;
+        topology_key=topo1
+        white_nodes=4,5,6
+        black_nodes=1,2,3
+        ";
+        pipeline_config = mock_props(conf);
+        assert_eq!(
+            pipeline_config.get_pipeline_type().to_string(),
+            PipelineType::Transaction.to_string()
+        );
+        match pipeline_config.extra_config {
+            ExtraConfig::Basic {} => assert!(false),
+            ExtraConfig::Transaction {
+                transaction_db,
+                transaction_table,
+                transaction_express,
+                transaction_command,
+                white_nodes,
+                black_nodes,
+            } => {
+                assert_eq!(transaction_db, "ape_dt");
+                assert_eq!(transaction_table, "ape_dt_topo1_node1_node2");
+                assert_eq!(
+                    transaction_express,
+                    "ape_dt_(?<topology>.*)_(?<source>.*)_(?<sink>.*)"
+                );
+                assert_eq!(
+                    transaction_command,
+                    "update ape_dt_topo1_node1_node2 set n = n + 1"
+                );
+                assert_eq!(white_nodes, "4,5,6");
+                assert_eq!(black_nodes, "1,2,3");
+            }
+        }
     }
 }

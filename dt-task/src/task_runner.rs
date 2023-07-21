@@ -7,7 +7,10 @@ use std::{
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
     config::{
-        config_enums::DbType, extractor_config::ExtractorConfig, sinker_config::SinkerConfig,
+        config_enums::{DbType, PipelineType},
+        extractor_config::ExtractorConfig,
+        pipeline_config::ExtraConfig,
+        sinker_config::SinkerConfig,
         task_config::TaskConfig,
     },
     error::Error,
@@ -16,11 +19,15 @@ use dt_common::{
 };
 use dt_connector::{extractor::snapshot_resumer::SnapshotResumer, Extractor};
 use dt_meta::{dt_data::DtData, row_type::RowType};
-use dt_pipeline::pipeline::Pipeline;
+use dt_pipeline::{
+    base_pipeline::BasicPipeline, transaction_pipeline::TransactionPipeline, Pipeline,
+};
 use futures::future::join;
 use log4rs::config::RawConfig;
 
-use super::{extractor_util::ExtractorUtil, pipeline_util::PipelineUtil, sinker_util::SinkerUtil};
+use super::{
+    extractor_util::ExtractorUtil, parallelizer_util::ParallelizerUtil, sinker_util::SinkerUtil,
+};
 
 pub struct TaskRunner {
     config: TaskConfig,
@@ -136,17 +143,7 @@ impl TaskRunner {
             .create_extractor(extractor_config, &buffer, &shut_down, syncer.clone())
             .await?;
 
-        let sinkers = SinkerUtil::create_sinkers(&self.config).await?;
-        let parallelizer = PipelineUtil::create_parallelizer(&self.config).await?;
-        let mut pipeline = Pipeline {
-            buffer: &buffer,
-            parallelizer,
-            sinkers,
-            shut_down: &shut_down,
-            checkpoint_interval_secs: self.config.pipeline.checkpoint_interval_secs,
-            batch_sink_interval_secs: self.config.pipeline.batch_sink_interval_secs,
-            syncer,
-        };
+        let mut pipeline = self.create_pipeline(&buffer, &shut_down, &syncer).await?;
 
         let result = join(extractor.extract(), pipeline.start()).await;
         pipeline.stop().await?;
@@ -155,6 +152,48 @@ impl TaskRunner {
             return result.0;
         }
         result.1
+    }
+
+    async fn create_pipeline<'a>(
+        &self,
+        buffer: &'a ConcurrentQueue<DtData>,
+        shut_down: &'a AtomicBool,
+        syncer: &'a Arc<Mutex<Syncer>>,
+    ) -> Result<Box<dyn Pipeline + 'a + Send>, Error> {
+        let transaction_command = self.fetch_transaction_command();
+
+        let parallelizer = ParallelizerUtil::create_parallelizer(&self.config).await?;
+        let sinkers = SinkerUtil::create_sinkers(&self.config, transaction_command).await?;
+
+        let pipeline: Box<dyn Pipeline + Send> = match self.config.pipeline.get_pipeline_type() {
+            PipelineType::Basic => {
+                let obj = BasicPipeline {
+                    buffer: &buffer,
+                    parallelizer,
+                    sinkers,
+                    shut_down: &shut_down,
+                    checkpoint_interval_secs: self.config.pipeline.checkpoint_interval_secs,
+                    batch_sink_interval_secs: self.config.pipeline.batch_sink_interval_secs,
+                    syncer: syncer.to_owned(),
+                };
+                Box::new(obj)
+            }
+            PipelineType::Transaction => {
+                let obj = TransactionPipeline {
+                    buffer: &buffer,
+                    parallelizer,
+                    sinkers,
+                    filters: None,
+                    shut_down: &shut_down,
+                    syncer: syncer.to_owned(),
+                    pipeline_config: self.config.pipeline.clone(),
+                    extractor_config: self.config.extractor.clone(),
+                };
+                Box::new(obj)
+            }
+        };
+
+        Ok(pipeline)
     }
 
     async fn create_extractor<'a>(
@@ -208,7 +247,11 @@ impl TaskRunner {
                 binlog_position,
                 server_id,
             } => {
-                let filter = RdbFilter::from_config(&self.config.filter, DbType::Mysql)?;
+                let filter = RdbFilter::from_config_with_transaction(
+                    &self.config.filter,
+                    DbType::Mysql,
+                    &self.config.pipeline,
+                )?;
                 let extractor = ExtractorUtil::create_mysql_cdc_extractor(
                     url,
                     binlog_filename,
@@ -342,6 +385,16 @@ impl TaskRunner {
             }
         };
         Ok(extractor)
+    }
+
+    fn fetch_transaction_command(&self) -> String {
+        match &self.config.pipeline.extra_config {
+            ExtraConfig::Transaction {
+                transaction_command,
+                ..
+            } => transaction_command.to_owned(),
+            _ => String::from(""),
+        }
     }
 
     fn init_log4rs(&self) -> Result<(), Error> {

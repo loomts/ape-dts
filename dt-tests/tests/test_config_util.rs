@@ -3,15 +3,18 @@ use std::{
     env,
     fs::{self, File},
     io::Read,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use configparser::ini::Ini;
-use dt_common::config::{
-    config_enums::{DbType, ParallelType},
-    extractor_config::ExtractorConfig,
-    sinker_config::SinkerConfig,
-    task_config::TaskConfig,
+use dt_common::{
+    config::{
+        config_enums::{DbType, ParallelType},
+        extractor_config::ExtractorConfig,
+        sinker_config::SinkerConfig,
+        task_config::TaskConfig,
+    },
+    utils::config_url_util::ConfigUrlUtil,
 };
 
 pub struct TestConfigUtil {}
@@ -32,6 +35,9 @@ impl TestConfigUtil {
     pub const EXTRACTOR_CHECK_LOG_DIR: &str = "extractor_check_log_dir";
     pub const SINKER_CHECK_LOG_DIR: &str = "sinker_check_log_dir";
 
+    pub const REPLACE_PARAM: &str = "replace";
+    pub const OVERRIDE_WHOLE: &str = "override";
+
     pub fn get_project_root() -> String {
         project_root::get_project_root()
             .unwrap()
@@ -47,6 +53,26 @@ impl TestConfigUtil {
             TEST_PROJECT,
             relative_dir
         )
+    }
+
+    // result: (absolute_sub_path, sub_path_dir_name)
+    pub fn get_absolute_sub_dir(relative_dir: &str) -> Vec<(String, String)> {
+        let mut result_dir: Vec<(String, String)> = vec![];
+
+        let absolute_dir = TestConfigUtil::get_absolute_dir(relative_dir);
+        let path = PathBuf::from(absolute_dir.as_str());
+
+        let entries = fs::read_dir(path).unwrap();
+        for entry in entries {
+            if let Ok(sub_path) = entry {
+                if sub_path.path().is_dir() {
+                    let sub_path_dir = sub_path.file_name().to_string_lossy().to_string();
+                    result_dir.push((format!("{}/{}", absolute_dir, sub_path_dir), sub_path_dir));
+                }
+            }
+        }
+
+        result_dir
     }
 
     pub fn transfer_config(config: Vec<(&str, &str, &str)>) -> Vec<(String, String, String)> {
@@ -101,67 +127,93 @@ impl TestConfigUtil {
         src_task_config_file: &str,
         dst_task_config_file: &str,
         project_root: &str,
+        policy: &str,
     ) {
         let env_path = format!("{}/{}/tests/.env", project_root, TEST_PROJECT);
         dotenv::from_path(env_path).unwrap();
 
-        let config = TaskConfig::new(&src_task_config_file);
         let mut update_configs = Vec::new();
+        let config = TaskConfig::new(&src_task_config_file);
 
-        match &config.extractor.get_db_type() {
-            DbType::Mysql => {
+        match policy {
+            Self::REPLACE_PARAM => {
                 update_configs.push((
                     EXTRACTOR.to_string(),
                     URL.to_string(),
-                    env::var("mysql_extractor_url").unwrap(),
+                    ConfigUrlUtil::convert_with_envs(config.extractor.get_url()).unwrap(),
                 ));
-            }
-
-            DbType::Pg => {
-                update_configs.push((
-                    EXTRACTOR.to_string(),
-                    URL.to_string(),
-                    env::var("pg_extractor_url").unwrap(),
-                ));
-            }
-
-            DbType::Mongo => {
-                update_configs.push((
-                    EXTRACTOR.to_string(),
-                    URL.to_string(),
-                    env::var("mongo_extractor_url").unwrap(),
-                ));
-            }
-
-            _ => {}
-        }
-
-        match &config.sinker.get_db_type() {
-            DbType::Mysql => {
                 update_configs.push((
                     SINKER.to_string(),
                     URL.to_string(),
-                    env::var("mysql_sinker_url").unwrap(),
+                    ConfigUrlUtil::convert_with_envs(config.sinker.get_url()).unwrap(),
                 ));
             }
+            _ => {
+                match env::var("override_enable") {
+                    Ok(v) => {
+                        if v.eq("false") {
+                            return;
+                        }
+                    }
+                    Err(_) => return,
+                }
 
-            DbType::Pg => {
-                update_configs.push((
-                    SINKER.to_string(),
-                    URL.to_string(),
-                    env::var("pg_sinker_url").unwrap(),
-                ));
+                match &config.extractor.get_db_type() {
+                    DbType::Mysql => {
+                        update_configs.push((
+                            EXTRACTOR.to_string(),
+                            URL.to_string(),
+                            env::var("mysql_extractor_url").unwrap(),
+                        ));
+                    }
+
+                    DbType::Pg => {
+                        update_configs.push((
+                            EXTRACTOR.to_string(),
+                            URL.to_string(),
+                            env::var("pg_extractor_url").unwrap(),
+                        ));
+                    }
+
+                    DbType::Mongo => {
+                        update_configs.push((
+                            EXTRACTOR.to_string(),
+                            URL.to_string(),
+                            env::var("mongo_extractor_url").unwrap(),
+                        ));
+                    }
+
+                    _ => {}
+                }
+
+                match &config.sinker.get_db_type() {
+                    DbType::Mysql => {
+                        update_configs.push((
+                            SINKER.to_string(),
+                            URL.to_string(),
+                            env::var("mysql_sinker_url").unwrap(),
+                        ));
+                    }
+
+                    DbType::Pg => {
+                        update_configs.push((
+                            SINKER.to_string(),
+                            URL.to_string(),
+                            env::var("pg_sinker_url").unwrap(),
+                        ));
+                    }
+
+                    DbType::Mongo => {
+                        update_configs.push((
+                            SINKER.to_string(),
+                            URL.to_string(),
+                            env::var("mongo_sinker_url").unwrap(),
+                        ));
+                    }
+
+                    _ => {}
+                }
             }
-
-            DbType::Mongo => {
-                update_configs.push((
-                    SINKER.to_string(),
-                    URL.to_string(),
-                    env::var("mongo_sinker_url").unwrap(),
-                ));
-            }
-
-            _ => {}
         }
 
         TestConfigUtil::update_task_config(

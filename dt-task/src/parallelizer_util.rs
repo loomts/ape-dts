@@ -4,7 +4,7 @@ use dt_common::{
     config::{config_enums::ParallelType, task_config::TaskConfig},
     error::Error,
 };
-use dt_pipeline::{
+use dt_parallelizer::{
     base_parallelizer::BaseParallelizer, check_parallelizer::CheckParallelizer,
     merge_parallelizer::MergeParallelizer, mongo_parallelizer::MongoParallelizer,
     partition_parallelizer::PartitionParallelizer, rdb_merger::RdbMerger,
@@ -15,14 +15,14 @@ use dt_pipeline::{
 
 use super::task_util::TaskUtil;
 
-pub struct PipelineUtil {}
+pub struct ParallelizerUtil {}
 
-impl PipelineUtil {
+impl ParallelizerUtil {
     pub async fn create_parallelizer(
         config: &TaskConfig,
     ) -> Result<Box<dyn Parallelizer + Send>, Error> {
-        let parallel_size = config.pipeline.parallel_size;
-        let parallel_type = &config.pipeline.parallel_type;
+        let parallel_size = config.parallelizer.parallel_size;
+        let parallel_type = &config.parallelizer.parallel_type;
         let base_parallelizer = BaseParallelizer {
             poped_data: VecDeque::new(),
         };

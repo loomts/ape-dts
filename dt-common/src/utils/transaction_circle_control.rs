@@ -1,0 +1,490 @@
+use core::fmt;
+use std::collections::HashMap;
+
+use crate::{
+    config::pipeline_config::{ExtraConfig, PipelineConfig},
+    error::Error,
+};
+use regex::Regex;
+
+const TOPOLOLOGY_KEY: &str = "topology";
+const SOURCE_NODE_KEY: &str = "source";
+const SINK_NODE_KEY: &str = "sink";
+
+#[derive(Clone, Default, Debug)]
+pub struct TopologyInfo {
+    pub topology_key: String,
+    pub source_node: String,
+    pub sink_node: String,
+}
+
+impl TopologyInfo {
+    pub fn is_empty(&self) -> bool {
+        self.topology_key.is_empty() || self.source_node.is_empty() || self.sink_node.is_empty()
+    }
+}
+
+impl fmt::Display for TopologyInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "topology_key:{},source_node:{},sink_node:{}",
+            self.topology_key, self.source_node, self.sink_node
+        )
+    }
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct TransactionWorker {
+    pub transaction_db: String,
+    pub transaction_table: String,
+    pub transaction_express: String,
+    pub white_nodes: String,
+    pub black_nodes: String,
+}
+
+impl TransactionWorker {
+    pub fn from(pipeline_config: &PipelineConfig) -> Self {
+        match &pipeline_config.extra_config {
+            ExtraConfig::Transaction {
+                transaction_db,
+                transaction_table,
+                transaction_express,
+                white_nodes,
+                black_nodes,
+                ..
+            } => Self {
+                transaction_db: transaction_db.to_owned(),
+                transaction_table: transaction_table.to_owned(),
+                transaction_express: transaction_express.to_owned(),
+                white_nodes: white_nodes.to_owned(),
+                black_nodes: black_nodes.to_owned(),
+            },
+            _ => Self::default(),
+        }
+    }
+
+    pub fn is_validate(&self) -> bool {
+        !self.transaction_db.is_empty()
+            && !self.transaction_table.is_empty()
+            && !self.transaction_express.is_empty()
+            && (!self.white_nodes.is_empty() || !self.black_nodes.is_empty())
+    }
+
+    pub fn pick_infos(&self, db: &str, table: &str) -> Result<Option<TopologyInfo>, Error> {
+        if db.is_empty()
+            || table.is_empty()
+            || self.transaction_express.is_empty()
+            || db != self.transaction_db
+        {
+            // the database is not match the transaction_db will return immediately.
+            return Ok(None);
+        }
+
+        let regex_result = Regex::new(&self.transaction_express);
+        match regex_result {
+            Ok(regex) => {
+                if let Some(caps) = regex.captures(table) {
+                    return Ok(Some(TopologyInfo {
+                        topology_key: caps.name(TOPOLOLOGY_KEY).unwrap().as_str().to_string(),
+                        source_node: caps.name(SOURCE_NODE_KEY).unwrap().as_str().to_string(),
+                        sink_node: caps.name(SINK_NODE_KEY).unwrap().as_str().to_string(),
+                    }));
+                }
+            }
+            Err(e) => {
+                return Err(Error::ConfigError {
+                    error: e.to_string(),
+                });
+            }
+        }
+        Ok(None)
+    }
+
+    // result: <(is_transaction_event, is_filter, is_from_cache), Error>
+    pub fn is_filter(
+        &self,
+        db: &str,
+        table: &str,
+        current_topology_key: &str,
+        cache: &mut HashMap<(String, String), bool>,
+    ) -> Result<(bool, bool, bool), Error> {
+        if cache.contains_key(&(db.to_string(), table.to_string())) {
+            let is_filter = cache
+                .get(&(db.to_string(), table.to_string()))
+                .unwrap_or(&false)
+                .to_owned();
+            return Ok((true, is_filter, true));
+        }
+
+        let do_filter;
+
+        let pick_result = self.pick_infos(db, table);
+        match pick_result {
+            Ok(pick_option) => match pick_option {
+                Some(pick) => do_filter = self.is_filter_internal(Some(pick), current_topology_key),
+                // when db.table is not a transaction table. ignore insert into cache
+                None => {
+                    return Ok((
+                        false,
+                        self.is_filter_internal(None, current_topology_key),
+                        false,
+                    ))
+                }
+            },
+            Err(e) => return Err(e),
+        }
+
+        cache.insert((db.to_string(), table.to_string()), do_filter);
+
+        // Todo: log
+
+        Ok((true, do_filter, false))
+    }
+
+    pub fn is_filter_internal(
+        &self,
+        topology_option: Option<TopologyInfo>,
+        current_topology_key: &str,
+    ) -> bool {
+        let topology_info: TopologyInfo = match topology_option {
+            Some(tp) => tp,
+            None => {
+                if !self.white_nodes.is_empty() {
+                    return true;
+                } else {
+                    return false;
+                }
+            }
+        };
+
+        let str_to_slice = |s: &str| -> Vec<String> {
+            s.split(",")
+                .map(|str| str.to_string())
+                .collect::<Vec<String>>()
+        };
+
+        if topology_info.topology_key == current_topology_key
+            && ((!self.black_nodes.is_empty()
+                && str_to_slice(&self.black_nodes).contains(&topology_info.source_node))
+                || (!self.white_nodes.is_empty()
+                    && !str_to_slice(&self.white_nodes).contains(&topology_info.source_node)))
+        {
+            true
+        } else {
+            false
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    fn build_pipeline_config(
+        transaction_db: String,
+        transaction_table: String,
+        transaction_express: String,
+        transaction_command: String,
+        white_nodes: String,
+        black_nodes: String,
+    ) -> PipelineConfig {
+        PipelineConfig {
+            extra_config: ExtraConfig::Transaction {
+                transaction_db,
+                transaction_table,
+                transaction_express,
+                transaction_command,
+                white_nodes,
+                black_nodes,
+            },
+            buffer_size: 100,
+            checkpoint_interval_secs: 10,
+            batch_sink_interval_secs: 0,
+        }
+    }
+
+    fn build_worker(
+        transaction_db: String,
+        transaction_table: String,
+        transaction_express: String,
+        transaction_command: String,
+        white_nodes: String,
+        black_nodes: String,
+    ) -> TransactionWorker {
+        let config = build_pipeline_config(
+            transaction_db,
+            transaction_table,
+            transaction_express,
+            transaction_command,
+            white_nodes,
+            black_nodes,
+        );
+        TransactionWorker::from(&config)
+    }
+
+    #[test]
+    fn is_filter_test() {
+        // black list
+        let mut transaction_worker = build_worker(
+            String::from("ape_dt"),
+            String::from("ape_dt_topo1_node1_node2"),
+            String::from("ape_dt_(?P<topology>.*)_(?P<source>.*)_(?P<sink>.*)"),
+            String::from("update ape_dt_topo1_node1_node2 set n = n + 1"),
+            String::from(""),
+            String::from("node1"),
+        );
+
+        let mut cache: HashMap<(String, String), bool> = HashMap::new();
+        let mut result =
+            transaction_worker.is_filter("ape_dt", "ape_dt_topo1_node1_node2", "topo1", &mut cache);
+        match result {
+            Ok((is_trans, filter, _)) => assert!(is_trans && filter),
+            Err(_) => assert!(false),
+        }
+
+        result =
+            transaction_worker.is_filter("ape_dt", "ape_dt_topo1_node3_node2", "topo1", &mut cache);
+        match result {
+            Ok((is_trans, filter, _)) => assert!(is_trans && !filter),
+            Err(_) => assert!(false),
+        }
+
+        result =
+            transaction_worker.is_filter("ape_dt", "ape_dt_topo2_node3_node2", "topo1", &mut cache);
+        match result {
+            Ok((is_trans, filter, _)) => assert!(is_trans && !filter),
+            Err(_) => assert!(false),
+        }
+
+        assert_eq!(cache.len(), 3);
+
+        result = transaction_worker.is_filter("test", "test_table", "topo1", &mut cache);
+        match result {
+            Ok((is_trans, filter, _)) => {
+                assert!(
+                    !is_trans
+                        && !filter
+                        && !cache.contains_key(&("test".to_string(), "test_table".to_string()))
+                )
+            }
+            Err(_) => assert!(false),
+        }
+
+        result = transaction_worker.is_filter("ape_dt", "test_table", "topo1", &mut cache);
+        match result {
+            Ok((is_trans, filter, _)) => {
+                assert!(
+                    !is_trans
+                        && !filter
+                        && !cache.contains_key(&("ape_dt".to_string(), "test_table".to_string()))
+                )
+            }
+            Err(_) => assert!(false),
+        }
+
+        assert_eq!(cache.len(), 3);
+
+        // white list
+        transaction_worker = build_worker(
+            String::from("ape_dt"),
+            String::from("ape_dt_topo1_node1_node2"),
+            String::from("ape_dt_(?P<topology>.*)_(?P<source>.*)_(?P<sink>.*)"),
+            String::from("update ape_dt_topo1_node1_node2 set n = n + 1"),
+            String::from("node1"),
+            String::from(""),
+        );
+
+        cache.clear();
+
+        result =
+            transaction_worker.is_filter("ape_dt", "ape_dt_topo1_node1_node2", "topo1", &mut cache);
+        match result {
+            Ok((is_trans, filter, _)) => assert!(is_trans && !filter),
+            Err(_) => assert!(false),
+        }
+
+        result =
+            transaction_worker.is_filter("ape_dt", "ape_dt_topo1_node3_node2", "topo1", &mut cache);
+        match result {
+            Ok((is_trans, filter, _)) => assert!(is_trans && filter),
+            Err(_) => assert!(false),
+        }
+
+        result =
+            transaction_worker.is_filter("ape_dt", "ape_dt_topo2_node3_node2", "topo1", &mut cache);
+        match result {
+            Ok((is_trans, filter, _)) => assert!(is_trans && !filter),
+            Err(_) => assert!(false),
+        }
+
+        assert_eq!(cache.len(), 3);
+
+        result = transaction_worker.is_filter("test", "test_table", "topo1", &mut cache);
+        match result {
+            Ok((is_trans, filter, _)) => {
+                assert!(
+                    !is_trans
+                        && filter
+                        && !cache.contains_key(&("test".to_string(), "test_table".to_string()))
+                )
+            }
+            Err(_) => assert!(false),
+        }
+
+        result = transaction_worker.is_filter("ape_dt", "test_table", "topo1", &mut cache);
+        match result {
+            Ok((is_trans, filter, _)) => {
+                assert!(
+                    !is_trans
+                        && filter
+                        && !cache.contains_key(&("test".to_string(), "test_table".to_string()))
+                )
+            }
+            Err(_) => assert!(false),
+        }
+
+        assert_eq!(cache.len(), 3);
+    }
+
+    #[test]
+    fn pick_info_test() {
+        let transaction_worker = build_worker(
+            String::from("ape_dt"),
+            String::from("ape_dt_topo1_node1_node2"),
+            String::from(r"ape_dt_(?P<topology>.*)_(?P<source>.*)_(?P<sink>.*)"),
+            String::from("update ape_dt_topo1_node1_node2 set n = n + 1"),
+            String::from(""),
+            String::from("node1"),
+        );
+
+        let mut info_result = transaction_worker.pick_infos("ape_dt", "ape_dt_topo1_node1_node2");
+        match info_result {
+            Ok(info_option) => {
+                let info = info_option.unwrap_or_default();
+                assert_eq!(info.topology_key, "topo1");
+                assert_eq!(info.source_node, "node1");
+                assert_eq!(info.sink_node, "node2");
+            }
+            Err(_) => assert!(false),
+        }
+
+        info_result = transaction_worker.pick_infos("ape_dt", "ape_dt_wrongname");
+        assert!(info_result.is_ok_and(|i| i.is_none()));
+    }
+
+    #[test]
+    fn is_filter_internal_test() {
+        let mut transaction_worker = build_worker(
+            String::from("ape_dt"),
+            String::from("ape_dt_topo1_node1_node2"),
+            String::from("ape_dt_(?P<topology>.*)_(?P<source>.*)_(?P<sink>.*)"),
+            String::from("update ape_dt_topo1_node1_node2 set n = n + 1"),
+            String::from(""),
+            String::from("node1"),
+        );
+
+        // blacklist
+        let mut is_filter = transaction_worker.is_filter_internal(
+            Some(TopologyInfo {
+                topology_key: String::from("topo1"),
+                source_node: String::from("node1"),
+                sink_node: String::from("node2"),
+            }),
+            "topo1",
+        );
+        assert!(is_filter);
+
+        is_filter = transaction_worker.is_filter_internal(
+            Some(TopologyInfo {
+                topology_key: String::from("topo1"),
+                source_node: String::from("node3"),
+                sink_node: String::from("node2"),
+            }),
+            "topo1",
+        );
+        assert!(!is_filter);
+
+        is_filter = transaction_worker.is_filter_internal(
+            Some(TopologyInfo {
+                topology_key: String::from("topo2"),
+                source_node: String::from("node1"),
+                sink_node: String::from("node2"),
+            }),
+            "topo1",
+        );
+        assert!(!is_filter);
+
+        // white list
+        transaction_worker = build_worker(
+            String::from("ape_dt"),
+            String::from("ape_dt_topo1_node1_node2"),
+            String::from("ape_dt_(?P<topology>.*)_(?P<source>.*)_(?P<sink>.*)"),
+            String::from("update ape_dt_topo1_node1_node2 set n = n + 1"),
+            String::from("node1"),
+            String::from(""),
+        );
+
+        is_filter = transaction_worker.is_filter_internal(
+            Some(TopologyInfo {
+                topology_key: String::from("topo1"),
+                source_node: String::from("node1"),
+                sink_node: String::from("node2"),
+            }),
+            "topo1",
+        );
+        assert!(!is_filter);
+
+        is_filter = transaction_worker.is_filter_internal(
+            Some(TopologyInfo {
+                topology_key: String::from("topo1"),
+                source_node: String::from("node3"),
+                sink_node: String::from("node2"),
+            }),
+            "topo1",
+        );
+        assert!(is_filter);
+
+        is_filter = transaction_worker.is_filter_internal(
+            Some(TopologyInfo {
+                topology_key: String::from("topo2"),
+                source_node: String::from("node3"),
+                sink_node: String::from("node2"),
+            }),
+            "topo1",
+        );
+        assert!(!is_filter);
+
+        is_filter = transaction_worker.is_filter_internal(
+            Some(TopologyInfo {
+                topology_key: String::from("topo2"),
+                source_node: String::from("node1"),
+                sink_node: String::from("node2"),
+            }),
+            "topo1",
+        );
+
+        assert!(!is_filter);
+
+        // black and white list
+        transaction_worker = build_worker(
+            String::from("ape_dt"),
+            String::from("ape_dt_topo1_node1_node2"),
+            String::from("ape_dt_(?P<topology>.*)_(?P<source>.*)_(?P<sink>.*)"),
+            String::from("update ape_dt_topo1_node1_node2 set n = n + 1"),
+            String::from("node1"),
+            String::from("node1"),
+        );
+
+        is_filter = transaction_worker.is_filter_internal(
+            Some(TopologyInfo {
+                topology_key: String::from("topo1"),
+                source_node: String::from("node1"),
+                sink_node: String::from("node2"),
+            }),
+            "topo1",
+        );
+        assert!(is_filter);
+    }
+}

@@ -102,7 +102,7 @@ impl MongoTestRunner {
         TimeUtil::sleep_millis(parse_millis).await;
         self.compare_data_for_tbs().await;
 
-        self.base.wait_task_finish(&task).await
+        BaseTestRunner::wait_task_finish(&task).await
     }
 
     pub async fn run_snapshot_test(&self, compare_data: bool) -> Result<(), Error> {

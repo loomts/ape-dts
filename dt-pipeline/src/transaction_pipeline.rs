@@ -6,55 +6,73 @@ use std::{
     time::Instant,
 };
 
+use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
+    config::{extractor_config::ExtractorConfig, pipeline_config::PipelineConfig},
     error::Error,
-    log_info, log_monitor, log_position,
+    log_error, log_info, log_monitor, log_position,
     monitor::{counter::Counter, statistic_counter::StatisticCounter},
     syncer::Syncer,
-    utils::time_util::TimeUtil,
+    utils::{time_util::TimeUtil, transaction_circle_control::TransactionWorker},
 };
 use dt_connector::Sinker;
-use dt_meta::{ddl_data::DdlData, dt_data::DtData, row_data::RowData};
+use dt_meta::{ddl_data::DdlData, dt_data::DtData};
+use dt_parallelizer::Parallelizer;
 
-use crate::Parallelizer;
+use crate::{filters::traits::TransactionFilter, utils::filter_util::FilterUtil, Pipeline};
 
-pub struct Pipeline<'a> {
+pub struct TransactionPipeline<'a> {
     pub buffer: &'a ConcurrentQueue<DtData>,
     pub parallelizer: Box<dyn Parallelizer + Send>,
     pub sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
+    pub filters: Option<Box<dyn TransactionFilter + Send>>,
+
     pub shut_down: &'a AtomicBool,
-    pub checkpoint_interval_secs: u64,
-    pub batch_sink_interval_secs: u64,
     pub syncer: Arc<Mutex<Syncer>>,
+
+    pub pipeline_config: PipelineConfig,
+    pub extractor_config: ExtractorConfig,
 }
 
-impl Pipeline<'_> {
-    pub async fn stop(&mut self) -> Result<(), Error> {
+#[async_trait]
+impl Pipeline for TransactionPipeline<'_> {
+    async fn stop(&mut self) -> Result<(), Error> {
         for sinker in self.sinkers.iter_mut() {
             sinker.lock().await.close().await.unwrap();
         }
         Ok(())
     }
 
-    pub async fn start(&mut self) -> Result<(), Error> {
+    async fn start(&mut self) -> Result<(), Error> {
         log_info!(
             "{} starts, parallel_size: {}, checkpoint_interval_secs: {}",
             self.parallelizer.get_name(),
             self.sinkers.len(),
-            self.checkpoint_interval_secs
+            self.pipeline_config.checkpoint_interval_secs
         );
+
+        if !self.initialization() {
+            log_error!(
+                "transaction pipeline config is error. {}",
+                self.pipeline_config
+            );
+            return Err(Error::ConfigError {
+                error: String::from("transaction pipeline config is error."),
+            });
+        }
 
         let mut last_sink_time = Instant::now();
         let mut last_checkpoint_time = Instant::now();
         let mut count_counter = Counter::new();
-        let mut tps_counter = StatisticCounter::new(self.checkpoint_interval_secs);
+        let mut tps_counter = StatisticCounter::new(self.pipeline_config.checkpoint_interval_secs);
         let mut last_received_position = Option::None;
         let mut last_commit_position = Option::None;
 
         while !self.shut_down.load(Ordering::Acquire) || !self.buffer.is_empty() {
             // some sinkers (foxlake) need to accumulate data to a big batch and sink
-            let data = if last_sink_time.elapsed().as_secs() < self.batch_sink_interval_secs
+            let data: Vec<DtData> = if last_sink_time.elapsed().as_secs()
+                < self.pipeline_config.batch_sink_interval_secs
                 && !self.buffer.is_full()
             {
                 Vec::new()
@@ -95,12 +113,23 @@ impl Pipeline<'_> {
 
         Ok(())
     }
+}
 
+impl TransactionPipeline<'_> {
     async fn sink_dml(
         &mut self,
         all_data: Vec<DtData>,
     ) -> Result<(usize, Option<String>, Option<String>), Error> {
-        let (data, last_received_position, last_commit_position) = Self::fetch_dml(all_data);
+        let filter = match &mut self.filters {
+            Some(f) => f,
+            None => {
+                return Err(Error::Unexpected {
+                    error: String::from("filter is empty in pipeline."),
+                })
+            }
+        };
+
+        let (data, last_received_position, last_commit_position) = filter.filter_dmls(all_data)?;
         let count = data.len();
         if count > 0 {
             self.parallelizer
@@ -124,30 +153,6 @@ impl Pipeline<'_> {
                 .unwrap()
         }
         Ok((count, last_received_position, last_commit_position))
-    }
-
-    fn fetch_dml(mut data: Vec<DtData>) -> (Vec<RowData>, Option<String>, Option<String>) {
-        let mut dml_data = Vec::new();
-        let mut last_received_position = Option::None;
-        let mut last_commit_position = Option::None;
-        for i in data.drain(..) {
-            match i {
-                DtData::Commit { position, .. } => {
-                    last_commit_position = Some(position);
-                    last_received_position = last_commit_position.clone();
-                    continue;
-                }
-
-                DtData::Dml { row_data } => {
-                    last_received_position = Some(row_data.position.clone());
-                    dml_data.push(row_data);
-                }
-
-                _ => {}
-            }
-        }
-
-        (dml_data, last_received_position, last_commit_position)
     }
 
     fn fetch_ddl(mut data: Vec<DtData>) -> (Vec<DdlData>, Option<String>, Option<String>) {
@@ -187,7 +192,8 @@ impl Pipeline<'_> {
         tps_counter.add(count);
         count_counter.add(count);
 
-        if last_checkpoint_time.elapsed().as_secs() < self.checkpoint_interval_secs {
+        if last_checkpoint_time.elapsed().as_secs() < self.pipeline_config.checkpoint_interval_secs
+        {
             return last_checkpoint_time;
         }
 
@@ -204,5 +210,39 @@ impl Pipeline<'_> {
         log_monitor!("sinked count: {}", count_counter.value);
 
         Instant::now()
+    }
+
+    fn initialization(&mut self) -> bool {
+        let mut is_validate = false;
+
+        let worker = TransactionWorker::from(&self.pipeline_config);
+
+        if !worker.is_validate() {
+            log_error!("transaction config is invalid when gernate TransactionWoeker.");
+            return false;
+        }
+
+        let result = worker.pick_infos(&worker.transaction_db, &worker.transaction_table);
+        let topology = result.unwrap().unwrap();
+        if !topology.is_empty() {
+            log_info!("transaction info initializated: [{}]", topology);
+
+            let filter_result = FilterUtil::create_transaction_filter(
+                &self.extractor_config,
+                worker,
+                topology.topology_key,
+            );
+            match filter_result {
+                Ok(filter) => self.filters = Some(filter),
+                Err(e) => {
+                    log_error!("build filter failed:{}", e);
+                    return false;
+                }
+            }
+
+            is_validate = true
+        }
+
+        is_validate
     }
 }

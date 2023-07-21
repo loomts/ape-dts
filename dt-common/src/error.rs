@@ -1,3 +1,5 @@
+use core::fmt;
+
 #[derive(Debug)]
 pub enum Error {
     ConfigError {
@@ -66,5 +68,23 @@ impl From<serde_yaml::Error> for Error {
 impl From<std::env::VarError> for Error {
     fn from(err: std::env::VarError) -> Self {
         Self::EnvVarError { error: err }
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let err_msg: String = match self {
+            Error::ConfigError { error } => error.to_owned(),
+            Error::BinlogError { .. } => String::from("binlog error"),
+            Error::SqlxError { error } => error.to_string(),
+            Error::Unexpected { error } => error.to_owned(),
+            Error::MetadataError { error } => error.to_owned(),
+            Error::IoError { error } => error.to_string(),
+            Error::YamlError { error } => error.to_string(),
+            Error::EnvVarError { error } => error.to_string(),
+            Error::StructError { error } => error.to_owned(),
+            Error::ColumnNotMatch => String::from("column not match"),
+        };
+        write!(f, "err_msg:{}", err_msg)
     }
 }

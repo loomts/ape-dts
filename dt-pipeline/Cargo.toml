@@ -7,6 +7,7 @@ edition = "2021"
 dt-common = {path = "../dt-common", version = "0.1.0"}
 dt-meta = {path = "../dt-meta", version = "0.1.0"}
 dt-connector = {path = "../dt-connector", version = "0.1.0"}
+dt-parallelizer = {path = "../dt-parallelizer", version = "0.1.0"}
 
 async-trait = { workspace = true }
 async-mutex = { workspace = true }
@@ -14,3 +15,5 @@ tokio = { workspace = true }
 concurrent-queue = { workspace = true }
 log = { workspace = true }
 log4rs = { workspace = true }
+futures = { workspace = true }
+regex = { workspace = true }

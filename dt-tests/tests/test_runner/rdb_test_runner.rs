@@ -30,7 +30,21 @@ pub const DST: &str = "dst";
 #[allow(dead_code)]
 impl RdbTestRunner {
     pub async fn new(relative_test_dir: &str) -> Result<Self, Error> {
-        let base = BaseTestRunner::new(relative_test_dir).await.unwrap();
+        Self::new_internal(relative_test_dir, TestConfigUtil::OVERRIDE_WHOLE, "").await
+    }
+
+    pub async fn new_internal(
+        relative_test_dir: &str,
+        config_override_police: &str,
+        config_tmp_relative_dir: &str,
+    ) -> Result<Self, Error> {
+        let base = BaseTestRunner::new_internal(
+            relative_test_dir,
+            config_override_police,
+            config_tmp_relative_dir,
+        )
+        .await
+        .unwrap();
 
         // prepare conn pools
         let mut src_conn_pool_mysql = None;
@@ -174,7 +188,73 @@ impl RdbTestRunner {
                 .await?
         );
 
-        self.base.wait_task_finish(&task).await
+        BaseTestRunner::wait_task_finish(&task).await
+    }
+
+    pub async fn initialization_ddl(&self) -> Result<(), Error> {
+        // prepare src and dst tables
+        self.execute_test_ddl_sqls().await?;
+
+        Ok(())
+    }
+
+    pub async fn initialization_data(&self) -> Result<(), Error> {
+        let mut src_insert_sqls = Vec::new();
+        let mut src_update_sqls = Vec::new();
+        let mut src_delete_sqls = Vec::new();
+
+        for sql in self.base.src_dml_sqls.iter() {
+            if sql.to_lowercase().starts_with("insert") {
+                src_insert_sqls.push(sql.clone());
+            } else if sql.to_lowercase().starts_with("update") {
+                src_update_sqls.push(sql.clone());
+            } else {
+                src_delete_sqls.push(sql.clone());
+            }
+        }
+
+        // insert src data
+        self.execute_src_sqls(&src_insert_sqls).await?;
+
+        // update src data
+        self.execute_src_sqls(&src_update_sqls).await?;
+
+        // delete src data
+        self.execute_src_sqls(&src_delete_sqls).await?;
+
+        Ok(())
+    }
+
+    pub async fn run_cycle_cdc_data_check(
+        &self,
+        transaction_table_full_name: String,
+        expect_num: Option<u8>,
+    ) -> Result<(), Error> {
+        let (src_tbs, dst_tbs, cols_list) = Self::parse_ddl_with_cycle(
+            &self.base.src_ddl_sqls,
+            transaction_table_full_name.to_owned(),
+        )
+        .unwrap();
+
+        let dml_count = match expect_num {
+            Some(num) => num,
+            None => self.base.src_dml_sqls.len() as u8,
+        };
+
+        assert!(
+            self.compare_data_for_tbs(&src_tbs, &dst_tbs, &cols_list)
+                .await?
+        );
+
+        self.check_transaction_table_data(
+            DST,
+            transaction_table_full_name.as_str(),
+            0,
+            dml_count as u8,
+        )
+        .await?;
+
+        Ok(())
     }
 
     pub async fn run_cdc_test_with_different_configs(
@@ -211,7 +291,7 @@ impl RdbTestRunner {
         self.execute_src_sqls(&self.base.src_dml_sqls).await?;
         TimeUtil::sleep_millis(parse_millis).await;
 
-        self.base.wait_task_finish(&task).await
+        BaseTestRunner::wait_task_finish(&task).await
     }
 
     pub async fn execute_test_dml_sqls(&self) -> Result<(), Error> {
@@ -330,6 +410,29 @@ impl RdbTestRunner {
             }
         }
         true
+    }
+
+    pub async fn check_transaction_table_data(
+        &self,
+        from: &str,
+        full_tb_name: &str,
+        col_order: u8,
+        expect_num: u8,
+    ) -> Result<bool, Error> {
+        let result = self.fetch_data(full_tb_name, from).await?;
+
+        assert!(result.len() == 1);
+        let row_data = result.get(0).unwrap();
+        assert!(row_data.len() >= col_order as usize);
+        let col_datas = row_data
+            .get(col_order as usize)
+            .unwrap()
+            .to_owned()
+            .unwrap();
+
+        assert_eq!(col_datas.get(0).unwrap().clone(), expect_num);
+
+        Ok(true)
     }
 
     pub async fn fetch_data(
@@ -462,6 +565,37 @@ impl RdbTestRunner {
         for sql in src_ddl_sqls {
             if sql.to_lowercase().contains("create table") {
                 let (tb, cols) = Self::parse_create_table(&sql).unwrap();
+                src_tbs.push(tb);
+                cols_list.push(cols);
+            }
+        }
+        let dst_tbs = src_tbs.clone();
+
+        Ok((src_tbs, dst_tbs, cols_list))
+    }
+
+    fn parse_ddl_with_cycle(
+        src_ddl_sqls: &Vec<String>,
+        transaction_table_full_name: String,
+    ) -> Result<(Vec<String>, Vec<String>, Vec<Vec<String>>), Error> {
+        let mut src_tbs = Vec::new();
+        let mut cols_list = Vec::new();
+        let transaction_db = transaction_table_full_name
+            .split('.')
+            .collect::<Vec<&str>>()
+            .get(0)
+            .unwrap()
+            .clone();
+
+        for sql in src_ddl_sqls {
+            let new_sql = sql
+                .to_lowercase()
+                .replace("create table if not exists", "create table");
+            if new_sql.to_lowercase().contains("create table") {
+                let (tb, cols) = Self::parse_create_table(&new_sql).unwrap();
+                if tb.starts_with(format!("{}.", transaction_db).as_str()) {
+                    continue;
+                }
                 src_tbs.push(tb);
                 cols_list.push(cols);
             }

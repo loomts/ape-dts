@@ -34,6 +34,7 @@ pub struct SinkerUtil {}
 impl SinkerUtil {
     pub async fn create_sinkers(
         task_config: &TaskConfig,
+        transaction_command: String,
     ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
         let sinkers = match &task_config.sinker {
             SinkerConfig::Mysql { url, batch_size } => {
@@ -42,8 +43,9 @@ impl SinkerUtil {
                     url,
                     &router,
                     &task_config.runtime.log_level,
-                    task_config.pipeline.parallel_size,
+                    task_config.parallelizer.parallel_size,
                     *batch_size,
+                    transaction_command,
                 )
                 .await?
             }
@@ -56,7 +58,7 @@ impl SinkerUtil {
                     url,
                     &router,
                     &task_config.runtime.log_level,
-                    task_config.pipeline.parallel_size,
+                    task_config.parallelizer.parallel_size,
                     *batch_size,
                 )
                 .await?
@@ -68,7 +70,7 @@ impl SinkerUtil {
                     url,
                     &router,
                     &task_config.runtime.log_level,
-                    task_config.pipeline.parallel_size,
+                    task_config.parallelizer.parallel_size,
                     *batch_size,
                 )
                 .await?
@@ -82,7 +84,7 @@ impl SinkerUtil {
                     url,
                     &router,
                     &task_config.runtime.log_level,
-                    task_config.pipeline.parallel_size,
+                    task_config.parallelizer.parallel_size,
                     *batch_size,
                 )
                 .await?
@@ -93,7 +95,7 @@ impl SinkerUtil {
                 SinkerUtil::create_mongo_sinker(
                     url,
                     &router,
-                    task_config.pipeline.parallel_size,
+                    task_config.parallelizer.parallel_size,
                     *batch_size,
                 )
                 .await?
@@ -109,7 +111,7 @@ impl SinkerUtil {
                 SinkerUtil::create_kafka_sinker(
                     url,
                     &router,
-                    task_config.pipeline.parallel_size,
+                    task_config.parallelizer.parallel_size,
                     *batch_size,
                     *ack_timeout_secs,
                     required_acks,
@@ -124,7 +126,7 @@ impl SinkerUtil {
             } => {
                 SinkerUtil::create_open_faas_sinker(
                     url,
-                    task_config.pipeline.parallel_size,
+                    task_config.parallelizer.parallel_size,
                     *batch_size,
                     *timeout_secs,
                 )
@@ -140,7 +142,7 @@ impl SinkerUtil {
                 root_dir,
             } => {
                 SinkerUtil::create_foxlake_sinker(
-                    task_config.pipeline.parallel_size,
+                    task_config.parallelizer.parallel_size,
                     *batch_size,
                     bucket,
                     root_dir,
@@ -158,7 +160,7 @@ impl SinkerUtil {
                 SinkerUtil::create_mysql_struct_sinker(
                     url,
                     &task_config.runtime.log_level,
-                    task_config.pipeline.parallel_size,
+                    task_config.parallelizer.parallel_size,
                     conflict_policy,
                 )
                 .await?
@@ -171,7 +173,7 @@ impl SinkerUtil {
                 SinkerUtil::create_pg_struct_sinker(
                     url,
                     &task_config.runtime.log_level,
-                    task_config.pipeline.parallel_size,
+                    task_config.parallelizer.parallel_size,
                     conflict_policy,
                 )
                 .await?
@@ -188,6 +190,7 @@ impl SinkerUtil {
         log_level: &str,
         parallel_size: usize,
         batch_size: usize,
+        transaction_command: String,
     ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool =
@@ -202,6 +205,7 @@ impl SinkerUtil {
                 meta_manager: meta_manager.clone(),
                 router: router.clone(),
                 batch_size,
+                transaction_command: transaction_command.to_owned(),
             };
             sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
         }

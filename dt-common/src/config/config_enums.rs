@@ -1,8 +1,4 @@
-use std::str::FromStr;
-
 use strum::{Display, EnumString, IntoStaticStr};
-
-use crate::error::Error;
 
 #[derive(Clone, Display, EnumString, IntoStaticStr, Debug)]
 pub enum DbType {
@@ -64,25 +60,23 @@ pub enum ParallelType {
     Mongo,
 }
 
+#[derive(EnumString, IntoStaticStr, Display)]
+pub enum PipelineType {
+    #[strum(serialize = "basic")]
+    Basic,
+    #[strum(serialize = "transaction")]
+    Transaction,
+}
+
 pub enum RouteType {
     Db,
     Tb,
 }
 
-#[derive(Clone, IntoStaticStr)]
+#[derive(EnumString, Clone, IntoStaticStr)]
 pub enum ConflictPolicyEnum {
     #[strum(serialize = "ignore")]
     Ignore,
     #[strum(serialize = "interrupt")]
     Interrupt,
-}
-
-impl FromStr for ConflictPolicyEnum {
-    type Err = Error;
-    fn from_str(str: &str) -> Result<Self, Self::Err> {
-        match str {
-            "ignore" => Ok(Self::Ignore),
-            _ => Ok(Self::Interrupt),
-        }
-    }
 }

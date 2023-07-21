@@ -26,8 +26,20 @@ static mut LOG4RS_INITED: bool = false;
 #[allow(dead_code)]
 impl BaseTestRunner {
     pub async fn new(relative_test_dir: &str) -> Result<Self, Error> {
+        Self::new_internal(relative_test_dir, TestConfigUtil::OVERRIDE_WHOLE, "").await
+    }
+
+    pub async fn new_internal(
+        relative_test_dir: &str,
+        config_replace_police: &str,
+        config_tmp_relative_dir: &str,
+    ) -> Result<Self, Error> {
         let project_root = TestConfigUtil::get_project_root();
-        let tmp_dir = format!("{}/tmp", project_root);
+        let tmp_dir = if config_tmp_relative_dir.is_empty() {
+            format!("{}/tmp", project_root)
+        } else {
+            format!("{}/tmp/{}", project_root, config_tmp_relative_dir)
+        };
         let test_dir = TestConfigUtil::get_absolute_dir(relative_test_dir);
         let src_task_config_file = format!("{}/task_config.ini", test_dir);
         let dst_task_config_file = format!("{}/task_config.ini", tmp_dir);
@@ -44,6 +56,7 @@ impl BaseTestRunner {
             &dst_task_config_file,
             &dst_task_config_file,
             &project_root,
+            config_replace_police,
         );
 
         let (
@@ -85,7 +98,7 @@ impl BaseTestRunner {
         Ok(task)
     }
 
-    pub async fn wait_task_finish(&self, task: &JoinHandle<()>) -> Result<(), Error> {
+    pub async fn wait_task_finish(task: &JoinHandle<()>) -> Result<(), Error> {
         task.abort();
         while !task.is_finished() {
             TimeUtil::sleep_millis(1).await;

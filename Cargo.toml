@@ -5,6 +5,7 @@ members = [
     "dt-meta",
     "dt-precheck",
     "dt-connector",
+    "dt-parallelizer",
     "dt-pipeline",
     "dt-task",
     "dt-main",

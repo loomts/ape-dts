@@ -1,8 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
+use dt_common::utils::time_util::TimeUtil;
 use futures::executor::block_on;
 
-use crate::test_runner::rdb_test_runner::DST;
+use crate::{
+    test_config_util::TestConfigUtil,
+    test_runner::{base_test_runner::BaseTestRunner, rdb_test_runner::DST},
+};
 
 use super::{
     mongo_test_runner::MongoTestRunner, rdb_check_test_runner::RdbCheckTestRunner,
@@ -44,6 +48,68 @@ impl TestBase {
             .unwrap();
         // runner.run_cdc_test_with_different_configs(start_millis, parse_millis))
         //     .unwrap();
+    }
+
+    pub async fn run_cycle_cdc_test(
+        test_dir: &str,
+        start_millis: u64,
+        parse_millis: u64,
+        transaction_database: &str,
+        expect_num_map: HashMap<String, u8>,
+    ) {
+        let sub_paths = TestConfigUtil::get_absolute_sub_dir(test_dir);
+        let mut handlers: Vec<tokio::task::JoinHandle<()>> = vec![];
+        let mut runner_map: HashMap<String, RdbTestRunner> = HashMap::new();
+
+        // init all ddls
+        for sub_path in &sub_paths {
+            let runner = RdbTestRunner::new_internal(
+                format!("{}/{}", test_dir, sub_path.1).as_str(),
+                TestConfigUtil::REPLACE_PARAM,
+                sub_path.1.as_str(),
+            )
+            .await
+            .unwrap();
+
+            runner.initialization_ddl().await.unwrap();
+
+            runner_map.insert(sub_path.1.to_owned(), runner);
+        }
+
+        // start task
+        for sub_path in &sub_paths {
+            let runner = runner_map.get(sub_path.1.as_str()).unwrap();
+            handlers.push(runner.base.spawn_task().await.unwrap());
+        }
+        TimeUtil::sleep_millis(start_millis).await;
+
+        // init all datas
+        for sub_path in &sub_paths {
+            let runner = runner_map.get(sub_path.1.as_str()).unwrap();
+            runner.initialization_data().await.unwrap();
+        }
+        TimeUtil::sleep_millis(parse_millis).await;
+
+        // do check
+        for sub_path in &sub_paths {
+            let runner = runner_map.get(sub_path.1.as_str()).unwrap();
+            let transaction_full_name = format!("{}.{}", transaction_database, sub_path.1);
+
+            let expect_num = if expect_num_map.contains_key(sub_path.1.as_str()) {
+                Some(expect_num_map.get(sub_path.1.as_str()).unwrap().clone())
+            } else {
+                None
+            };
+
+            runner
+                .run_cycle_cdc_data_check(transaction_full_name, expect_num)
+                .await
+                .unwrap();
+        }
+
+        for handler in handlers {
+            BaseTestRunner::wait_task_finish(&handler).await.unwrap();
+        }
     }
 
     pub async fn run_check_test(test_dir: &str) {

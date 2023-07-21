@@ -24,6 +24,8 @@ pub struct MysqlSinker {
     pub meta_manager: MysqlMetaManager,
     pub router: RdbRouter,
     pub batch_size: usize,
+
+    pub transaction_command: String,
 }
 
 #[async_trait]
@@ -33,17 +35,21 @@ impl Sinker for MysqlSinker {
             return Ok(());
         }
 
-        if !batch {
-            self.serial_sink(data).await.unwrap();
+        if !self.transaction_command.is_empty() {
+            self.transaction_sink(data).await.unwrap();
         } else {
-            match data[0].row_type {
-                RowType::Insert => {
-                    call_batch_fn!(self, data, Self::batch_insert);
+            if !batch {
+                self.serial_sink(data).await.unwrap();
+            } else {
+                match data[0].row_type {
+                    RowType::Insert => {
+                        call_batch_fn!(self, data, Self::batch_insert);
+                    }
+                    RowType::Delete => {
+                        call_batch_fn!(self, data, Self::batch_delete);
+                    }
+                    _ => self.serial_sink(data).await.unwrap(),
                 }
-                RowType::Delete => {
-                    call_batch_fn!(self, data, Self::batch_delete);
-                }
-                _ => self.serial_sink(data).await.unwrap(),
             }
         }
         Ok(())
@@ -67,8 +73,48 @@ impl MysqlSinker {
             let (mut sql, cols, binds) = query_builder.get_query_info(row_data)?;
             sql = self.handle_dialect(&sql);
             let query = query_builder.create_mysql_query(&sql, &cols, &binds);
+
             query.execute(&self.conn_pool).await.unwrap();
         }
+        Ok(())
+    }
+
+    async fn transaction_sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
+        let all_count = data.len();
+        let mut sinked_count = 0;
+
+        loop {
+            let mut batch_size = self.batch_size;
+            if all_count - sinked_count < batch_size {
+                batch_size = all_count - sinked_count;
+            }
+
+            let mut transaction = self.conn_pool.begin().await.unwrap();
+
+            // do transaction table dml command to tag this transaction
+            sqlx::query(&self.transaction_command)
+                .execute(&mut transaction)
+                .await
+                .unwrap();
+
+            for row_data in data.iter() {
+                let tb_meta = self.get_tb_meta(row_data).await?;
+                let query_builder = RdbQueryBuilder::new_for_mysql(&tb_meta);
+
+                let (mut sql, cols, binds) = query_builder.get_query_info(row_data)?;
+                sql = self.handle_dialect(&sql);
+                let query = query_builder.create_mysql_query(&sql, &cols, &binds);
+                query.execute(&mut transaction).await.unwrap();
+            }
+
+            transaction.commit().await.unwrap();
+
+            sinked_count += batch_size;
+            if sinked_count == all_count {
+                break;
+            }
+        }
+
         Ok(())
     }
 
