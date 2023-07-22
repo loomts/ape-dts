@@ -168,10 +168,10 @@ impl TaskRunner {
         let pipeline: Box<dyn Pipeline + Send> = match self.config.pipeline.get_pipeline_type() {
             PipelineType::Basic => {
                 let obj = BasicPipeline {
-                    buffer: &buffer,
+                    buffer,
                     parallelizer,
                     sinkers,
-                    shut_down: &shut_down,
+                    shut_down,
                     checkpoint_interval_secs: self.config.pipeline.checkpoint_interval_secs,
                     batch_sink_interval_secs: self.config.pipeline.batch_sink_interval_secs,
                     syncer: syncer.to_owned(),
@@ -180,11 +180,11 @@ impl TaskRunner {
             }
             PipelineType::Transaction => {
                 let obj = TransactionPipeline {
-                    buffer: &buffer,
+                    buffer,
                     parallelizer,
                     sinkers,
                     filters: None,
-                    shut_down: &shut_down,
+                    shut_down,
                     syncer: syncer.to_owned(),
                     pipeline_config: self.config.pipeline.clone(),
                     extractor_config: self.config.extractor.clone(),

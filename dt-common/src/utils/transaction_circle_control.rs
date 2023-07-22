@@ -149,31 +149,20 @@ impl TransactionWorker {
     ) -> bool {
         let topology_info: TopologyInfo = match topology_option {
             Some(tp) => tp,
-            None => {
-                if !self.white_nodes.is_empty() {
-                    return true;
-                } else {
-                    return false;
-                }
-            }
+            None => return !self.white_nodes.is_empty(),
         };
 
         let str_to_slice = |s: &str| -> Vec<String> {
-            s.split(",")
+            s.split(',')
                 .map(|str| str.to_string())
                 .collect::<Vec<String>>()
         };
 
-        if topology_info.topology_key == current_topology_key
+        topology_info.topology_key == current_topology_key
             && ((!self.black_nodes.is_empty()
                 && str_to_slice(&self.black_nodes).contains(&topology_info.source_node))
                 || (!self.white_nodes.is_empty()
                     && !str_to_slice(&self.white_nodes).contains(&topology_info.source_node)))
-        {
-            true
-        } else {
-            false
-        }
     }
 }
 

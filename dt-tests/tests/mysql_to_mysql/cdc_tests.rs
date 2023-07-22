@@ -36,7 +36,7 @@ mod test {
         TestBase::run_cycle_cdc_test(
             "mysql_to_mysql/cdc/cycle_basic_test",
             3000,
-            2000000,
+            2000,
             "ape_trans_mysql",
             HashMap::new(),
         )
