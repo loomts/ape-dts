@@ -137,8 +137,6 @@ impl TransactionWorker {
 
         cache.insert((db.to_string(), table.to_string()), do_filter);
 
-        // Todo: log
-
         Ok((true, do_filter, false))
     }
 
