@@ -1,4 +1,4 @@
-use dt_common::{error::Error, log_info};
+use dt_common::{error::Error, log_debug, log_info};
 use dt_meta::redis::redis_entry::RedisEntry;
 use sqlx::types::chrono;
 
@@ -59,10 +59,11 @@ impl RdbLoader<'_> {
             }
 
             K_FLAG_AUX => {
-                let key = self.reader.read_string()?;
+                let key = String::from(self.reader.read_string()?);
                 let value = self.reader.read_string()?;
                 match key.as_str() {
                     "repl-stream-db" => {
+                        let value = String::from(value);
                         self.repl_stream_db_id = value.parse::<i64>().unwrap();
                         log_info!("RDB repl-stream-db: {}", self.repl_stream_db_id);
                     }
@@ -74,7 +75,7 @@ impl RdbLoader<'_> {
                     }
 
                     _ => {
-                        log_info!("RDB AUX fields. key=[{}], value=[{}]", key, value);
+                        log_info!("RDB AUX fields. key=[{}], value=[{:?}]", key, value);
                     }
                 }
             }
@@ -114,14 +115,14 @@ impl RdbLoader<'_> {
             K_EOF => {
                 self.is_end = true;
                 self.reader
-                    .read_raw(self.reader.total_length - self.reader.position)?;
+                    .read_raw(self.reader.rdb_length - self.reader.position)?;
             }
 
             _ => {
                 let key = self.reader.read_string()?;
-
                 self.reader.copy_raw = true;
-                let value = EntryParser::parse_object(&mut self.reader, type_byte, &key).unwrap();
+                let value =
+                    EntryParser::parse_object(&mut self.reader, type_byte, key.clone()).unwrap();
                 self.reader.copy_raw = false;
 
                 let mut entry = RedisEntry::new();

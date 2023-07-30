@@ -1,5 +1,5 @@
 use dt_common::error::Error;
-use dt_meta::redis::redis_object::RedisObject;
+use dt_meta::redis::redis_object::{RedisObject, RedisString};
 
 use crate::extractor::redis::rdb::reader::rdb_reader::RdbReader;
 
@@ -15,10 +15,8 @@ impl EntryParser {
     pub fn parse_object(
         reader: &mut RdbReader,
         type_byte: u8,
-        key: &str,
+        key: RedisString,
     ) -> Result<RedisObject, Error> {
-        println!("--------------------------------- {}", key);
-
         let obj = match type_byte {
             super::RDB_TYPE_STRING => {
                 RedisObject::String(StringLoader::load_from_buffer(reader, key, type_byte)?)

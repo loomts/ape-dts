@@ -2,6 +2,7 @@ use std::io::Cursor;
 
 use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
 use dt_common::error::Error;
+use dt_meta::redis::redis_object::RedisString;
 
 use crate::extractor::redis::RawByteReader;
 
@@ -20,12 +21,12 @@ const ZIP_INT_32B: u8 = 0xd0;
 const ZIP_INT_64B: u8 = 0xe0;
 
 impl RdbReader<'_> {
-    pub fn read_zip_list(&mut self) -> Result<Vec<String>, Error> {
+    pub fn read_zip_list(&mut self) -> Result<Vec<RedisString>, Error> {
         // The general layout of the ziplist is as follows:
         // <zlbytes> <zltail> <zllen> <entry> <entry> ... <entry> <zlend>
 
-        let buf = self.read_string_raw()?;
-        let mut reader = Cursor::new(buf.as_slice());
+        let buf = self.read_string()?;
+        let mut reader = Cursor::new(buf.as_bytes());
 
         let _ = reader.read_u32::<LittleEndian>()?; // zlbytes
         let _ = reader.read_u32::<LittleEndian>()?; // zltail
@@ -60,7 +61,10 @@ impl RdbReader<'_> {
         Ok(elements)
     }
 
-    fn read_zip_list_entry(reader: &mut Cursor<&[u8]>, first_byte: u8) -> Result<String, Error> {
+    fn read_zip_list_entry(
+        reader: &mut Cursor<&[u8]>,
+        first_byte: u8,
+    ) -> Result<RedisString, Error> {
         // read prevlen
         if first_byte == 0xFE {
             let _prevlen = reader.read_u32::<LittleEndian>()?;
@@ -72,21 +76,21 @@ impl RdbReader<'_> {
             ZIP_STR_06B => {
                 let length = (first_byte & 0x3f) as usize; // 0x3f = 00111111
                 let buf = reader.read_raw(length)?;
-                return Ok(String::from_utf8(buf).unwrap());
+                return Ok(RedisString::from(buf));
             }
 
             ZIP_STR_14B => {
                 let second_byte = reader.read_u8()?;
                 let length = (((first_byte & 0x3f) as u16) << 8) | second_byte as u16;
                 let buf = reader.read_raw(length as usize)?;
-                return Ok(String::from_utf8(buf).unwrap());
+                return Ok(RedisString::from(buf));
             }
 
             ZIP_STR_32B => {
                 let mut buf = reader.read_raw(4)?;
                 let length = LittleEndian::read_u32(&buf);
                 buf = reader.read_raw(length as usize)?;
-                return Ok(String::from_utf8(buf).unwrap());
+                return Ok(RedisString::from(buf));
             }
 
             _ => {}
@@ -95,27 +99,27 @@ impl RdbReader<'_> {
         match first_byte {
             ZIP_INT_08B => {
                 let v = reader.read_i8()?;
-                return Ok(v.to_string());
+                return Ok(RedisString::from(v.to_string()));
             }
 
             ZIP_INT_16B => {
                 let v = reader.read_i16::<LittleEndian>()?;
-                return Ok(v.to_string());
+                return Ok(RedisString::from(v.to_string()));
             }
 
             ZIP_INT_24B => {
                 let v = reader.read_i24::<LittleEndian>()?;
-                return Ok(v.to_string());
+                return Ok(RedisString::from(v.to_string()));
             }
 
             ZIP_INT_32B => {
                 let v = reader.read_i32::<LittleEndian>()?;
-                return Ok(v.to_string());
+                return Ok(RedisString::from(v.to_string()));
             }
 
             ZIP_INT_64B => {
                 let v = reader.read_i64::<LittleEndian>()?;
-                return Ok(v.to_string());
+                return Ok(RedisString::from(v.to_string()));
             }
 
             _ => {}
@@ -128,7 +132,7 @@ impl RdbReader<'_> {
                     error: format!("invalid zipInt04B encoding: {}", v),
                 });
             }
-            return Ok(v.to_string());
+            return Ok(RedisString::from(v.to_string()));
         }
 
         Err(Error::Unexpected {

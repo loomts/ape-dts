@@ -5,8 +5,10 @@ use dt_common::{
         sinker_config::SinkerConfig, task_config::TaskConfig,
     },
     error::Error,
+    utils::time_util::TimeUtil,
 };
 use dt_connector::sinker::redis::cmd_encoder::CmdEncoder;
+use dt_meta::redis::redis_object::RedisCmd;
 use dt_task::task_util::TaskUtil;
 use redis::{Connection, ConnectionLike, Value};
 
@@ -47,19 +49,33 @@ impl RedisTestRunner {
         })
     }
 
-    pub async fn run_snapshot_test(&mut self, compare_data: bool) -> Result<(), Error> {
+    pub async fn run_snapshot_test(&mut self) -> Result<(), Error> {
         self.execute_test_ddl_sqls()?;
 
         let mut src_conn = self.src_conn.as_mut().unwrap();
         Self::execute_cmds(&mut src_conn, &self.base.src_dml_sqls);
         self.base.start_task().await?;
 
-        if compare_data {
-            // self.compare_data_for_tbs().await;
-            self.compare_data()?;
-        }
+        self.compare_all_data()
+    }
 
-        Ok(())
+    pub async fn run_cdc_test(
+        &mut self,
+        start_millis: u64,
+        parse_millis: u64,
+    ) -> Result<(), Error> {
+        self.execute_test_ddl_sqls()?;
+
+        let task = self.base.spawn_task().await?;
+        TimeUtil::sleep_millis(start_millis).await;
+
+        let mut src_conn = self.src_conn.as_mut().unwrap();
+        Self::execute_cmds(&mut src_conn, &self.base.src_dml_sqls);
+
+        TimeUtil::sleep_millis(parse_millis).await;
+        self.compare_all_data()?;
+
+        self.base.wait_task_finish(&task).await
     }
 
     fn execute_test_ddl_sqls(&mut self) -> Result<(), Error> {
@@ -70,40 +86,50 @@ impl RedisTestRunner {
         Ok(())
     }
 
-    fn compare_data(&mut self) -> Result<(), Error> {
+    fn compare_all_data(&mut self) -> Result<(), Error> {
+        let src_conn = self.src_conn.as_mut().unwrap();
+        let dbs = Self::list_dbs(src_conn);
+        for db in dbs {
+            println!("compare data for db: {}", db);
+            self.compare_data(db)?;
+        }
+        Ok(())
+    }
+
+    fn compare_data(&mut self, db: String) -> Result<(), Error> {
         let src_conn = self.src_conn.as_mut().unwrap();
         let dst_conn = self.dst_conn.as_mut().unwrap();
 
-        // string entries
-        let set_keys = Self::list_keys(src_conn, "set_key_*");
-        Self::compare_string_entries(src_conn, dst_conn, &set_keys);
+        Self::execute_cmd(src_conn, &format!("SELECT {}", db));
+        Self::execute_cmd(dst_conn, &format!("SELECT {}", db));
 
-        let mset_keys = Self::list_keys(src_conn, "mset_key_*");
-        Self::compare_string_entries(src_conn, dst_conn, &mset_keys);
+        let mut string_keys = Vec::new();
+        let mut hash_keys = Vec::new();
+        let mut list_keys = Vec::new();
+        let mut stream_keys = Vec::new();
+        let mut set_keys = Vec::new();
+        let mut zset_keys = Vec::new();
 
-        // hash entries
-        let hset_keys = Self::list_keys(src_conn, "hset_key_*");
-        Self::compare_hash_entries(src_conn, dst_conn, &hset_keys);
+        let keys = Self::list_keys(src_conn, "*");
+        for key in keys {
+            let key_type = Self::get_key_type(src_conn, &key);
+            match key_type.as_str() {
+                "string" => string_keys.push(key),
+                "hash" => hash_keys.push(key),
+                "zset" => zset_keys.push(key),
+                "stream" => stream_keys.push(key),
+                "set" => set_keys.push(key),
+                "list" => list_keys.push(key),
+                _ => string_keys.push(key),
+            }
+        }
 
-        let hmset_keys = Self::list_keys(src_conn, "hmset_key_*");
-        Self::compare_hash_entries(src_conn, dst_conn, &hmset_keys);
-
-        // list entries
-        let list_keys = Self::list_keys(src_conn, "list_key_*");
+        Self::compare_string_entries(src_conn, dst_conn, &string_keys);
+        Self::compare_hash_entries(src_conn, dst_conn, &hash_keys);
         Self::compare_list_entries(src_conn, dst_conn, &list_keys);
-
-        // set entries
-        let sets_keys = Self::list_keys(src_conn, "sets_key_*");
-        Self::compare_set_entries(src_conn, dst_conn, &sets_keys);
-
-        // zset entries
-        let zset_keys = Self::list_keys(src_conn, "zset_key_*");
+        Self::compare_set_entries(src_conn, dst_conn, &set_keys);
         Self::compare_zset_entries(src_conn, dst_conn, &zset_keys);
-
-        // stream entries
-        let stream_keys = Self::list_keys(src_conn, "stream_key_*");
         Self::compare_stream_entries(src_conn, dst_conn, &stream_keys);
-
         Ok(())
     }
 
@@ -184,6 +210,24 @@ impl RedisTestRunner {
         assert_eq!(src_result, dst_result);
     }
 
+    fn list_dbs(conn: &mut Connection) -> Vec<String> {
+        let mut dbs = Vec::new();
+        let cmd = "INFO keyspace";
+        match Self::execute_cmd(conn, &cmd) {
+            redis::Value::Data(data) => {
+                let spaces = String::from_utf8(data).unwrap();
+                for space in spaces.split("\r\n").collect::<Vec<&str>>() {
+                    if space.contains("db") {
+                        let tokens: Vec<&str> = space.split(":").collect::<Vec<&str>>();
+                        dbs.push(tokens[0].trim_start_matches("db").to_string());
+                    }
+                }
+            }
+            _ => {}
+        }
+        dbs
+    }
+
     fn list_keys(conn: &mut Connection, match_pattern: &str) -> Vec<String> {
         let mut keys = Vec::new();
         let cmd = format!("KEYS {}", match_pattern);
@@ -198,7 +242,20 @@ impl RedisTestRunner {
             }
             _ => assert!(false),
         }
+        keys.sort();
         keys
+    }
+
+    fn get_key_type(conn: &mut Connection, key: &str) -> String {
+        let cmd = format!("type \"{}\"", key);
+        let value = Self::execute_cmd(conn, &cmd);
+        match value {
+            redis::Value::Status(key_type) => {
+                return key_type;
+            }
+            _ => assert!(false),
+        }
+        String::new()
     }
 
     fn execute_cmds(conn: &mut Connection, cmds: &Vec<String>) {
@@ -208,7 +265,7 @@ impl RedisTestRunner {
     }
 
     fn execute_cmd(conn: &mut Connection, cmd: &str) -> Value {
-        println!("execute cmd: {:?}", cmd);
+        // println!("execute cmd: {:?}", cmd);
         let packed_cmd = Self::pack_cmd(cmd);
         conn.req_packed_command(&packed_cmd).unwrap()
     }
@@ -219,22 +276,15 @@ impl RedisTestRunner {
         let escape_pairs = vec![(ARG_QUOTER, ARG_QUOTER)];
         let args = ConfigTokenParser::parse(cmd, &delimiters, &escape_pairs);
 
-        let args = args
+        let args: Vec<&str> = args
             .iter()
             .map(|arg| {
                 arg.trim_start_matches(ARG_QUOTER)
                     .trim_end_matches(ARG_QUOTER)
-                    .to_string()
             })
-            .collect::<Vec<String>>();
+            .collect();
 
-        // turn args vec into bytes vec
-        let mut cmd_bytes = vec![];
-        for arg in args {
-            cmd_bytes.push(arg.as_bytes().to_vec());
-        }
-
-        // encode cmd bytes
-        CmdEncoder::encode(&cmd_bytes)
+        let redis_cmd = RedisCmd::from_str_args(&args);
+        CmdEncoder::encode(&redis_cmd)
     }
 }

@@ -18,7 +18,8 @@ use dt_connector::extractor::{
         pg_snapshot_extractor::PgSnapshotExtractor, pg_struct_extractor::PgStructExtractor,
     },
     redis::{
-        redis_cdc_extractor::RedisCdcExtractor, redis_snapshot_extractor::RedisSnapshotExtractor,
+        redis_cdc_extractor::RedisCdcExtractor, redis_client::RedisClient,
+        redis_snapshot_extractor::RedisSnapshotExtractor,
     },
     snapshot_resumer::SnapshotResumer,
 };
@@ -378,14 +379,17 @@ impl ExtractorUtil {
 
     pub async fn create_redis_snapshot_extractor(
         url: &str,
+        repl_port: u64,
         buffer: Arc<ConcurrentQueue<DtData>>,
         shut_down: Arc<AtomicBool>,
     ) -> Result<RedisSnapshotExtractor, Error> {
-        let conn = TaskUtil::create_redis_conn(url).await?;
+        // let conn = TaskUtil::create_redis_conn(url).await?;
+        let conn = RedisClient::new(url).await.unwrap();
         Ok(RedisSnapshotExtractor {
             conn,
             buffer,
             shut_down,
+            repl_port,
         })
     }
 
@@ -393,12 +397,15 @@ impl ExtractorUtil {
         url: &str,
         run_id: &str,
         repl_offset: u64,
+        repl_port: u64,
+        now_db_id: i64,
         heartbeat_interval_secs: u64,
         buffer: Arc<ConcurrentQueue<DtData>>,
         shut_down: Arc<AtomicBool>,
         syncer: Arc<Mutex<Syncer>>,
     ) -> Result<RedisCdcExtractor, Error> {
-        let conn = TaskUtil::create_redis_conn(url).await?;
+        // let conn = TaskUtil::create_redis_conn(url).await?;
+        let conn = RedisClient::new(url).await.unwrap();
         Ok(RedisCdcExtractor {
             conn,
             buffer,
@@ -407,6 +414,8 @@ impl ExtractorUtil {
             heartbeat_interval_secs,
             shut_down,
             syncer,
+            repl_port,
+            now_db_id: now_db_id,
         })
     }
 }

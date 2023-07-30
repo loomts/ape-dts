@@ -1,4 +1,6 @@
 use dt_common::error::Error;
+use dt_meta::redis::redis_object::RedisString;
+use rdkafka::message::ToBytes;
 
 use crate::extractor::redis::RawByteReader;
 
@@ -10,59 +12,33 @@ const RDB_ENC_INT32: u8 = 2;
 const RDB_ENC_LZF: u8 = 3;
 
 impl RdbReader<'_> {
-    pub fn read_string(&mut self) -> Result<String, Error> {
+    pub fn read_string(&mut self) -> Result<RedisString, Error> {
         let (len, special) = self.read_encoded_length()?;
-        if special {
+        let bytes = if special {
             match len as u8 {
-                RDB_ENC_INT8 => Ok(self.read_i8()?.to_string()),
+                RDB_ENC_INT8 => self.read_i8()?.to_string().as_bytes().to_vec(),
 
-                RDB_ENC_INT16 => Ok(self.read_i16()?.to_string()),
+                RDB_ENC_INT16 => self.read_i16()?.to_string().as_bytes().to_vec(),
 
-                RDB_ENC_INT32 => Ok(self.read_i32()?.to_string()),
+                RDB_ENC_INT32 => self.read_i32()?.to_string().as_bytes().to_vec(),
 
                 RDB_ENC_LZF => {
                     let in_len = self.read_length()?;
                     let out_len = self.read_length()?;
                     let in_buf = self.read_raw(in_len as usize)?;
-                    let out_buf = self.lzf_decompress(&in_buf, out_len as usize)?;
-                    Ok(String::from_utf8(out_buf).unwrap())
+                    self.lzf_decompress(&in_buf, out_len as usize)?
                 }
 
-                _ => Err(Error::Unexpected {
-                    error: format!("Unknown string encode type {}", len).to_string(),
-                }),
-            }
-        } else {
-            let buf = self.read_raw(len as usize)?;
-            Ok(String::from_utf8(buf).unwrap())
-        }
-    }
-
-    pub fn read_string_raw(&mut self) -> Result<Vec<u8>, Error> {
-        let (len, special) = self.read_encoded_length()?;
-        if special {
-            match len as u8 {
-                RDB_ENC_INT8 => self.read_raw(1),
-
-                RDB_ENC_INT16 => self.read_raw(2),
-
-                RDB_ENC_INT32 => self.read_raw(4),
-
-                RDB_ENC_LZF => {
-                    let in_len = self.read_length()?;
-                    let out_len = self.read_length()?;
-                    let in_buf = self.read_raw(in_len as usize)?;
-                    self.lzf_decompress(&in_buf, out_len as usize)
+                _ => {
+                    return Err(Error::Unexpected {
+                        error: format!("Unknown string encode type {}", len).to_string(),
+                    })
                 }
-
-                _ => Err(Error::Unexpected {
-                    error: format!("Unknown string encode type {}", len).to_string(),
-                }),
             }
         } else {
-            let buf = self.read_raw(len as usize)?;
-            Ok(buf)
-        }
+            self.read_raw(len as usize)?
+        };
+        Ok(RedisString { bytes })
     }
 
     fn lzf_decompress(&self, in_buf: &[u8], out_len: usize) -> Result<Vec<u8>, Error> {

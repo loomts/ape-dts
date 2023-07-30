@@ -8,4 +8,16 @@ mod test {
     async fn snapshot_basic_test() {
         TestBase::run_redis_snapshot_test("redis_to_redis/snapshot/basic_test").await;
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn snapshot_multi_dbs_test() {
+        TestBase::run_redis_snapshot_test("redis_to_redis/snapshot/multi_dbs_test").await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn snapshot_cmds_test() {
+        TestBase::run_redis_snapshot_test("redis_to_redis/snapshot/cmds_test").await;
+    }
 }

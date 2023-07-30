@@ -1,11 +1,10 @@
+use crate::extractor::redis::{redis_client::RedisClient, RawByteReader};
 use dt_common::error::Error;
-use redis::Connection;
-
-use crate::extractor::redis::RawByteReader;
+use futures::executor::block_on;
 
 pub struct RdbReader<'a> {
-    pub conn: &'a mut Connection,
-    pub total_length: usize,
+    pub conn: &'a mut RedisClient,
+    pub rdb_length: usize,
     pub position: usize,
     pub copy_raw: bool,
     pub raw_bytes: Vec<u8>,
@@ -19,7 +18,7 @@ impl RdbReader<'_> {
 
 impl RawByteReader for RdbReader<'_> {
     fn read_raw(&mut self, length: usize) -> Result<Vec<u8>, Error> {
-        let buf = self.conn.recv_response_raw(length).unwrap();
+        let (buf, _n) = block_on(self.conn.recv_raw(length)).unwrap();
         self.position += length;
         if self.copy_raw {
             self.raw_bytes.extend_from_slice(&buf);

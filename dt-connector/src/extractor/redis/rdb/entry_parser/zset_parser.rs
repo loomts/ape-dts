@@ -1,5 +1,5 @@
 use dt_common::error::Error;
-use dt_meta::redis::redis_object::{ZSetEntry, ZsetObject};
+use dt_meta::redis::redis_object::{RedisString, ZSetEntry, ZsetObject};
 
 use crate::extractor::redis::rdb::reader::rdb_reader::RdbReader;
 
@@ -8,11 +8,11 @@ pub struct ZsetLoader {}
 impl ZsetLoader {
     pub fn load_from_buffer(
         reader: &mut RdbReader,
-        key: &str,
+        key: RedisString,
         type_byte: u8,
     ) -> Result<ZsetObject, Error> {
         let mut obj = ZsetObject::new();
-        obj.key = key.to_string();
+        obj.key = key;
 
         match type_byte {
             super::RDB_TYPE_ZSET => Self::read_zset(&mut obj, reader, false)?,
@@ -42,7 +42,10 @@ impl ZsetLoader {
                 reader.read_float()?.to_string()
             };
 
-            let entry = ZSetEntry { member, score };
+            let entry = ZSetEntry {
+                member,
+                score: RedisString::from(score),
+            };
             obj.elements.push(entry);
         }
         Ok(())
@@ -50,15 +53,15 @@ impl ZsetLoader {
 
     fn read_zset_zip_list(obj: &mut ZsetObject, reader: &mut RdbReader) -> Result<(), Error> {
         let list = reader.read_zip_list()?;
-        Self::parse_zset_result(obj, &list)
+        Self::parse_zset_result(obj, list)
     }
 
     fn read_zset_list_pack(obj: &mut ZsetObject, reader: &mut RdbReader) -> Result<(), Error> {
         let list = reader.read_list_pack()?;
-        Self::parse_zset_result(obj, &list)
+        Self::parse_zset_result(obj, list)
     }
 
-    fn parse_zset_result(obj: &mut ZsetObject, list: &Vec<String>) -> Result<(), Error> {
+    fn parse_zset_result(obj: &mut ZsetObject, list: Vec<RedisString>) -> Result<(), Error> {
         let size = list.len();
         if size % 2 != 0 {
             return Err(Error::Unexpected {
@@ -67,12 +70,9 @@ impl ZsetLoader {
         }
 
         for i in (0..size).step_by(2) {
-            let member = &list[i];
-            let score = &list[i + 1];
-            obj.elements.push(ZSetEntry {
-                member: member.to_string(),
-                score: score.to_string(),
-            });
+            let member = list[i].clone();
+            let score = list[i + 1].clone();
+            obj.elements.push(ZSetEntry { member, score });
         }
         Ok(())
     }

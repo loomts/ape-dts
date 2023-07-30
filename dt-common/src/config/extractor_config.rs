@@ -69,13 +69,16 @@ pub enum ExtractorConfig {
 
     RedisSnapshot {
         url: String,
+        repl_port: u64,
     },
 
     RedisCdc {
         url: String,
         run_id: String,
         repl_offset: u64,
+        repl_port: u64,
         heartbeat_interval_secs: u64,
+        now_db_id: i64,
     },
 }
 
