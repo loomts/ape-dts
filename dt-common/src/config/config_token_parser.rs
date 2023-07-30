@@ -47,15 +47,17 @@ impl ConfigTokenParser {
         delimiters: &[char],
     ) -> (String, usize) {
         let mut token = String::new();
+        let mut read_count = 0;
         for c in chars.iter().skip(start_index) {
             if delimiters.contains(c) {
                 break;
             } else {
                 token.push(*c);
+                read_count += 1;
             }
         }
 
-        let next_index = start_index + token.len();
+        let next_index = start_index + read_count;
         (token, next_index)
     }
 
@@ -66,9 +68,11 @@ impl ConfigTokenParser {
     ) -> (String, usize) {
         let mut start = false;
         let mut token = String::new();
+        let mut read_count = 0;
         for c in chars.iter().skip(start_index) {
             if start && *c == escape_pair.1 {
                 token.push(*c);
+                read_count += 1;
                 break;
             }
             if *c == escape_pair.0 {
@@ -76,10 +80,14 @@ impl ConfigTokenParser {
             }
             if start {
                 token.push(*c);
+                read_count += 1;
             }
         }
 
-        let next_index = start_index + token.len();
+        // when there are emojs in the token, the read_count may be less than token.len(), for example:
+        // in chars, 😀 only takes 1 slot, which is '\u{1f600}'
+        // in token, 😀 takes 4 slots, which are: 240, 159, 152, 128
+        let next_index = start_index + read_count;
         (token, next_index)
     }
 }
@@ -183,5 +191,27 @@ mod tests {
         assert_eq!(tokens[5], "tb_3");
         assert_eq!(tokens[6], "db_4");
         assert_eq!(tokens[7], r#""tb`4""#);
+    }
+
+    #[test]
+    fn test_parse_emoj_config_tokens() {
+        let config = r#"SET "set_key_3_  😀" "val_2_  😀""#;
+        let delimiters = vec![' '];
+        let escape_pairs = vec![('"', '"')];
+        let tokens = ConfigTokenParser::parse(config, &delimiters, &escape_pairs);
+        assert_eq!(tokens.len(), 3);
+        assert_eq!(tokens[0], "SET");
+        assert_eq!(tokens[1], r#""set_key_3_  😀""#);
+        assert_eq!(tokens[2], r#""val_2_  😀""#);
+
+        let config = r#"ZADD key 2 val_2_中文 3 "val_3_  😀""#;
+        let tokens = ConfigTokenParser::parse(config, &delimiters, &escape_pairs);
+        assert_eq!(tokens.len(), 6);
+        assert_eq!(tokens[0], "ZADD");
+        assert_eq!(tokens[1], "key");
+        assert_eq!(tokens[2], "2");
+        assert_eq!(tokens[3], "val_2_中文");
+        assert_eq!(tokens[4], "3");
+        assert_eq!(tokens[5], r#""val_3_  😀""#);
     }
 }

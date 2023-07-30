@@ -62,6 +62,11 @@ impl TaskUtil {
         Ok(conn_pool)
     }
 
+    pub async fn create_redis_conn(url: &str) -> Result<redis::Connection, Error> {
+        let conn = redis::Client::open(url).unwrap().get_connection().unwrap();
+        Ok(conn)
+    }
+
     pub async fn create_rdb_meta_manager(config: &TaskConfig) -> Result<RdbMetaManager, Error> {
         let log_level = &config.runtime.log_level;
         let meta_manager = match &config.sinker {

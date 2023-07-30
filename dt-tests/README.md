@@ -130,6 +130,30 @@ mongo "mongodb://ape_dts:123456@mongo1:9042/?replicaSet=rs0"
 docker run -d --name dst-mongo \
 	-e MONGO_INITDB_ROOT_USERNAME=ape_dts \
 	-e MONGO_INITDB_ROOT_PASSWORD=123456 \
-  -p 27113:27017 \
+  -p 27018:27017 \
 	mongo
+```
+
+## redis
+
+### source
+
+```
+docker run --name some-redis-1 \
+-p 6380:6379 \
+-d redis redis-server \
+--requirepass 123456 \
+--save 60 1 \
+--loglevel warning
+```
+
+### target
+
+```
+docker run --name some-redis-2 \
+-p 6381:6379 \
+-d redis redis-server \
+--requirepass 123456 \
+--save 60 1 \
+--loglevel warning
 ```

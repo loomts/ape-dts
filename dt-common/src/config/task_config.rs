@@ -157,8 +157,26 @@ impl TaskConfig {
 
                 ExtractType::Basic => Ok(ExtractorConfig::Basic { url, db_type }),
 
-                _ => Err(Error::Unexpected {
-                    error: "extractor db type not supported".to_string(),
+                t => Err(Error::Unexpected {
+                    error: format!("extract type: {} not supported", t),
+                }),
+            },
+
+            DbType::Redis => match extract_type {
+                ExtractType::Snapshot => Ok(ExtractorConfig::RedisSnapshot { url }),
+
+                ExtractType::Cdc => Ok(ExtractorConfig::RedisCdc {
+                    url,
+                    run_id: ini.get(EXTRACTOR, "run_id").unwrap(),
+                    repl_offset: ini.getuint(EXTRACTOR, "repl_offset").unwrap().unwrap(),
+                    heartbeat_interval_secs: ini
+                        .getuint(EXTRACTOR, "heartbeat_interval_secs")
+                        .unwrap()
+                        .unwrap(),
+                }),
+
+                t => Err(Error::Unexpected {
+                    error: format!("extract type: {} not supported", t),
                 }),
             },
 
@@ -243,6 +261,8 @@ impl TaskConfig {
                 region: ini.get(SINKER, "region").unwrap(),
                 root_dir: ini.get(SINKER, "root_dir").unwrap(),
             }),
+
+            DbType::Redis => Ok(SinkerConfig::Redis { url, batch_size }),
         }
     }
 

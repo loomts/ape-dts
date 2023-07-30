@@ -18,6 +18,7 @@ use dt_connector::{
         open_faas_sinker::OpenFaasSinker,
         pg::{pg_checker::PgChecker, pg_sinker::PgSinker, pg_struct_sinker::PgStructSinker},
         rdb_router::RdbRouter,
+        redis::redis_sinker::RedisSinker,
     },
     Sinker,
 };
@@ -173,6 +174,15 @@ impl SinkerUtil {
                     &task_config.runtime.log_level,
                     task_config.pipeline.parallel_size,
                     conflict_policy,
+                )
+                .await?
+            }
+
+            SinkerConfig::Redis { url, batch_size } => {
+                SinkerUtil::create_redis_sinker(
+                    url,
+                    task_config.pipeline.parallel_size,
+                    *batch_size,
                 )
                 .await?
             }
@@ -426,6 +436,20 @@ impl SinkerUtil {
                 conn_pool: conn_pool.clone(),
                 conflict_policy: conflict_policy.clone(),
             };
+            sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
+        }
+        Ok(sub_sinkers)
+    }
+
+    async fn create_redis_sinker<'a>(
+        url: &str,
+        parallel_size: usize,
+        batch_size: usize,
+    ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
+        let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
+        for _ in 0..parallel_size {
+            let conn = TaskUtil::create_redis_conn(url).await?;
+            let sinker = RedisSinker { conn, batch_size };
             sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
         }
         Ok(sub_sinkers)

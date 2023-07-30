@@ -66,6 +66,17 @@ pub enum ExtractorConfig {
         resume_token: String,
         start_timestamp: i64,
     },
+
+    RedisSnapshot {
+        url: String,
+    },
+
+    RedisCdc {
+        url: String,
+        run_id: String,
+        repl_offset: u64,
+        heartbeat_interval_secs: u64,
+    },
 }
 
 impl ExtractorConfig {
@@ -83,6 +94,8 @@ impl ExtractorConfig {
 
             Self::MongoSnapshot { .. } | Self::MongoCdc { .. } => DbType::Mongo,
             Self::Basic { db_type, .. } => db_type.clone(),
+
+            Self::RedisSnapshot { .. } | Self::RedisCdc { .. } => DbType::Redis,
         }
     }
 }

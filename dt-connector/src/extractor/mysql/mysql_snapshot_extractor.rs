@@ -1,4 +1,4 @@
-use std::sync::atomic::AtomicBool;
+use std::sync::{atomic::AtomicBool, Arc};
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
@@ -23,19 +23,19 @@ use crate::{
     Extractor,
 };
 
-pub struct MysqlSnapshotExtractor<'a> {
+pub struct MysqlSnapshotExtractor {
     pub conn_pool: Pool<MySql>,
     pub meta_manager: MysqlMetaManager,
     pub resumer: SnapshotResumer,
-    pub buffer: &'a ConcurrentQueue<DtData>,
+    pub buffer: Arc<ConcurrentQueue<DtData>>,
     pub slice_size: usize,
     pub db: String,
     pub tb: String,
-    pub shut_down: &'a AtomicBool,
+    pub shut_down: Arc<AtomicBool>,
 }
 
 #[async_trait]
-impl Extractor for MysqlSnapshotExtractor<'_> {
+impl Extractor for MysqlSnapshotExtractor {
     async fn extract(&mut self) -> Result<(), Error> {
         log_info!(
             "MysqlSnapshotExtractor starts, schema: `{}`, tb: `{}`, slice_size: {}",
@@ -55,7 +55,7 @@ impl Extractor for MysqlSnapshotExtractor<'_> {
     }
 }
 
-impl MysqlSnapshotExtractor<'_> {
+impl MysqlSnapshotExtractor {
     async fn extract_internal(&mut self) -> Result<(), Error> {
         let tb_meta = self.meta_manager.get_tb_meta(&self.db, &self.tb).await?;
 
@@ -75,7 +75,7 @@ impl MysqlSnapshotExtractor<'_> {
             self.extract_all(&tb_meta).await?;
         }
 
-        BaseExtractor::wait_task_finish(self.buffer, self.shut_down).await
+        BaseExtractor::wait_task_finish(self.buffer.as_ref(), self.shut_down.as_ref()).await
     }
 
     async fn extract_all(&mut self, tb_meta: &MysqlTbMeta) -> Result<(), Error> {
@@ -90,7 +90,7 @@ impl MysqlSnapshotExtractor<'_> {
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let row_data = RowData::from_mysql_row(&row, tb_meta);
-            BaseExtractor::push_row(self.buffer, row_data)
+            BaseExtractor::push_row(self.buffer.as_ref(), row_data)
                 .await
                 .unwrap();
             all_count += 1;
@@ -146,7 +146,7 @@ impl MysqlSnapshotExtractor<'_> {
                 if let Some(value) = start_value.to_option_string() {
                     row_data.position = format!("`{}`:{}", order_col, value)
                 }
-                BaseExtractor::push_row(self.buffer, row_data)
+                BaseExtractor::push_row(self.buffer.as_ref(), row_data)
                     .await
                     .unwrap();
                 slice_count += 1;

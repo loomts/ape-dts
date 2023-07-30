@@ -18,6 +18,8 @@ pub enum DbType {
     Foxlake,
     #[strum(serialize = "mongo")]
     Mongo,
+    #[strum(serialize = "redis")]
+    Redis,
 }
 
 #[derive(Display, EnumString, IntoStaticStr)]
@@ -62,6 +64,8 @@ pub enum ParallelType {
     Table,
     #[strum(serialize = "mongo")]
     Mongo,
+    #[strum(serialize = "redis")]
+    Redis,
 }
 
 pub enum RouteType {

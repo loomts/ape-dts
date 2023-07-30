@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::atomic::AtomicBool};
+use std::{
+    collections::HashMap,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
@@ -25,17 +28,17 @@ use crate::{
     BatchCheckExtractor, Extractor,
 };
 
-pub struct PgCheckExtractor<'a> {
+pub struct PgCheckExtractor {
     pub conn_pool: Pool<Postgres>,
     pub meta_manager: PgMetaManager,
     pub check_log_dir: String,
-    pub buffer: &'a ConcurrentQueue<DtData>,
+    pub buffer: Arc<ConcurrentQueue<DtData>>,
     pub batch_size: usize,
-    pub shut_down: &'a AtomicBool,
+    pub shut_down: Arc<AtomicBool>,
 }
 
 #[async_trait]
-impl Extractor for PgCheckExtractor<'_> {
+impl Extractor for PgCheckExtractor {
     async fn extract(&mut self) -> Result<(), Error> {
         log_info!(
             "PgCheckExtractor starts, check_log_dir: {}",
@@ -44,9 +47,9 @@ impl Extractor for PgCheckExtractor<'_> {
 
         let mut base_check_extractor = BaseCheckExtractor {
             check_log_dir: self.check_log_dir.clone(),
-            buffer: self.buffer,
+            buffer: self.buffer.clone(),
             batch_size: self.batch_size,
-            shut_down: self.shut_down,
+            shut_down: self.shut_down.clone(),
         };
 
         base_check_extractor.extract(self).await
@@ -58,7 +61,7 @@ impl Extractor for PgCheckExtractor<'_> {
 }
 
 #[async_trait]
-impl BatchCheckExtractor for PgCheckExtractor<'_> {
+impl BatchCheckExtractor for PgCheckExtractor {
     async fn batch_extract(&mut self, check_logs: &[CheckLog]) -> Result<(), Error> {
         if check_logs.is_empty() {
             return Ok(());
@@ -88,7 +91,7 @@ impl BatchCheckExtractor for PgCheckExtractor<'_> {
                 row_data.before = row_data.after.clone();
             }
 
-            BaseExtractor::push_row(self.buffer, row_data)
+            BaseExtractor::push_row(self.buffer.as_ref(), row_data)
                 .await
                 .unwrap();
         }
@@ -97,7 +100,7 @@ impl BatchCheckExtractor for PgCheckExtractor<'_> {
     }
 }
 
-impl PgCheckExtractor<'_> {
+impl PgCheckExtractor {
     fn build_check_row_datas(
         &mut self,
         check_logs: &[CheckLog],

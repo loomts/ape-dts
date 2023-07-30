@@ -140,10 +140,6 @@ impl MongoTestRunner {
         db: &str,
         sqls: &Vec<String>,
     ) -> Result<(), Error> {
-        if sqls.is_empty() {
-            return Ok(());
-        }
-
         for sql in sqls.iter() {
             if sql.contains("drop") {
                 self.execute_drop(client, &db, sql).await.unwrap();
@@ -161,10 +157,6 @@ impl MongoTestRunner {
         db: &str,
         sqls: &Vec<String>,
     ) -> Result<(), Error> {
-        if sqls.is_empty() {
-            return Ok(());
-        }
-
         for sql in sqls.iter() {
             if sql.contains("insertOne") {
                 self.execute_insert(client, &db, sql).await?;

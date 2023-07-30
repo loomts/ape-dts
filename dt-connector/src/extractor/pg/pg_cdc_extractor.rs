@@ -41,22 +41,22 @@ use dt_meta::{
     row_type::RowType,
 };
 
-pub struct PgCdcExtractor<'a> {
+pub struct PgCdcExtractor {
     pub meta_manager: PgMetaManager,
-    pub buffer: &'a ConcurrentQueue<DtData>,
+    pub buffer: Arc<ConcurrentQueue<DtData>>,
     pub filter: RdbFilter,
     pub url: String,
     pub slot_name: String,
     pub start_lsn: String,
     pub heartbeat_interval_secs: u64,
-    pub shut_down: &'a AtomicBool,
+    pub shut_down: Arc<AtomicBool>,
     pub syncer: Arc<Mutex<Syncer>>,
 }
 
 const SECS_FROM_1970_TO_2000: i64 = 946_684_800;
 
 #[async_trait]
-impl Extractor for PgCdcExtractor<'_> {
+impl Extractor for PgCdcExtractor {
     async fn extract(&mut self) -> Result<(), Error> {
         log_info!(
             "PgCdcExtractor starts, slot_name: {}, start_lsn: {}, heartbeat_interval_secs: {}",
@@ -73,7 +73,7 @@ impl Extractor for PgCdcExtractor<'_> {
     }
 }
 
-impl PgCdcExtractor<'_> {
+impl PgCdcExtractor {
     async fn extract_internal(&mut self) -> Result<(), Error> {
         let mut cdc_client = PgCdcClient {
             url: self.url.clone(),

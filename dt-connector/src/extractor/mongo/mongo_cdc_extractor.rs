@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::atomic::AtomicBool};
+use std::{
+    collections::HashMap,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
@@ -19,17 +22,17 @@ use serde_json::json;
 
 use crate::{extractor::base_extractor::BaseExtractor, Extractor};
 
-pub struct MongoCdcExtractor<'a> {
-    pub buffer: &'a ConcurrentQueue<DtData>,
+pub struct MongoCdcExtractor {
+    pub buffer: Arc<ConcurrentQueue<DtData>>,
     pub filter: RdbFilter,
-    pub shut_down: &'a AtomicBool,
+    pub shut_down: Arc<AtomicBool>,
     pub resume_token: String,
     pub start_timestamp: i64,
     pub mongo_client: Client,
 }
 
 #[async_trait]
-impl Extractor for MongoCdcExtractor<'_> {
+impl Extractor for MongoCdcExtractor {
     async fn extract(&mut self) -> Result<(), Error> {
         log_info!(
             "MongoCdcExtractor starts, resume_token: {} ",
@@ -43,7 +46,7 @@ impl Extractor for MongoCdcExtractor<'_> {
     }
 }
 
-impl MongoCdcExtractor<'_> {
+impl MongoCdcExtractor {
     async fn extract_internal(&mut self) -> Result<(), Error> {
         let mut start_timestamp_option: Option<Timestamp> = None;
         let mut start_after: Option<ResumeToken> = None;
@@ -153,7 +156,7 @@ impl MongoCdcExtractor<'_> {
     }
 }
 
-impl MongoCdcExtractor<'_> {
+impl MongoCdcExtractor {
     async fn push_row_to_buf(&mut self, row_data: RowData) -> Result<(), Error> {
         if self.filter.filter_event(
             &row_data.schema,
@@ -162,6 +165,6 @@ impl MongoCdcExtractor<'_> {
         ) {
             return Ok(());
         }
-        BaseExtractor::push_row(self.buffer, row_data).await
+        BaseExtractor::push_row(self.buffer.as_ref(), row_data).await
     }
 }

@@ -8,9 +8,9 @@ use dt_pipeline::{
     base_parallelizer::BaseParallelizer, check_parallelizer::CheckParallelizer,
     merge_parallelizer::MergeParallelizer, mongo_parallelizer::MongoParallelizer,
     partition_parallelizer::PartitionParallelizer, rdb_merger::RdbMerger,
-    rdb_partitioner::RdbPartitioner, serial_parallelizer::SerialParallelizer,
-    snapshot_parallelizer::SnapshotParallelizer, table_parallelizer::TableParallelizer,
-    Parallelizer,
+    rdb_partitioner::RdbPartitioner, redis_parallelizer::RedisParallelizer,
+    serial_parallelizer::SerialParallelizer, snapshot_parallelizer::SnapshotParallelizer,
+    table_parallelizer::TableParallelizer, Parallelizer,
 };
 
 use super::task_util::TaskUtil;
@@ -68,6 +68,11 @@ impl PipelineUtil {
             }),
 
             ParallelType::Mongo => Box::new(MongoParallelizer {
+                base_parallelizer,
+                parallel_size,
+            }),
+
+            ParallelType::Redis => Box::new(RedisParallelizer {
                 base_parallelizer,
                 parallel_size,
             }),

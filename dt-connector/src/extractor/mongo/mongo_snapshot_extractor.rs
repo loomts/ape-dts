@@ -1,6 +1,9 @@
 use std::{
     collections::HashMap,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
 
 use async_trait::async_trait;
@@ -18,17 +21,17 @@ use crate::{
     Extractor,
 };
 
-pub struct MongoSnapshotExtractor<'a> {
+pub struct MongoSnapshotExtractor {
     pub resumer: SnapshotResumer,
-    pub buffer: &'a ConcurrentQueue<DtData>,
+    pub buffer: Arc<ConcurrentQueue<DtData>>,
     pub db: String,
     pub tb: String,
-    pub shut_down: &'a AtomicBool,
+    pub shut_down: Arc<AtomicBool>,
     pub mongo_client: Client,
 }
 
 #[async_trait]
-impl Extractor for MongoSnapshotExtractor<'_> {
+impl Extractor for MongoSnapshotExtractor {
     async fn extract(&mut self) -> Result<(), Error> {
         log_info!(
             "MongoSnapshotExtractor starts, schema: {}, tb: {}",
@@ -43,7 +46,7 @@ impl Extractor for MongoSnapshotExtractor<'_> {
     }
 }
 
-impl MongoSnapshotExtractor<'_> {
+impl MongoSnapshotExtractor {
     pub async fn extract_internal(&mut self) -> Result<(), Error> {
         log_info!("start extracting data from {}.{}", self.db, self.tb);
 
@@ -84,7 +87,7 @@ impl MongoSnapshotExtractor<'_> {
                 before: None,
             };
 
-            BaseExtractor::push_row(self.buffer, row_data)
+            BaseExtractor::push_row(self.buffer.as_ref(), row_data)
                 .await
                 .unwrap();
             all_count += 1;

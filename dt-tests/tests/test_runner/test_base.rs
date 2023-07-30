@@ -7,7 +7,7 @@ use crate::test_runner::rdb_test_runner::DST;
 use super::{
     mongo_test_runner::MongoTestRunner, rdb_check_test_runner::RdbCheckTestRunner,
     rdb_precheck_test_runner::RdbPrecheckTestRunner, rdb_struct_test_runner::RdbStructTestRunner,
-    rdb_test_runner::RdbTestRunner,
+    rdb_test_runner::RdbTestRunner, redis_test_runner::RedisTestRunner,
 };
 
 pub struct TestBase {}
@@ -89,6 +89,11 @@ impl TestBase {
             .run_cdc_test(start_millis, parse_millis)
             .await
             .unwrap();
+    }
+
+    pub async fn run_redis_snapshot_test(test_dir: &str) {
+        let mut runner = RedisTestRunner::new(test_dir).await.unwrap();
+        runner.run_snapshot_test(true).await.unwrap();
     }
 
     pub async fn run_mysql_struct_test(test_dir: &str) {
