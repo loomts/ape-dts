@@ -92,12 +92,36 @@ impl TestBase {
     }
 
     pub async fn run_redis_snapshot_test(test_dir: &str) {
-        let mut runner = RedisTestRunner::new(test_dir).await.unwrap();
+        let mut runner = RedisTestRunner::new_default(test_dir).await.unwrap();
+        runner.run_snapshot_test().await.unwrap();
+    }
+
+    pub async fn run_redis_rejson_snapshot_test(test_dir: &str) {
+        let mut runner = RedisTestRunner::new(test_dir, vec![' '], vec![('\'', '\'')])
+            .await
+            .unwrap();
+        runner.run_snapshot_test().await.unwrap();
+    }
+
+    pub async fn run_redis_redisearch_snapshot_test(test_dir: &str) {
+        let mut runner = RedisTestRunner::new(test_dir, vec![' '], vec![('\'', '\'')])
+            .await
+            .unwrap();
         runner.run_snapshot_test().await.unwrap();
     }
 
     pub async fn run_redis_cdc_test(test_dir: &str, start_millis: u64, parse_millis: u64) {
-        let mut runner = RedisTestRunner::new(test_dir).await.unwrap();
+        let mut runner = RedisTestRunner::new_default(test_dir).await.unwrap();
+        runner
+            .run_cdc_test(start_millis, parse_millis)
+            .await
+            .unwrap();
+    }
+
+    pub async fn run_redis_rejson_cdc_test(test_dir: &str, start_millis: u64, parse_millis: u64) {
+        let mut runner = RedisTestRunner::new(test_dir, vec![' '], vec![('\'', '\'')])
+            .await
+            .unwrap();
         runner
             .run_cdc_test(start_millis, parse_millis)
             .await

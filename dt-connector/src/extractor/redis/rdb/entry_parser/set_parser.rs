@@ -1,4 +1,6 @@
-use byteorder::{ByteOrder, LittleEndian};
+use std::io::Cursor;
+
+use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
 use dt_common::error::Error;
 use dt_meta::redis::redis_object::{RedisString, SetObject};
 
@@ -36,8 +38,11 @@ impl SetLoader {
     }
 
     pub fn read_int_set(obj: &mut SetObject, reader: &mut RdbReader) -> Result<(), Error> {
-        let encoding_type = reader.read_u32()? as usize;
-        let size = reader.read_u32()?;
+        let buf = reader.read_string()?;
+        let mut reader = Cursor::new(buf.as_bytes());
+
+        let encoding_type = reader.read_u32::<LittleEndian>()? as usize;
+        let size = reader.read_u32::<LittleEndian>()?;
         for _ in 0..size {
             let buf = reader.read_raw(encoding_type)?;
             let int_str = match encoding_type {

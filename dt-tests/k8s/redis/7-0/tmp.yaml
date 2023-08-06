@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-redis-7-0-src
+  namespace: dts 
+  labels:
+    app: redis
+    version: "7-0"
+    use: src
+spec:
+  containers:
+  - name: pod-redis-7-0-src
+    image: redis:7.0
+    ports:
+    - containerPort: 6379
+      protocol: TCP 
+    volumeMounts:
+    - name: config
+      mountPath: /redis-config
+    command: 
+    - sh
+    - -c
+    - |
+      redis-server /redis-config/redis.conf &
+      sleep 5
+      redis-cli -h localhost MODULE LOAD redisjson
+  volumes:
+  - name: config
+    configMap:
+      name: configmap-redis-7-0-src

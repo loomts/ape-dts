@@ -23,9 +23,8 @@ impl StreamLoader {
         let n_list_pack = reader.read_length()?;
         for _ in 0..n_list_pack {
             // Load key
-            let key = reader.read_string()?;
-
             // key is streamId, like: 1612181627287-0
+            let key = reader.read_string()?;
             let master_ms = BigEndian::read_i64(&key.as_bytes()[..8]); // ms
             let master_seq = BigEndian::read_i64(&key.as_bytes()[8..]);
 
@@ -165,8 +164,8 @@ impl StreamLoader {
 
             for _ in 0..n_pel {
                 // Load streamId
-                let ms = reader.read_u64()?;
-                let seq = reader.read_u64()?;
+                let ms = reader.read_be_u64()?;
+                let seq = reader.read_be_u64()?;
                 let stream_id = format!("{}-{}", ms, seq);
 
                 // Load deliveryTime
@@ -194,8 +193,8 @@ impl StreamLoader {
                 let n_pel = reader.read_length()?;
                 for _i in 0..n_pel {
                     // Load streamId
-                    let ms = reader.read_u64()?;
-                    let seq = reader.read_u64()?;
+                    let ms = reader.read_be_u64()?;
+                    let seq = reader.read_be_u64()?;
                     let stream_id = format!("{}-{}", ms, seq);
 
                     /* Send */

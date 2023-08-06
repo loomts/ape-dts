@@ -3,6 +3,7 @@ use super::redis_object::{RedisCmd, RedisObject, RedisString};
 #[derive(Debug, Clone)]
 pub struct RedisEntry {
     pub id: u64,
+    // whether the command is decoded from dump.rdb file
     pub is_base: bool,
     pub db_id: i64,
     pub timestamp_ms: u64,
@@ -52,7 +53,7 @@ impl RedisEntry {
         }
     }
 
-    pub fn is_rdb(&self) -> bool {
-        !self.raw_bytes.is_empty()
+    pub fn is_raw(&self) -> bool {
+        self.is_base && !self.raw_bytes.is_empty()
     }
 }

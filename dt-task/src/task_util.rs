@@ -5,11 +5,14 @@ use dt_common::{
     constants::MongoConstants,
     error::Error,
 };
+use dt_connector::sinker::redis::cmd_encoder::CmdEncoder;
 use dt_meta::{
     mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
-    rdb_meta_manager::RdbMetaManager,
+    rdb_meta_manager::RdbMetaManager, redis::redis_object::RedisCmd,
 };
 use mongodb::options::ClientOptions;
+use redis::ConnectionLike;
+use regex::Regex;
 use sqlx::{
     mysql::{MySqlConnectOptions, MySqlPoolOptions},
     postgres::{PgConnectOptions, PgPoolOptions},
@@ -65,6 +68,33 @@ impl TaskUtil {
     pub async fn create_redis_conn(url: &str) -> Result<redis::Connection, Error> {
         let conn = redis::Client::open(url).unwrap().get_connection().unwrap();
         Ok(conn)
+    }
+
+    pub fn get_redis_version(conn: &mut redis::Connection) -> Result<f32, Error> {
+        let cmd = RedisCmd::from_str_args(&vec!["INFO"]);
+        let value = conn.req_packed_command(&CmdEncoder::encode(&cmd)).unwrap();
+        if let redis::Value::Data(data) = value {
+            let info = String::from_utf8(data).unwrap();
+            let re = Regex::new(r"redis_version:(\S+)").unwrap();
+            let cap = re.captures(&info).unwrap();
+
+            let version_str = cap[1].to_string();
+            let tokens: Vec<&str> = version_str.split(".").collect();
+            if tokens.is_empty() {
+                return Err(Error::Unexpected {
+                    error: "can not get redis version by INFO".to_string(),
+                });
+            }
+
+            let mut version = tokens[0].to_string();
+            if tokens.len() > 1 {
+                version = format!("{}.{}", tokens[0], tokens[1]);
+            }
+            return Ok(f32::from_str(&version).unwrap());
+        }
+        Err(Error::Unexpected {
+            error: "can not get redis version by INFO".to_string(),
+        })
     }
 
     pub async fn create_rdb_meta_manager(config: &TaskConfig) -> Result<RdbMetaManager, Error> {

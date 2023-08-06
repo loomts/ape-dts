@@ -43,7 +43,7 @@ impl BaseTestRunner {
         TestConfigUtil::update_task_config_url(
             &dst_task_config_file,
             &dst_task_config_file,
-            &project_root,
+            &test_dir,
         );
 
         let (

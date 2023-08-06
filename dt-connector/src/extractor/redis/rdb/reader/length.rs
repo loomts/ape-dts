@@ -1,7 +1,7 @@
 use crate::extractor::redis::RawByteReader;
 
 use super::rdb_reader::RdbReader;
-use byteorder::{ByteOrder, LittleEndian};
+use byteorder::{BigEndian, ByteOrder};
 use dt_common::error::Error;
 
 const RDB_6_BIT_LEN: u8 = 0;
@@ -34,20 +34,20 @@ impl RdbReader<'_> {
 
             RDB_14_BIT_LEN => {
                 let next_byte = self.read_byte()?;
-                let len = u64::from(first_byte) & 0x3f << 8 | u64::from(next_byte);
+                let len = (u64::from(first_byte) & 0x3f) << 8 | u64::from(next_byte);
                 Ok((len, false))
             }
 
             RDB_32_OR_64_BIT_LEN => match first_byte {
                 RDB_32_BIT_LEN => {
                     let next_bytes = self.read_raw(4)?;
-                    let len = LittleEndian::read_u32(&next_bytes) as u64;
+                    let len = BigEndian::read_u32(&next_bytes) as u64;
                     Ok((len, false))
                 }
 
                 RDB_64_BIT_LEN => {
                     let next_bytes = self.read_raw(8)?;
-                    let len = LittleEndian::read_u64(&next_bytes) as u64;
+                    let len = BigEndian::read_u64(&next_bytes) as u64;
                     Ok((len, false))
                 }
 

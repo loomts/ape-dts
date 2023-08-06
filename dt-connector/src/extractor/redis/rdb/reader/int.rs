@@ -1,7 +1,7 @@
 use crate::extractor::redis::RawByteReader;
 
 use super::rdb_reader::RdbReader;
-use byteorder::{ByteOrder, LittleEndian};
+use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use dt_common::error::Error;
 
 impl RdbReader<'_> {
@@ -29,6 +29,11 @@ impl RdbReader<'_> {
         Ok(LittleEndian::read_u64(&buf))
     }
 
+    pub fn read_be_u64(&mut self) -> Result<u64, Error> {
+        let buf = self.read_raw(8)?;
+        Ok(BigEndian::read_u64(&buf))
+    }
+
     pub fn read_i8(&mut self) -> Result<i8, Error> {
         Ok(self.read_byte()? as i8)
     }
@@ -51,5 +56,10 @@ impl RdbReader<'_> {
     pub fn read_i64(&mut self) -> Result<i64, Error> {
         let buf = self.read_raw(8)?;
         Ok(LittleEndian::read_i64(&buf))
+    }
+
+    pub fn read_be_i64(&mut self) -> Result<i64, Error> {
+        let buf = self.read_raw(8)?;
+        Ok(BigEndian::read_i64(&buf))
     }
 }

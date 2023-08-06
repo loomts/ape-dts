@@ -37,21 +37,3 @@ const RDB_MODULE_OPCODE_UINT: u8 = 2;
 const RDB_MODULE_OPCODE_FLOAT: u8 = 3;
 const RDB_MODULE_OPCODE_DOUBLE: u8 = 4;
 const RDB_MODULE_OPCODE_STRING: u8 = 5;
-
-// const STRING_TYPE: &str = "string";
-// const LIST_TYPE: &str = "list";
-// const SET_TYPE: &str = "set";
-// const HASH_TYPE: &str = "hash";
-// const ZSET_TYPE: &str = "zset";
-// const AUX_TYPE: &str = "aux";
-// const DB_SIZE_TYPE: &str = "dbsize";
-
-// pub trait RedisObject {
-//     fn load_from_buffer(
-//         &mut self,
-//         reader: &mut RdbReader,
-//         key: &str,
-//         type_byte: u8,
-//     ) -> Result<(), Error>;
-//     fn rewrite(&self) -> Result<Vec<RedisCmd>, Error>;
-// }

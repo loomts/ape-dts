@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-redis-6-0-src
+  namespace: dts 
+  labels:
+    app: redis
+    version: "6-0"
+    use: src
+spec:
+  containers:
+  - name: pod-redis-6-0-src
+    image: redis:6.0
+    ports:
+    - containerPort: 6379
+      protocol: TCP 
+    command: ["redis-server"]
