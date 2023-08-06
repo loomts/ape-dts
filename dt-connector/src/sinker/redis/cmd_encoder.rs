@@ -1,17 +1,18 @@
 use byteorder::WriteBytesExt;
+use dt_meta::redis::redis_object::RedisCmd;
 use std::io::Write;
 
 pub struct CmdEncoder {}
 
 impl CmdEncoder {
-    pub fn encode(args: &Vec<Vec<u8>>) -> Vec<u8> {
+    pub fn encode(cmd: &RedisCmd) -> Vec<u8> {
         let mut buf = Vec::new();
 
         buf.write_u8(super::RESP_ARRAY).unwrap();
         // write array length
-        Self::write_length(&mut buf, args.len());
+        Self::write_length(&mut buf, cmd.args.len());
 
-        for arg in args {
+        for arg in cmd.args.iter() {
             Self::write_arg(&mut buf, arg);
         }
         buf

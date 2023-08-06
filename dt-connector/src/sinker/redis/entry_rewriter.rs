@@ -7,8 +7,6 @@ use dt_meta::redis::{
     },
 };
 
-use super::cmd_encoder::CmdEncoder;
-
 const CRC64_TABLE: [u64; 256] = [
     0x0000000000000000,
     0x7ad870c830358979,
@@ -272,9 +270,13 @@ pub struct EntryRewriter {}
 
 impl EntryRewriter {
     pub fn rewrite_hash(obj: &mut HashObject) -> Result<Vec<RedisCmd>, Error> {
-        let mut cmds = Vec::new();
+        let mut cmds = vec![];
         for (k, v) in &obj.value {
-            let cmd = vec!["hset".to_string(), obj.key.clone(), k.clone(), v.clone()];
+            let mut cmd = RedisCmd::new();
+            cmd.add_str_arg("hset");
+            cmd.add_redis_arg(&obj.key);
+            cmd.add_redis_arg(k);
+            cmd.add_redis_arg(v);
             cmds.push(cmd);
         }
         Ok(cmds)
@@ -283,7 +285,11 @@ impl EntryRewriter {
     pub fn rewrite_list(obj: &mut ListObject) -> Result<Vec<RedisCmd>, Error> {
         let mut cmds = vec![];
         for ele in &obj.elements {
-            cmds.push(vec!["rpush".to_string(), obj.key.clone(), ele.clone()]);
+            let mut cmd = RedisCmd::new();
+            cmd.add_str_arg("rpush");
+            cmd.add_redis_arg(&obj.key);
+            cmd.add_redis_arg(ele);
+            cmds.push(cmd);
         }
         Ok(cmds)
     }
@@ -297,7 +303,11 @@ impl EntryRewriter {
     pub fn rewrite_set(obj: &mut SetObject) -> Result<Vec<RedisCmd>, Error> {
         let mut cmds = vec![];
         for ele in &obj.elements {
-            cmds.push(vec!["sadd".to_string(), obj.key.clone(), ele.clone()]);
+            let mut cmd = RedisCmd::new();
+            cmd.add_str_arg("sadd");
+            cmd.add_redis_arg(&obj.key);
+            cmd.add_redis_arg(ele);
+            cmds.push(cmd);
         }
         Ok(cmds)
     }
@@ -308,29 +318,34 @@ impl EntryRewriter {
     }
 
     pub fn rewrite_string(obj: &mut StringObject) -> Result<Vec<RedisCmd>, Error> {
-        let cmd = vec!["SET".to_string(), obj.key.clone(), obj.value.clone()];
+        let mut cmd = RedisCmd::new();
+        cmd.add_str_arg("set");
+        cmd.add_redis_arg(&obj.key);
+        cmd.add_redis_arg(&obj.value);
         Ok(vec![cmd])
     }
 
     pub fn rewrite_zset(obj: &mut ZsetObject) -> Result<Vec<RedisCmd>, Error> {
         let mut cmds = vec![];
         for ele in obj.elements.iter() {
-            let cmd = vec!["zadd", &obj.key, &ele.score, &ele.member];
-            cmds.push(cmd.iter().map(|s| s.to_string()).collect());
+            let mut cmd = RedisCmd::new();
+            cmd.add_str_arg("zadd");
+            cmd.add_redis_arg(&obj.key);
+            cmd.add_redis_arg(&ele.score);
+            cmd.add_redis_arg(&ele.member);
+            cmds.push(cmd);
         }
         Ok(cmds)
     }
 
-    pub fn rewrite_as_restore(entry: &RedisEntry) -> Result<Vec<u8>, Error> {
+    pub fn rewrite_as_restore(entry: &RedisEntry) -> Result<RedisCmd, Error> {
         let value = Self::create_value_dump(entry.value_type_byte, &entry.raw_bytes);
-        let args = vec![
-            "restore".as_bytes().to_vec(),
-            entry.key.as_bytes().to_vec(),
-            entry.expire_ms.to_string().as_bytes().to_vec(),
-            value,
-            "replace".as_bytes().to_vec(),
-        ];
-        let cmd = CmdEncoder::encode(&args);
+        let mut cmd = RedisCmd::new();
+        cmd.add_str_arg("restore");
+        cmd.add_redis_arg(&entry.key);
+        cmd.add_str_arg(&entry.expire_ms.to_string());
+        cmd.add_arg(value);
+        cmd.add_str_arg("replace");
         Ok(cmd)
     }
 

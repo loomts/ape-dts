@@ -17,11 +17,9 @@ use dt_common::{
 use dt_connector::{extractor::snapshot_resumer::SnapshotResumer, Extractor};
 use dt_meta::{dt_data::DtData, row_type::RowType};
 use dt_pipeline::pipeline::Pipeline;
-use futures::{future::join, FutureExt};
+
 use log4rs::config::RawConfig;
 use tokio::try_join;
-
-use crate::task_util::TaskUtil;
 
 use super::{extractor_util::ExtractorUtil, pipeline_util::PipelineUtil, sinker_util::SinkerUtil};
 
@@ -164,7 +162,7 @@ impl TaskRunner {
             pipeline.start().await.unwrap();
             pipeline.stop().await.unwrap();
         });
-        try_join!(f1, f2);
+        let _ = try_join!(f1, f2);
         Ok(())
     }
 
@@ -347,9 +345,11 @@ impl TaskRunner {
                 Box::new(extractor)
             }
 
-            ExtractorConfig::RedisSnapshot { url } => {
-                let extractor =
-                    ExtractorUtil::create_redis_snapshot_extractor(url, buffer, shut_down).await?;
+            ExtractorConfig::RedisSnapshot { url, repl_port } => {
+                let extractor = ExtractorUtil::create_redis_snapshot_extractor(
+                    url, *repl_port, buffer, shut_down,
+                )
+                .await?;
                 Box::new(extractor)
             }
 
@@ -357,12 +357,16 @@ impl TaskRunner {
                 url,
                 run_id,
                 repl_offset,
+                now_db_id,
+                repl_port,
                 heartbeat_interval_secs,
             } => {
                 let extractor = ExtractorUtil::create_redis_cdc_extractor(
                     url,
                     run_id,
                     *repl_offset,
+                    *repl_port,
+                    *now_db_id,
                     *heartbeat_interval_secs,
                     buffer,
                     shut_down,

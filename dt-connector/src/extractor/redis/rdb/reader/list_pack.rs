@@ -2,6 +2,7 @@ use std::io::Cursor;
 
 use byteorder::{LittleEndian, ReadBytesExt};
 use dt_common::error::Error;
+use dt_meta::redis::redis_object::RedisString;
 
 use crate::extractor::redis::RawByteReader;
 
@@ -35,9 +36,9 @@ const LP_ENCODING_32BIT_STR_MASK: u8 = 0xFF; // 11111111
 const LP_ENCODING_32BIT_STR: u8 = 0xF0; // 11110000
 
 impl RdbReader<'_> {
-    pub fn read_list_pack(&mut self) -> Result<Vec<String>, Error> {
-        let buf = self.read_string_raw()?;
-        let mut reader = Cursor::new(buf.as_slice());
+    pub fn read_list_pack(&mut self) -> Result<Vec<RedisString>, Error> {
+        let buf = self.read_string()?;
+        let mut reader = Cursor::new(buf.as_bytes());
 
         let _all_bytes = reader.read_u32::<LittleEndian>()?; // discard the number of bytes
         let size = reader.read_u16::<LittleEndian>()?;
@@ -57,7 +58,7 @@ impl RdbReader<'_> {
         Ok(elements)
     }
 
-    fn read_listpack_entry(reader: &mut Cursor<&[u8]>) -> Result<String, Error> {
+    fn read_listpack_entry(reader: &mut Cursor<&[u8]>) -> Result<RedisString, Error> {
         let mut val: i64;
         let mut uval: u64;
         let negstart: u64;
@@ -73,9 +74,9 @@ impl RdbReader<'_> {
         } else if (fire_byte & LP_ENCODING_6BIT_STR_MASK) == LP_ENCODING_6BIT_STR {
             // 6bit length str
             let length = usize::from(fire_byte & 0x3f); // 0x3f is 00111111
-            let ele = String::from_utf8(reader.read_raw(length)?).unwrap();
+            let ele = reader.read_raw(length)?;
             let _ = reader.read_raw(Self::lp_encode_backlen(1 + length)); // encode: 1byte, str: length
-            return Ok(ele);
+            return Ok(RedisString::from(ele));
         } else if (fire_byte & LP_ENCODING_13BIT_INT_MASK) == LP_ENCODING_13BIT_INT {
             // 13bit int
             let second_byte = reader.read_u8()?;
@@ -111,15 +112,15 @@ impl RdbReader<'_> {
             // 12bit length str
             let second_byte = reader.read_u8()?;
             let length = (((fire_byte as usize) & 0x0f) << 8) + second_byte as usize; // 4bit + 8bit
-            let ele = String::from_utf8(reader.read_raw(length)?).unwrap();
+            let ele = reader.read_raw(length)?;
             let _ = reader.read_raw(Self::lp_encode_backlen(2 + length)); // encode: 2byte, str: length
-            return Ok(ele);
+            return Ok(RedisString::from(ele));
         } else if (fire_byte & LP_ENCODING_32BIT_STR_MASK) == LP_ENCODING_32BIT_STR {
             // 32bit length str
             let length = reader.read_u32::<LittleEndian>()? as usize;
-            let ele = String::from_utf8(reader.read_raw(length)?).unwrap();
+            let ele = reader.read_raw(length)?;
             let _ = reader.read_raw(Self::lp_encode_backlen(5 + length)); // encode: 1byte, length: 4byte, str: length
-            return Ok(ele);
+            return Ok(RedisString::from(ele));
         } else {
             // redis use this value, don't know why
             // uval = 12345678900000000 + uint64(fireByte)
@@ -143,7 +144,7 @@ impl RdbReader<'_> {
             val = uval as i64;
         }
 
-        Ok(val.to_string())
+        Ok(RedisString::from(val.to_string()))
     }
 
     /// Return length(bytes) for encoding backlen in Redis protocol

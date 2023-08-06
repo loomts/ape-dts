@@ -1,6 +1,6 @@
 use byteorder::{ByteOrder, LittleEndian};
 use dt_common::error::Error;
-use dt_meta::redis::redis_object::SetObject;
+use dt_meta::redis::redis_object::{RedisString, SetObject};
 
 use crate::extractor::redis::{rdb::reader::rdb_reader::RdbReader, RawByteReader};
 
@@ -9,11 +9,11 @@ pub struct SetLoader {}
 impl SetLoader {
     pub fn load_from_buffer(
         reader: &mut RdbReader,
-        key: &str,
+        key: RedisString,
         type_byte: u8,
     ) -> Result<SetObject, Error> {
         let mut obj = SetObject::new();
-        obj.key = key.to_string();
+        obj.key = key;
 
         match type_byte {
             super::RDB_TYPE_SET => Self::read_str_set(&mut obj, reader)?,
@@ -51,7 +51,7 @@ impl SetLoader {
                     });
                 }
             };
-            obj.elements.push(int_str);
+            obj.elements.push(RedisString::from(int_str));
         }
         Ok(())
     }

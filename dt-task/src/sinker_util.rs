@@ -449,7 +449,11 @@ impl SinkerUtil {
         let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
         for _ in 0..parallel_size {
             let conn = TaskUtil::create_redis_conn(url).await?;
-            let sinker = RedisSinker { conn, batch_size };
+            let sinker = RedisSinker {
+                conn,
+                batch_size,
+                now_db_id: -1,
+            };
             sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
         }
         Ok(sub_sinkers)

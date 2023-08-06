@@ -93,7 +93,15 @@ impl TestBase {
 
     pub async fn run_redis_snapshot_test(test_dir: &str) {
         let mut runner = RedisTestRunner::new(test_dir).await.unwrap();
-        runner.run_snapshot_test(true).await.unwrap();
+        runner.run_snapshot_test().await.unwrap();
+    }
+
+    pub async fn run_redis_cdc_test(test_dir: &str, start_millis: u64, parse_millis: u64) {
+        let mut runner = RedisTestRunner::new(test_dir).await.unwrap();
+        runner
+            .run_cdc_test(start_millis, parse_millis)
+            .await
+            .unwrap();
     }
 
     pub async fn run_mysql_struct_test(test_dir: &str) {

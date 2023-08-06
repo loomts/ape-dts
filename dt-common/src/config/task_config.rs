@@ -162,23 +162,28 @@ impl TaskConfig {
                 }),
             },
 
-            DbType::Redis => match extract_type {
-                ExtractType::Snapshot => Ok(ExtractorConfig::RedisSnapshot { url }),
+            DbType::Redis => {
+                let repl_port = ini.getuint(EXTRACTOR, "repl_port").unwrap().unwrap();
+                match extract_type {
+                    ExtractType::Snapshot => Ok(ExtractorConfig::RedisSnapshot { url, repl_port }),
 
-                ExtractType::Cdc => Ok(ExtractorConfig::RedisCdc {
-                    url,
-                    run_id: ini.get(EXTRACTOR, "run_id").unwrap(),
-                    repl_offset: ini.getuint(EXTRACTOR, "repl_offset").unwrap().unwrap(),
-                    heartbeat_interval_secs: ini
-                        .getuint(EXTRACTOR, "heartbeat_interval_secs")
-                        .unwrap()
-                        .unwrap(),
-                }),
+                    ExtractType::Cdc => Ok(ExtractorConfig::RedisCdc {
+                        url,
+                        repl_port,
+                        run_id: ini.get(EXTRACTOR, "run_id").unwrap(),
+                        repl_offset: ini.getuint(EXTRACTOR, "repl_offset").unwrap().unwrap(),
+                        heartbeat_interval_secs: ini
+                            .getuint(EXTRACTOR, "heartbeat_interval_secs")
+                            .unwrap()
+                            .unwrap(),
+                        now_db_id: ini.getint(EXTRACTOR, "now_db_id").unwrap().unwrap(),
+                    }),
 
-                t => Err(Error::Unexpected {
-                    error: format!("extract type: {} not supported", t),
-                }),
-            },
+                    t => Err(Error::Unexpected {
+                        error: format!("extract type: {} not supported", t),
+                    }),
+                }
+            }
 
             _ => Err(Error::Unexpected {
                 error: "extractor db type not supported".to_string(),

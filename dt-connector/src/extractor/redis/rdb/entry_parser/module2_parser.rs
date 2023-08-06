@@ -1,5 +1,5 @@
 use dt_common::error::Error;
-use dt_meta::redis::redis_object::ModuleObject;
+use dt_meta::redis::redis_object::{ModuleObject, RedisString};
 
 use crate::extractor::redis::rdb::reader::rdb_reader::RdbReader;
 
@@ -8,14 +8,17 @@ pub struct ModuleLoader {}
 impl ModuleLoader {
     pub fn load_from_buffer(
         reader: &mut RdbReader,
-        key: &str,
+        key: RedisString,
         type_byte: u8,
     ) -> Result<ModuleObject, Error> {
         let obj = ModuleObject::new();
 
         if type_byte == super::RDB_TYPE_MODULE {
             return Err(Error::Unexpected {
-                error: format!("module type with version 1 is not supported, key=[{}]", key),
+                error: format!(
+                    "module type with version 1 is not supported, key=[{}]",
+                    String::from(key)
+                ),
             });
         }
 

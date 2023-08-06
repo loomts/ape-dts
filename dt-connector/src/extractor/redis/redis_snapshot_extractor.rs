@@ -1,3 +1,4 @@
+use super::redis_client::RedisClient;
 use super::redis_psync_extractor::RedisPsyncExtractor;
 use crate::extractor::base_extractor::BaseExtractor;
 use crate::Extractor;
@@ -5,12 +6,12 @@ use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 use dt_common::error::Error;
 use dt_meta::dt_data::DtData;
-use redis::Connection;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 pub struct RedisSnapshotExtractor {
-    pub conn: Connection,
+    pub conn: RedisClient,
+    pub repl_port: u64,
     pub buffer: Arc<ConcurrentQueue<DtData>>,
     pub shut_down: Arc<AtomicBool>,
 }
@@ -21,10 +22,16 @@ impl Extractor for RedisSnapshotExtractor {
         let mut psync_extractor = RedisPsyncExtractor {
             conn: &mut self.conn,
             buffer: self.buffer.clone(),
-            run_id: "?".to_string(),
-            repl_offset: -1,
+            run_id: String::new(),
+            repl_offset: 0,
+            repl_port: self.repl_port,
+            now_db_id: 0,
         };
         psync_extractor.extract().await?;
         BaseExtractor::wait_task_finish(self.buffer.as_ref(), self.shut_down.as_ref()).await
+    }
+
+    async fn close(&mut self) -> Result<(), Error> {
+        self.conn.close().await
     }
 }

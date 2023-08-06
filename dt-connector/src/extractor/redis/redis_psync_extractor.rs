@@ -3,28 +3,34 @@ use concurrent_queue::ConcurrentQueue;
 use dt_common::utils::time_util::TimeUtil;
 use dt_common::{error::Error, log_info};
 use dt_meta::dt_data::DtData;
-use redis::Connection;
+use dt_meta::redis::redis_object::RedisCmd;
 
 use std::sync::Arc;
 
 use crate::extractor::redis::rdb::rdb_loader::RdbLoader;
 use crate::extractor::redis::rdb::reader::rdb_reader::RdbReader;
+use crate::extractor::redis::redis_resp_types::Value;
 use crate::Extractor;
 
+use super::redis_client::RedisClient;
+
 pub struct RedisPsyncExtractor<'a> {
-    pub conn: &'a mut Connection,
+    pub conn: &'a mut RedisClient,
     pub buffer: Arc<ConcurrentQueue<DtData>>,
     pub run_id: String,
-    pub repl_offset: i128,
+    pub repl_offset: u64,
+    pub now_db_id: i64,
+    pub repl_port: u64,
 }
 
 #[async_trait]
 impl Extractor for RedisPsyncExtractor<'_> {
     async fn extract(&mut self) -> Result<(), Error> {
         log_info!(
-            "RedisPsyncExtractor starts, run_id: {}, repl_offset: {}",
+            "RedisPsyncExtractor starts, run_id: {}, repl_offset: {}, now_db_id: {}",
             self.run_id,
             self.repl_offset,
+            self.now_db_id
         );
         self.start_psync().await
     }
@@ -32,40 +38,61 @@ impl Extractor for RedisPsyncExtractor<'_> {
 
 impl RedisPsyncExtractor<'_> {
     pub async fn start_psync(&mut self) -> Result<(), Error> {
-        self.conn
-            .send_packed_command(b"replconf listening-port 10007\r\n")
-            .unwrap();
-        self.conn.recv_response().unwrap();
+        // replconf listening-port [port]
+        let repl_port = self.repl_port.to_string();
+        let repl_cmd = RedisCmd::from_str_args(&vec!["replconf", "listening-port", &repl_port]);
+        self.conn.send(&repl_cmd).await.unwrap();
+        if let Value::Okay = self.conn.read().await.unwrap() {
+        } else {
+            return Err(Error::Unexpected {
+                error: "replconf listening-port response is not Ok".to_string(),
+            });
+        }
 
-        // start psync
-        let psync_cmd = format!("PSYNC {} {}\r\n", self.run_id, self.repl_offset);
-        self.conn.send_packed_command(psync_cmd.as_bytes()).unwrap();
+        let full_sync = self.run_id.is_empty() && self.repl_offset == 0;
+        let (run_id, repl_offset) = if full_sync {
+            ("?".to_string(), "-1".to_string())
+        } else {
+            (self.run_id.clone(), self.repl_offset.to_string())
+        };
 
-        // parse psync response
-        let (run_id, master_offset) =
-            if let redis::Value::Status(s) = self.conn.recv_response().unwrap() {
-                println!("PSYNC command response status: {:?}", s);
+        // PSYNC [run_id] [offset]
+        let psync_cmd = RedisCmd::from_str_args(&vec!["PSYNC", &run_id, &repl_offset]);
+        self.conn.send(&psync_cmd).await.unwrap();
+        let value = self.conn.read().await.unwrap();
+
+        if let Value::Status(s) = value {
+            log_info!("PSYNC command response status: {:?}", s);
+            if full_sync {
                 let tokens: Vec<&str> = s.split_whitespace().collect();
-                (tokens[1].to_string(), tokens[2].parse::<u64>().unwrap())
-            } else {
+                self.run_id = tokens[1].to_string();
+                self.repl_offset = tokens[2].parse::<u64>().unwrap();
+            } else if s != "CONTINUE" {
                 return Err(Error::Unexpected {
-                    error: "PSYNC command response is NOT status".to_string(),
+                    error: "PSYNC command response is NOT CONTINUE".to_string(),
                 });
-            };
-        log_info!("run_id: {:?}, master_offset: {:?}", run_id, master_offset);
-        self.run_id = run_id;
-        self.repl_offset = master_offset as i128;
+            }
+        } else {
+            return Err(Error::Unexpected {
+                error: "PSYNC command response is NOT status".to_string(),
+            });
+        };
 
+        if full_sync {
+            self.receive_rdb().await?;
+        }
+        Ok(())
+    }
+
+    async fn receive_rdb(&mut self) -> Result<(), Error> {
         // format: \n\n\n$<length>\r\n<rdb>
         loop {
-            let buf = self.conn.recv_response_raw(1).unwrap();
+            let (buf, _n) = self.conn.recv_raw(1).await.unwrap();
             if buf[0] == b'\n' {
                 continue;
             }
             if buf[0] != b'$' {
-                return Err(Error::Unexpected {
-                    error: "invalid rdb format".to_string(),
-                });
+                panic!("invalid rdb format");
             }
             break;
         }
@@ -73,7 +100,7 @@ impl RedisPsyncExtractor<'_> {
         // length of rdb data
         let mut rdb_length_str = String::new();
         loop {
-            let buf = self.conn.recv_response_raw(1).unwrap();
+            let (buf, _n) = self.conn.recv_raw(1).await.unwrap();
             if buf[0] == b'\n' {
                 break;
             }
@@ -83,13 +110,9 @@ impl RedisPsyncExtractor<'_> {
         }
         let rdb_length = rdb_length_str.parse::<usize>().unwrap();
 
-        self.receive_rdb(rdb_length).await
-    }
-
-    async fn receive_rdb(&mut self, total_length: usize) -> Result<(), Error> {
         let reader = RdbReader {
             conn: &mut self.conn,
-            total_length,
+            rdb_length,
             position: 0,
             copy_raw: false,
             raw_bytes: Vec::new(),
@@ -98,7 +121,7 @@ impl RedisPsyncExtractor<'_> {
         let mut loader = RdbLoader {
             reader,
             repl_stream_db_id: 0,
-            now_db_id: 0,
+            now_db_id: self.now_db_id,
             expire_ms: 0,
             idle: 0,
             freq: 0,
@@ -106,15 +129,15 @@ impl RedisPsyncExtractor<'_> {
         };
 
         let version = loader.load_meta()?;
-        println!("source redis version: {:?}", version);
+        log_info!("source redis version: {:?}", version);
 
         loop {
-            let entry = loader.load_entry()?;
-            if let Some(e) = entry {
+            if let Some(entry) = loader.load_entry()? {
                 while self.buffer.is_full() {
                     TimeUtil::sleep_millis(1).await;
                 }
-                self.buffer.push(DtData::Redis { entry: e }).unwrap();
+                self.now_db_id = entry.db_id;
+                self.buffer.push(DtData::Redis { entry }).unwrap();
             }
 
             if loader.is_end {
