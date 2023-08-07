@@ -32,7 +32,7 @@ mod test {
 
     #[tokio::test]
     #[serial]
-    async fn twoway_basic_test() {
+    async fn circle_basic_test() {
         TestBase::run_cycle_cdc_test(
             "mysql_to_mysql/cdc/cycle_basic_test",
             3000,
@@ -45,7 +45,7 @@ mod test {
 
     #[tokio::test]
     #[serial]
-    async fn twoway_star_test() {
+    async fn circle_star_test() {
         TestBase::run_cycle_cdc_test(
             "mysql_to_mysql/cdc/cycle_star_test",
             3000,
@@ -65,7 +65,7 @@ mod test {
 
     #[tokio::test]
     #[serial]
-    async fn twoway_net_test() {
+    async fn circle_net_test() {
         TestBase::run_cycle_cdc_test(
             "mysql_to_mysql/cdc/cycle_net_test",
             3000,

@@ -227,11 +227,8 @@ impl TransactionPipeline<'_> {
         if !topology.is_empty() {
             log_info!("transaction info initializated: [{}]", topology);
 
-            let filter_result = FilterUtil::create_transaction_filter(
-                &self.extractor_config,
-                worker,
-                topology.topology_key,
-            );
+            let filter_result =
+                FilterUtil::create_transaction_filter(&self.extractor_config, worker, topology);
             match filter_result {
                 Ok(filter) => self.filters = Some(filter),
                 Err(e) => {

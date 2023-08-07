@@ -106,7 +106,7 @@ impl TransactionWorker {
         &self,
         db: &str,
         table: &str,
-        current_topology_key: &str,
+        current_topology: TopologyInfo,
         cache: &mut HashMap<(String, String), bool>,
     ) -> Result<(bool, bool, bool), Error> {
         if cache.contains_key(&(db.to_string(), table.to_string())) {
@@ -122,12 +122,12 @@ impl TransactionWorker {
         let pick_result = self.pick_infos(db, table);
         match pick_result {
             Ok(pick_option) => match pick_option {
-                Some(pick) => do_filter = self.is_filter_internal(Some(pick), current_topology_key),
+                Some(pick) => do_filter = self.is_filter_internal(Some(pick), current_topology),
                 // when db.table is not a transaction table. ignore insert into cache
                 None => {
                     return Ok((
                         false,
-                        self.is_filter_internal(None, current_topology_key),
+                        self.is_filter_internal(None, current_topology),
                         false,
                     ))
                 }
@@ -143,24 +143,44 @@ impl TransactionWorker {
     pub fn is_filter_internal(
         &self,
         topology_option: Option<TopologyInfo>,
-        current_topology_key: &str,
+        current_topology: TopologyInfo,
     ) -> bool {
-        let topology_info: TopologyInfo = match topology_option {
-            Some(tp) => tp,
-            None => return !self.white_nodes.is_empty(),
-        };
-
         let str_to_slice = |s: &str| -> Vec<String> {
             s.split(',')
                 .map(|str| str.to_string())
                 .collect::<Vec<String>>()
         };
 
-        topology_info.topology_key == current_topology_key
-            && ((!self.black_nodes.is_empty()
-                && str_to_slice(&self.black_nodes).contains(&topology_info.source_node))
-                || (!self.white_nodes.is_empty()
-                    && !str_to_slice(&self.white_nodes).contains(&topology_info.source_node)))
+        let (topology_key, source_node_key): (String, String) = match topology_option {
+            Some(tp) => (tp.topology_key, tp.source_node),
+            // 'None' means that this event comes from the business write of source
+            None => (
+                current_topology.topology_key.clone(),
+                current_topology.source_node.clone(),
+            ),
+        };
+
+        // whether to filter by default depends on whether the 'white_nodes' configuration is specified
+        let mut do_filter = if self.white_nodes.is_empty() {
+            false
+        } else {
+            true
+        };
+        if !self.black_nodes.is_empty()
+            && topology_key == current_topology.topology_key
+            && str_to_slice(&self.black_nodes).contains(&source_node_key.to_string())
+        {
+            // the priority of 'black_nodes' is higher than 'white_nodes'
+            return true;
+        }
+        if !self.white_nodes.is_empty()
+            && topology_key == current_topology.topology_key
+            && str_to_slice(&self.white_nodes).contains(&source_node_key.to_string())
+        {
+            do_filter = false
+        }
+
+        do_filter
     }
 }
 
@@ -211,6 +231,18 @@ mod tests {
         TransactionWorker::from(&config)
     }
 
+    fn build_topology_info(
+        curr_topology: &str,
+        curr_source_node: &str,
+        curr_sink_node: &str,
+    ) -> TopologyInfo {
+        TopologyInfo {
+            topology_key: curr_topology.to_string(),
+            source_node: curr_source_node.to_string(),
+            sink_node: curr_sink_node.to_string(),
+        }
+    }
+
     #[test]
     fn is_filter_test() {
         // black list
@@ -223,23 +255,37 @@ mod tests {
             String::from("node1"),
         );
 
+        let curr_topology = build_topology_info("topo1", "node1", "node2");
+
         let mut cache: HashMap<(String, String), bool> = HashMap::new();
-        let mut result =
-            transaction_worker.is_filter("ape_dt", "ape_dt_topo1_node1_node2", "topo1", &mut cache);
+        let mut result = transaction_worker.is_filter(
+            "ape_dt",
+            "ape_dt_topo1_node1_node2",
+            curr_topology.clone(),
+            &mut cache,
+        );
         match result {
             Ok((is_trans, filter, _)) => assert!(is_trans && filter),
             Err(_) => assert!(false),
         }
 
-        result =
-            transaction_worker.is_filter("ape_dt", "ape_dt_topo1_node3_node2", "topo1", &mut cache);
+        result = transaction_worker.is_filter(
+            "ape_dt",
+            "ape_dt_topo1_node3_node2",
+            curr_topology.clone(),
+            &mut cache,
+        );
         match result {
             Ok((is_trans, filter, _)) => assert!(is_trans && !filter),
             Err(_) => assert!(false),
         }
 
-        result =
-            transaction_worker.is_filter("ape_dt", "ape_dt_topo2_node3_node2", "topo1", &mut cache);
+        result = transaction_worker.is_filter(
+            "ape_dt",
+            "ape_dt_topo2_node3_node2",
+            curr_topology.clone(),
+            &mut cache,
+        );
         match result {
             Ok((is_trans, filter, _)) => assert!(is_trans && !filter),
             Err(_) => assert!(false),
@@ -247,24 +293,26 @@ mod tests {
 
         assert_eq!(cache.len(), 3);
 
-        result = transaction_worker.is_filter("test", "test_table", "topo1", &mut cache);
+        result =
+            transaction_worker.is_filter("test", "test_table", curr_topology.clone(), &mut cache);
         match result {
             Ok((is_trans, filter, _)) => {
                 assert!(
                     !is_trans
-                        && !filter
+                        && filter
                         && !cache.contains_key(&("test".to_string(), "test_table".to_string()))
                 )
             }
             Err(_) => assert!(false),
         }
 
-        result = transaction_worker.is_filter("ape_dt", "test_table", "topo1", &mut cache);
+        result =
+            transaction_worker.is_filter("ape_dt", "test_table", curr_topology.clone(), &mut cache);
         match result {
             Ok((is_trans, filter, _)) => {
                 assert!(
                     !is_trans
-                        && !filter
+                        && filter
                         && !cache.contains_key(&("ape_dt".to_string(), "test_table".to_string()))
                 )
             }
@@ -285,30 +333,81 @@ mod tests {
 
         cache.clear();
 
-        result =
-            transaction_worker.is_filter("ape_dt", "ape_dt_topo1_node1_node2", "topo1", &mut cache);
+        result = transaction_worker.is_filter(
+            "ape_dt",
+            "ape_dt_topo1_node1_node2",
+            curr_topology.clone(),
+            &mut cache,
+        );
         match result {
             Ok((is_trans, filter, _)) => assert!(is_trans && !filter),
             Err(_) => assert!(false),
         }
 
-        result =
-            transaction_worker.is_filter("ape_dt", "ape_dt_topo1_node3_node2", "topo1", &mut cache);
+        result = transaction_worker.is_filter(
+            "ape_dt",
+            "ape_dt_topo1_node3_node2",
+            curr_topology.clone(),
+            &mut cache,
+        );
         match result {
             Ok((is_trans, filter, _)) => assert!(is_trans && filter),
             Err(_) => assert!(false),
         }
 
+        result = transaction_worker.is_filter(
+            "ape_dt",
+            "ape_dt_topo2_node3_node2",
+            curr_topology.clone(),
+            &mut cache,
+        );
+        match result {
+            Ok((is_trans, filter, _)) => assert!(is_trans && filter),
+            Err(_) => assert!(false),
+        }
+
+        assert_eq!(cache.len(), 3);
+
         result =
-            transaction_worker.is_filter("ape_dt", "ape_dt_topo2_node3_node2", "topo1", &mut cache);
+            transaction_worker.is_filter("test", "test_table", curr_topology.clone(), &mut cache);
         match result {
-            Ok((is_trans, filter, _)) => assert!(is_trans && !filter),
+            Ok((is_trans, filter, _)) => {
+                assert!(
+                    !is_trans
+                        && !filter
+                        && !cache.contains_key(&("test".to_string(), "test_table".to_string()))
+                )
+            }
+            Err(_) => assert!(false),
+        }
+
+        result =
+            transaction_worker.is_filter("ape_dt", "test_table", curr_topology.clone(), &mut cache);
+        match result {
+            Ok((is_trans, filter, _)) => {
+                assert!(
+                    !is_trans
+                        && !filter
+                        && !cache.contains_key(&("test".to_string(), "test_table".to_string()))
+                )
+            }
             Err(_) => assert!(false),
         }
 
         assert_eq!(cache.len(), 3);
 
-        result = transaction_worker.is_filter("test", "test_table", "topo1", &mut cache);
+        // white list with business events
+        transaction_worker = build_worker(
+            String::from("ape_dt"),
+            String::from("ape_dt_topo1_node1_node2"),
+            String::from("ape_dt_(?P<topology>.*)_(?P<source>.*)_(?P<sink>.*)"),
+            String::from("update ape_dt_topo1_node1_node2 set n = n + 1"),
+            String::from("node3"),
+            String::from(""),
+        );
+
+        result =
+            transaction_worker.is_filter("test", "test_table", curr_topology.clone(), &mut cache);
         match result {
             Ok((is_trans, filter, _)) => {
                 assert!(
@@ -319,20 +418,6 @@ mod tests {
             }
             Err(_) => assert!(false),
         }
-
-        result = transaction_worker.is_filter("ape_dt", "test_table", "topo1", &mut cache);
-        match result {
-            Ok((is_trans, filter, _)) => {
-                assert!(
-                    !is_trans
-                        && filter
-                        && !cache.contains_key(&("test".to_string(), "test_table".to_string()))
-                )
-            }
-            Err(_) => assert!(false),
-        }
-
-        assert_eq!(cache.len(), 3);
     }
 
     #[test]
@@ -372,6 +457,8 @@ mod tests {
             String::from("node1"),
         );
 
+        let curr_topology = build_topology_info("topo1", "node1", "node2");
+
         // blacklist
         let mut is_filter = transaction_worker.is_filter_internal(
             Some(TopologyInfo {
@@ -379,7 +466,7 @@ mod tests {
                 source_node: String::from("node1"),
                 sink_node: String::from("node2"),
             }),
-            "topo1",
+            curr_topology.clone(),
         );
         assert!(is_filter);
 
@@ -389,7 +476,7 @@ mod tests {
                 source_node: String::from("node3"),
                 sink_node: String::from("node2"),
             }),
-            "topo1",
+            curr_topology.clone(),
         );
         assert!(!is_filter);
 
@@ -399,7 +486,7 @@ mod tests {
                 source_node: String::from("node1"),
                 sink_node: String::from("node2"),
             }),
-            "topo1",
+            curr_topology.clone(),
         );
         assert!(!is_filter);
 
@@ -419,7 +506,7 @@ mod tests {
                 source_node: String::from("node1"),
                 sink_node: String::from("node2"),
             }),
-            "topo1",
+            curr_topology.clone(),
         );
         assert!(!is_filter);
 
@@ -429,7 +516,7 @@ mod tests {
                 source_node: String::from("node3"),
                 sink_node: String::from("node2"),
             }),
-            "topo1",
+            curr_topology.clone(),
         );
         assert!(is_filter);
 
@@ -439,9 +526,9 @@ mod tests {
                 source_node: String::from("node3"),
                 sink_node: String::from("node2"),
             }),
-            "topo1",
+            curr_topology.clone(),
         );
-        assert!(!is_filter);
+        assert!(is_filter);
 
         is_filter = transaction_worker.is_filter_internal(
             Some(TopologyInfo {
@@ -449,7 +536,7 @@ mod tests {
                 source_node: String::from("node1"),
                 sink_node: String::from("node2"),
             }),
-            "topo1",
+            curr_topology.clone(),
         );
 
         assert!(!is_filter);
@@ -470,7 +557,7 @@ mod tests {
                 source_node: String::from("node1"),
                 sink_node: String::from("node2"),
             }),
-            "topo1",
+            curr_topology.clone(),
         );
         assert!(is_filter);
     }

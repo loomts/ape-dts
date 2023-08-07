@@ -1,13 +1,17 @@
 use std::collections::HashMap;
 
-use dt_common::{error::Error, log_info, utils::transaction_circle_control::TransactionWorker};
+use dt_common::{
+    error::Error,
+    log_info,
+    utils::transaction_circle_control::{TopologyInfo, TransactionWorker},
+};
 use dt_meta::{dt_data::DtData, row_data::RowData};
 
 use super::traits::TransactionFilter;
 
 pub struct MysqlTransactionFilter {
     pub transaction_worker: TransactionWorker,
-    pub current_topology_key: String,
+    pub current_topology: TopologyInfo,
     pub do_transaction_filter: bool,
 
     pub cache: HashMap<(String, String), bool>,
@@ -34,7 +38,7 @@ impl TransactionFilter for MysqlTransactionFilter {
                     match self.transaction_worker.is_filter(
                         &row_data.schema,
                         &row_data.tb,
-                        &self.current_topology_key,
+                        self.current_topology.clone(),
                         &mut self.cache,
                     ) {
                         Ok((is_trans_event, is_filter, is_from_cache)) => {
