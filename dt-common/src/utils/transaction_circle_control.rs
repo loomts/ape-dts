@@ -161,21 +161,17 @@ impl TransactionWorker {
         };
 
         // whether to filter by default depends on whether the 'white_nodes' configuration is specified
-        let mut do_filter = if self.white_nodes.is_empty() {
-            false
-        } else {
-            true
-        };
+        let mut do_filter = !self.white_nodes.is_empty();
         if !self.black_nodes.is_empty()
             && topology_key == current_topology.topology_key
-            && str_to_slice(&self.black_nodes).contains(&source_node_key.to_string())
+            && str_to_slice(&self.black_nodes).contains(&source_node_key)
         {
             // the priority of 'black_nodes' is higher than 'white_nodes'
             return true;
         }
         if !self.white_nodes.is_empty()
             && topology_key == current_topology.topology_key
-            && str_to_slice(&self.white_nodes).contains(&source_node_key.to_string())
+            && str_to_slice(&self.white_nodes).contains(&source_node_key)
         {
             do_filter = false
         }
