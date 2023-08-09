@@ -1,5 +1,5 @@
-use dt_common::{error::Error, log_debug, log_info};
-use dt_meta::redis::redis_entry::RedisEntry;
+use dt_common::{error::Error, log_info};
+use dt_meta::redis::{redis_entry::RedisEntry, redis_object::RedisCmd};
 use sqlx::types::chrono;
 
 use crate::extractor::redis::RawByteReader;
@@ -69,9 +69,17 @@ impl RdbLoader<'_> {
                     }
 
                     "lua" => {
-                        // let e = Entry::new_base_entry(vec!["script", "load", &value]);
-                        // ch.send(e).await?;
-                        // log::info!("LUA script: {}", value);
+                        let mut cmd = RedisCmd::new();
+                        cmd.add_str_arg("script");
+                        cmd.add_str_arg("load");
+                        cmd.add_redis_arg(&value);
+                        log_info!("LUA script: {:?}", value);
+
+                        let mut entry = RedisEntry::new();
+                        entry.is_base = true;
+                        entry.db_id = self.now_db_id;
+                        entry.cmd = cmd;
+                        return Ok(Some(entry));
                     }
 
                     _ => {
@@ -121,18 +129,25 @@ impl RdbLoader<'_> {
             _ => {
                 let key = self.reader.read_string()?;
                 self.reader.copy_raw = true;
-                let value =
-                    EntryParser::parse_object(&mut self.reader, type_byte, key.clone()).unwrap();
+                let value = EntryParser::parse_object(&mut self.reader, type_byte, key.clone());
                 self.reader.copy_raw = false;
 
-                let mut entry = RedisEntry::new();
-                entry.is_base = true;
-                entry.db_id = self.now_db_id;
-                entry.raw_bytes = self.reader.drain_raw_bytes();
-                entry.key = key;
-                entry.value = value;
-                entry.value_type_byte = type_byte;
-                return Ok(Some(entry));
+                if let Err(error) = value {
+                    panic!(
+                        "parsing rdb failed, key: {:?}, error: {:?}",
+                        String::from(key),
+                        error
+                    );
+                } else {
+                    let mut entry = RedisEntry::new();
+                    entry.is_base = true;
+                    entry.db_id = self.now_db_id;
+                    entry.raw_bytes = self.reader.drain_raw_bytes();
+                    entry.key = key;
+                    entry.value = value.unwrap();
+                    entry.value_type_byte = type_byte;
+                    return Ok(Some(entry));
+                }
             }
         }
 

@@ -15,6 +15,7 @@ pub struct RedisSinker {
     pub batch_size: usize,
     pub conn: Connection,
     pub now_db_id: i64,
+    pub version: f32,
 }
 
 #[async_trait]
@@ -58,8 +59,8 @@ impl RedisSinker {
                     self.now_db_id = entry.db_id;
                 }
 
-                if entry.is_rdb() {
-                    let cmd = EntryRewriter::rewrite_as_restore(&entry)?;
+                if entry.is_raw() {
+                    let cmd = EntryRewriter::rewrite_as_restore(&entry, self.version)?;
                     packed_cmds.extend_from_slice(&CmdEncoder::encode(&cmd));
                 } else {
                     packed_cmds.extend_from_slice(&CmdEncoder::encode(&entry.cmd));

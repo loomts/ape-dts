@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-redis-redisearch-dst
+  namespace: dts 
+  labels:
+    app: redis
+    version: "redisearch"
+    use: dst
+spec:
+  containers:
+  - name: pod-redis-redisearch-dst
+    image: redislabs/redisearch:2.8.4
+    ports:
+    - containerPort: 6379
+      protocol: TCP 

@@ -1,6 +1,6 @@
 use std::io::Cursor;
 
-use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
+use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
 use dt_common::error::Error;
 use dt_meta::redis::redis_object::RedisString;
 
@@ -71,8 +71,9 @@ impl RdbReader<'_> {
         }
 
         // read encoding
-        let first2bits = (first_byte & 0xc0) >> 6; // first 2 bits of encoding
-        match first2bits {
+        let first_byte = reader.read_raw(1)?[0];
+        let first_2_bits = (first_byte & 0xc0) >> 6; // first 2 bits of encoding
+        match first_2_bits {
             ZIP_STR_06B => {
                 let length = (first_byte & 0x3f) as usize; // 0x3f = 00111111
                 let buf = reader.read_raw(length)?;
@@ -88,7 +89,7 @@ impl RdbReader<'_> {
 
             ZIP_STR_32B => {
                 let mut buf = reader.read_raw(4)?;
-                let length = LittleEndian::read_u32(&buf);
+                let length = BigEndian::read_u32(&buf);
                 buf = reader.read_raw(length as usize)?;
                 return Ok(RedisString::from(buf));
             }

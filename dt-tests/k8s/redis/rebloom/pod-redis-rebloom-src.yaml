@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-redis-rebloom-src
+  namespace: dts 
+  labels:
+    app: redis
+    version: "rebloom"
+    use: src
+spec:
+  containers:
+  - name: pod-redis-rebloom-src
+    image: redislabs/rebloom:2.6.3
+    ports:
+    - containerPort: 6379
+      protocol: TCP 

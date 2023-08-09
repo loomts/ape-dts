@@ -87,7 +87,7 @@ impl RedisPsyncExtractor<'_> {
     async fn receive_rdb(&mut self) -> Result<(), Error> {
         // format: \n\n\n$<length>\r\n<rdb>
         loop {
-            let (buf, _n) = self.conn.recv_raw(1).await.unwrap();
+            let buf = self.conn.read_raw(1).await.unwrap();
             if buf[0] == b'\n' {
                 continue;
             }
@@ -100,7 +100,7 @@ impl RedisPsyncExtractor<'_> {
         // length of rdb data
         let mut rdb_length_str = String::new();
         loop {
-            let (buf, _n) = self.conn.recv_raw(1).await.unwrap();
+            let buf = self.conn.read_raw(1).await.unwrap();
             if buf[0] == b'\n' {
                 break;
             }

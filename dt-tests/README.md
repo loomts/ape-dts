@@ -135,6 +135,13 @@ docker run -d --name dst-mongo \
 ```
 
 ## redis
+### images of redis versions
+- redis:7.0
+- redis:6.0
+- redis:6.2
+- redis:5.0
+- redis:4.0
+- redis:2.8
 
 ### source
 

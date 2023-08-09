@@ -100,11 +100,31 @@ impl TestConfigUtil {
     pub fn update_task_config_url(
         src_task_config_file: &str,
         dst_task_config_file: &str,
-        project_root: &str,
+        test_dir: &str,
     ) {
-        let env_path = format!("{}/{}/tests/.env", project_root, TEST_PROJECT);
-        dotenv::from_path(env_path).unwrap();
+        let mut env_file = String::new();
+        // recursively search .env from test dir up to parent dirs
+        let mut dir = Path::new(test_dir);
+        loop {
+            let path = dir.join(".env");
+            if fs::metadata(&path).is_ok() {
+                env_file = path.to_str().unwrap().to_string();
+                break;
+            }
 
+            if let Some(parent_dir) = dir.parent() {
+                dir = parent_dir;
+            } else {
+                break;
+            }
+        }
+
+        println!("use .env file: {}", env_file);
+        if env_file.is_empty() {
+            return;
+        }
+
+        dotenv::from_path(env_file).unwrap();
         let config = TaskConfig::new(&src_task_config_file);
         let mut update_configs = Vec::new();
 

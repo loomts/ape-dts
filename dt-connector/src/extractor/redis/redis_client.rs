@@ -1,11 +1,12 @@
 use super::redis_resp_reader::RedisRespReader;
 use super::redis_resp_types::Value;
 use crate::sinker::redis::cmd_encoder::CmdEncoder;
+use async_std::io::BufReader;
+use async_std::net::TcpStream;
+use async_std::prelude::*;
 use dt_common::error::Error;
 use dt_meta::redis::redis_object::RedisCmd;
-use tokio::io::BufReader;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream;
+
 use url::Url;
 
 pub struct RedisClient {
@@ -50,12 +51,12 @@ impl RedisClient {
     }
 
     pub async fn close(&mut self) -> Result<(), Error> {
-        self.stream.shutdown().await?;
+        self.stream.get_mut().shutdown(std::net::Shutdown::Both)?;
         Ok(())
     }
 
     pub async fn send_packed(&mut self, packed_cmd: &[u8]) -> Result<(), Error> {
-        self.stream.write_all(packed_cmd).await.unwrap();
+        self.stream.get_mut().write_all(packed_cmd).await?;
         Ok(())
     }
 
@@ -74,9 +75,17 @@ impl RedisClient {
         Ok((value, resp_reader.read_len))
     }
 
-    pub async fn recv_raw(&mut self, length: usize) -> Result<(Vec<u8>, usize), Error> {
+    pub async fn read_raw(&mut self, length: usize) -> Result<Vec<u8>, Error> {
         let mut buf = vec![0; length];
-        let n = self.stream.read(&mut buf).await.unwrap();
-        Ok((buf, n))
+        // if length is bigger than buffer size of BufReader, the buf will be filled by 0,
+        // so here we must read from inner TcpStream instead of BufReader
+        // let n = self.stream.read(&mut buf).await.unwrap();
+        let mut read_count = 0;
+        while read_count < length {
+            // use async_std::net::TcpStream instead of tokio::net::TcpStream, tokio TcpStream may stuck
+            // when trying to get big data by multiple read.
+            read_count += self.stream.get_mut().read(&mut buf[read_count..]).await?;
+        }
+        Ok(buf)
     }
 }

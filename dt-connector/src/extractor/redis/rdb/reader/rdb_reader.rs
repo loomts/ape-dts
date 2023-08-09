@@ -18,7 +18,7 @@ impl RdbReader<'_> {
 
 impl RawByteReader for RdbReader<'_> {
     fn read_raw(&mut self, length: usize) -> Result<Vec<u8>, Error> {
-        let (buf, _n) = block_on(self.conn.recv_raw(length)).unwrap();
+        let buf = block_on(self.conn.read_raw(length)).unwrap();
         self.position += length;
         if self.copy_raw {
             self.raw_bytes.extend_from_slice(&buf);

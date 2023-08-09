@@ -1,6 +1,5 @@
 use dt_common::error::Error;
 use dt_meta::redis::redis_object::RedisString;
-use rdkafka::message::ToBytes;
 
 use crate::extractor::redis::RawByteReader;
 

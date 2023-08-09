@@ -1,4 +1,4 @@
-use dt_common::error::Error;
+use dt_common::{error::Error, log_warn};
 use dt_meta::redis::{
     redis_entry::RedisEntry,
     redis_object::{
@@ -338,14 +338,17 @@ impl EntryRewriter {
         Ok(cmds)
     }
 
-    pub fn rewrite_as_restore(entry: &RedisEntry) -> Result<RedisCmd, Error> {
+    pub fn rewrite_as_restore(entry: &RedisEntry, version: f32) -> Result<RedisCmd, Error> {
         let value = Self::create_value_dump(entry.value_type_byte, &entry.raw_bytes);
         let mut cmd = RedisCmd::new();
         cmd.add_str_arg("restore");
         cmd.add_redis_arg(&entry.key);
         cmd.add_str_arg(&entry.expire_ms.to_string());
         cmd.add_arg(value);
-        cmd.add_str_arg("replace");
+        if version >= 3.0 {
+            log_warn!("RDB restore command behavior is rewrite, but target redis version is {}, not support REPLACE modifier", version);
+            cmd.add_str_arg("replace");
+        }
         Ok(cmd)
     }
 

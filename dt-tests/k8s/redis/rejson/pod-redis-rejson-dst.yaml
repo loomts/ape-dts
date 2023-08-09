@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-redis-rejson-dst
+  namespace: dts 
+  labels:
+    app: redis
+    version: "rejson"
+    use: dst
+spec:
+  containers:
+  - name: pod-redis-rejson-dst
+    image: redislabs/rejson:2.6.4
+    ports:
+    - containerPort: 6379
+      protocol: TCP 

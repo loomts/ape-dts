@@ -1,6 +1,7 @@
 use async_recursion::async_recursion;
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
-use tokio::net::TcpStream;
+use async_std::io::BufReader;
+use async_std::net::TcpStream;
+use async_std::prelude::*;
 
 use super::redis_resp_types::Value;
 
