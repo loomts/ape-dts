@@ -20,9 +20,10 @@ impl ZsetLoader {
             super::RDB_TYPE_ZSET_ZIP_LIST => Self::read_zset_zip_list(&mut obj, reader)?,
             super::RDB_TYPE_ZSET_LIST_PACK => Self::read_zset_list_pack(&mut obj, reader)?,
             _ => {
-                return Err(Error::Unexpected {
-                    error: format!("unknown zset type. type_byte=[{}]", type_byte),
-                });
+                return Err(Error::RedisRdbError(format!(
+                    "unknown zset type. type_byte=[{}]",
+                    type_byte
+                )));
             }
         }
         Ok(obj)
@@ -64,9 +65,10 @@ impl ZsetLoader {
     fn parse_zset_result(obj: &mut ZsetObject, list: Vec<RedisString>) -> Result<(), Error> {
         let size = list.len();
         if size % 2 != 0 {
-            return Err(Error::Unexpected {
-                error: format!("zset list pack size is not even. size=[{}]", size),
-            });
+            return Err(Error::RedisRdbError(format!(
+                "zset list pack size is not even. size=[{}]",
+                size
+            )));
         }
 
         for i in (0..size).step_by(2) {

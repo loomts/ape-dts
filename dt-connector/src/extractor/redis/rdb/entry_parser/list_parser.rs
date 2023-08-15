@@ -23,9 +23,10 @@ impl ListLoader {
             super::RDB_TYPE_LIST_QUICK_LIST => Self::read_quick_list(&mut obj, reader)?,
             super::RDB_TYPE_LIST_QUICK_LIST_2 => Self::read_quick_list_2(&mut obj, reader)?,
             _ => {
-                return Err(Error::Unexpected {
-                    error: format!("unknown list type {}", type_byte),
-                })
+                return Err(Error::RedisRdbError(format!(
+                    "unknown list type {}",
+                    type_byte
+                )))
             }
         }
         Ok(obj)
@@ -66,9 +67,10 @@ impl ListLoader {
                 }
 
                 _ => {
-                    return Err(Error::Unexpected {
-                        error: format!("unknown quicklist container {}", container),
-                    });
+                    return Err(Error::RedisRdbError(format!(
+                        "unknown quicklist container {}",
+                        container
+                    )));
                 }
             }
         }

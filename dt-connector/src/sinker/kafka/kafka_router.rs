@@ -51,9 +51,10 @@ impl KafkaRouter {
             let tokens: Vec<&str> = name.split(':').collect();
 
             if tokens.len() != 2 {
-                return Err(Error::ConfigError {
-                    error: format!("invalid router config, check error near: {}", name),
-                });
+                return Err(Error::ConfigError(format!(
+                    "invalid router config, check error near: {}",
+                    name
+                )));
             }
             map.insert(
                 tokens.first().unwrap().to_string(),

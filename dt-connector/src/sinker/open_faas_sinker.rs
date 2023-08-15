@@ -1,7 +1,7 @@
 use crate::{call_batch_fn, Sinker};
 use async_trait::async_trait;
 use dt_common::{error::Error, log_error};
-use dt_meta::{ddl_data::DdlData, row_data::RowData};
+use dt_meta::row_data::RowData;
 use reqwest::Client;
 use serde_json::json;
 
@@ -15,14 +15,6 @@ pub struct OpenFaasSinker {
 impl Sinker for OpenFaasSinker {
     async fn sink_dml(&mut self, mut data: Vec<RowData>, _batch: bool) -> Result<(), Error> {
         call_batch_fn!(self, data, Self::invoke);
-        Ok(())
-    }
-
-    async fn sink_ddl(&mut self, _data: Vec<DdlData>, _batch: bool) -> Result<(), Error> {
-        Ok(())
-    }
-
-    async fn close(&mut self) -> Result<(), Error> {
         Ok(())
     }
 }

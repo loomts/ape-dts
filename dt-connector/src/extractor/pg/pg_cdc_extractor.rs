@@ -67,10 +67,6 @@ impl Extractor for PgCdcExtractor {
         self.extract_internal().await.unwrap();
         Ok(())
     }
-
-    async fn close(&mut self) -> Result<(), Error> {
-        Ok(())
-    }
 }
 
 impl PgCdcExtractor {
@@ -335,9 +331,9 @@ impl PgCdcExtractor {
                 }
 
                 TupleData::UnchangedToast => {
-                    return Err(Error::Unexpected {
-                        error: "unexpected UnchangedToast value received".to_string(),
-                    })
+                    return Err(Error::ExtractorError(
+                        "unexpected UnchangedToast value received".into(),
+                    ))
                 }
             }
         }

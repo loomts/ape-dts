@@ -81,9 +81,9 @@ impl TaskUtil {
             let version_str = cap[1].to_string();
             let tokens: Vec<&str> = version_str.split(".").collect();
             if tokens.is_empty() {
-                return Err(Error::Unexpected {
-                    error: "can not get redis version by INFO".to_string(),
-                });
+                return Err(Error::Unexpected(
+                    "can not get redis version by INFO".into(),
+                ));
             }
 
             let mut version = tokens[0].to_string();
@@ -92,9 +92,9 @@ impl TaskUtil {
             }
             return Ok(f32::from_str(&version).unwrap());
         }
-        Err(Error::Unexpected {
-            error: "can not get redis version by INFO".to_string(),
-        })
+        Err(Error::Unexpected(
+            "can not get redis version by INFO".into(),
+        ))
     }
 
     pub async fn create_rdb_meta_manager(config: &TaskConfig) -> Result<RdbMetaManager, Error> {
@@ -111,9 +111,7 @@ impl TaskUtil {
             }
 
             _ => {
-                return Err(Error::Unexpected {
-                    error: "unexpected sinker type".to_string(),
-                });
+                return Err(Error::ConfigError("unsupported sinker config".into()));
             }
         };
         Ok(meta_manager)

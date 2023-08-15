@@ -413,7 +413,7 @@ UNLINK 64-1 64-2 64-3
 -- XCLAIM mystream mygroup Alice 3600000 1526569498055-0
 
 -- XDEL -- version: 5.0.0
--- XADD 66-1 * a 1
+-- XADD 66-1 1538561700640-0 a 1
 -- XADD 66-1 * b 2
 -- XADD 66-1 * c 3
 -- XDEL 66-1 1538561700640-0

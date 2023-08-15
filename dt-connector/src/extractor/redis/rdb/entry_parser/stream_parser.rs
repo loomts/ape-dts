@@ -44,10 +44,10 @@ impl StreamLoader {
             // master entry end by zero
             let last_entry = String::from(Self::next(&mut inx, &elements).clone());
             if last_entry != "0" {
-                return Err(Error::Unexpected {
-                    error: format!("master entry not ends by zero. lastEntry=[{}]", last_entry)
-                        .to_string(),
-                });
+                return Err(Error::RedisRdbError(format!(
+                    "master entry not ends by zero. lastEntry=[{}]",
+                    last_entry
+                )));
             }
 
             // Parse entries
@@ -71,9 +71,9 @@ impl StreamLoader {
                 } else {
                     // get field by lp.Next()
                     let num = Self::next_integer(&mut inx, &elements) as usize;
-                    let _ = elements[inx..inx + num * 2]
-                        .iter()
-                        .map(|i| cmd.add_redis_arg(i));
+                    for ele in elements[inx..inx + num * 2].iter() {
+                        cmd.add_redis_arg(ele);
+                    }
                     inx += num * 2;
                 }
 
@@ -100,7 +100,7 @@ impl StreamLoader {
             // the key we are serializing is an empty string, which is possible
             // for the Stream type.
             let mut cmd = RedisCmd::new();
-            cmd.add_str_arg("xadd");
+            cmd.add_str_arg("XADD");
             cmd.add_redis_arg(&master_key);
             cmd.add_str_arg("MAXLEN");
             cmd.add_str_arg("0");
@@ -113,7 +113,7 @@ impl StreamLoader {
         // Append XSETID after XADD, make sure lastid is correct,
         // in case of XDEL lastid.
         let mut cmd = RedisCmd::new();
-        cmd.add_str_arg("xsetid");
+        cmd.add_str_arg("XSETID");
         cmd.add_redis_arg(&master_key);
         cmd.add_str_arg(&last_id);
         obj.cmds.push(cmd);
@@ -146,6 +146,7 @@ impl StreamLoader {
 
             /* Create Group */
             let mut cmd = RedisCmd::new();
+            cmd.add_str_arg("XGROUP");
             cmd.add_str_arg("CREATE");
             cmd.add_redis_arg(&master_key);
             cmd.add_redis_arg(&group_name);
@@ -199,7 +200,7 @@ impl StreamLoader {
 
                     /* Send */
                     let mut cmd = RedisCmd::new();
-                    cmd.add_str_arg("xclaim");
+                    cmd.add_str_arg("XCLAIM");
                     cmd.add_redis_arg(&master_key);
                     cmd.add_redis_arg(&group_name);
                     cmd.add_redis_arg(&consumer_name);

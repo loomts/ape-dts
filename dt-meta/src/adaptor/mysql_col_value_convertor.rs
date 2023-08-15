@@ -3,7 +3,9 @@ use std::io::{Cursor, Seek, SeekFrom};
 use byteorder::{LittleEndian, ReadBytesExt};
 use chrono::{TimeZone, Utc};
 use dt_common::error::Error;
-use mysql_binlog_connector_rust::column::column_value::ColumnValue;
+use mysql_binlog_connector_rust::column::{
+    column_value::ColumnValue, json::json_binary::JsonBinary,
+};
 use sqlx::{mysql::MySqlRow, Row};
 
 use crate::{col_value::ColValue, mysql::mysql_col_type::MysqlColType};
@@ -69,8 +71,8 @@ impl MysqlColValueConvertor {
         }
     }
 
-    pub fn from_binlog(col_type: &MysqlColType, value: ColumnValue) -> ColValue {
-        match value {
+    pub fn from_binlog(col_type: &MysqlColType, value: ColumnValue) -> Result<ColValue, Error> {
+        let col_value = match value {
             ColumnValue::Tiny(v) => {
                 if *col_type == MysqlColType::UnsignedTiny {
                     ColValue::UnsignedTiny(v as u8)
@@ -133,7 +135,7 @@ impl MysqlColValueConvertor {
                     if length as usize > v.len() {
                         let pad_v: Vec<u8> = vec![0; length as usize - v.len()];
                         let final_v = [v, pad_v].concat();
-                        return ColValue::Blob(final_v);
+                        return Ok(ColValue::Blob(final_v));
                     }
                 }
                 ColValue::Blob(v)
@@ -143,10 +145,15 @@ impl MysqlColValueConvertor {
             ColumnValue::Bit(v) => ColValue::Bit(v),
             ColumnValue::Set(v) => ColValue::Set(v),
             ColumnValue::Enum(v) => ColValue::Enum(v),
-            ColumnValue::Json(v) => ColValue::Json(v),
+            ColumnValue::Json(v) => {
+                let v = JsonBinary::parse_as_string(&v)?;
+                ColValue::Json2(v)
+            }
 
             _ => ColValue::None,
-        }
+        };
+
+        Ok(col_value)
     }
 
     pub fn from_str(col_type: &MysqlColType, value_str: &str) -> Result<ColValue, Error> {
@@ -218,10 +225,13 @@ impl MysqlColValueConvertor {
             MysqlColType::Set => ColValue::String(value_str),
             MysqlColType::Enum => ColValue::String(value_str),
 
+            MysqlColType::Json => ColValue::Json2(value_str),
+
             _ => {
-                return Err(Error::Unexpected {
-                    error: format!("unsupported column type,  column type: {:?}", col_type),
-                })
+                return Err(Error::Unexpected(format!(
+                    "unsupported column type: {:?}",
+                    col_type
+                )))
             }
         };
 
@@ -335,8 +345,13 @@ impl MysqlColValueConvertor {
                 return Ok(ColValue::Enum2(value));
             }
             MysqlColType::Json => {
-                let value: Vec<u8> = row.get_unchecked(col);
-                return Ok(ColValue::Json(value));
+                let value: serde_json::Value = row.try_get(col)?;
+                // TODO, decimal will lose precision when insert into target mysql as string.
+                // insert into json_table(id, json_col) values(1, "212765.700000000010000"); the result will be:
+                // +-----+--------------------------+
+                // | id | json_col                  |
+                // |  1 | 212765.7                  |
+                return Ok(ColValue::Json2(value.to_string()));
             }
             _ => {}
         }

@@ -1,9 +1,8 @@
-use dt_common::{error::Error, log_warn};
+use dt_common::error::Error;
 use dt_meta::redis::{
     redis_entry::RedisEntry,
     redis_object::{
-        HashObject, ListObject, ModuleObject, RedisCmd, SetObject, StreamObject, StringObject,
-        ZsetObject,
+        HashObject, ListObject, ModuleObject, RedisCmd, SetObject, StringObject, ZsetObject,
     },
 };
 
@@ -295,9 +294,7 @@ impl EntryRewriter {
     }
 
     pub fn rewrite_module(_obj: &mut ModuleObject) -> Result<Vec<RedisCmd>, Error> {
-        Err(Error::Unexpected {
-            error: "module rewrite not implemented".to_string(),
-        })
+        Err(Error::Unexpected("module rewrite not implemented".into()))
     }
 
     pub fn rewrite_set(obj: &mut SetObject) -> Result<Vec<RedisCmd>, Error> {
@@ -310,11 +307,6 @@ impl EntryRewriter {
             cmds.push(cmd);
         }
         Ok(cmds)
-    }
-
-    pub fn rewrite_stream(obj: &mut StreamObject) -> Result<Vec<RedisCmd>, Error> {
-        // Ok(obj.cmds.drain(..).collect())
-        Ok(obj.cmds.clone())
     }
 
     pub fn rewrite_string(obj: &mut StringObject) -> Result<Vec<RedisCmd>, Error> {
@@ -346,7 +338,6 @@ impl EntryRewriter {
         cmd.add_str_arg(&entry.expire_ms.to_string());
         cmd.add_arg(value);
         if version >= 3.0 {
-            log_warn!("RDB restore command behavior is rewrite, but target redis version is {}, not support REPLACE modifier", version);
             cmd.add_str_arg("replace");
         }
         Ok(cmd)

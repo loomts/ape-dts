@@ -50,10 +50,6 @@ impl Extractor for MysqlCheckExtractor {
 
         base_check_extractor.extract(self).await
     }
-
-    async fn close(&mut self) -> Result<(), Error> {
-        Ok(())
-    }
 }
 
 #[async_trait]

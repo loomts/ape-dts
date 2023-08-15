@@ -62,9 +62,10 @@ impl RdbRouter {
                 || !Self::is_valid_name(tokens[0], &name_type)
                 || !Self::is_valid_name(tokens[1], &name_type)
             {
-                return Err(Error::ConfigError {
-                    error: format!("invalid router config, check error near: {}", name),
-                });
+                return Err(Error::ConfigError(format!(
+                    "invalid router config, check error near: {}",
+                    name
+                )));
             }
             map.insert(
                 tokens.first().unwrap().to_string(),

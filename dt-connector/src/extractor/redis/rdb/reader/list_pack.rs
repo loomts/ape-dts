@@ -51,9 +51,9 @@ impl RdbReader<'_> {
 
         let last_byte = reader.read_u8()?;
         if last_byte != 0xFF {
-            return Err(Error::Unexpected {
-                error: "read_listpack: last byte is not 0xFF".to_string(),
-            });
+            return Err(Error::RedisRdbError(
+                "read_listpack: last byte is not 0xFF".into(),
+            ));
         }
         Ok(elements)
     }
@@ -130,9 +130,10 @@ impl RdbReader<'_> {
             // uval = 12345678900000000 + uint64(fireByte)
             // negstart = math.MaxUint64
             // negmax = 0
-            return Err(Error::Unexpected {
-                error: format!("unknown encoding: {}", first_byte).to_string(),
-            });
+            return Err(Error::RedisRdbError(format!(
+                "unknown encoding: {}",
+                first_byte
+            )));
         }
 
         // We reach this code path only for integer encodings.

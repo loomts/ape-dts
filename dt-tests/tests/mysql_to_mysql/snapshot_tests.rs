@@ -3,6 +3,7 @@ mod test {
 
     use std::collections::HashMap;
 
+    use dt_common::config::config_enums::DbType;
     use serial_test::serial;
 
     use crate::test_runner::test_base::TestBase;
@@ -54,6 +55,7 @@ mod test {
 
         TestBase::run_snapshot_test_and_check_dst_count(
             "mysql_to_mysql/snapshot/special_character_in_name_test",
+            &DbType::Mysql,
             dst_expected_counts,
         )
         .await;
@@ -74,9 +76,16 @@ mod test {
 
         TestBase::run_snapshot_test_and_check_dst_count(
             "mysql_to_mysql/snapshot/resume_test",
+            &DbType::Mysql,
             dst_expected_counts,
         )
         .await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn snapshot_json_test() {
+        TestBase::run_snapshot_test("mysql_to_mysql/snapshot/json_test").await;
     }
 
     #[tokio::test]

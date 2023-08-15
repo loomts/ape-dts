@@ -198,4 +198,12 @@ impl RedisCmd {
             String::from_utf8(self.args[0].clone()).unwrap()
         }
     }
+
+    pub fn to_string(&self) -> String {
+        let mut str_args = Vec::new();
+        for arg in self.args.iter() {
+            str_args.push(String::from_utf8_lossy(arg));
+        }
+        str_args.join(" ")
+    }
 }

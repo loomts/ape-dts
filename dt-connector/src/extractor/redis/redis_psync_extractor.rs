@@ -44,9 +44,9 @@ impl RedisPsyncExtractor<'_> {
         self.conn.send(&repl_cmd).await.unwrap();
         if let Value::Okay = self.conn.read().await.unwrap() {
         } else {
-            return Err(Error::Unexpected {
-                error: "replconf listening-port response is not Ok".to_string(),
-            });
+            return Err(Error::ExtractorError(
+                "replconf listening-port response is not Ok".into(),
+            ));
         }
 
         let full_sync = self.run_id.is_empty() && self.repl_offset == 0;
@@ -68,14 +68,14 @@ impl RedisPsyncExtractor<'_> {
                 self.run_id = tokens[1].to_string();
                 self.repl_offset = tokens[2].parse::<u64>().unwrap();
             } else if s != "CONTINUE" {
-                return Err(Error::Unexpected {
-                    error: "PSYNC command response is NOT CONTINUE".to_string(),
-                });
+                return Err(Error::ExtractorError(
+                    "PSYNC command response is NOT CONTINUE".into(),
+                ));
             }
         } else {
-            return Err(Error::Unexpected {
-                error: "PSYNC command response is NOT status".to_string(),
-            });
+            return Err(Error::ExtractorError(
+                "PSYNC command response is NOT status".into(),
+            ));
         };
 
         if full_sync {

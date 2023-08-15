@@ -111,6 +111,7 @@ impl<'q> SqlxMysqlExt<'q> for Query<'q, MySql, MySqlArguments> {
                 ColValue::Enum(v) => self.bind(v),
                 ColValue::Enum2(v) => self.bind(v),
                 ColValue::Json(v) => self.bind(v),
+                ColValue::Json2(v) => self.bind(v),
                 _ => {
                     let none: Option<String> = Option::None;
                     self.bind(none)

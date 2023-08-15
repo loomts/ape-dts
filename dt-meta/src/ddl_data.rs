@@ -6,6 +6,7 @@ use super::{ddl_type::DdlType, struct_meta::database_model::StructModel};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DdlData {
     pub schema: String,
+    pub tb: String,
     pub query: String,
     #[serde(skip)]
     pub meta: Option<StructModel>,

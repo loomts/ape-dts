@@ -110,7 +110,7 @@ impl PgStructSinker {
                 if constraint_type == &ConstraintTypeEnum::Foregin.to_charval().unwrap() {
                     let msg = format!("foreign key is not supported yet, schema:[{}], table:[{}], constraint_name:[{}]", schema_name, table_name, constraint_name);
                     println!("{}", msg);
-                    return Err(Error::StructError { error: msg });
+                    return Err(Error::StructError(msg));
                 }
                 let sql = format!(
                     "ALTER TABLE \"{}\".\"{}\" ADD CONSTRAINT \"{}\" {}",

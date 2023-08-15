@@ -19,6 +19,8 @@ pub enum DdlType {
     AlterDatabase,
     #[strum(serialize = "alter_table")]
     AlterTable,
+    #[strum(serialize = "create_index")]
+    CreateIndex,
     #[strum(serialize = "unknown")]
     Unknown,
 }

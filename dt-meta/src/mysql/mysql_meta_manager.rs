@@ -36,6 +36,16 @@ impl<'a> MysqlMetaManager {
         Ok(self)
     }
 
+    pub fn invalidate_cache(&mut self, schema: &str, tb: &str) {
+        if !schema.is_empty() && !tb.is_empty() {
+            let full_name = format!("{}.{}", schema, tb);
+            self.cache.remove(&full_name);
+        } else {
+            // clear all cache is always safe
+            self.cache.clear();
+        }
+    }
+
     pub async fn get_tb_meta(&mut self, schema: &str, tb: &str) -> Result<MysqlTbMeta, Error> {
         let full_name = format!("{}.{}", schema, tb);
         if let Some(tb_meta) = self.cache.get(&full_name) {
@@ -92,9 +102,10 @@ impl<'a> MysqlMetaManager {
         }
 
         if cols.is_empty() {
-            return Err(Error::MetadataError {
-                error: format!("failed to get table metadata for: `{}`.`{}`", schema, tb),
-            });
+            return Err(Error::MetadataError(format!(
+                "failed to get table metadata for: `{}`.`{}`",
+                schema, tb
+            )));
         }
         Ok((cols, col_type_map))
     }
@@ -234,9 +245,6 @@ impl<'a> MysqlMetaManager {
             self.version = row.try_get(0)?;
             return Ok(());
         }
-
-        Err(Error::MetadataError {
-            error: "failed to init mysql version".to_string(),
-        })
+        Err(Error::MetadataError("failed to init mysql version".into()))
     }
 }

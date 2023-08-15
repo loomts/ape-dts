@@ -1,6 +1,6 @@
 use super::config_enums::{ConflictPolicyEnum, DbType};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum SinkerConfig {
     Basic {
         url: String,
@@ -69,6 +69,7 @@ pub enum SinkerConfig {
     Redis {
         url: String,
         batch_size: usize,
+        method: String,
     },
 }
 

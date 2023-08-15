@@ -117,9 +117,10 @@ impl RedisCdcExtractor {
                 }
             }
             v => {
-                return Err(Error::Unexpected {
-                    error: format!("received unexpected aof value: {:?}", v),
-                });
+                return Err(Error::RedisRdbError(format!(
+                    "received unexpected aof value: {:?}",
+                    v
+                )));
             }
         }
         Ok(cmd)

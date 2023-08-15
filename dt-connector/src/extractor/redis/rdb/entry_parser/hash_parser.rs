@@ -20,9 +20,10 @@ impl HashLoader {
             super::RDB_TYPE_HASH_ZIP_LIST => Self::read_hash_zip_list(&mut obj, reader)?,
             super::RDB_TYPE_HASH_LIST_PACK => Self::read_hash_list_pack(&mut obj, reader)?,
             _ => {
-                return Err(Error::Unexpected {
-                    error: format!("unknown hash type. type_byte=[{}]", type_byte),
-                })
+                return Err(Error::RedisRdbError(format!(
+                    "unknown hash type. type_byte=[{}]",
+                    type_byte
+                )))
             }
         }
         Ok(obj)
@@ -39,9 +40,9 @@ impl HashLoader {
     }
 
     fn read_hash_zip_map(_obj: &mut HashObject, _reader: &mut RdbReader) -> Result<(), Error> {
-        Err(Error::Unexpected {
-            error: "not implemented rdb_type_zip_map".to_string(),
-        })
+        Err(Error::RedisRdbError(
+            "not implemented rdb_type_zip_map".to_string(),
+        ))
     }
 
     fn read_hash_zip_list(obj: &mut HashObject, reader: &mut RdbReader) -> Result<(), Error> {

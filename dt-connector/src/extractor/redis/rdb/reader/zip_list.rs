@@ -52,9 +52,10 @@ impl RdbReader<'_> {
 
             let last_byte = reader.read_u8()?;
             if last_byte != 0xFF {
-                return Err(Error::Unexpected {
-                    error: format!("invalid zipList lastByte encoding: {}", last_byte),
-                });
+                return Err(Error::RedisRdbError(format!(
+                    "invalid zipList lastByte encoding: {}",
+                    last_byte
+                )));
             }
         }
 
@@ -129,15 +130,17 @@ impl RdbReader<'_> {
         if first_byte >> 4 == ZIP_INT_04B {
             let v = (first_byte & 0x0f) as i8 - 1;
             if v < 0 || v > 12 {
-                return Err(Error::Unexpected {
-                    error: format!("invalid zipInt04B encoding: {}", v),
-                });
+                return Err(Error::RedisRdbError(format!(
+                    "invalid zipInt04B encoding: {}",
+                    v
+                )));
             }
             return Ok(RedisString::from(v.to_string()));
         }
 
-        Err(Error::Unexpected {
-            error: format!("invalid encoding: {}", first_byte),
-        })
+        Err(Error::RedisRdbError(format!(
+            "invalid encoding: {}",
+            first_byte
+        )))
     }
 }

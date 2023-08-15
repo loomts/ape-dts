@@ -56,10 +56,6 @@ impl Sinker for FoxlakeSinker {
         self.put_to_file(&key, &content).await.unwrap();
         Ok(())
     }
-
-    async fn close(&mut self) -> Result<(), Error> {
-        Ok(())
-    }
 }
 
 impl FoxlakeSinker {

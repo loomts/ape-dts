@@ -157,9 +157,10 @@ impl TaskConfig {
 
                 ExtractType::Basic => Ok(ExtractorConfig::Basic { url, db_type }),
 
-                t => Err(Error::Unexpected {
-                    error: format!("extract type: {} not supported", t),
-                }),
+                extract_type => Err(Error::ConfigError(format!(
+                    "extract type: {} not supported",
+                    extract_type
+                ))),
             },
 
             DbType::Redis => {
@@ -179,15 +180,17 @@ impl TaskConfig {
                         now_db_id: ini.getint(EXTRACTOR, "now_db_id").unwrap().unwrap(),
                     }),
 
-                    t => Err(Error::Unexpected {
-                        error: format!("extract type: {} not supported", t),
-                    }),
+                    extract_type => Err(Error::ConfigError(format!(
+                        "extract type: {} not supported",
+                        extract_type
+                    ))),
                 }
             }
 
-            _ => Err(Error::Unexpected {
-                error: "extractor db type not supported".to_string(),
-            }),
+            db_type => Err(Error::ConfigError(format!(
+                "extractor db type: {} not supported",
+                db_type
+            ))),
         }
     }
 
@@ -240,9 +243,10 @@ impl TaskConfig {
 
                 SinkType::Basic => Ok(SinkerConfig::Basic { url, db_type }),
 
-                _ => Err(Error::Unexpected {
-                    error: "sinker db type not supported".to_string(),
-                }),
+                db_type => Err(Error::ConfigError(format!(
+                    "sinker db type: {} not supported",
+                    db_type
+                ))),
             },
 
             DbType::Kafka => Ok(SinkerConfig::Kafka {
@@ -267,7 +271,11 @@ impl TaskConfig {
                 root_dir: ini.get(SINKER, "root_dir").unwrap(),
             }),
 
-            DbType::Redis => Ok(SinkerConfig::Redis { url, batch_size }),
+            DbType::Redis => Ok(SinkerConfig::Redis {
+                url,
+                batch_size,
+                method: Self::get_optional_value(ini, SINKER, "method"),
+            }),
         }
     }
 

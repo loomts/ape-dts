@@ -15,9 +15,7 @@ impl RdbReader<'_> {
     pub fn read_length(&mut self) -> Result<u64, Error> {
         let (len, special) = self.read_encoded_length()?;
         if special {
-            Err(Error::Unexpected {
-                error: format!("illegal length special=true").to_string(),
-            })
+            Err(Error::RedisRdbError("illegal length special=true".into()))
         } else {
             Ok(len)
         }
@@ -51,9 +49,10 @@ impl RdbReader<'_> {
                     Ok((len, false))
                 }
 
-                _ => Err(Error::Unexpected {
-                    error: format!("illegal length encoding: {:x}", first_byte).to_string(),
-                }),
+                _ => Err(Error::RedisRdbError(format!(
+                    "illegal length encoding: {:x}",
+                    first_byte
+                ))),
             },
 
             RDB_SPECIAL_LEN => {
@@ -61,9 +60,10 @@ impl RdbReader<'_> {
                 Ok((len, true))
             }
 
-            _ => Err(Error::Unexpected {
-                error: format!("illegal length encoding: {:x}", first_byte).to_string(),
-            }),
+            _ => Err(Error::RedisRdbError(format!(
+                "illegal length encoding: {:x}",
+                first_byte
+            ))),
         }
     }
 }
