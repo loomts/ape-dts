@@ -32,8 +32,6 @@ pub enum ExtractType {
     CheckLog,
     #[strum(serialize = "struct")]
     Struct,
-    #[strum(serialize = "basic")]
-    Basic,
 }
 
 #[derive(Display, EnumString, IntoStaticStr)]
@@ -44,8 +42,6 @@ pub enum SinkType {
     Check,
     #[strum(serialize = "struct")]
     Struct,
-    #[strum(serialize = "basic")]
-    Basic,
 }
 
 #[derive(EnumString, IntoStaticStr, Clone, Display)]

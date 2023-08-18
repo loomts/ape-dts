@@ -1,8 +1,7 @@
 use std::{fs::File, io::Read};
 
 use configparser::ini::Ini;
-
-use crate::error::Error;
+use dt_common::error::Error;
 
 use super::precheck_config::PrecheckConfig;
 
@@ -39,9 +38,9 @@ impl PrecheckTaskConfig {
                 do_cdc: do_cdc.parse().unwrap(),
             })
         } else {
-            Err(Error::Unexpected {
-                error: String::from("config is not valid for precheck."),
-            })
+            Err(Error::ConfigError(
+                "config is not valid for precheck.".into(),
+            ))
         }
     }
 }

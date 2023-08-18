@@ -32,40 +32,16 @@ mod test {
     #[serial]
     async fn struct_existed_test() {
         let test_dir = "mysql_to_mysql/precheck/struct_existed_test";
-
-        let mut src_expected_results = HashMap::new();
-        src_expected_results.insert(CheckItem::CheckIfStructExisted.to_string(), true);
-
-        let mut dst_expected_results = HashMap::new();
-        dst_expected_results.insert(CheckItem::CheckIfStructExisted.to_string(), true);
-
-        TestBase::run_precheck_test(
-            test_dir,
-            &HashSet::new(),
-            &src_expected_results,
-            &dst_expected_results,
-        )
-        .await
+        TestBase::run_precheck_test(test_dir, &HashSet::new(), &HashMap::new(), &HashMap::new())
+            .await
     }
 
     #[tokio::test]
     #[serial]
     async fn struct_supported_basic_test() {
         let test_dir = "mysql_to_mysql/precheck/struct_supported_basic_test";
-
-        let mut src_expected_results = HashMap::new();
-        src_expected_results.insert(CheckItem::CheckIfTableStructSupported.to_string(), true);
-
-        let mut dst_expected_results = HashMap::new();
-        dst_expected_results.insert(CheckItem::CheckIfTableStructSupported.to_string(), true);
-
-        TestBase::run_precheck_test(
-            test_dir,
-            &HashSet::new(),
-            &src_expected_results,
-            &dst_expected_results,
-        )
-        .await
+        TestBase::run_precheck_test(test_dir, &HashSet::new(), &HashMap::new(), &HashMap::new())
+            .await
     }
 
     #[tokio::test]

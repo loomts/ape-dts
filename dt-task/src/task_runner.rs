@@ -372,10 +372,6 @@ impl TaskRunner {
                 .await?;
                 Box::new(extractor)
             }
-
-            _ => {
-                return Err(Error::ConfigError("unsupported extractor config".into()));
-            }
         };
         Ok(extractor)
     }

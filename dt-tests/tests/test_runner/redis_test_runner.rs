@@ -96,7 +96,7 @@ impl RedisTestRunner {
         self.base.wait_task_finish(&task).await
     }
 
-    fn execute_test_ddl_sqls(&mut self) -> Result<(), Error> {
+    pub fn execute_test_ddl_sqls(&mut self) -> Result<(), Error> {
         self.execute_cmds(SRC, &self.base.src_ddl_sqls.clone());
         self.execute_cmds(DST, &self.base.dst_ddl_sqls.clone());
         Ok(())

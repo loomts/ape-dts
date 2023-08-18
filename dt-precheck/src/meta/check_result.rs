@@ -1,6 +1,4 @@
-use dt_common::config::config_enums::DbType;
-
-use crate::error::Error;
+use dt_common::{config::config_enums::DbType, error::Error};
 
 use super::check_item::CheckItem;
 
@@ -29,7 +27,7 @@ impl CheckResult {
     pub fn build_with_err(
         check_item: CheckItem,
         is_source: bool,
-        db_type_option: Option<DbType>,
+        db_type: DbType,
         err_option: Option<Error>,
     ) -> Self {
         let check_desc;
@@ -38,7 +36,7 @@ impl CheckResult {
         if !is_source {
             source_or_sink = String::from("sink");
         }
-        let db_type = db_type_option.unwrap();
+
         match check_item {
             CheckItem::CheckDatabaseConnection => {
                 check_desc = format!("check if the {} database can be connected.", source_or_sink);

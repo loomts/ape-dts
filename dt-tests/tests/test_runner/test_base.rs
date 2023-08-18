@@ -164,20 +164,13 @@ impl TestBase {
         dst_expected_results: &HashMap<String, bool>,
     ) {
         let runner = RdbPrecheckTestRunner::new(test_dir).await.unwrap();
-        runner.base.execute_test_ddl_sqls().await.unwrap();
-        let results: Vec<
-            Result<dt_precheck::meta::check_result::CheckResult, dt_precheck::error::Error>,
-        > = runner.run_check().await;
-
         runner
-            .validate(
-                &results,
+            .run_check(
                 ignore_check_items,
-                &src_expected_results,
-                &dst_expected_results,
+                src_expected_results,
+                dst_expected_results,
             )
-            .await;
-
-        runner.base.execute_clean_sqls().await.unwrap();
+            .await
+            .unwrap();
     }
 }

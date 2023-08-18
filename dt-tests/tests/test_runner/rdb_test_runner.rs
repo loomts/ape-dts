@@ -89,17 +89,6 @@ impl RdbTestRunner {
                 src_url = url.clone();
             }
 
-            ExtractorConfig::Basic { url, db_type, .. } => match db_type {
-                DbType::Mysql => {
-                    src_url = url.clone();
-                }
-                DbType::Pg => {
-                    src_db_type = DbType::Pg;
-                    src_url = url.clone();
-                }
-                _ => {}
-            },
-
             _ => {}
         }
 
@@ -116,17 +105,6 @@ impl RdbTestRunner {
                 dst_db_type = DbType::Pg;
                 dst_url = url.clone();
             }
-
-            SinkerConfig::Basic { url, db_type, .. } => match db_type {
-                DbType::Mysql => {
-                    dst_url = url.clone();
-                }
-                DbType::Pg => {
-                    dst_db_type = DbType::Pg;
-                    dst_url = url.clone();
-                }
-                _ => {}
-            },
 
             _ => {}
         }

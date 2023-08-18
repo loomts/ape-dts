@@ -35,6 +35,12 @@ pub enum Error {
     #[error("from utf8 error: {0}")]
     FromUtf8Error(#[from] std::string::FromUtf8Error),
 
+    #[error("mongodb error: {0}")]
+    MongodbError(#[from] mongodb::error::Error),
+
     #[error("struct error: {0}")]
     StructError(String),
+
+    #[error("precheck error: {0}")]
+    PreCheckError(String),
 }

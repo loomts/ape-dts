@@ -91,8 +91,6 @@ impl TaskConfig {
                     url,
                     db: String::new(),
                 }),
-
-                ExtractType::Basic => Ok(ExtractorConfig::Basic { url, db_type }),
             },
 
             DbType::Pg => match extract_type {
@@ -122,8 +120,6 @@ impl TaskConfig {
                     url,
                     db: String::new(),
                 }),
-
-                ExtractType::Basic => Ok(ExtractorConfig::Basic { url, db_type }),
             },
 
             DbType::Mongo => match extract_type {
@@ -154,8 +150,6 @@ impl TaskConfig {
                         start_timestamp,
                     })
                 }
-
-                ExtractType::Basic => Ok(ExtractorConfig::Basic { url, db_type }),
 
                 extract_type => Err(Error::ConfigError(format!(
                     "extract type: {} not supported",
@@ -217,8 +211,6 @@ impl TaskConfig {
                     url,
                     conflict_policy,
                 }),
-
-                SinkType::Basic => Ok(SinkerConfig::Basic { url, db_type }),
             },
 
             DbType::Pg => match sink_type {
@@ -234,14 +226,10 @@ impl TaskConfig {
                     url,
                     conflict_policy,
                 }),
-
-                SinkType::Basic => Ok(SinkerConfig::Basic { url, db_type }),
             },
 
             DbType::Mongo => match sink_type {
                 SinkType::Write => Ok(SinkerConfig::Mongo { url, batch_size }),
-
-                SinkType::Basic => Ok(SinkerConfig::Basic { url, db_type }),
 
                 db_type => Err(Error::ConfigError(format!(
                     "sinker db type: {} not supported",

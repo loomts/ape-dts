@@ -25,28 +25,14 @@ mod test {
     #[serial]
     async fn struct_existed_test() {
         let test_dir = "pg_to_pg/precheck/struct_existed_test";
-
-        let mut src_expected_results = HashMap::new();
-        src_expected_results.insert(CheckItem::CheckIfStructExisted.to_string(), true);
-
-        let mut dst_expected_results = HashMap::new();
-        dst_expected_results.insert(CheckItem::CheckIfStructExisted.to_string(), true);
-
-        run_precheck_test(test_dir, &src_expected_results, &dst_expected_results).await
+        run_precheck_test(test_dir, &HashMap::new(), &HashMap::new()).await
     }
 
     #[tokio::test]
     #[serial]
     async fn struct_supported_basic_test() {
         let test_dir = "pg_to_pg/precheck/struct_supported_basic_test";
-
-        let mut src_expected_results = HashMap::new();
-        src_expected_results.insert(CheckItem::CheckIfTableStructSupported.to_string(), true);
-
-        let mut dst_expected_results = HashMap::new();
-        dst_expected_results.insert(CheckItem::CheckIfTableStructSupported.to_string(), true);
-
-        run_precheck_test(test_dir, &src_expected_results, &dst_expected_results).await
+        run_precheck_test(test_dir, &HashMap::new(), &HashMap::new()).await
     }
 
     #[tokio::test]

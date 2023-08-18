@@ -1,12 +1,14 @@
 use std::collections::HashSet;
 
 use async_trait::async_trait;
-use dt_common::config::{config_enums::DbType, filter_config::FilterConfig};
+use dt_common::{
+    config::{config_enums::DbType, filter_config::FilterConfig},
+    error::Error,
+};
 use dt_meta::struct_meta::{db_table_model::DbTable, pg_enums::ConstraintTypeEnum};
 
 use crate::{
     config::precheck_config::PrecheckConfig,
-    error::Error,
     fetcher::{postgresql::pg_fetcher::PgFetcher, traits::Fetcher},
     meta::check_item::CheckItem,
     meta::check_result::CheckResult,
@@ -22,7 +24,6 @@ pub struct PostgresqlPrechecker {
     pub filter_config: FilterConfig,
     pub precheck_config: PrecheckConfig,
     pub is_source: bool,
-    pub db_type_option: Option<DbType>,
 }
 
 #[async_trait]
@@ -38,7 +39,7 @@ impl Prechecker for PostgresqlPrechecker {
         Ok(CheckResult::build_with_err(
             CheckItem::CheckDatabaseConnection,
             self.is_source,
-            self.db_type_option.clone(),
+            DbType::Pg,
             check_error,
         ))
     }
@@ -51,17 +52,16 @@ impl Prechecker for PostgresqlPrechecker {
         match result {
             Ok(version) => {
                 if version.is_empty() {
-                    check_error = Some(Error::PreCheckError {
-                        error: "found no version info".to_string(),
-                    });
+                    check_error = Some(Error::PreCheckError("found no version info".into()));
                 } else {
                     let version_i32: i32 = version.parse().unwrap();
                     if !(PG_SUPPORT_DB_VERSION_NUM_MIN..=PG_SUPPORT_DB_VERSION_NUM_MAX)
                         .contains(&version_i32)
                     {
-                        check_error = Some(Error::PreCheckError {
-                            error: format!("version:{} is not supported yet", version_i32),
-                        });
+                        check_error = Some(Error::PreCheckError(format!(
+                            "version:{} is not supported yet",
+                            version_i32
+                        )));
                     }
                 }
             }
@@ -71,7 +71,7 @@ impl Prechecker for PostgresqlPrechecker {
         Ok(CheckResult::build_with_err(
             CheckItem::CheckDatabaseVersionSupported,
             self.is_source,
-            self.db_type_option.clone(),
+            DbType::Pg,
             check_error,
         ))
     }
@@ -91,7 +91,7 @@ impl Prechecker for PostgresqlPrechecker {
             return Ok(CheckResult::build_with_err(
                 CheckItem::CheckIfDatabaseSupportCdc,
                 self.is_source,
-                self.db_type_option.clone(),
+                DbType::Pg,
                 check_error,
             ));
         }
@@ -140,9 +140,7 @@ impl Prechecker for PostgresqlPrechecker {
             Err(e) => return Err(e),
         }
         if !err_msgs.is_empty() {
-            check_error = Some(Error::PreCheckError {
-                error: err_msgs.join(";"),
-            });
+            check_error = Some(Error::PreCheckError(err_msgs.join(";").into()));
         }
 
         if check_error.is_none() {
@@ -151,7 +149,7 @@ impl Prechecker for PostgresqlPrechecker {
             match slot_result {
                 Ok(slots) => {
                     if max_replication_slots_i32 == (slots.len() as i32) {
-                        check_error = Some(Error::PreCheckError { error: format!("the current number of slots:[{}] has reached max_replication_slots, and new slots cannot be created", max_replication_slots_i32) });
+                        check_error = Some(Error::PreCheckError ( format!("the current number of slots:[{}] has reached max_replication_slots, and new slots cannot be created", max_replication_slots_i32) ));
                     }
                 }
                 Err(e) => check_error = Some(e),
@@ -161,7 +159,7 @@ impl Prechecker for PostgresqlPrechecker {
         Ok(CheckResult::build_with_err(
             CheckItem::CheckIfDatabaseSupportCdc,
             self.is_source,
-            self.db_type_option.clone(),
+            DbType::Pg,
             check_error,
         ))
     }
@@ -191,9 +189,9 @@ impl Prechecker for PostgresqlPrechecker {
         all_schemas.extend(&tb_schemas);
         if all_schemas.is_empty() {
             println!("found no schema need to do migrate, very strange");
-            return Err(Error::PreCheckError {
-                error: String::from("found no schema need to do migrate"),
-            });
+            return Err(Error::PreCheckError(
+                "found no schema need to do migrate".into(),
+            ));
         }
 
         if (self.is_source || !self.precheck_config.do_struct_init) && !tbs.is_empty() {
@@ -252,15 +250,13 @@ impl Prechecker for PostgresqlPrechecker {
             }
         }
         if !err_msgs.is_empty() {
-            check_error = Some(Error::PreCheckError {
-                error: err_msgs.join("."),
-            })
+            check_error = Some(Error::PreCheckError(err_msgs.join(".").into()))
         }
 
         Ok(CheckResult::build_with_err(
             CheckItem::CheckIfStructExisted,
             self.is_source,
-            self.db_type_option.clone(),
+            DbType::Pg,
             check_error,
         ))
     }
@@ -274,7 +270,7 @@ impl Prechecker for PostgresqlPrechecker {
             return Ok(CheckResult::build_with_err(
                 CheckItem::CheckIfTableStructSupported,
                 self.is_source,
-                self.db_type_option.clone(),
+                DbType::Pg,
                 check_error,
             ));
         }
@@ -301,9 +297,9 @@ impl Prechecker for PostgresqlPrechecker {
         all_schemas.extend(&tb_schemas);
         if all_schemas.is_empty() {
             println!("found no schema need to do migrate, very strange");
-            return Err(Error::PreCheckError {
-                error: String::from("found no schema need to do migrate"),
-            });
+            return Err(Error::PreCheckError(
+                "found no schema need to do migrate".into(),
+            ));
         }
 
         let (mut has_pk_tables, mut has_fk_tables): (HashSet<String>, HashSet<String>) =
@@ -360,15 +356,13 @@ impl Prechecker for PostgresqlPrechecker {
             ));
         }
         if !err_msgs.is_empty() {
-            check_error = Some(Error::PreCheckError {
-                error: err_msgs.join(";"),
-            })
+            check_error = Some(Error::PreCheckError(err_msgs.join(";").into()))
         }
 
         Ok(CheckResult::build_with_err(
             CheckItem::CheckIfTableStructSupported,
             self.is_source,
-            self.db_type_option.clone(),
+            DbType::Pg,
             check_error,
         ))
     }

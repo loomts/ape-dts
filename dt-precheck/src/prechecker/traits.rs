@@ -1,6 +1,7 @@
 use async_trait::async_trait;
+use dt_common::error::Error;
 
-use crate::{error::Error, meta::check_result::CheckResult};
+use crate::meta::check_result::CheckResult;
 
 #[async_trait]
 pub trait Prechecker {

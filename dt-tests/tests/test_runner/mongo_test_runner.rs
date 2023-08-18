@@ -122,7 +122,7 @@ impl MongoTestRunner {
         Ok(())
     }
 
-    async fn execute_test_ddl_sqls(&self) -> Result<(), Error> {
+    pub async fn execute_test_ddl_sqls(&self) -> Result<(), Error> {
         let src_mongo_client = self.src_mongo_client.as_ref().unwrap();
         let dst_mongo_client = self.dst_mongo_client.as_ref().unwrap();
         let src_db = Self::get_db(&self.base.src_ddl_sqls[0]);

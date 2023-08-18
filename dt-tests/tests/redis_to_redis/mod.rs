@@ -7,6 +7,7 @@ pub mod cdc_7_0_tests;
 pub mod cdc_rebloom_tests;
 pub mod cdc_redisearch_tests;
 pub mod cdc_rejson_tests;
+pub mod precheck_tests;
 pub mod snapshot_2_8_tests;
 pub mod snapshot_4_0_tests;
 pub mod snapshot_5_0_tests;

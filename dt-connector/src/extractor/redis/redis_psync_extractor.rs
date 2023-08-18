@@ -32,12 +32,16 @@ impl Extractor for RedisPsyncExtractor<'_> {
             self.repl_offset,
             self.now_db_id
         );
-        self.start_psync().await
+        if self.start_psync().await? {
+            // server won't send rdb if it's NOT full sync
+            self.receive_rdb().await?;
+        }
+        Ok(())
     }
 }
 
 impl RedisPsyncExtractor<'_> {
-    pub async fn start_psync(&mut self) -> Result<(), Error> {
+    pub async fn start_psync(&mut self) -> Result<bool, Error> {
         // replconf listening-port [port]
         let repl_port = self.repl_port.to_string();
         let repl_cmd = RedisCmd::from_str_args(&vec!["replconf", "listening-port", &repl_port]);
@@ -77,11 +81,7 @@ impl RedisPsyncExtractor<'_> {
                 "PSYNC command response is NOT status".into(),
             ));
         };
-
-        if full_sync {
-            self.receive_rdb().await?;
-        }
-        Ok(())
+        Ok(full_sync)
     }
 
     async fn receive_rdb(&mut self) -> Result<(), Error> {
