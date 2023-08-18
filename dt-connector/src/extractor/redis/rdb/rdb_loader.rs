@@ -35,9 +35,7 @@ impl RdbLoader<'_> {
         let mut buf = self.reader.read_raw(5)?;
         let magic = String::from_utf8(buf).unwrap();
         if magic != "REDIS" {
-            return Err(Error::Unexpected {
-                error: "invalid rdb format".to_string(),
-            });
+            return Err(Error::RedisRdbError("invalid rdb format".to_string()));
         }
 
         // version

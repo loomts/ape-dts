@@ -14,12 +14,10 @@ impl ModuleLoader {
         let obj = ModuleObject::new();
 
         if type_byte == super::RDB_TYPE_MODULE {
-            return Err(Error::Unexpected {
-                error: format!(
-                    "module type with version 1 is not supported, key=[{}]",
-                    String::from(key)
-                ),
-            });
+            return Err(Error::RedisRdbError(format!(
+                "module type with version 1 is not supported, key=[{}]",
+                String::from(key)
+            )));
         }
 
         let module_id = reader.read_length()?;
@@ -44,12 +42,10 @@ impl ModuleLoader {
                 }
 
                 _ => {
-                    return Err(Error::Unexpected {
-                        error: format!(
-                            "unknown module opcode=[{}], module name=[{}]",
-                            op_code, module_name
-                        ),
-                    });
+                    return Err(Error::RedisRdbError(format!(
+                        "unknown module opcode=[{}], module name=[{}]",
+                        op_code, module_name
+                    )));
                 }
             }
             op_code = reader.read_byte()?;

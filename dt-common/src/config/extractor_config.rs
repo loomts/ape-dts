@@ -1,6 +1,6 @@
 use super::config_enums::DbType;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ExtractorConfig {
     Basic {
         url: String,

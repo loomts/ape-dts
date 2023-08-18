@@ -38,9 +38,9 @@ impl RdbMetaManager {
             return Ok(tb_meta.basic);
         }
 
-        Err(Error::Unexpected {
-            error: "no available meta_manager in partitioner".to_string(),
-        })
+        Err(Error::Unexpected(
+            "no available meta_manager in partitioner".into(),
+        ))
     }
 
     pub fn parse_rdb_cols(

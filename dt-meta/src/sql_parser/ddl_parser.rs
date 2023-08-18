@@ -12,7 +12,10 @@ use nom::{
 };
 use regex::Regex;
 
-use std::{borrow::Cow, str};
+use std::{
+    borrow::Cow,
+    str::{self},
+};
 
 use crate::ddl_type::DdlType;
 
@@ -30,10 +33,20 @@ impl DdlParser {
         let sql = Self::remove_comments(sql);
         let input = sql.trim().as_bytes();
         match sql_query(input) {
-            Ok((_, o)) => Ok(o),
-            Err(_) => Err(Error::Unexpected {
-                error: format!("failed to parse sql: {}", sql),
-            }),
+            Ok((_, o)) => {
+                let database = if let Some(db) = o.1 {
+                    Some(String::from_utf8(db)?)
+                } else {
+                    None
+                };
+                let table = if let Some(tb) = o.2 {
+                    Some(String::from_utf8(tb)?)
+                } else {
+                    None
+                };
+                Ok((o.0, database, table))
+            }
+            Err(_) => Err(Error::Unexpected(format!("failed to parse sql: {}", sql))),
         }
     }
 
@@ -46,7 +59,7 @@ impl DdlParser {
 
 /// parse ddl sql and return: (ddl_type, schema, table)
 #[allow(clippy::type_complexity)]
-pub fn sql_query(i: &[u8]) -> IResult<&[u8], (DdlType, Option<String>, Option<String>)> {
+pub fn sql_query(i: &[u8]) -> IResult<&[u8], (DdlType, Option<Vec<u8>>, Option<Vec<u8>>)> {
     alt((
         map(create_database, |r| {
             (DdlType::CreateDatabase, Some(r), None)
@@ -61,7 +74,7 @@ pub fn sql_query(i: &[u8]) -> IResult<&[u8], (DdlType, Option<String>, Option<St
     ))(i)
 }
 
-pub fn create_database(i: &[u8]) -> IResult<&[u8], String> {
+pub fn create_database(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
     let (remaining_input, (_, _, _, _, _, database, _)) = tuple((
         tag_no_case("create"),
         multispace1,
@@ -71,11 +84,10 @@ pub fn create_database(i: &[u8]) -> IResult<&[u8], String> {
         sql_identifier,
         multispace0,
     ))(i)?;
-    let database = String::from(str::from_utf8(database).unwrap());
-    Ok((remaining_input, database))
+    Ok((remaining_input, database.to_vec()))
 }
 
-pub fn drop_database(i: &[u8]) -> IResult<&[u8], String> {
+pub fn drop_database(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
     let (remaining_input, (_, _, _, _, _, database, _)) = tuple((
         tag_no_case("drop"),
         multispace1,
@@ -85,11 +97,10 @@ pub fn drop_database(i: &[u8]) -> IResult<&[u8], String> {
         sql_identifier,
         multispace0,
     ))(i)?;
-    let database = String::from(str::from_utf8(database).unwrap());
-    Ok((remaining_input, database))
+    Ok((remaining_input, database.to_vec()))
 }
 
-pub fn alter_database(i: &[u8]) -> IResult<&[u8], String> {
+pub fn alter_database(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
     let (remaining_input, (_, _, _, _, database, _)) = tuple((
         tag_no_case("alter"),
         multispace1,
@@ -98,11 +109,10 @@ pub fn alter_database(i: &[u8]) -> IResult<&[u8], String> {
         sql_identifier,
         multispace1,
     ))(i)?;
-    let database = String::from(str::from_utf8(database).unwrap());
-    Ok((remaining_input, database))
+    Ok((remaining_input, database.to_vec()))
 }
 
-pub fn create_table(i: &[u8]) -> IResult<&[u8], (Option<String>, String)> {
+pub fn create_table(i: &[u8]) -> IResult<&[u8], (Option<Vec<u8>>, Vec<u8>)> {
     let (remaining_input, (_, _, _, _, _, table, _)) = tuple((
         tag_no_case("create"),
         multispace1,
@@ -115,7 +125,7 @@ pub fn create_table(i: &[u8]) -> IResult<&[u8], (Option<String>, String)> {
     Ok((remaining_input, table))
 }
 
-pub fn drop_table(i: &[u8]) -> IResult<&[u8], (Option<String>, String)> {
+pub fn drop_table(i: &[u8]) -> IResult<&[u8], (Option<Vec<u8>>, Vec<u8>)> {
     let (remaining_input, (_, _, _, _, _, table, _)) = tuple((
         tag_no_case("drop"),
         multispace1,
@@ -128,7 +138,7 @@ pub fn drop_table(i: &[u8]) -> IResult<&[u8], (Option<String>, String)> {
     Ok((remaining_input, table))
 }
 
-pub fn alter_table(i: &[u8]) -> IResult<&[u8], (Option<String>, String)> {
+pub fn alter_table(i: &[u8]) -> IResult<&[u8], (Option<Vec<u8>>, Vec<u8>)> {
     let (remaining_input, (_, _, _, _, table, _)) = tuple((
         tag_no_case("alter"),
         multispace1,
@@ -140,9 +150,21 @@ pub fn alter_table(i: &[u8]) -> IResult<&[u8], (Option<String>, String)> {
     Ok((remaining_input, table))
 }
 
-pub fn truncate_table(i: &[u8]) -> IResult<&[u8], (Option<String>, String)> {
+pub fn truncate_table(i: &[u8]) -> IResult<&[u8], (Option<Vec<u8>>, Vec<u8>)> {
     let (remaining_input, (_, _, _, _, table, _)) = tuple((
         tag_no_case("truncate"),
+        multispace1,
+        opt(tag_no_case("table")),
+        opt(multispace1),
+        schema_table_reference,
+        multispace0,
+    ))(i)?;
+    Ok((remaining_input, table))
+}
+
+pub fn rename_table(i: &[u8]) -> IResult<&[u8], (Option<Vec<u8>>, Vec<u8>)> {
+    let (remaining_input, (_, _, _, _, table, _)) = tuple((
+        tag_no_case("rename"),
         multispace1,
         tag_no_case("table"),
         multispace1,
@@ -152,7 +174,7 @@ pub fn truncate_table(i: &[u8]) -> IResult<&[u8], (Option<String>, String)> {
     Ok((remaining_input, table))
 }
 
-pub fn rename_table(i: &[u8]) -> IResult<&[u8], (Option<String>, String)> {
+pub fn create_index(i: &[u8]) -> IResult<&[u8], (Option<Vec<u8>>, Vec<u8>)> {
     let (remaining_input, (_, _, _, _, table, _)) = tuple((
         tag_no_case("rename"),
         multispace1,
@@ -187,7 +209,7 @@ pub fn if_exists(i: &[u8]) -> IResult<&[u8], ()> {
 }
 
 // Parse a reference to a named schema.table, with an optional alias
-pub fn schema_table_reference(i: &[u8]) -> IResult<&[u8], (Option<String>, String)> {
+pub fn schema_table_reference(i: &[u8]) -> IResult<&[u8], (Option<Vec<u8>>, Vec<u8>)> {
     map(
         tuple((
             opt(pair(sql_identifier, pair(multispace0, tag(".")))),
@@ -195,10 +217,8 @@ pub fn schema_table_reference(i: &[u8]) -> IResult<&[u8], (Option<String>, Strin
             sql_identifier,
         )),
         |tup| {
-            let name = String::from(str::from_utf8(tup.2).unwrap());
-            let schema = tup
-                .0
-                .map(|(schema, _)| String::from(str::from_utf8(schema).unwrap()));
+            let name = tup.2.to_vec();
+            let schema = tup.0.map(|(schema, _)| schema.to_vec());
             (schema, name)
         },
     )(i)
@@ -206,14 +226,28 @@ pub fn schema_table_reference(i: &[u8]) -> IResult<&[u8], (Option<String>, Strin
 
 #[inline]
 pub fn is_sql_identifier(chr: u8) -> bool {
-    is_alphanumeric(chr) || chr == b'_' || chr == b'@'
+    is_alphanumeric(chr) || chr == b'_'
+}
+
+#[inline]
+pub fn is_escaped_sql_identifier_1(chr: u8) -> bool {
+    chr != b'`'
+}
+
+#[inline]
+pub fn is_escaped_sql_identifier_2(chr: u8) -> bool {
+    chr != b'"'
 }
 
 pub fn sql_identifier(i: &[u8]) -> IResult<&[u8], &[u8]> {
     alt((
         preceded(not(peek(sql_keyword)), take_while1(is_sql_identifier)),
-        delimited(tag("`"), take_while1(is_sql_identifier), tag("`")),
-        delimited(tag("["), take_while1(is_sql_identifier), tag("]")),
+        delimited(tag("`"), take_while1(is_escaped_sql_identifier_1), tag("`")),
+        delimited(
+            tag("\""),
+            take_while1(is_escaped_sql_identifier_2),
+            tag("\""),
+        ),
     ))(i)
 }
 
@@ -259,6 +293,33 @@ mod test {
             assert_eq!(r.0, DdlType::CreateTable);
             assert_eq!(r.1, Some("aaa".to_string()));
             assert_eq!(r.2, Some("bbb".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_create_table_with_schema_with_special_characters() {
+        let sqls = vec![
+            // mysql
+            "CREATE TABLE IF NOT EXISTS `test_db_*.*`.bbb(id int);",
+            "CREATE TABLE IF NOT EXISTS `中文.others*&^%$#@!+_)(&^%#`.`中文!@$#$%^&*&(_+)`(id int);",
+            // pg
+            r#"CREATE TABLE IF NOT EXISTS "test_db_*.*".bbb(id int);"#,
+            r#"CREATE TABLE IF NOT EXISTS "中文.others*&^%$#@!+_)(&^%#"."中文!@$#$%^&*&(_+)"(id int);"#,
+        ];
+        let dbs = vec![
+            "test_db_*.*",
+            "中文.others*&^%$#@!+_)(&^%#",
+            "test_db_*.*",
+            "中文.others*&^%$#@!+_)(&^%#",
+        ];
+        let tbs = vec!["bbb", "中文!@$#$%^&*&(_+)", "bbb", "中文!@$#$%^&*&(_+)"];
+
+        for i in 0..sqls.len() {
+            let sql = sqls[i];
+            let r = DdlParser::parse(sql).unwrap();
+            assert_eq!(r.0, DdlType::CreateTable);
+            assert_eq!(r.1, Some(dbs[i].to_string()));
+            assert_eq!(r.2, Some(tbs[i].to_string()));
         }
     }
 
@@ -422,6 +483,23 @@ mod test {
     }
 
     #[test]
+    fn test_create_database_with_special_characters() {
+        let sqls = vec![
+            "CREATE DATABASE IF NOT EXISTS `test_db_*.*`;",
+            "CREATE DATABASE IF NOT EXISTS `中文.others*&^%$#@!+_)(&^%#`;",
+        ];
+        let dbs = vec!["test_db_*.*", "中文.others*&^%$#@!+_)(&^%#"];
+
+        for i in 0..sqls.len() {
+            let sql = sqls[i];
+            let r = DdlParser::parse(sql).unwrap();
+            assert_eq!(r.0, DdlType::CreateDatabase);
+            assert_eq!(r.1, Some(dbs[i].to_string()));
+            assert_eq!(r.2, None);
+        }
+    }
+
+    #[test]
     fn test_drop_database() {
         let sqls = vec![
             "drop database aaa",
@@ -486,6 +564,9 @@ mod test {
             "truncate /*some comments,*/table/*some comments*/ `aaa`.`bbb`",
             //  escapes + spaces + comments
             "truncate /*some comments,*/table/*some comments*/   `aaa` .  `bbb`  ",
+            // without keyword `table`
+            "truncate `aaa`.`bbb`",
+            "truncate /*some comments,*/table/*some comments*/ `aaa`.`bbb`",
         ];
 
         for sql in sqls {

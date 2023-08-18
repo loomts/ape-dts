@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::{
     call_batch_fn, close_conn_pool,
     rdb_query_builder::RdbQueryBuilder,
@@ -5,21 +7,26 @@ use crate::{
     Sinker,
 };
 
-use dt_common::{error::Error, log_error};
+use dt_common::{error::Error, log_error, log_info};
 
 use dt_meta::{
     ddl_data::DdlData,
+    ddl_type::DdlType,
     mysql::{mysql_meta_manager::MysqlMetaManager, mysql_tb_meta::MysqlTbMeta},
     row_data::RowData,
     row_type::RowType,
 };
 
-use sqlx::{MySql, Pool};
+use sqlx::{
+    mysql::{MySqlConnectOptions, MySqlPoolOptions},
+    MySql, Pool,
+};
 
 use async_trait::async_trait;
 
 #[derive(Clone)]
 pub struct MysqlSinker {
+    pub url: String,
     pub conn_pool: Pool<MySql>,
     pub meta_manager: MysqlMetaManager,
     pub router: RdbRouter,
@@ -53,7 +60,32 @@ impl Sinker for MysqlSinker {
         return close_conn_pool!(self);
     }
 
-    async fn sink_ddl(&mut self, _data: Vec<DdlData>, _batch: bool) -> Result<(), Error> {
+    async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> Result<(), Error> {
+        for ddl_data in data.iter() {
+            log_info!("sink ddl: {}", ddl_data.query);
+            let query = sqlx::query(&ddl_data.query);
+
+            // create a tmp connection with databse since sqlx conn pool does NOT support `USE db`
+            let mut conn_options = MySqlConnectOptions::from_str(&self.url).unwrap();
+            if !ddl_data.schema.is_empty() && ddl_data.ddl_type != DdlType::CreateDatabase {
+                conn_options = conn_options.database(&ddl_data.schema);
+            }
+
+            let conn_pool = MySqlPoolOptions::new()
+                .max_connections(1)
+                .connect_with(conn_options)
+                .await
+                .unwrap();
+            query.execute(&conn_pool).await.unwrap();
+        }
+        Ok(())
+    }
+
+    async fn refresh_meta(&mut self, data: Vec<DdlData>) -> Result<(), Error> {
+        for ddl_data in data.iter() {
+            self.meta_manager
+                .invalidate_cache(&ddl_data.schema, &ddl_data.tb);
+        }
         Ok(())
     }
 }

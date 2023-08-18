@@ -45,18 +45,14 @@ impl RedisTestRunner {
                 TaskUtil::create_redis_conn(&url).await.unwrap()
             }
             _ => {
-                return Err(Error::Unexpected {
-                    error: "extractor config error".to_string(),
-                });
+                return Err(Error::ConfigError("unsupported extractor config".into()));
             }
         };
 
         let dst_conn = match config.sinker {
             SinkerConfig::Redis { url, .. } => TaskUtil::create_redis_conn(&url).await.unwrap(),
             _ => {
-                return Err(Error::Unexpected {
-                    error: "sinker config error".to_string(),
-                });
+                return Err(Error::ConfigError("unsupported sinker config".into()));
             }
         };
 

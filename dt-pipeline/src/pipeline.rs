@@ -136,9 +136,18 @@ impl Pipeline {
         let count = data.len();
         if count > 0 {
             self.parallelizer
-                .sink_ddl(data, &self.sinkers)
+                .sink_ddl(data.clone(), &self.sinkers)
                 .await
-                .unwrap()
+                .unwrap();
+            // only part of sinkers will execute sink_ddl, but all sinkers should refresh metadata
+            for sinker in self.sinkers.iter_mut() {
+                sinker
+                    .lock()
+                    .await
+                    .refresh_meta(data.clone())
+                    .await
+                    .unwrap();
+            }
         }
         Ok((count, last_received_position, last_commit_position))
     }

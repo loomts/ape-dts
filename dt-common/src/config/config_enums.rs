@@ -4,7 +4,7 @@ use strum::{Display, EnumString, IntoStaticStr};
 
 use crate::error::Error;
 
-#[derive(Clone, Display, EnumString, IntoStaticStr, Debug)]
+#[derive(Clone, Display, EnumString, IntoStaticStr, Debug, PartialEq, Eq)]
 pub enum DbType {
     #[strum(serialize = "mysql")]
     Mysql,
@@ -36,7 +36,7 @@ pub enum ExtractType {
     Basic,
 }
 
-#[derive(EnumString, IntoStaticStr)]
+#[derive(Display, EnumString, IntoStaticStr)]
 pub enum SinkType {
     #[strum(serialize = "write")]
     Write,
@@ -73,7 +73,7 @@ pub enum RouteType {
     Tb,
 }
 
-#[derive(Clone, IntoStaticStr)]
+#[derive(Clone, Debug, IntoStaticStr)]
 pub enum ConflictPolicyEnum {
     #[strum(serialize = "ignore")]
     Ignore,

@@ -42,9 +42,7 @@ impl RedisClient {
                     return Ok(me);
                 }
             }
-            return Err(Error::Unexpected {
-                error: format!("can't cnnect redis: {}", url),
-            });
+            return Err(Error::Unexpected(format!("can't cnnect redis: {}", url)));
         }
 
         Ok(me)

@@ -1,70 +1,40 @@
-#[derive(Debug)]
+use thiserror::Error;
+
+#[derive(Error, Debug)]
 pub enum Error {
-    ConfigError {
-        error: String,
-    },
+    #[error("config error: {0}")]
+    ConfigError(String),
 
-    BinlogError {
-        error: mysql_binlog_connector_rust::binlog_error::BinlogError,
-    },
+    #[error("extractor error: {0}")]
+    ExtractorError(String),
 
-    SqlxError {
-        error: sqlx::Error,
-    },
+    #[error("sinker error: {0}")]
+    SinkerError(String),
 
-    Unexpected {
-        error: String,
-    },
+    #[error("pull mysql binlog error: {0}")]
+    BinlogError(#[from] mysql_binlog_connector_rust::binlog_error::BinlogError),
 
-    MetadataError {
-        error: String,
-    },
+    #[error("sqlx error: {0}")]
+    SqlxError(#[from] sqlx::Error),
 
-    IoError {
-        error: std::io::Error,
-    },
+    #[error("unexpected error: {0}")]
+    Unexpected(String),
 
-    YamlError {
-        error: serde_yaml::Error,
-    },
+    #[error("parse redis rdb error: {0}")]
+    RedisRdbError(String),
 
-    EnvVarError {
-        error: std::env::VarError,
-    },
+    #[error("metadata error: {0}")]
+    MetadataError(String),
 
-    StructError {
-        error: String,
-    },
+    #[error("io error: {0}")]
+    IoError(#[from] std::io::Error),
 
-    ColumnNotMatch,
-}
+    #[error("yaml error: {0}")]
+    YamlError(#[from] serde_yaml::Error),
 
-impl From<mysql_binlog_connector_rust::binlog_error::BinlogError> for Error {
-    fn from(err: mysql_binlog_connector_rust::binlog_error::BinlogError) -> Self {
-        Self::BinlogError { error: err }
-    }
-}
+    #[error("from utf8 error: {0}")]
+    FromUtf8Error(#[from] std::string::FromUtf8Error),
 
-impl From<sqlx::Error> for Error {
-    fn from(err: sqlx::Error) -> Self {
-        Self::SqlxError { error: err }
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(err: std::io::Error) -> Self {
-        Self::IoError { error: err }
-    }
-}
-
-impl From<serde_yaml::Error> for Error {
-    fn from(err: serde_yaml::Error) -> Self {
-        Self::YamlError { error: err }
-    }
-}
-
-impl From<std::env::VarError> for Error {
-    fn from(err: std::env::VarError) -> Self {
-        Self::EnvVarError { error: err }
-    }
+    #[error("struct error: {0}")]
+    StructError(String),
 }

@@ -35,6 +35,7 @@ pub enum ColValue {
     Set2(String),
     Enum2(String),
     Json(Vec<u8>),
+    Json2(String),
     MongoDoc(Document),
 }
 
@@ -77,6 +78,7 @@ impl ColValue {
             ColValue::Enum2(v) => Some(v.to_string()),
             // TODO: support JSON
             ColValue::Json(v) => Some(format!("{:?}", v)),
+            ColValue::Json2(v) => Some(v.to_string()),
             _ => Option::None,
         }
     }
@@ -113,6 +115,7 @@ impl Serialize for ColValue {
             ColValue::Enum2(v) => serializer.serialize_str(v),
             // TODO: support JSON
             ColValue::Json(v) => serializer.serialize_bytes(v),
+            ColValue::Json2(v) => serializer.serialize_str(v),
             _ => serializer.serialize_none(),
         }
     }

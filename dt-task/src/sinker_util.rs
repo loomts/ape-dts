@@ -22,7 +22,10 @@ use dt_connector::{
     },
     Sinker,
 };
-use dt_meta::{mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager};
+use dt_meta::{
+    mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
+    redis::redis_write_method::RedisWriteMethod,
+};
 use kafka::producer::{Producer, RequiredAcks};
 use reqwest::Client;
 use rusoto_core::Region;
@@ -178,11 +181,16 @@ impl SinkerUtil {
                 .await?
             }
 
-            SinkerConfig::Redis { url, batch_size } => {
+            SinkerConfig::Redis {
+                url,
+                batch_size,
+                method,
+            } => {
                 SinkerUtil::create_redis_sinker(
                     url,
                     task_config.pipeline.parallel_size,
                     *batch_size,
+                    method,
                 )
                 .await?
             }
@@ -208,6 +216,7 @@ impl SinkerUtil {
         let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
         for _ in 0..parallel_size {
             let sinker = MysqlSinker {
+                url: url.to_string(),
                 conn_pool: conn_pool.clone(),
                 meta_manager: meta_manager.clone(),
                 router: router.clone(),
@@ -445,16 +454,19 @@ impl SinkerUtil {
         url: &str,
         parallel_size: usize,
         batch_size: usize,
+        method: &str,
     ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
         let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
         for _ in 0..parallel_size {
             let mut conn = TaskUtil::create_redis_conn(url).await?;
             let version = TaskUtil::get_redis_version(&mut conn)?;
+            let method = RedisWriteMethod::from_str(method).unwrap();
             let sinker = RedisSinker {
                 conn,
                 batch_size,
                 now_db_id: -1,
                 version,
+                method,
             };
             sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
         }

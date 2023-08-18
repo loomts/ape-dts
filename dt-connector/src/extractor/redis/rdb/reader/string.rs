@@ -29,9 +29,10 @@ impl RdbReader<'_> {
                 }
 
                 _ => {
-                    return Err(Error::Unexpected {
-                        error: format!("Unknown string encode type {}", len).to_string(),
-                    })
+                    return Err(Error::RedisRdbError(format!(
+                        "Unknown string encode type {}",
+                        len
+                    )))
                 }
             }
         } else {
@@ -73,9 +74,10 @@ impl RdbReader<'_> {
         }
 
         if o != out_len {
-            Err(Error::Unexpected {
-                error: format!("lzf decompress failed: out_len: {}, o: {}", out_len, o).to_string(),
-            })
+            Err(Error::RedisRdbError(format!(
+                "lzf decompress failed: out_len: {}, o: {}",
+                out_len, o
+            )))
         } else {
             Ok(out)
         }

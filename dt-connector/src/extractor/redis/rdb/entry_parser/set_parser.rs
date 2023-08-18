@@ -21,9 +21,10 @@ impl SetLoader {
             super::RDB_TYPE_SET => Self::read_str_set(&mut obj, reader)?,
             super::RDB_TYPE_SET_INT_SET => Self::read_int_set(&mut obj, reader)?,
             _ => {
-                return Err(Error::Unexpected {
-                    error: format!("unknown set type. type_byte=[{}]", type_byte).to_string(),
-                })
+                return Err(Error::RedisRdbError(format!(
+                    "unknown set type. type_byte=[{}]",
+                    type_byte
+                )))
             }
         }
         Ok(obj)
@@ -50,10 +51,10 @@ impl SetLoader {
                 4 => LittleEndian::read_i32(&buf).to_string(),
                 8 => LittleEndian::read_i64(&buf).to_string(),
                 _ => {
-                    return Err(Error::Unexpected {
-                        error: format!("unknown int encoding type: {:x}", encoding_type)
-                            .to_string(),
-                    });
+                    return Err(Error::RedisRdbError(format!(
+                        "unknown int encoding type: {:x}",
+                        encoding_type
+                    )));
                 }
             };
             obj.elements.push(RedisString::from(int_str));

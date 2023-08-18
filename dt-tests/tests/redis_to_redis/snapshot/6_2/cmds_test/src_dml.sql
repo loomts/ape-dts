@@ -413,7 +413,7 @@ XADD 65-1 * field1 value1 field2 value2 field3 value3
 -- XCLAIM mystream mygroup Alice 3600000 1526569498055-0
 
 -- XDEL
-XADD 66-1 * a 1
+XADD 66-1 1538561700640-0 a 1
 XADD 66-1 * b 2
 XADD 66-1 * c 3
 XDEL 66-1 1538561700640-0

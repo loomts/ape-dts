@@ -28,10 +28,6 @@ impl Extractor for MysqlStructExtractor {
         log_info!("MysqlStructExtractor starts, schema: {}", self.db,);
         self.extract_internal().await
     }
-
-    async fn close(&mut self) -> Result<(), Error> {
-        Ok(())
-    }
 }
 
 impl MysqlStructExtractor {
@@ -60,6 +56,7 @@ impl MysqlStructExtractor {
     pub async fn push_dt_data(&mut self, meta: &StructModel) {
         let ddl_data = DdlData {
             schema: self.db.clone(),
+            tb: String::new(),
             query: String::new(),
             meta: Some(meta.to_owned()),
             ddl_type: DdlType::Unknown,

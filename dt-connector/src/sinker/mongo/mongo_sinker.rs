@@ -7,7 +7,7 @@ use mongodb::{
 
 use dt_common::{constants::MongoConstants, error::Error, log_error};
 
-use dt_meta::{col_value::ColValue, ddl_data::DdlData, row_data::RowData, row_type::RowType};
+use dt_meta::{col_value::ColValue, row_data::RowData, row_type::RowType};
 
 use crate::{call_batch_fn, sinker::rdb_router::RdbRouter, Sinker};
 
@@ -38,14 +38,6 @@ impl Sinker for MongoSinker {
                 _ => self.serial_sink(data).await.unwrap(),
             }
         }
-        Ok(())
-    }
-
-    async fn close(&mut self) -> Result<(), Error> {
-        Ok(())
-    }
-
-    async fn sink_ddl(&mut self, _data: Vec<DdlData>, _batch: bool) -> Result<(), Error> {
         Ok(())
     }
 }

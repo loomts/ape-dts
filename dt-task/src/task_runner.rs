@@ -113,10 +113,7 @@ impl TaskRunner {
                     },
 
                     _ => {
-                        return Err(Error::Unexpected {
-                            error: "unexpected extractor config type for rdb snapshot task"
-                                .to_string(),
-                        });
+                        return Err(Error::ConfigError("unsupported extractor config".into()));
                     }
                 };
 
@@ -377,9 +374,7 @@ impl TaskRunner {
             }
 
             _ => {
-                return Err(Error::ConfigError {
-                    error: String::from("extractor_config type is not supported."),
-                })
+                return Err(Error::ConfigError("unsupported extractor config".into()));
             }
         };
         Ok(extractor)

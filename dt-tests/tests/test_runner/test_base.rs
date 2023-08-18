@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use dt_common::config::config_enums::DbType;
 use futures::executor::block_on;
 
 use crate::test_runner::rdb_test_runner::DST;
@@ -21,18 +22,24 @@ impl TestBase {
 
     pub async fn run_snapshot_test_and_check_dst_count(
         test_dir: &str,
+        db_type: &DbType,
         dst_expected_counts: HashMap<&str, usize>,
     ) {
         let runner = RdbTestRunner::new(test_dir).await.unwrap();
         runner.run_snapshot_test(false).await.unwrap();
 
-        let assert_dst_count = |tb: &str, count: usize| {
-            let dst_data = block_on(runner.fetch_data(tb, DST)).unwrap();
+        let assert_dst_count = |db_tb: &(String, String), count: usize| {
+            let dst_data = block_on(runner.fetch_data(db_tb, DST)).unwrap();
+            println!(
+                "check dst table {:?} record count, expect: {}",
+                db_tb, count
+            );
             assert_eq!(dst_data.len(), count);
         };
 
-        for (tb, count) in dst_expected_counts.iter() {
-            assert_dst_count(tb, *count);
+        for (db_tb, count) in dst_expected_counts {
+            let db_tb = RdbTestRunner::parse_full_tb_name(db_tb, db_type);
+            assert_dst_count(&db_tb, count);
         }
     }
 
@@ -44,6 +51,14 @@ impl TestBase {
             .unwrap();
         // runner.run_cdc_test_with_different_configs(start_millis, parse_millis))
         //     .unwrap();
+    }
+
+    pub async fn run_ddl_test(test_dir: &str, start_millis: u64, parse_millis: u64) {
+        let runner = RdbTestRunner::new(test_dir).await.unwrap();
+        runner
+            .run_ddl_test(start_millis, parse_millis)
+            .await
+            .unwrap();
     }
 
     pub async fn run_check_test(test_dir: &str) {

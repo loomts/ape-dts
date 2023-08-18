@@ -4,7 +4,7 @@ use crate::{call_batch_fn, Sinker};
 
 use dt_common::error::Error;
 
-use dt_meta::{ddl_data::DdlData, row_data::RowData};
+use dt_meta::row_data::RowData;
 
 use kafka::producer::{Producer, Record};
 
@@ -20,14 +20,6 @@ pub struct KafkaSinker {
 impl Sinker for KafkaSinker {
     async fn sink_dml(&mut self, mut data: Vec<RowData>, _batch: bool) -> Result<(), Error> {
         call_batch_fn!(self, data, Self::send);
-        Ok(())
-    }
-
-    async fn sink_ddl(&mut self, _data: Vec<DdlData>, _batch: bool) -> Result<(), Error> {
-        Ok(())
-    }
-
-    async fn close(&mut self) -> Result<(), Error> {
         Ok(())
     }
 }

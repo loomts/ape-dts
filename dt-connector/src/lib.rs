@@ -26,6 +26,10 @@ pub trait Sinker {
     async fn sink_raw(&mut self, mut _data: Vec<DtData>, _batch: bool) -> Result<(), Error> {
         Ok(())
     }
+
+    async fn refresh_meta(&mut self, _data: Vec<DdlData>) -> Result<(), Error> {
+        Ok(())
+    }
 }
 
 #[async_trait]

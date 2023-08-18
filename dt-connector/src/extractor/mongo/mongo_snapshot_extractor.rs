@@ -40,10 +40,6 @@ impl Extractor for MongoSnapshotExtractor {
         );
         self.extract_internal().await
     }
-
-    async fn close(&mut self) -> Result<(), Error> {
-        Ok(())
-    }
 }
 
 impl MongoSnapshotExtractor {

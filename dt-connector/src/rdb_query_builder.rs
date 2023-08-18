@@ -125,12 +125,10 @@ impl RdbQueryBuilder<'_> {
                 cols.push(col.clone());
                 let col_value = before.get(col);
                 if *col_value.unwrap() == ColValue::None {
-                    return Err(Error::Unexpected {
-                        error: format!(
+                    return Err(Error::Unexpected(format!(
                             "db: {}, tb: {}, where col: {} is NULL, which should not happen in batch delete",
                             self.rdb_tb_meta.schema, self.rdb_tb_meta.tb, col
-                        ),
-                    });
+                        )));
                 }
                 binds.push(col_value);
             }
@@ -252,12 +250,10 @@ impl RdbQueryBuilder<'_> {
         }
 
         if set_pairs.is_empty() {
-            return Err(Error::Unexpected {
-                error: format!(
-                    "db: {}, tb: {}, no cols in after, which should not happen in update",
-                    self.rdb_tb_meta.schema, self.rdb_tb_meta.tb
-                ),
-            });
+            return Err(Error::Unexpected(format!(
+                "db: {}, tb: {}, no cols in after, which should not happen in update",
+                self.rdb_tb_meta.schema, self.rdb_tb_meta.tb
+            )));
         }
 
         let (where_sql, not_null_cols) = self.get_where_info(placeholder_index, before)?;
@@ -336,12 +332,10 @@ impl RdbQueryBuilder<'_> {
                 cols.push(col.clone());
                 let col_value = after.get(col);
                 if *col_value.unwrap() == ColValue::None {
-                    return Err(Error::Unexpected {
-                        error: format!(
+                    return Err(Error::Unexpected(format!(
                             "db: {}, tb: {}, where col: {} is NULL, which should not happen in batch select",
                             self.rdb_tb_meta.schema, self.rdb_tb_meta.tb, col
-                        ),
-                    });
+                        )));
                 }
                 binds.push(col_value);
             }
