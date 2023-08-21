@@ -15,13 +15,13 @@ use super::{
     rdb_test_runner::RdbTestRunner, redis_test_runner::RedisTestRunner,
 };
 
-pub struct RdbPrecheckTestRunner {
+pub struct PrecheckTestRunner {
     pub db_type: DbType,
     checker_connector: PrecheckerBuilder,
     test_dir: String,
 }
 
-impl RdbPrecheckTestRunner {
+impl PrecheckTestRunner {
     pub async fn new(test_dir: &str) -> Result<Self, Error> {
         let base = BaseTestRunner::new(test_dir).await.unwrap();
         let task_config = TaskConfig::new(&base.task_config_file);
