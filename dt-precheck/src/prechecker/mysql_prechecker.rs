@@ -1,13 +1,15 @@
 use std::collections::HashSet;
 
 use async_trait::async_trait;
-use dt_common::config::{config_enums::DbType, filter_config::FilterConfig};
+use dt_common::{
+    config::{config_enums::DbType, filter_config::FilterConfig},
+    error::Error,
+};
 use dt_meta::struct_meta::db_table_model::DbTable;
 use regex::Regex;
 
 use crate::{
     config::precheck_config::PrecheckConfig,
-    error::Error,
     fetcher::{mysql::mysql_fetcher::MysqlFetcher, traits::Fetcher},
     meta::{check_item::CheckItem, check_result::CheckResult},
 };
@@ -21,22 +23,16 @@ pub struct MySqlPrechecker {
     pub filter_config: FilterConfig,
     pub precheck_config: PrecheckConfig,
     pub is_source: bool,
-    pub db_type_option: Option<DbType>,
 }
 
 #[async_trait]
 impl Prechecker for MySqlPrechecker {
     async fn build_connection(&mut self) -> Result<CheckResult, Error> {
-        let result = self.fetcher.build_connection().await;
-        match result {
-            Ok(_) => {}
-            Err(e) => return Err(e),
-        }
-
+        self.fetcher.build_connection().await?;
         Ok(CheckResult::build_with_err(
             CheckItem::CheckDatabaseConnection,
             self.is_source,
-            self.db_type_option.clone(),
+            DbType::Mysql,
             None,
         ))
     }
@@ -49,15 +45,14 @@ impl Prechecker for MySqlPrechecker {
         match result {
             Ok(version) => {
                 if version.is_empty() {
-                    check_error = Some(Error::PreCheckError {
-                        error: "found no version info.".to_string(),
-                    });
+                    check_error = Some(Error::PreCheckError("found no version info.".into()));
                 } else {
                     let re = Regex::new(MYSQL_SUPPORT_DB_VERSION_REGEX).unwrap();
                     if !re.is_match(version.as_str()) {
-                        check_error = Some(Error::PreCheckError {
-                            error: format!("mysql version:[{}] is invalid.", version),
-                        });
+                        check_error = Some(Error::PreCheckError(format!(
+                            "mysql version:[{}] is invalid.",
+                            version
+                        )));
                     }
                 }
             }
@@ -67,7 +62,7 @@ impl Prechecker for MySqlPrechecker {
         Ok(CheckResult::build_with_err(
             CheckItem::CheckDatabaseVersionSupported,
             self.is_source,
-            self.db_type_option.clone(),
+            DbType::Mysql,
             check_error,
         ))
     }
@@ -87,7 +82,7 @@ impl Prechecker for MySqlPrechecker {
             return Ok(CheckResult::build_with_err(
                 CheckItem::CheckIfDatabaseSupportCdc,
                 self.is_source,
-                self.db_type_option.clone(),
+                DbType::Mysql,
                 check_error,
             ));
         }
@@ -127,9 +122,9 @@ impl Prechecker for MySqlPrechecker {
                             }
                         }
                         _ => {
-                            return Err(Error::PreCheckError {
-                                error: "find database cdc settings meet unknown error".to_string(),
-                            })
+                            return Err(Error::PreCheckError(
+                                "find database cdc settings meet unknown error".into(),
+                            ))
                         }
                     }
                 }
@@ -137,15 +132,13 @@ impl Prechecker for MySqlPrechecker {
             Err(e) => return Err(e),
         }
         if !errs.is_empty() {
-            check_error = Some(Error::PreCheckError {
-                error: errs.join(";"),
-            })
+            check_error = Some(Error::PreCheckError(errs.join(";")))
         }
 
         Ok(CheckResult::build_with_err(
             CheckItem::CheckIfDatabaseSupportCdc,
             self.is_source,
-            self.db_type_option.clone(),
+            DbType::Mysql,
             check_error,
         ))
     }
@@ -230,15 +223,13 @@ impl Prechecker for MySqlPrechecker {
             }
         }
         if !err_msgs.is_empty() {
-            check_error = Some(Error::PreCheckError {
-                error: err_msgs.join("."),
-            })
+            check_error = Some(Error::PreCheckError(err_msgs.join(".").into()))
         }
 
         Ok(CheckResult::build_with_err(
             CheckItem::CheckIfStructExisted,
             self.is_source,
-            self.db_type_option.clone(),
+            DbType::Mysql,
             check_error,
         ))
     }
@@ -251,7 +242,7 @@ impl Prechecker for MySqlPrechecker {
             return Ok(CheckResult::build_with_err(
                 CheckItem::CheckIfTableStructSupported,
                 self.is_source,
-                self.db_type_option.clone(),
+                DbType::Mysql,
                 check_error,
             ));
         }
@@ -334,15 +325,13 @@ impl Prechecker for MySqlPrechecker {
             ))
         }
         if !err_msgs.is_empty() {
-            check_error = Some(Error::PreCheckError {
-                error: err_msgs.join(";"),
-            })
+            check_error = Some(Error::PreCheckError(err_msgs.join(";").into()))
         }
 
         Ok(CheckResult::build_with_err(
             CheckItem::CheckIfTableStructSupported,
             self.is_source,
-            self.db_type_option.clone(),
+            DbType::Mysql,
             check_error,
         ))
     }

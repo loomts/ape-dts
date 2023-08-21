@@ -1,61 +1,27 @@
-use std::{collections::HashMap, time::Duration};
+use std::collections::HashMap;
 
 use async_trait::async_trait;
-use dt_common::{
-    config::{
-        config_enums::DbType, extractor_config::ExtractorConfig, filter_config::FilterConfig,
-        router_config::RouterConfig, sinker_config::SinkerConfig,
-    },
-    utils::rdb_filter::RdbFilter,
-};
+use dt_common::{error::Error, utils::rdb_filter::RdbFilter};
+use dt_task::task_util::TaskUtil;
 use futures::{Stream, TryStreamExt};
-use sqlx::{
-    postgres::{PgPoolOptions, PgRow},
-    query, Pool, Postgres, Row,
-};
+use sqlx::{postgres::PgRow, query, Pool, Postgres, Row};
 
 use crate::{
-    error::Error,
     fetcher::traits::Fetcher,
     meta::database_mode::{Constraint, Database, Schema, Table},
 };
 
 pub struct PgFetcher {
     pub pool: Option<Pool<Postgres>>,
-    pub source_config: ExtractorConfig,
-    pub filter_config: FilterConfig,
-    pub sinker_config: SinkerConfig,
-    pub router_config: RouterConfig,
+    pub url: String,
     pub is_source: bool,
-    pub db_type_option: Option<DbType>,
     pub filter: RdbFilter,
 }
 
 #[async_trait]
 impl Fetcher for PgFetcher {
     async fn build_connection(&mut self) -> Result<(), Error> {
-        let mut connection_url = String::from("");
-
-        if self.is_source {
-            if let ExtractorConfig::Basic { url, db_type } = &self.source_config {
-                connection_url = String::from(url);
-                self.db_type_option = Some(db_type.to_owned());
-            }
-        } else if let SinkerConfig::Basic { url, db_type } = &self.sinker_config {
-            connection_url = String::from(url);
-            self.db_type_option = Some(db_type.to_owned());
-        }
-
-        let db_pool_result = PgPoolOptions::new()
-            .max_connections(8)
-            .acquire_timeout(Duration::from_secs(5))
-            .connect(connection_url.as_str())
-            .await;
-        match db_pool_result {
-            Ok(pool) => self.pool = Option::Some(pool),
-            Err(error) => return Err(Error::from(error)),
-        }
-
+        self.pool = Some(TaskUtil::create_pg_conn_pool(&self.url, 1, true).await?);
         Ok(())
     }
 

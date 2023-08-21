@@ -8,6 +8,8 @@ edition = "2021"
 [dependencies]
 dt-common = { path = "../dt-common", version = "0.1.0"}
 dt-meta = { path = "../dt-meta", version = "0.1.0"}
+dt-task = { path = "../dt-task", version = "0.1.0" }
+dt-connector = { path = "../dt-connector", version = "0.1.0" }
 
 sqlx = {workspace = true, features = ["runtime-async-std-rustls", "mysql", "postgres", "decimal", "bigdecimal", "ipnetwork", "mac_address", "bit-vec", "time", "chrono", "json", "uuid"]}
 strum = { workspace = true }
@@ -17,3 +19,5 @@ configparser = { workspace = true }
 futures = { workspace = true }
 regex = { workspace = true }
 mongodb = { workspace = true }
+concurrent-queue = { workspace = true }
+redis = { workspace = true }

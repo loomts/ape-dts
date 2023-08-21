@@ -194,8 +194,6 @@ impl SinkerUtil {
                 )
                 .await?
             }
-
-            _ => vec![],
         };
         Ok(sinkers)
     }

@@ -2,11 +2,6 @@ use super::config_enums::DbType;
 
 #[derive(Clone, Debug)]
 pub enum ExtractorConfig {
-    Basic {
-        url: String,
-        db_type: DbType,
-    },
-
     MysqlStruct {
         url: String,
         db: String,
@@ -96,9 +91,25 @@ impl ExtractorConfig {
             | Self::PgCheck { .. } => DbType::Pg,
 
             Self::MongoSnapshot { .. } | Self::MongoCdc { .. } => DbType::Mongo,
-            Self::Basic { db_type, .. } => db_type.clone(),
 
             Self::RedisSnapshot { .. } | Self::RedisCdc { .. } => DbType::Redis,
+        }
+    }
+
+    pub fn get_url(&self) -> String {
+        match self {
+            Self::MysqlStruct { url, .. }
+            | Self::MysqlSnapshot { url, .. }
+            | Self::MysqlCdc { url, .. }
+            | Self::MysqlCheck { url, .. }
+            | Self::PgStruct { url, .. }
+            | Self::PgSnapshot { url, .. }
+            | Self::PgCdc { url, .. }
+            | Self::PgCheck { url, .. }
+            | Self::MongoSnapshot { url, .. }
+            | Self::MongoCdc { url, .. }
+            | Self::RedisSnapshot { url, .. }
+            | Self::RedisCdc { url, .. } => url.to_owned(),
         }
     }
 }
