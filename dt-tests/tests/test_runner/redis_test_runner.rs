@@ -127,7 +127,8 @@ impl RedisTestRunner {
         let mut cf_bloom_keys = Vec::new();
 
         let keys = self.list_keys(SRC, "*");
-        for key in keys {
+        for i in keys.iter() {
+            let key = i.clone();
             let key_type = self.get_key_type(SRC, &key);
             match key_type.to_lowercase().as_str() {
                 "string" => string_keys.push(key),
@@ -155,7 +156,38 @@ impl RedisTestRunner {
         self.compare_rejson_entries(&json_keys);
         self.compare_bf_bloom_entries(&bf_bloom_keys);
         self.compare_cf_bloom_entries(&cf_bloom_keys);
+        self.check_expire(&keys);
         Ok(())
+    }
+
+    fn check_expire(&mut self, keys: &Vec<String>) {
+        for key in keys {
+            let cmd = format!("PTTL {}", self.escape_key(key));
+            let src_result = self.execute_cmd(SRC, &cmd);
+            let dst_result = self.execute_cmd(DST, &cmd);
+
+            let get_expire = |result: Value| -> i64 {
+                match result {
+                    Value::Int(expire) => return expire,
+                    _ => {
+                        // should never happen
+                        return -1000;
+                    }
+                }
+            };
+
+            let src_expire = get_expire(src_result);
+            let dst_expire = get_expire(dst_result);
+            assert_ne!(src_expire, -1000);
+            assert_ne!(dst_expire, -1000);
+            if src_expire > 0 {
+                println!("src key: {} expire in {}", key, src_expire);
+                println!("dst key: {} expire in {}", key, dst_expire);
+                assert!(dst_expire > 0)
+            } else {
+                assert!(dst_expire < 0)
+            }
+        }
     }
 
     fn compare_string_entries(&mut self, keys: &Vec<String>) {

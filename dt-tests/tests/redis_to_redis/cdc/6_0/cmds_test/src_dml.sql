@@ -86,12 +86,16 @@ EXPIRE 15-1 1
 -- Starting with Redis version 7.0.0: Added options: NX, XX, GT and LT.
 -- EXPIRE 15-1 1 XX
 -- EXPIRE 15-1 1 NX
+SET 15-2 "Hello"
+-- NOT expire during test
+EXPIRE 15-2 1000000000
 
 
 -- EXPIREAT
 SET 16-1 "Hello"
 EXPIREAT 16-1 1
 SET 16-2 "Hello"
+-- NOT expire during test
 EXPIREAT 16-2 4102416000
 
 -- GEOADD
@@ -228,6 +232,7 @@ PERSIST 41-1
 
 -- PEXPIRE
 SET 42-1 "Hello"
+-- NOT expire during test
 PEXPIRE 42-1 1500000000
 -- Starting with Redis version 7.0.0: Added options: NX, XX, GT and LT.
 -- SET 42-2 "Hello"
@@ -239,6 +244,7 @@ PEXPIRE 42-1 1500000000
 SET 43-1 "Hello"
 PEXPIREAT 43-1 1555555555005
 SET 43-2 "Hello"
+-- NOT expire during test
 PEXPIREAT 43-2 15555555550050000
 -- PEXPIRETIME 43-1
 
@@ -257,6 +263,7 @@ PFMERGE 45-3 45-1 45-2
 -- PSETEX (deprecated)
 PSETEX 46-1 1000 "Hello"
 -- PTTL 46-1
+-- NOT expire during test
 PSETEX 46-2 100000000 "Hello"
 -- GET 46-2
 
@@ -327,6 +334,7 @@ SETBIT 55-1 7 0
 -- SETEX
 SETEX 56-1 1 "Hello"
 -- GET 56-1
+-- NOT expire during test
 SETEX 56-2 100000000 "Hello"
 
 -- SETNX

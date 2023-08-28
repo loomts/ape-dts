@@ -49,10 +49,12 @@ impl RdbLoader<'_> {
 
         match type_byte {
             K_FLAG_IDLE => {
+                // OBJECT IDELTIME NOT captured in rdb snapshot
                 self.idle = self.reader.read_length()? as i64;
             }
 
             K_FLAG_FREQ => {
+                // OBJECT FREQ NOT captured in rdb snapshot
                 self.freq = self.reader.read_u8()? as i64;
             }
 
@@ -144,6 +146,9 @@ impl RdbLoader<'_> {
                     entry.key = key;
                     entry.value = value.unwrap();
                     entry.value_type_byte = type_byte;
+                    entry.expire_ms = self.expire_ms;
+                    // reset expire_ms
+                    self.expire_ms = 0;
                     return Ok(Some(entry));
                 }
             }

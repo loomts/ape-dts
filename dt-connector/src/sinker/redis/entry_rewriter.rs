@@ -343,6 +343,17 @@ impl EntryRewriter {
         Ok(cmd)
     }
 
+    pub fn rewrite_expire(entry: &RedisEntry) -> Result<Option<RedisCmd>, Error> {
+        if entry.expire_ms == 0 {
+            return Ok(None);
+        }
+        let mut cmd = RedisCmd::new();
+        cmd.add_str_arg("pexpire");
+        cmd.add_redis_arg(&entry.key);
+        cmd.add_str_arg(&entry.expire_ms.to_string());
+        Ok(Some(cmd))
+    }
+
     fn create_value_dump(type_byte: u8, val: &[u8]) -> Vec<u8> {
         let mut buf: Vec<u8> = Vec::new();
         buf.push(type_byte);
