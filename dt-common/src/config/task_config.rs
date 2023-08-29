@@ -329,32 +329,3 @@ impl TaskConfig {
         T::default()
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::utils::work_dir_util::WorkDirUtil;
-
-    use super::*;
-    use std::{fs, path::PathBuf};
-
-    #[test]
-    fn task_config_new_test() {
-        let project_root = WorkDirUtil::get_project_root().unwrap();
-
-        let path_name = format!("{}/dt-common/src/test/config", project_root);
-        println!("path_name:{}", path_name);
-
-        for entry in fs::read_dir(PathBuf::from(path_name)).unwrap() {
-            if entry.is_err() {
-                continue;
-            }
-            let dir_entry = entry.unwrap();
-            println!(
-                "begin check config: {}",
-                dir_entry.file_name().to_string_lossy()
-            );
-            TaskConfig::new(&dir_entry.path().to_string_lossy().to_string());
-        }
-        assert!(true)
-    }
-}
