@@ -27,12 +27,12 @@ BITOP XOR 3-5 3-1 3-2
 -- NOT
 BITOP NOT 3-6 3-1
 
--- BLMOVE
+-- BLMOVE -- version: 6.2.0
 RPUSH 4-1 a b c
 RPUSH 4-2 x y z
 BLMOVE 4-1 4-2 LEFT LEFT 0
 
--- BLMPOP
+-- BLMPOP -- version: 7.0.0
 -- BLMPOP timeout numkeys key [key ...] <LEFT | RIGHT> [COUNT count]
 LPUSH 5-1 a b c d
 LPUSH 5-2 1 2 3 4
@@ -85,11 +85,15 @@ SET 15-1 "Hello"
 EXPIRE 15-1 1
 EXPIRE 15-1 1 XX
 EXPIRE 15-1 1 NX
+SET 15-2 "Hello"
+-- NOT expire during test
+EXPIRE 15-2 1000000000
 
 -- EXPIREAT
 SET 16-1 "Hello"
 EXPIREAT 16-1 1
 SET 16-2 "Hello"
+-- NOT expire during test
 EXPIREAT 16-2 4102416000
 
 -- GEOADD
@@ -220,11 +224,12 @@ MGET 40-1 40-2 40-3
 
 -- PERSIST
 SET 41-1 "Hello"
-EXPIRE 41-1 100
+EXPIRE 41-1 10
 PERSIST 41-1
 
 -- PEXPIRE
 SET 42-1 "Hello"
+-- NOT expire during test
 PEXPIRE 42-1 1500000000
 SET 42-2 "Hello"
 PEXPIRE 42-2 1000 XX
@@ -235,6 +240,7 @@ PEXPIRE 42-3 1000 NX
 SET 43-1 "Hello"
 PEXPIREAT 43-1 1555555555005
 SET 43-2 "Hello"
+-- NOT expire during test
 PEXPIREAT 43-2 15555555550050000
 -- PEXPIRETIME 43-1
 
@@ -253,6 +259,7 @@ PFMERGE 45-3 45-1 45-2
 -- PSETEX (deprecated)
 PSETEX 46-1 1000 "Hello"
 -- PTTL 46-1
+-- NOT expire during test
 PSETEX 46-2 100000000 "Hello"
 -- GET 46-2
 
@@ -297,6 +304,9 @@ RPUSHX 52-2 "World"
 SADD 53-1 "Hello"
 SADD 53-1 "World"
 SADD 53-1 "World"
+SADD 53-2 1000
+SADD 53-2 2000
+SADD 53-2 3000
 -- SMEMBERS 53-1
 -- SORT 53-1 ALPHA
 
@@ -319,6 +329,7 @@ SETBIT 55-1 7 0
 -- SETEX
 SETEX 56-1 1 "Hello"
 -- GET 56-1
+-- NOT expire during test
 SETEX 56-2 100000000 "Hello"
 
 -- SETNX

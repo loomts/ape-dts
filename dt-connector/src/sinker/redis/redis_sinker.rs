@@ -100,7 +100,7 @@ impl RedisSinker {
                     }
 
                     RedisWriteMethod::Rewrite => {
-                        let rewrite_cmds = match entry.value {
+                        let mut rewrite_cmds = match entry.value {
                             RedisObject::String(ref mut obj) => EntryRewriter::rewrite_string(obj),
                             RedisObject::List(ref mut obj) => EntryRewriter::rewrite_list(obj),
                             RedisObject::Set(ref mut obj) => EntryRewriter::rewrite_set(obj),
@@ -113,6 +113,9 @@ impl RedisSinker {
                             }
                             _ => return Err(Error::SinkerError("rewrite not implemented".into())),
                         }?;
+                        if let Some(expire_cmd) = EntryRewriter::rewrite_expire(&entry)? {
+                            rewrite_cmds.push(expire_cmd)
+                        }
                         cmds.extend(rewrite_cmds);
                     }
                 }
