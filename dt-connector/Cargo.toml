@@ -37,5 +37,6 @@ url = { workspace = true }
 log = { workspace = true }
 log4rs = { workspace = true }
 redis = { workspace = true }
-thiserror = "1.0"
-async-std = "1.12.0"
+thiserror = { workspace = true }
+async-std = { workspace = true }
+chrono =  { workspace = true }

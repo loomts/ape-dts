@@ -59,7 +59,9 @@ pub enum ExtractorConfig {
     MongoCdc {
         url: String,
         resume_token: String,
-        start_timestamp: i64,
+        start_timestamp: u32,
+        // op_log, change_stream
+        source: String,
     },
 
     RedisSnapshot {

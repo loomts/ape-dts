@@ -54,3 +54,4 @@ mongodb = { version = "2.5.0" }
 dotenv = "0.15.0"
 redis =  { version = "0.23.1", features = ["tokio-comp"] } 
 thiserror = "1.0.44"
+async-std = "1.12.0"
