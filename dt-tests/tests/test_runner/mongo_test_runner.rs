@@ -65,7 +65,7 @@ impl MongoTestRunner {
         start_millis: u64,
         parse_millis: u64,
     ) -> Result<(), Error> {
-        self.execute_test_ddl_sqls().await?;
+        self.execute_test_prepare_sqls().await?;
 
         // update start_timestamp to make sure the subsequent cdc task can get old events
         let start_timestamp = Utc::now().timestamp().to_string();
@@ -123,7 +123,7 @@ impl MongoTestRunner {
     }
 
     pub async fn run_cdc_test(&self, start_millis: u64, parse_millis: u64) -> Result<(), Error> {
-        self.execute_test_ddl_sqls().await?;
+        self.execute_test_prepare_sqls().await?;
 
         let task = self.base.spawn_task().await?;
         TimeUtil::sleep_millis(start_millis).await;
@@ -159,7 +159,7 @@ impl MongoTestRunner {
     }
 
     pub async fn run_snapshot_test(&self, compare_data: bool) -> Result<(), Error> {
-        self.execute_test_ddl_sqls().await?;
+        self.execute_test_prepare_sqls().await?;
 
         let src_mongo_client = self.src_mongo_client.as_ref().unwrap();
 
@@ -178,7 +178,7 @@ impl MongoTestRunner {
         Ok(())
     }
 
-    pub async fn execute_test_ddl_sqls(&self) -> Result<(), Error> {
+    pub async fn execute_test_prepare_sqls(&self) -> Result<(), Error> {
         let src_mongo_client = self.src_mongo_client.as_ref().unwrap();
         let dst_mongo_client = self.dst_mongo_client.as_ref().unwrap();
 
@@ -187,9 +187,11 @@ impl MongoTestRunner {
 
         for (db, sqls) in src_sqls.iter() {
             self.execute_ddls(src_mongo_client, db, sqls).await?;
+            self.execute_dmls(src_mongo_client, db, sqls).await?;
         }
         for (db, sqls) in dst_sqls.iter() {
             self.execute_ddls(dst_mongo_client, db, sqls).await?;
+            self.execute_dmls(dst_mongo_client, db, sqls).await?;
         }
         Ok(())
     }

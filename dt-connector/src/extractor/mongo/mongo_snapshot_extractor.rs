@@ -14,7 +14,7 @@ use dt_meta::{
     row_type::RowType,
 };
 use mongodb::{
-    bson::{doc, oid::ObjectId, Document},
+    bson::{doc, oid::ObjectId, Bson, Document},
     options::FindOptions,
     Client,
 };
@@ -72,8 +72,7 @@ impl MongoSnapshotExtractor {
         let mut cursor = collection.find(filter, find_options).await.unwrap();
         while cursor.advance().await.unwrap() {
             let doc = cursor.deserialize_current().unwrap();
-
-            let id = doc.get_object_id(MongoConstants::ID).unwrap().to_string();
+            let id = Self::get_object_id(&doc);
 
             let mut after = HashMap::new();
             after.insert(MongoConstants::DOC.to_string(), ColValue::MongoDoc(doc));
@@ -106,5 +105,15 @@ impl MongoSnapshotExtractor {
 
         self.shut_down.store(true, Ordering::Release);
         Ok(())
+    }
+
+    fn get_object_id(doc: &Document) -> String {
+        if let Some(id) = doc.get(MongoConstants::ID) {
+            match id {
+                Bson::ObjectId(v) => return v.to_string(),
+                _ => return String::new(),
+            }
+        }
+        String::new()
     }
 }
