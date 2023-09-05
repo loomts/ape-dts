@@ -88,6 +88,10 @@ impl Sinker for MysqlSinker {
         }
         Ok(())
     }
+
+    fn batch_size(&mut self) -> usize {
+        self.batch_size
+    }
 }
 
 impl MysqlSinker {

@@ -51,6 +51,10 @@ impl Sinker for PgSinker {
     async fn close(&mut self) -> Result<(), Error> {
         return close_conn_pool!(self);
     }
+
+    fn batch_size(&mut self) -> usize {
+        self.batch_size
+    }
 }
 
 impl PgSinker {

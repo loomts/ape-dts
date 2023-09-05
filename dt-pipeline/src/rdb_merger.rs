@@ -1,34 +1,48 @@
 use std::collections::HashMap;
 
-use dt_common::error::Error;
+use async_trait::async_trait;
+use dt_common::{error::Error, log_debug};
 use dt_meta::{rdb_meta_manager::RdbMetaManager, row_data::RowData, row_type::RowType};
+
+use crate::{merge_parallelizer::TbMergedData, Merger};
 
 pub struct RdbMerger {
     pub meta_manager: RdbMetaManager,
 }
 
-impl RdbMerger {
-    pub async fn merge(
-        &mut self,
-        data: Vec<RowData>,
-    ) -> Result<HashMap<String, TbMergedData>, Error> {
-        let mut sub_datas = HashMap::<String, TbMergedData>::new();
+#[async_trait]
+impl Merger for RdbMerger {
+    async fn merge(&mut self, data: Vec<RowData>) -> Result<Vec<TbMergedData>, Error> {
+        let mut tb_data_map = HashMap::<String, RdbTbMergedData>::new();
         for row_data in data {
             let full_tb = format!("{}.{}", row_data.schema, row_data.tb);
-            if let Some(merged) = sub_datas.get_mut(&full_tb) {
+            if let Some(merged) = tb_data_map.get_mut(&full_tb) {
                 self.merge_row_data(merged, row_data).await?;
             } else {
-                let mut merged = TbMergedData::new();
+                let mut merged = RdbTbMergedData::new();
                 self.merge_row_data(&mut merged, row_data).await?;
-                sub_datas.insert(full_tb, merged);
+                tb_data_map.insert(full_tb, merged);
             }
         }
-        Ok(sub_datas)
-    }
 
+        let mut results = Vec::new();
+        for (tb, mut rdb_tb_merged) in tb_data_map.drain() {
+            let tb_merged = TbMergedData {
+                tb,
+                insert_rows: rdb_tb_merged.get_insert_rows(),
+                delete_rows: rdb_tb_merged.get_delete_rows(),
+                unmerged_rows: rdb_tb_merged.get_unmerged_rows(),
+            };
+            results.push(tb_merged);
+        }
+        Ok(results)
+    }
+}
+
+impl RdbMerger {
     async fn merge_row_data(
         &mut self,
-        merged: &mut TbMergedData,
+        merged: &mut RdbTbMergedData,
         row_data: RowData,
     ) -> Result<(), Error> {
         // if the table already has some rows unmerged, then following rows also need to be unmerged.
@@ -68,6 +82,12 @@ impl RdbMerger {
             }
 
             RowType::Update => {
+                // if uk change found in any row_data, for safety, all following row_datas won't be merged
+                if self.check_uk_changed(&tb_meta.id_cols, &row_data) {
+                    merged.unmerged_rows.push(row_data);
+                    return Ok(());
+                }
+
                 let (delete, insert) = self.split_update_row_data(row_data).await?;
                 let insert_hash_code = self.get_hash_code(&insert).await?;
 
@@ -109,6 +129,18 @@ impl RdbMerger {
         Ok(())
     }
 
+    fn check_uk_changed(&mut self, id_cols: &[String], row_data: &RowData) -> bool {
+        let before = row_data.before.as_ref().unwrap();
+        let after = row_data.after.as_ref().unwrap();
+        for col in id_cols.iter() {
+            if before.get(col) != after.get(col) {
+                log_debug!("rdb_merger, uk change found, row_data: {:?}", row_data);
+                return true;
+            }
+        }
+        false
+    }
+
     fn check_collision(
         &mut self,
         buffer: &HashMap<u128, RowData>,
@@ -129,6 +161,7 @@ impl RdbMerger {
 
             for col in id_cols.iter() {
                 if col_values.get(col) != exist_col_values.get(col) {
+                    log_debug!("rdb_merger, collision found, row_data: {:?}", row_data);
                     return true;
                 }
             }
@@ -173,14 +206,14 @@ impl RdbMerger {
     }
 }
 
-pub struct TbMergedData {
+struct RdbTbMergedData {
     // HashMap<row_key_hash_code, RowData>
     delete_rows: HashMap<u128, RowData>,
     insert_rows: HashMap<u128, RowData>,
     unmerged_rows: Vec<RowData>,
 }
 
-impl TbMergedData {
+impl RdbTbMergedData {
     pub fn new() -> Self {
         Self {
             delete_rows: HashMap::new(),
@@ -198,12 +231,6 @@ impl TbMergedData {
     }
 
     pub fn get_unmerged_rows(&mut self) -> Vec<RowData> {
-        self.unmerged_rows.as_slice().to_vec()
-    }
-}
-
-impl Default for TbMergedData {
-    fn default() -> Self {
-        Self::new()
+        self.unmerged_rows.drain(..).collect::<Vec<_>>()
     }
 }

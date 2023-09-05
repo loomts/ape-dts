@@ -6,16 +6,13 @@ use dt_common::error::Error;
 use dt_connector::Sinker;
 use dt_meta::{ddl_data::DdlData, dt_data::DtData, row_data::RowData};
 
-use crate::Parallelizer;
+use crate::{Merger, Parallelizer};
 
-use super::{
-    base_parallelizer::BaseParallelizer, rdb_merger::RdbMerger,
-    snapshot_parallelizer::SnapshotParallelizer,
-};
+use super::{base_parallelizer::BaseParallelizer, snapshot_parallelizer::SnapshotParallelizer};
 
 pub struct CheckParallelizer {
     pub base_parallelizer: BaseParallelizer,
-    pub merger: RdbMerger,
+    pub merger: Box<dyn Merger + Send + Sync>,
     pub parallel_size: usize,
 }
 
@@ -35,15 +32,15 @@ impl Parallelizer for CheckParallelizer {
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
     ) -> Result<(), Error> {
         let mut merged_datas = self.merger.merge(data).await?;
-        for (_full_tb, tb_merged_data) in merged_datas.iter_mut() {
-            let batch_data = tb_merged_data.get_insert_rows();
+        for tb_merged_data in merged_datas.drain(..) {
+            let batch_data = tb_merged_data.insert_rows;
             let batch_sub_datas = SnapshotParallelizer::partition(batch_data, self.parallel_size)?;
             self.base_parallelizer
                 .sink_dml(batch_sub_datas, sinkers, self.parallel_size, true)
                 .await
                 .unwrap();
 
-            let serial_data = tb_merged_data.get_unmerged_rows();
+            let serial_data = tb_merged_data.unmerged_rows;
             let serial_sub_datas =
                 SnapshotParallelizer::partition(serial_data, self.parallel_size)?;
             self.base_parallelizer

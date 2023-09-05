@@ -1,96 +1,49 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use async_trait::async_trait;
-use concurrent_queue::ConcurrentQueue;
 use dt_common::error::Error;
-use dt_connector::Sinker;
 use dt_meta::{
     col_value::ColValue,
-    ddl_data::DdlData,
-    dt_data::DtData,
     mongo::{mongo_constant::MongoConstants, mongo_key::MongoKey},
     row_data::RowData,
     row_type::RowType,
 };
 
-use crate::Parallelizer;
+use crate::{merge_parallelizer::TbMergedData, Merger};
 
-use super::base_parallelizer::BaseParallelizer;
-
-pub struct MongoParallelizer {
-    pub base_parallelizer: BaseParallelizer,
-    pub parallel_size: usize,
-}
+pub struct MongoMerger {}
 
 #[async_trait]
-impl Parallelizer for MongoParallelizer {
-    fn get_name(&self) -> String {
-        "MongoParallelizer".to_string()
-    }
-
-    async fn drain(&mut self, buffer: &ConcurrentQueue<DtData>) -> Result<Vec<DtData>, Error> {
-        self.base_parallelizer.drain(buffer)
-    }
-
-    async fn sink_dml(
-        &mut self,
-        data: Vec<RowData>,
-        sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> Result<(), Error> {
-        let mut sub_datas = Self::partition_dml_by_tb(data)?;
-        let mut inserts = Vec::new();
-        let mut deletes = Vec::new();
-        let mut unmerged = Vec::new();
-        while !sub_datas.is_empty() {
-            let sub_data = sub_datas.remove(0);
-            let (sub_inserts, sub_deletes, unmerged_rows) = Self::merge_dml(sub_data)?;
-            deletes.push(sub_deletes);
-            inserts.push(sub_inserts);
-            unmerged.push(unmerged_rows);
-        }
-
-        self.base_parallelizer
-            .sink_dml(deletes, sinkers, self.parallel_size, true)
-            .await
-            .unwrap();
-        self.base_parallelizer
-            .sink_dml(inserts, sinkers, self.parallel_size, true)
-            .await
-            .unwrap();
-        self.base_parallelizer
-            .sink_dml(unmerged, sinkers, 1, false)
-            .await
-            .unwrap();
-        Ok(())
-    }
-
-    async fn sink_ddl(
-        &mut self,
-        _data: Vec<DdlData>,
-        _sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> Result<(), Error> {
-        Ok(())
-    }
-}
-
-impl MongoParallelizer {
-    /// partition dml vec into sub vecs by full table name
-    pub fn partition_dml_by_tb(data: Vec<RowData>) -> Result<Vec<Vec<RowData>>, Error> {
-        let mut sub_data_map: HashMap<String, Vec<RowData>> = HashMap::new();
+impl Merger for MongoMerger {
+    async fn merge(&mut self, data: Vec<RowData>) -> Result<Vec<TbMergedData>, Error> {
+        let mut tb_data_map: HashMap<String, Vec<RowData>> = HashMap::new();
         for row_data in data {
             let full_tb = format!("{}.{}", row_data.schema, row_data.tb);
-            if let Some(sub_data) = sub_data_map.get_mut(&full_tb) {
-                sub_data.push(row_data);
+            if let Some(tb_data) = tb_data_map.get_mut(&full_tb) {
+                tb_data.push(row_data);
             } else {
-                sub_data_map.insert(full_tb, vec![row_data]);
+                tb_data_map.insert(full_tb, vec![row_data]);
             }
         }
 
-        Ok(sub_data_map.into_values().collect())
+        let mut results = Vec::new();
+        for (tb, tb_data) in tb_data_map.drain() {
+            let (insert_rows, delete_rows, unmerged_rows) = Self::merge_row_data(tb_data)?;
+            let tb_merged = TbMergedData {
+                tb,
+                insert_rows,
+                delete_rows,
+                unmerged_rows,
+            };
+            results.push(tb_merged);
+        }
+        Ok(results)
     }
+}
 
+impl MongoMerger {
     /// partition dmls of the same table into insert vec and delete vec
-    pub fn merge_dml(
+    pub fn merge_row_data(
         mut data: Vec<RowData>,
     ) -> Result<(Vec<RowData>, Vec<RowData>, Vec<RowData>), Error> {
         let mut insert_map = HashMap::new();

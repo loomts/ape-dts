@@ -31,6 +31,10 @@ impl Sinker for RedisSinker {
         }
         Ok(())
     }
+
+    fn batch_size(&mut self) -> usize {
+        self.batch_size
+    }
 }
 
 impl RedisSinker {
