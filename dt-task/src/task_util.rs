@@ -2,13 +2,13 @@ use std::{str::FromStr, time::Duration};
 
 use dt_common::{
     config::{sinker_config::SinkerConfig, task_config::TaskConfig},
-    constants::MongoConstants,
     error::Error,
 };
 use dt_connector::sinker::redis::cmd_encoder::CmdEncoder;
 use dt_meta::{
-    mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
-    rdb_meta_manager::RdbMetaManager, redis::redis_object::RedisCmd,
+    mongo::mongo_constant::MongoConstants, mysql::mysql_meta_manager::MysqlMetaManager,
+    pg::pg_meta_manager::PgMetaManager, rdb_meta_manager::RdbMetaManager,
+    redis::redis_object::RedisCmd,
 };
 use mongodb::options::ClientOptions;
 use redis::ConnectionLike;
@@ -137,7 +137,9 @@ impl TaskUtil {
 
     pub async fn create_mongo_client(url: &str) -> Result<mongodb::Client, Error> {
         let mut client_options = ClientOptions::parse_async(url).await.unwrap();
+        // app_name only for debug usage
         client_options.app_name = Some(MongoConstants::APP_NAME.to_string());
+        client_options.direct_connection = Some(true);
         Ok(mongodb::Client::with_options(client_options).unwrap())
     }
 

@@ -4,6 +4,7 @@ pub mod db_enums;
 pub mod ddl_data;
 pub mod ddl_type;
 pub mod dt_data;
+pub mod mongo;
 pub mod mysql;
 pub mod pg;
 pub mod rdb_meta_manager;

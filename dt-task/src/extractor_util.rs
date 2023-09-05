@@ -1,4 +1,7 @@
-use std::sync::{atomic::AtomicBool, Arc, Mutex};
+use std::{
+    str::FromStr,
+    sync::{atomic::AtomicBool, Arc, Mutex},
+};
 
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
@@ -24,8 +27,8 @@ use dt_connector::extractor::{
     snapshot_resumer::SnapshotResumer,
 };
 use dt_meta::{
-    dt_data::DtData, mysql::mysql_meta_manager::MysqlMetaManager,
-    pg::pg_meta_manager::PgMetaManager,
+    dt_data::DtData, mongo::mongo_cdc_source::MongoCdcSource,
+    mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
 };
 use futures::TryStreamExt;
 use sqlx::Row;
@@ -319,7 +322,8 @@ impl ExtractorUtil {
     pub async fn create_mongo_cdc_extractor(
         url: &str,
         resume_token: &str,
-        start_timestamp: &i64,
+        start_timestamp: &u32,
+        source: &str,
         buffer: Arc<ConcurrentQueue<DtData>>,
         filter: RdbFilter,
         shut_down: Arc<AtomicBool>,
@@ -330,6 +334,7 @@ impl ExtractorUtil {
             filter,
             resume_token: resume_token.to_string(),
             start_timestamp: *start_timestamp,
+            source: MongoCdcSource::from_str(source)?,
             shut_down,
             mongo_client,
         })

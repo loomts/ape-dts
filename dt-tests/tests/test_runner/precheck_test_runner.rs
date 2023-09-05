@@ -86,7 +86,7 @@ impl PrecheckTestRunner {
 
             DbType::Mongo => {
                 let base = MongoTestRunner::new(&self.test_dir).await?;
-                base.execute_test_ddl_sqls().await?;
+                base.execute_test_prepare_sqls().await?;
             }
 
             DbType::Redis => {

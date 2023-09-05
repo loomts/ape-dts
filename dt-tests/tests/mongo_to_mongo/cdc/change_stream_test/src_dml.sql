@@ -23,3 +23,12 @@ db.tb_1.deleteOne({ "name": "b", "age": "2" });
 
 db.tb_2.deleteOne({ "name": "d", "age": "4" });
 db.tb_2.deleteOne({ "name": "e", "age": "5" });
+
+use test_db_2
+
+-- insert records with custom defined _id and object_id
+db.tb_1.insertMany([{ "name": "a", "age": "1", "_id": "1" }, { "name": "b", "age": "1", "_id": "2" }, { "name": "c", "age": "1" }]);
+
+db.tb_1.updateMany({ "age": "1" },  { "$set": { "age" : "1000" } });
+
+db.tb_1.deleteMany({ "age": "1000" });

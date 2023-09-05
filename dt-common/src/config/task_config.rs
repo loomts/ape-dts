@@ -129,27 +129,12 @@ impl TaskConfig {
                     tb: String::new(),
                 }),
 
-                ExtractType::Cdc => {
-                    let start_timestamp: i64 = match ini.getint(EXTRACTOR, "start_timestamp") {
-                        Ok(ts_option) => {
-                            if let Some(ts) = ts_option {
-                                ts
-                            } else {
-                                0
-                            }
-                        }
-                        Err(_) => 0,
-                    };
-                    let resume_token: String = match ini.get(EXTRACTOR, "resume_token") {
-                        Some(val) => val,
-                        None => String::from(""),
-                    };
-                    Ok(ExtractorConfig::MongoCdc {
-                        url,
-                        resume_token,
-                        start_timestamp,
-                    })
-                }
+                ExtractType::Cdc => Ok(ExtractorConfig::MongoCdc {
+                    url,
+                    resume_token: Self::get_optional_value(ini, EXTRACTOR, "resume_token"),
+                    start_timestamp: Self::get_optional_value(ini, EXTRACTOR, "start_timestamp"),
+                    source: Self::get_optional_value(ini, EXTRACTOR, "source"),
+                }),
 
                 extract_type => Err(Error::ConfigError(format!(
                     "extract type: {} not supported",
