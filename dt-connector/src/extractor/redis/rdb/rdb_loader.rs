@@ -6,9 +6,9 @@ use crate::extractor::redis::RawByteReader;
 
 use super::{entry_parser::entry_parser::EntryParser, reader::rdb_reader::RdbReader};
 
-const K_FLAG_FUNCTION2: u8 = 245; // function library data
-const K_FLAG_FUNCTION: u8 = 246; // old function library data for 7.0 rc1 and rc2
-const K_FLAG_MODULE_AUX: u8 = 247; // Module auxiliary data.
+const _K_FLAG_FUNCTION2: u8 = 245; // function library data
+const _K_FLAG_FUNCTION: u8 = 246; // old function library data for 7.0 rc1 and rc2
+const _K_FLAG_MODULE_AUX: u8 = 247; // Module auxiliary data.
 const K_FLAG_IDLE: u8 = 0xf8; // LRU idle time.
 const K_FLAG_FREQ: u8 = 0xf9; // LFU frequency.
 const K_FLAG_AUX: u8 = 0xfa; // RDB aux field.

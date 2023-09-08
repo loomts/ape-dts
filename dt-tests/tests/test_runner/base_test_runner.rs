@@ -27,7 +27,7 @@ static mut LOG4RS_INITED: bool = false;
 impl BaseTestRunner {
     pub async fn new(relative_test_dir: &str) -> Result<Self, Error> {
         let project_root = TestConfigUtil::get_project_root();
-        let tmp_dir = format!("{}/tmp", project_root);
+        let tmp_dir = format!("{}/tmp/{}", project_root, relative_test_dir);
         let test_dir = TestConfigUtil::get_absolute_dir(relative_test_dir);
         let src_task_config_file = format!("{}/task_config.ini", test_dir);
         let dst_task_config_file = format!("{}/task_config.ini", tmp_dir);

@@ -128,77 +128,25 @@ impl TestConfigUtil {
         let config = TaskConfig::new(&src_task_config_file);
         let mut update_configs = Vec::new();
 
-        match &config.extractor.get_db_type() {
-            DbType::Mysql => {
-                update_configs.push((
-                    EXTRACTOR.to_string(),
-                    URL.to_string(),
-                    env::var("mysql_extractor_url").unwrap(),
-                ));
-            }
+        let extractor_url = match &config.extractor.get_db_type() {
+            DbType::Mysql => env::var("mysql_extractor_url").unwrap(),
+            DbType::Pg => env::var("pg_extractor_url").unwrap(),
+            DbType::Mongo => env::var("mongo_extractor_url").unwrap(),
+            DbType::Redis => env::var("redis_extractor_url").unwrap(),
+            DbType::Kafka => env::var("kafka_extractor_url").unwrap(),
+            _ => String::new(),
+        };
+        update_configs.push((EXTRACTOR.into(), URL.into(), extractor_url));
 
-            DbType::Pg => {
-                update_configs.push((
-                    EXTRACTOR.to_string(),
-                    URL.to_string(),
-                    env::var("pg_extractor_url").unwrap(),
-                ));
-            }
-
-            DbType::Mongo => {
-                update_configs.push((
-                    EXTRACTOR.to_string(),
-                    URL.to_string(),
-                    env::var("mongo_extractor_url").unwrap(),
-                ));
-            }
-
-            DbType::Redis => {
-                update_configs.push((
-                    EXTRACTOR.to_string(),
-                    URL.to_string(),
-                    env::var("redis_extractor_url").unwrap(),
-                ));
-            }
-
-            _ => {}
-        }
-
-        match &config.sinker.get_db_type() {
-            DbType::Mysql => {
-                update_configs.push((
-                    SINKER.to_string(),
-                    URL.to_string(),
-                    env::var("mysql_sinker_url").unwrap(),
-                ));
-            }
-
-            DbType::Pg => {
-                update_configs.push((
-                    SINKER.to_string(),
-                    URL.to_string(),
-                    env::var("pg_sinker_url").unwrap(),
-                ));
-            }
-
-            DbType::Mongo => {
-                update_configs.push((
-                    SINKER.to_string(),
-                    URL.to_string(),
-                    env::var("mongo_sinker_url").unwrap(),
-                ));
-            }
-
-            DbType::Redis => {
-                update_configs.push((
-                    SINKER.to_string(),
-                    URL.to_string(),
-                    env::var("redis_sinker_url").unwrap(),
-                ));
-            }
-
-            _ => {}
-        }
+        let sinker_url = match &config.sinker.get_db_type() {
+            DbType::Mysql => env::var("mysql_sinker_url").unwrap(),
+            DbType::Pg => env::var("pg_sinker_url").unwrap(),
+            DbType::Mongo => env::var("mongo_sinker_url").unwrap(),
+            DbType::Redis => env::var("redis_sinker_url").unwrap(),
+            DbType::Kafka => env::var("kafka_sinker_url").unwrap(),
+            _ => String::new(),
+        };
+        update_configs.push((SINKER.into(), URL.into(), sinker_url));
 
         TestConfigUtil::update_task_config(
             &src_task_config_file,

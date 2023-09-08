@@ -48,6 +48,7 @@ impl PipelineUtil {
                     base_parallelizer,
                     merger,
                     parallel_size,
+                    sinker_basic_config: config.sinker_basic.clone(),
                 })
             }
 
@@ -73,6 +74,7 @@ impl PipelineUtil {
                     base_parallelizer,
                     merger,
                     parallel_size,
+                    sinker_basic_config: config.sinker_basic.clone(),
                 })
             }
 

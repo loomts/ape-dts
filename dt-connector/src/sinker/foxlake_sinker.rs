@@ -56,10 +56,6 @@ impl Sinker for FoxlakeSinker {
         self.put_to_file(&key, &content).await.unwrap();
         Ok(())
     }
-
-    fn batch_size(&mut self) -> usize {
-        self.batch_size
-    }
 }
 
 impl FoxlakeSinker {

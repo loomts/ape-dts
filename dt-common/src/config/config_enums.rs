@@ -22,7 +22,7 @@ pub enum DbType {
     Redis,
 }
 
-#[derive(Display, EnumString, IntoStaticStr)]
+#[derive(Display, EnumString, IntoStaticStr, Debug, Clone)]
 pub enum ExtractType {
     #[strum(serialize = "snapshot")]
     Snapshot,

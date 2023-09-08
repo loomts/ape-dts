@@ -68,6 +68,13 @@ pub enum SinkerConfig {
     },
 }
 
+#[derive(Clone, Debug)]
+pub struct SinkerBasicConfig {
+    pub db_type: DbType,
+    pub url: String,
+    pub batch_size: usize,
+}
+
 impl SinkerConfig {
     pub fn get_db_type(&self) -> DbType {
         match self {

@@ -1,13 +1,30 @@
-use crate::redis::redis_entry::RedisEntry;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+
+use crate::{kafka::kafka_message::KafkaMessage, redis::redis_entry::RedisEntry};
 
 use super::{ddl_data::DdlData, row_data::RowData};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DtData {
-    Ddl { ddl_data: DdlData },
-    Dml { row_data: RowData },
-    Commit { xid: String, position: String },
-    Redis { entry: RedisEntry },
+    Ddl {
+        ddl_data: DdlData,
+    },
+    Dml {
+        row_data: RowData,
+    },
+    Commit {
+        xid: String,
+        position: String,
+    },
+    #[serde(skip)]
+    Redis {
+        entry: RedisEntry,
+    },
+    #[serde(skip)]
+    Kafka {
+        message: KafkaMessage,
+    },
 }
 
 impl DtData {
@@ -15,7 +32,7 @@ impl DtData {
         matches!(self, DtData::Ddl { .. })
     }
 
-    pub fn is_raw(&self) -> bool {
-        matches!(self, DtData::Redis { .. })
+    pub fn to_string(&self) -> String {
+        json!(self).to_string()
     }
 }

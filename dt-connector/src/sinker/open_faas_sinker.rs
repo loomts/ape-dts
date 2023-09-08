@@ -17,10 +17,6 @@ impl Sinker for OpenFaasSinker {
         call_batch_fn!(self, data, Self::invoke);
         Ok(())
     }
-
-    fn batch_size(&mut self) -> usize {
-        self.batch_size
-    }
 }
 
 impl OpenFaasSinker {

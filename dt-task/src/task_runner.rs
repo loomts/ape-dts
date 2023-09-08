@@ -144,6 +144,7 @@ impl TaskRunner {
         let mut pipeline = Pipeline {
             buffer,
             parallelizer,
+            sinker_basic_config: self.config.sinker_basic.clone(),
             sinkers,
             shut_down: shut_down.clone(),
             checkpoint_interval_secs: self.config.pipeline.checkpoint_interval_secs,
@@ -367,6 +368,29 @@ impl TaskRunner {
                     *repl_port,
                     *now_db_id,
                     *heartbeat_interval_secs,
+                    buffer,
+                    shut_down,
+                    syncer,
+                )
+                .await?;
+                Box::new(extractor)
+            }
+
+            ExtractorConfig::Kafka {
+                url,
+                group,
+                topic,
+                partition,
+                offset,
+                ack_interval_secs,
+            } => {
+                let extractor = ExtractorUtil::create_kafka_extractor(
+                    url,
+                    group,
+                    topic,
+                    *partition,
+                    *offset,
+                    *ack_interval_secs,
                     buffer,
                     shut_down,
                     syncer,

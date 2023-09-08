@@ -43,4 +43,14 @@ impl Parallelizer for SerialParallelizer {
             .sink_ddl(vec![data], sinkers, 1, false)
             .await
     }
+
+    async fn sink_raw(
+        &mut self,
+        data: Vec<DtData>,
+        sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
+    ) -> Result<(), Error> {
+        self.base_parallelizer
+            .sink_raw(vec![data], sinkers, 1, false)
+            .await
+    }
 }

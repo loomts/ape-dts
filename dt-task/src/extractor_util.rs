@@ -8,6 +8,7 @@ use dt_common::{
     config::config_enums::DbType, error::Error, syncer::Syncer, utils::rdb_filter::RdbFilter,
 };
 use dt_connector::extractor::{
+    kafka::kafka_extractor::KafkaExtractor,
     mongo::{
         mongo_cdc_extractor::MongoCdcExtractor, mongo_snapshot_extractor::MongoSnapshotExtractor,
     },
@@ -421,6 +422,30 @@ impl ExtractorUtil {
             syncer,
             repl_port,
             now_db_id: now_db_id,
+        })
+    }
+
+    pub async fn create_kafka_extractor(
+        url: &str,
+        group: &str,
+        topic: &str,
+        partition: i32,
+        offset: i64,
+        ack_interval_secs: u64,
+        buffer: Arc<ConcurrentQueue<DtData>>,
+        shut_down: Arc<AtomicBool>,
+        syncer: Arc<Mutex<Syncer>>,
+    ) -> Result<KafkaExtractor, Error> {
+        Ok(KafkaExtractor {
+            url: url.into(),
+            group: group.into(),
+            topic: topic.into(),
+            partition,
+            offset,
+            ack_interval_secs,
+            buffer,
+            shut_down,
+            syncer,
         })
     }
 }
