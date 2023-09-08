@@ -41,6 +41,10 @@ impl Sinker for PgStructSinker {
         }
         Ok(())
     }
+
+    fn batch_size(&mut self) -> usize {
+        1
+    }
 }
 
 impl PgStructSinker {

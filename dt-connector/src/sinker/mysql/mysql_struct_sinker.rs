@@ -39,6 +39,10 @@ impl Sinker for MysqlStructSinker {
         }
         Ok(())
     }
+
+    fn batch_size(&mut self) -> usize {
+        1
+    }
 }
 
 impl MysqlStructSinker {

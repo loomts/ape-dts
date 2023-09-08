@@ -1,7 +1,7 @@
 pub mod base_parallelizer;
 pub mod check_parallelizer;
 pub mod merge_parallelizer;
-pub mod mongo_parallelizer;
+pub mod mongo_merger;
 pub mod partition_parallelizer;
 pub mod pipeline;
 pub mod rdb_merger;
@@ -18,6 +18,7 @@ use concurrent_queue::ConcurrentQueue;
 use dt_common::error::Error;
 use dt_connector::Sinker;
 use dt_meta::{ddl_data::DdlData, dt_data::DtData, row_data::RowData};
+use merge_parallelizer::TbMergedData;
 
 #[async_trait]
 pub trait Parallelizer {
@@ -50,4 +51,9 @@ pub trait Parallelizer {
     ) -> Result<(), Error> {
         Ok(())
     }
+}
+
+#[async_trait]
+pub trait Merger {
+    async fn merge(&mut self, data: Vec<RowData>) -> Result<Vec<TbMergedData>, Error>;
 }

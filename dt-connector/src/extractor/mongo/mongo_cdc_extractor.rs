@@ -125,9 +125,9 @@ impl MongoCdcExtractor {
                     );
                 }
                 // TODO, DDL
-                "c" => {}
-                "xi" => {}
-                "xd" => {}
+                "c" | "xi" | "xd" => {
+                    continue;
+                }
                 "n" => {
                     // TODO, heartbeat
                     // Document({"op": String("n"), "ns": String(""), "o": Document({"msg": String("periodic noop")}), "ts": Timestamp { time: 1693470874, increment: 1 }, "t": Int64(67), "v": Int64(2), "wall": DateTime(2023-08-31 8:34:34.19 +00:00:00)})
@@ -242,7 +242,9 @@ impl MongoCdcExtractor {
                     }
 
                     // TODO, heartbeat and DDL
-                    _ => {}
+                    _ => {
+                        continue;
+                    }
                 }
 
                 let row_data = RowData {

@@ -6,11 +6,11 @@ use dt_common::{
 };
 use dt_pipeline::{
     base_parallelizer::BaseParallelizer, check_parallelizer::CheckParallelizer,
-    merge_parallelizer::MergeParallelizer, mongo_parallelizer::MongoParallelizer,
+    merge_parallelizer::MergeParallelizer, mongo_merger::MongoMerger,
     partition_parallelizer::PartitionParallelizer, rdb_merger::RdbMerger,
     rdb_partitioner::RdbPartitioner, redis_parallelizer::RedisParallelizer,
     serial_parallelizer::SerialParallelizer, snapshot_parallelizer::SnapshotParallelizer,
-    table_parallelizer::TableParallelizer, Parallelizer,
+    table_parallelizer::TableParallelizer, Merger, Parallelizer,
 };
 
 use super::task_util::TaskUtil;
@@ -67,10 +67,14 @@ impl PipelineUtil {
                 parallel_size,
             }),
 
-            ParallelType::Mongo => Box::new(MongoParallelizer {
-                base_parallelizer,
-                parallel_size,
-            }),
+            ParallelType::Mongo => {
+                let merger = Box::new(MongoMerger {});
+                Box::new(MergeParallelizer {
+                    base_parallelizer,
+                    merger,
+                    parallel_size,
+                })
+            }
 
             ParallelType::Redis => Box::new(RedisParallelizer {
                 base_parallelizer,
@@ -80,9 +84,17 @@ impl PipelineUtil {
         Ok(parallelizer)
     }
 
-    pub async fn create_rdb_merger(config: &TaskConfig) -> Result<RdbMerger, Error> {
+    pub async fn create_rdb_merger(
+        config: &TaskConfig,
+    ) -> Result<Box<dyn Merger + Send + Sync>, Error> {
         let meta_manager = TaskUtil::create_rdb_meta_manager(config).await?;
-        Ok(RdbMerger { meta_manager })
+        let rdb_merger = RdbMerger { meta_manager };
+        Ok(Box::new(rdb_merger))
+    }
+
+    pub async fn create_mongo_merger() -> Result<Box<dyn Merger + Send + Sync>, Error> {
+        let mongo_merger = MongoMerger {};
+        Ok(Box::new(mongo_merger))
     }
 
     pub async fn create_rdb_partitioner(config: &TaskConfig) -> Result<RdbPartitioner, Error> {

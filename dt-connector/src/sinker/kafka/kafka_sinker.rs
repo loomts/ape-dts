@@ -22,6 +22,10 @@ impl Sinker for KafkaSinker {
         call_batch_fn!(self, data, Self::send);
         Ok(())
     }
+
+    fn batch_size(&mut self) -> usize {
+        self.batch_size
+    }
 }
 
 impl KafkaSinker {
