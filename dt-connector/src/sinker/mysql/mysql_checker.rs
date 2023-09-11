@@ -55,10 +55,6 @@ impl Sinker for MysqlChecker {
         self.serial_ddl_check(data).await.unwrap();
         Ok(())
     }
-
-    fn batch_size(&mut self) -> usize {
-        self.batch_size
-    }
 }
 
 impl MysqlChecker {

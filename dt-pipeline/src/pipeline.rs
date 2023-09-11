@@ -8,6 +8,7 @@ use std::{
 
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
+    config::{config_enums::DbType, sinker_config::SinkerBasicConfig},
     error::Error,
     log_info, log_monitor, log_position,
     monitor::{counter::Counter, statistic_counter::StatisticCounter},
@@ -22,6 +23,7 @@ use crate::Parallelizer;
 pub struct Pipeline {
     pub buffer: Arc<ConcurrentQueue<DtData>>,
     pub parallelizer: Box<dyn Parallelizer + Send>,
+    pub sinker_basic_config: SinkerBasicConfig,
     pub sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
     pub shut_down: Arc<AtomicBool>,
     pub checkpoint_interval_secs: u64,
@@ -67,7 +69,11 @@ impl Pipeline {
             let mut sink_count = 0;
             if !data.is_empty() {
                 let (count, last_received, last_commit);
-                if data[0].is_raw() {
+                let sink_raw = match self.sinker_basic_config.db_type {
+                    DbType::Redis | DbType::Kafka => true,
+                    _ => false,
+                };
+                if sink_raw {
                     (count, last_received, last_commit) = self.sink_raw(data).await.unwrap();
                 } else if data[0].is_ddl() {
                     (count, last_received, last_commit) = self.sink_ddl(data).await.unwrap();
@@ -173,7 +179,14 @@ impl Pipeline {
                     raw_data.push(i);
                 }
 
-                _ => {}
+                DtData::Dml { row_data } => {
+                    last_received_position = Some(row_data.position.clone());
+                    raw_data.push(i);
+                }
+
+                _ => {
+                    raw_data.push(i);
+                }
             }
         }
 

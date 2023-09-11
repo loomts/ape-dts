@@ -155,6 +155,12 @@ impl RdbTestRunner {
         let task = self.base.spawn_task().await?;
         TimeUtil::sleep_millis(start_millis).await;
 
+        self.execute_test_sqls_and_compare(parse_millis).await?;
+
+        self.base.wait_task_finish(&task).await
+    }
+
+    pub async fn execute_test_sqls_and_compare(&self, parse_millis: u64) -> Result<(), Error> {
         // load dml sqls
         let mut src_insert_sqls = Vec::new();
         let mut src_update_sqls = Vec::new();
@@ -172,7 +178,7 @@ impl RdbTestRunner {
 
         // insert src data
         self.execute_src_sqls(&src_insert_sqls).await?;
-        TimeUtil::sleep_millis(start_millis).await;
+        TimeUtil::sleep_millis(parse_millis).await;
 
         let db_tbs = self.get_compare_db_tbs().await?;
         let src_db_tbs = db_tbs.clone();
@@ -181,15 +187,18 @@ impl RdbTestRunner {
 
         // update src data
         self.execute_src_sqls(&src_update_sqls).await?;
-        TimeUtil::sleep_millis(parse_millis).await;
+        if !src_update_sqls.is_empty() {
+            TimeUtil::sleep_millis(parse_millis).await;
+        }
         assert!(self.compare_data_for_tbs(&src_db_tbs, &dst_db_tbs).await?);
 
         // delete src data
         self.execute_src_sqls(&src_delete_sqls).await?;
-        TimeUtil::sleep_millis(parse_millis).await;
+        if !src_delete_sqls.is_empty() {
+            TimeUtil::sleep_millis(parse_millis).await;
+        }
         assert!(self.compare_data_for_tbs(&src_db_tbs, &dst_db_tbs).await?);
-
-        self.base.wait_task_finish(&task).await
+        Ok(())
     }
 
     pub async fn run_cdc_test_with_different_configs(
@@ -248,7 +257,7 @@ impl RdbTestRunner {
         }
     }
 
-    async fn execute_src_sqls(&self, sqls: &Vec<String>) -> Result<(), Error> {
+    pub async fn execute_src_sqls(&self, sqls: &Vec<String>) -> Result<(), Error> {
         if let Some(pool) = &self.src_conn_pool_mysql {
             Self::execute_sqls_mysql(sqls, pool).await?;
         }
@@ -268,7 +277,7 @@ impl RdbTestRunner {
         Ok(())
     }
 
-    async fn compare_data_for_tbs(
+    pub async fn compare_data_for_tbs(
         &self,
         src_db_tbs: &Vec<(String, String)>,
         dst_db_tbs: &Vec<(String, String)>,
@@ -482,7 +491,7 @@ impl RdbTestRunner {
     }
 
     /// get compare tbs
-    async fn get_compare_db_tbs(&self) -> Result<Vec<(String, String)>, Error> {
+    pub async fn get_compare_db_tbs(&self) -> Result<Vec<(String, String)>, Error> {
         let mut db_tbs = vec![];
         let (src_db_type, src_url, _, _) = Self::parse_conn_info(&self.base);
 

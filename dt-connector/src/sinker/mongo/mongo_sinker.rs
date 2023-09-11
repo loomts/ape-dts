@@ -43,10 +43,6 @@ impl Sinker for MongoSinker {
         }
         Ok(())
     }
-
-    fn batch_size(&mut self) -> usize {
-        self.batch_size
-    }
 }
 
 impl MongoSinker {

@@ -4,6 +4,7 @@ pub mod db_enums;
 pub mod ddl_data;
 pub mod ddl_type;
 pub mod dt_data;
+pub mod kafka;
 pub mod mongo;
 pub mod mysql;
 pub mod pg;

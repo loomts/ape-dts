@@ -1,4 +1,4 @@
-use super::config_enums::DbType;
+use super::config_enums::{DbType, ExtractType};
 
 #[derive(Clone, Debug)]
 pub enum ExtractorConfig {
@@ -77,6 +77,22 @@ pub enum ExtractorConfig {
         heartbeat_interval_secs: u64,
         now_db_id: i64,
     },
+
+    Kafka {
+        url: String,
+        group: String,
+        topic: String,
+        partition: i32,
+        offset: i64,
+        ack_interval_secs: u64,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub struct ExtractorBasicConfig {
+    pub db_type: DbType,
+    pub extract_type: ExtractType,
+    pub url: String,
 }
 
 impl ExtractorConfig {
@@ -86,15 +102,13 @@ impl ExtractorConfig {
             | Self::MysqlSnapshot { .. }
             | Self::MysqlCdc { .. }
             | Self::MysqlCheck { .. } => DbType::Mysql,
-
             Self::PgStruct { .. }
             | Self::PgSnapshot { .. }
             | Self::PgCdc { .. }
             | Self::PgCheck { .. } => DbType::Pg,
-
             Self::MongoSnapshot { .. } | Self::MongoCdc { .. } => DbType::Mongo,
-
             Self::RedisSnapshot { .. } | Self::RedisCdc { .. } => DbType::Redis,
+            Self::Kafka { .. } => DbType::Kafka,
         }
     }
 
@@ -111,7 +125,8 @@ impl ExtractorConfig {
             | Self::MongoSnapshot { url, .. }
             | Self::MongoCdc { url, .. }
             | Self::RedisSnapshot { url, .. }
-            | Self::RedisCdc { url, .. } => url.to_owned(),
+            | Self::RedisCdc { url, .. }
+            | Self::Kafka { url, .. } => url.to_owned(),
         }
     }
 }

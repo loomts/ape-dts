@@ -43,4 +43,7 @@ pub enum Error {
 
     #[error("precheck error: {0}")]
     PreCheckError(String),
+
+    #[error("kafka error: {0}")]
+    KafkaError(#[from] kafka::Error),
 }

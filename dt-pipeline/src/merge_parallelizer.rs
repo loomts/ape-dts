@@ -2,7 +2,7 @@ use std::{cmp, sync::Arc};
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
-use dt_common::error::Error;
+use dt_common::{config::sinker_config::SinkerBasicConfig, error::Error};
 use dt_connector::Sinker;
 use dt_meta::{ddl_data::DdlData, dt_data::DtData, row_data::RowData, row_type::RowType};
 
@@ -14,6 +14,7 @@ pub struct MergeParallelizer {
     pub base_parallelizer: BaseParallelizer,
     pub merger: Box<dyn Merger + Send + Sync>,
     pub parallel_size: usize,
+    pub sinker_basic_config: SinkerBasicConfig,
 }
 
 enum MergeType {
@@ -86,7 +87,7 @@ impl MergeParallelizer {
             // make sure NO too much threads generated
             let batch_size = cmp::max(
                 data.len() / self.parallel_size,
-                cmp::max(sinkers[0].lock().await.batch_size(), 1),
+                cmp::max(self.sinker_basic_config.batch_size, 1),
             );
 
             match merge_type {

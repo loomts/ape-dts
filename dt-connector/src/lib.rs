@@ -30,8 +30,6 @@ pub trait Sinker {
     async fn refresh_meta(&mut self, _data: Vec<DdlData>) -> Result<(), Error> {
         Ok(())
     }
-
-    fn batch_size(&mut self) -> usize;
 }
 
 #[async_trait]
