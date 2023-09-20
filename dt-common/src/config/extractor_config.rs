@@ -129,20 +129,4 @@ impl ExtractorConfig {
             | Self::Kafka { url, .. } => url.to_owned(),
         }
     }
-
-    pub fn get_url(&self) -> String {
-        match self {
-            ExtractorConfig::Basic { url, .. } => url.to_owned(),
-            ExtractorConfig::MysqlStruct { url, .. } => url.to_owned(),
-            ExtractorConfig::PgStruct { url, .. } => url.to_owned(),
-            ExtractorConfig::MysqlSnapshot { url, .. } => url.to_owned(),
-            ExtractorConfig::MysqlCdc { url, .. } => url.to_owned(),
-            ExtractorConfig::MysqlCheck { url, .. } => url.to_owned(),
-            ExtractorConfig::PgSnapshot { url, .. } => url.to_owned(),
-            ExtractorConfig::PgCdc { url, .. } => url.to_owned(),
-            ExtractorConfig::PgCheck { url, .. } => url.to_owned(),
-            ExtractorConfig::MongoSnapshot { url, .. } => url.to_owned(),
-            ExtractorConfig::MongoCdc { url, .. } => url.to_owned(),
-        }
-    }
 }

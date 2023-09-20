@@ -7,11 +7,8 @@ use std::{
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
     config::{
-        config_enums::{DbType, PipelineType},
-        extractor_config::ExtractorConfig,
-        pipeline_config::ExtraConfig,
-        sinker_config::SinkerConfig,
-        task_config::TaskConfig,
+        config_enums::DbType, extractor_config::ExtractorConfig, pipeline_config::ExtraConfig,
+        sinker_config::SinkerConfig, task_config::TaskConfig,
     },
     error::Error,
     syncer::Syncer,
@@ -19,12 +16,12 @@ use dt_common::{
 };
 use dt_connector::{extractor::snapshot_resumer::SnapshotResumer, Extractor};
 use dt_meta::{dt_data::DtData, row_type::RowType};
-use dt_pipeline::{
-    base_pipeline::BasicPipeline, transaction_pipeline::TransactionPipeline, Pipeline,
-};
-use futures::future::join;
+use dt_pipeline::{base_pipeline::BasePipeline, drainers::traits::DataDrainer, Pipeline};
+
 use log4rs::config::RawConfig;
 use tokio::try_join;
+
+use crate::pipeline_util::PipelineUtil;
 
 use super::{
     extractor_util::ExtractorUtil, parallelizer_util::ParallelizerUtil, sinker_util::SinkerUtil,
@@ -146,7 +143,9 @@ impl TaskRunner {
             )
             .await?;
 
-        let mut pipeline = self.create_pipeline(&buffer, &shut_down, &syncer).await?;
+        let mut pipeline = self
+            .create_pipeline(buffer, shut_down.clone(), syncer)
+            .await?;
 
         let f1 = tokio::spawn(async move {
             extractor.extract().await.unwrap();
@@ -160,47 +159,35 @@ impl TaskRunner {
         Ok(())
     }
 
-    async fn create_pipeline<'a>(
+    async fn create_pipeline(
         &self,
-        buffer: &'a ConcurrentQueue<DtData>,
-        shut_down: &'a AtomicBool,
-        syncer: &'a Arc<Mutex<Syncer>>,
-    ) -> Result<Box<dyn Pipeline + 'a + Send>, Error> {
+        buffer: Arc<ConcurrentQueue<DtData>>,
+        shut_down: Arc<AtomicBool>,
+        syncer: Arc<Mutex<Syncer>>,
+    ) -> Result<Box<dyn Pipeline + Send>, Error> {
         let transaction_command = self.fetch_transaction_command();
 
         let parallelizer = ParallelizerUtil::create_parallelizer(&self.config).await?;
         let sinkers = SinkerUtil::create_sinkers(&self.config, transaction_command).await?;
 
-        let pipeline: Box<dyn Pipeline + Send> = match self.config.pipeline.get_pipeline_type() {
-            PipelineType::Basic => {
-                let obj = BasicPipeline {
-                    buffer,
-                    parallelizer,
-                    sinker_basic_config: self.config.sinker_basic.clone(),
-                    sinkers,
-                    shut_down,
-                    checkpoint_interval_secs: self.config.pipeline.checkpoint_interval_secs,
-                    batch_sink_interval_secs: self.config.pipeline.batch_sink_interval_secs,
-                    syncer: syncer.to_owned(),
-                };
-                Box::new(obj)
-            }
-            PipelineType::Transaction => {
-                let obj = TransactionPipeline {
-                    buffer,
-                    parallelizer,
-                    sinkers,
-                    filters: None,
-                    shut_down,
-                    syncer: syncer.to_owned(),
-                    pipeline_config: self.config.pipeline.clone(),
-                    extractor_config: self.config.extractor.clone(),
-                };
-                Box::new(obj)
-            }
+        let drainer: Box<dyn DataDrainer + Send> = PipelineUtil::build_drainer(
+            self.config.pipeline.clone(),
+            self.config.extractor.clone(),
+        )?;
+
+        let pipeline = BasePipeline {
+            buffer,
+            parallelizer,
+            sinker_basic_config: self.config.sinker_basic.clone(),
+            sinkers,
+            shut_down,
+            checkpoint_interval_secs: self.config.pipeline.checkpoint_interval_secs,
+            batch_sink_interval_secs: self.config.pipeline.batch_sink_interval_secs,
+            syncer: syncer.to_owned(),
+            drainer,
         };
 
-        Ok(pipeline)
+        Ok(Box::new(pipeline))
     }
 
     async fn create_extractor(

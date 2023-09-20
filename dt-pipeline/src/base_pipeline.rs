@@ -6,8 +6,10 @@ use std::{
     time::Instant,
 };
 
+use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
+    config::{config_enums::DbType, sinker_config::SinkerBasicConfig},
     error::Error,
     log_info, log_monitor, log_position,
     monitor::{counter::Counter, statistic_counter::StatisticCounter},
@@ -15,29 +17,34 @@ use dt_common::{
     utils::time_util::TimeUtil,
 };
 use dt_connector::Sinker;
-use dt_meta::{ddl_data::DdlData, dt_data::DtData, row_data::RowData};
+use dt_meta::dt_data::DtData;
+use dt_parallelizer::Parallelizer;
 
-use crate::Parallelizer;
+use crate::{drainers::traits::DataDrainer, Pipeline};
 
-pub struct Pipeline<'a> {
-    pub buffer: &'a ConcurrentQueue<DtData>,
+pub struct BasePipeline {
+    pub buffer: Arc<ConcurrentQueue<DtData>>,
     pub parallelizer: Box<dyn Parallelizer + Send>,
+    pub sinker_basic_config: SinkerBasicConfig,
     pub sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
-    pub shut_down: &'a AtomicBool,
+    pub shut_down: Arc<AtomicBool>,
     pub checkpoint_interval_secs: u64,
     pub batch_sink_interval_secs: u64,
     pub syncer: Arc<Mutex<Syncer>>,
+
+    pub drainer: Box<dyn DataDrainer + Send>,
 }
 
-impl Pipeline<'_> {
-    pub async fn stop(&mut self) -> Result<(), Error> {
+#[async_trait]
+impl Pipeline for BasePipeline {
+    async fn stop(&mut self) -> Result<(), Error> {
         for sinker in self.sinkers.iter_mut() {
             sinker.lock().await.close().await.unwrap();
         }
         Ok(())
     }
 
-    pub async fn start(&mut self) -> Result<(), Error> {
+    async fn start(&mut self) -> Result<(), Error> {
         log_info!(
             "{} starts, parallel_size: {}, checkpoint_interval_secs: {}",
             self.parallelizer.get_name(),
@@ -60,14 +67,20 @@ impl Pipeline<'_> {
                 Vec::new()
             } else {
                 last_sink_time = Instant::now();
-                self.parallelizer.drain(self.buffer).await.unwrap()
+                self.parallelizer.drain(self.buffer.as_ref()).await.unwrap()
             };
 
             // process all row_datas in buffer at a time
             let mut sink_count = 0;
             if !data.is_empty() {
                 let (count, last_received, last_commit);
-                if data[0].is_ddl() {
+                let sink_raw = match self.sinker_basic_config.db_type {
+                    DbType::Redis | DbType::Kafka => true,
+                    _ => false,
+                };
+                if sink_raw {
+                    (count, last_received, last_commit) = self.sink_raw(data).await.unwrap();
+                } else if data[0].is_ddl() {
                     (count, last_received, last_commit) = self.sink_ddl(data).await.unwrap();
                 } else {
                     (count, last_received, last_commit) = self.sink_dml(data).await.unwrap();
@@ -95,12 +108,31 @@ impl Pipeline<'_> {
 
         Ok(())
     }
+}
+
+impl BasePipeline {
+    async fn sink_raw(
+        &mut self,
+        all_data: Vec<DtData>,
+    ) -> Result<(usize, Option<String>, Option<String>), Error> {
+        let (data, last_received_position, last_commit_position) =
+            self.drainer.drain_raw(all_data)?;
+        let count = data.len();
+        if count > 0 {
+            self.parallelizer
+                .sink_raw(data, &self.sinkers)
+                .await
+                .unwrap()
+        }
+        Ok((count, last_received_position, last_commit_position))
+    }
 
     async fn sink_dml(
         &mut self,
         all_data: Vec<DtData>,
     ) -> Result<(usize, Option<String>, Option<String>), Error> {
-        let (data, last_received_position, last_commit_position) = Self::fetch_dml(all_data);
+        let (data, last_received_position, last_commit_position) =
+            self.drainer.drain_dmls(all_data)?;
         let count = data.len();
         if count > 0 {
             self.parallelizer
@@ -115,63 +147,25 @@ impl Pipeline<'_> {
         &mut self,
         all_data: Vec<DtData>,
     ) -> Result<(usize, Option<String>, Option<String>), Error> {
-        let (data, last_received_position, last_commit_position) = Self::fetch_ddl(all_data);
+        let (data, last_received_position, last_commit_position) =
+            self.drainer.drain_ddl(all_data)?;
         let count = data.len();
         if count > 0 {
             self.parallelizer
-                .sink_ddl(data, &self.sinkers)
+                .sink_ddl(data.clone(), &self.sinkers)
                 .await
-                .unwrap()
+                .unwrap();
+            // only part of sinkers will execute sink_ddl, but all sinkers should refresh metadata
+            for sinker in self.sinkers.iter_mut() {
+                sinker
+                    .lock()
+                    .await
+                    .refresh_meta(data.clone())
+                    .await
+                    .unwrap();
+            }
         }
         Ok((count, last_received_position, last_commit_position))
-    }
-
-    fn fetch_dml(mut data: Vec<DtData>) -> (Vec<RowData>, Option<String>, Option<String>) {
-        let mut dml_data = Vec::new();
-        let mut last_received_position = Option::None;
-        let mut last_commit_position = Option::None;
-        for i in data.drain(..) {
-            match i {
-                DtData::Commit { position, .. } => {
-                    last_commit_position = Some(position);
-                    last_received_position = last_commit_position.clone();
-                    continue;
-                }
-
-                DtData::Dml { row_data } => {
-                    last_received_position = Some(row_data.position.clone());
-                    dml_data.push(row_data);
-                }
-
-                _ => {}
-            }
-        }
-
-        (dml_data, last_received_position, last_commit_position)
-    }
-
-    fn fetch_ddl(mut data: Vec<DtData>) -> (Vec<DdlData>, Option<String>, Option<String>) {
-        // TODO, change result name
-        let mut result = Vec::new();
-        let mut last_received_position = Option::None;
-        let mut last_commit_position = Option::None;
-        for i in data.drain(..) {
-            match i {
-                DtData::Commit { position, .. } => {
-                    last_commit_position = Some(position);
-                    last_received_position = last_commit_position.clone();
-                    continue;
-                }
-
-                DtData::Ddl { ddl_data } => {
-                    result.push(ddl_data);
-                }
-
-                _ => {}
-            }
-        }
-
-        (result, last_received_position, last_commit_position)
     }
 
     #[inline(always)]

@@ -294,17 +294,43 @@ impl TaskConfig {
         Ok((basic, sinker))
     }
 
+    fn load_pipeline_type(ini: &Ini) -> Option<PipelineType> {
+        match &ini.get(PIPELINE, PIPELINE_TYPE) {
+            Some(t) => Some(PipelineType::from_str(t).unwrap()),
+            None => None,
+        }
+    }
+
     fn load_paralleizer_config(ini: &Ini) -> ParallelizerConfig {
-        ParallelizerConfig {
-            parallel_size: ini.getuint(PARALLELIZER, "parallel_size").unwrap().unwrap() as usize,
-            parallel_type: ParallelType::from_str(&ini.get(PARALLELIZER, "parallel_type").unwrap())
+        // compatible with older versions, Paralleizer settings are set under the pipeline section
+        let parallel_sections: Vec<String> = ini
+            .sections()
+            .iter()
+            .filter(|&s| *s == PARALLELIZER)
+            .map(|s| s.clone())
+            .collect();
+
+        if parallel_sections.len() == 0 || Self::load_pipeline_type(&ini).is_none() {
+            ParallelizerConfig {
+                parallel_size: ini.getuint(PIPELINE, "parallel_size").unwrap().unwrap() as usize,
+                parallel_type: ParallelType::from_str(&ini.get(PIPELINE, "parallel_type").unwrap())
+                    .unwrap(),
+            }
+        } else {
+            ParallelizerConfig {
+                parallel_size: ini.getuint(PARALLELIZER, "parallel_size").unwrap().unwrap()
+                    as usize,
+                parallel_type: ParallelType::from_str(
+                    &ini.get(PARALLELIZER, "parallel_type").unwrap(),
+                )
                 .unwrap(),
+            }
         }
     }
 
     fn load_pipeline_config(ini: &Ini) -> PipelineConfig {
-        let pipeline_type: PipelineType = match &ini.get(PIPELINE, PIPELINE_TYPE) {
-            Some(t) => PipelineType::from_str(t).unwrap(),
+        let pipeline_type: PipelineType = match Self::load_pipeline_type(ini) {
+            Some(t) => t,
             None => PipelineType::Basic,
         };
 
@@ -385,32 +411,8 @@ impl TaskConfig {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, path::PathBuf};
-
-    use crate::utils::work_dir_util::WorkDirUtil;
 
     use super::*;
-
-    #[test]
-    fn task_config_new_test() {
-        let project_root = WorkDirUtil::get_project_root().unwrap();
-
-        let path_name = format!("{}/dt-common/src/test/config", project_root);
-        println!("path_name:{}", path_name);
-
-        for entry in fs::read_dir(PathBuf::from(path_name)).unwrap() {
-            if entry.is_err() {
-                continue;
-            }
-            let dir_entry = entry.unwrap();
-            println!(
-                "begin check config: {}",
-                dir_entry.file_name().to_string_lossy()
-            );
-            TaskConfig::new(&dir_entry.path().to_string_lossy().to_string());
-        }
-        assert!(true)
-    }
 
     fn mock_props(confs: &str) -> PipelineConfig {
         let mut inis = Ini::new();

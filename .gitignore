@@ -26,3 +26,6 @@ Session.vim
 
 ## Integration Test
 /tmp
+
+## local env settings
+/**/.env.local

@@ -93,9 +93,7 @@ impl TransactionWorker {
                 }
             }
             Err(e) => {
-                return Err(Error::ConfigError {
-                    error: e.to_string(),
-                });
+                return Err(Error::ConfigError(e.to_string()));
             }
         }
         Ok(None)

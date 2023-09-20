@@ -105,20 +105,4 @@ impl SinkerConfig {
             Self::Foxlake { .. } => String::new(),
         }
     }
-
-    pub fn get_url(&self) -> String {
-        match self {
-            SinkerConfig::Basic { url, .. } => url.to_owned(),
-            SinkerConfig::Mysql { url, .. } => url.to_owned(),
-            SinkerConfig::Pg { url, .. } => url.to_owned(),
-            SinkerConfig::Mongo { url, .. } => url.to_owned(),
-            SinkerConfig::MysqlCheck { url, .. } => url.to_owned(),
-            SinkerConfig::PgCheck { url, .. } => url.to_owned(),
-            SinkerConfig::MysqlStruct { url, .. } => url.to_owned(),
-            SinkerConfig::PgStruct { url, .. } => url.to_owned(),
-            SinkerConfig::Kafka { url, .. } => url.to_owned(),
-            SinkerConfig::OpenFaas { url, .. } => url.to_owned(),
-            SinkerConfig::Foxlake { .. } => String::from(""),
-        }
-    }
 }

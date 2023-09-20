@@ -86,3 +86,11 @@ impl FromStr for ConflictPolicyEnum {
         }
     }
 }
+
+#[derive(EnumString, IntoStaticStr, Display)]
+pub enum PipelineType {
+    #[strum(serialize = "basic")]
+    Basic,
+    #[strum(serialize = "transaction")]
+    Transaction,
+}

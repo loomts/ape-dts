@@ -190,7 +190,7 @@ impl SinkerUtil {
             } => {
                 SinkerUtil::create_redis_sinker(
                     url,
-                    task_config.pipeline.parallel_size,
+                    task_config.parallelizer.parallel_size,
                     *batch_size,
                     method,
                 )

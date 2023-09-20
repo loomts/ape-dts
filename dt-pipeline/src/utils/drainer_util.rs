@@ -6,26 +6,26 @@ use dt_common::{
     utils::transaction_circle_control::{TopologyInfo, TransactionWorker},
 };
 
-use crate::filters::{mysql_transaction_filter::MysqlTransactionFilter, traits::TransactionFilter};
+use crate::drainers::{mysql_transaction_filter::MysqlTransactionFilter, traits::DataDrainer};
 
-pub struct FilterUtil {}
+pub struct DrainerUtil {}
 
-impl FilterUtil {
-    pub fn create_transaction_filter(
+impl DrainerUtil {
+    pub fn create_transaction_filter_drainer(
         extractor: &ExtractorConfig,
         transaction_worker: TransactionWorker,
         current_topology: TopologyInfo,
-    ) -> Result<Box<dyn TransactionFilter + Send>, Error> {
+    ) -> Result<Box<dyn DataDrainer + Send>, Error> {
         match extractor {
             ExtractorConfig::MysqlCdc { .. } => Ok(Box::new(MysqlTransactionFilter {
                 transaction_worker,
                 current_topology,
-                cache: HashMap::new(),
                 do_transaction_filter: false,
+                cache: HashMap::new(),
             })),
-            _ => Err(Error::ConfigError {
-                error: String::from("extractor type not support transaction filter yet."),
-            }),
+            _ => Err(Error::ConfigError(String::from(
+                "extractor type not support transaction filter yet.",
+            ))),
         }
     }
 }

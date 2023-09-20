@@ -7,7 +7,7 @@ use dt_common::{
 };
 use dt_meta::{dt_data::DtData, row_data::RowData};
 
-use super::traits::TransactionFilter;
+use super::traits::DataDrainer;
 
 pub struct MysqlTransactionFilter {
     pub transaction_worker: TransactionWorker,
@@ -17,8 +17,8 @@ pub struct MysqlTransactionFilter {
     pub cache: HashMap<(String, String), bool>,
 }
 
-impl TransactionFilter for MysqlTransactionFilter {
-    fn filter_dmls(
+impl DataDrainer for MysqlTransactionFilter {
+    fn drain_dmls(
         &mut self,
         mut datas: Vec<DtData>,
     ) -> Result<(Vec<RowData>, Option<String>, Option<String>), Error> {
@@ -74,4 +74,6 @@ impl TransactionFilter for MysqlTransactionFilter {
 
         Ok((result_data, last_received_position, last_commit_position))
     }
+
+    // Todo: how to control ddl?
 }
