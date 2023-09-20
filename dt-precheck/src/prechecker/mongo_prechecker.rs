@@ -1,11 +1,13 @@
 use async_trait::async_trait;
-use dt_common::config::{config_enums::DbType, filter_config::FilterConfig};
+use dt_common::{
+    config::{config_enums::DbType, filter_config::FilterConfig},
+    error::Error,
+};
 use mongodb::bson::Bson;
 use regex::Regex;
 
 use crate::{
     config::precheck_config::PrecheckConfig,
-    error::Error,
     fetcher::{mongo::mongo_fetcher::MongoFetcher, traits::Fetcher},
     meta::{check_item::CheckItem, check_result::CheckResult},
 };
@@ -19,22 +21,16 @@ pub struct MongoPrechecker {
     pub filter_config: FilterConfig,
     pub precheck_config: PrecheckConfig,
     pub is_source: bool,
-    pub db_type_option: Option<DbType>,
 }
 
 #[async_trait]
 impl Prechecker for MongoPrechecker {
     async fn build_connection(&mut self) -> Result<CheckResult, Error> {
-        let result = self.fetcher.build_connection().await;
-        match result {
-            Ok(_) => {}
-            Err(e) => return Err(e),
-        }
-
+        self.fetcher.build_connection().await?;
         Ok(CheckResult::build_with_err(
             CheckItem::CheckDatabaseConnection,
             self.is_source,
-            self.db_type_option.clone(),
+            DbType::Mongo,
             None,
         ))
     }
@@ -45,15 +41,16 @@ impl Prechecker for MongoPrechecker {
         let version = self.fetcher.fetch_version().await?;
         let reg = Regex::new(MONGO_SUPPORTED_VERSION_REGEX).unwrap();
         if !reg.is_match(version.as_str()) {
-            check_error = Some(Error::PreCheckError {
-                error: format!("mongo version:[{}] is invalid.", version),
-            });
+            check_error = Some(Error::PreCheckError(format!(
+                "mongo version:[{}] is invalid.",
+                version
+            )));
         }
 
         Ok(CheckResult::build_with_err(
             CheckItem::CheckDatabaseVersionSupported,
             self.is_source,
-            self.db_type_option.clone(),
+            DbType::Mongo,
             check_error,
         ))
     }
@@ -73,18 +70,15 @@ impl Prechecker for MongoPrechecker {
             return Ok(CheckResult::build_with_err(
                 CheckItem::CheckIfDatabaseSupportCdc,
                 self.is_source,
-                self.db_type_option.clone(),
+                DbType::Mongo,
                 check_error,
             ));
         }
 
         // 1. replSet used
         // 2. the specify url is the master
-        let random_db = self.fetcher.get_random_db()?;
-        let rs_status = self
-            .fetcher
-            .execute_for_db(random_db.clone(), "hello")
-            .await?;
+        // let random_db = self.fetcher.get_random_db()?;
+        let rs_status = self.fetcher.execute_for_db("hello").await?;
 
         let (ok, primary, me): (bool, &str, &str) = (
             rs_status.get("ok").and_then(Bson::as_f64).unwrap_or(0.0) >= 1.0,
@@ -105,15 +99,13 @@ impl Prechecker for MongoPrechecker {
         }
 
         if !err_msg.is_empty() {
-            check_error = Some(Error::PreCheckError {
-                error: String::from(err_msg),
-            });
+            check_error = Some(Error::PreCheckError(err_msg.into()));
         }
 
         Ok(CheckResult::build_with_err(
             CheckItem::CheckIfDatabaseSupportCdc,
             self.is_source,
-            self.db_type_option.clone(),
+            DbType::Mongo,
             check_error,
         ))
     }
@@ -122,7 +114,7 @@ impl Prechecker for MongoPrechecker {
         Ok(CheckResult::build_with_err(
             CheckItem::CheckIfStructExisted,
             self.is_source,
-            self.db_type_option.clone(),
+            DbType::Mongo,
             None,
         ))
     }
@@ -133,11 +125,9 @@ impl Prechecker for MongoPrechecker {
         let invalid_dbs = vec!["admin", "local"];
         for db in invalid_dbs {
             if !self.fetcher.filter.filter_db(db) {
-                check_error = Some(Error::PreCheckError {
-                    error: String::from(
-                        "database 'admin' and 'local' are not supported as source and target.",
-                    ),
-                });
+                check_error = Some(Error::PreCheckError(
+                    "database 'admin' and 'local' are not supported as source and target.".into(),
+                ));
                 break;
             }
         }
@@ -145,7 +135,7 @@ impl Prechecker for MongoPrechecker {
         Ok(CheckResult::build_with_err(
             CheckItem::CheckIfTableStructSupported,
             self.is_source,
-            self.db_type_option.clone(),
+            DbType::Mongo,
             check_error,
         ))
     }

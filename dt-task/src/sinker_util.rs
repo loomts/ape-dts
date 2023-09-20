@@ -18,10 +18,14 @@ use dt_connector::{
         open_faas_sinker::OpenFaasSinker,
         pg::{pg_checker::PgChecker, pg_sinker::PgSinker, pg_struct_sinker::PgStructSinker},
         rdb_router::RdbRouter,
+        redis::redis_sinker::RedisSinker,
     },
     Sinker,
 };
-use dt_meta::{mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager};
+use dt_meta::{
+    mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
+    redis::redis_write_method::RedisWriteMethod,
+};
 use kafka::producer::{Producer, RequiredAcks};
 use reqwest::Client;
 use rusoto_core::Region;
@@ -179,7 +183,19 @@ impl SinkerUtil {
                 .await?
             }
 
-            _ => vec![],
+            SinkerConfig::Redis {
+                url,
+                batch_size,
+                method,
+            } => {
+                SinkerUtil::create_redis_sinker(
+                    url,
+                    task_config.pipeline.parallel_size,
+                    *batch_size,
+                    method,
+                )
+                .await?
+            }
         };
         Ok(sinkers)
     }
@@ -201,6 +217,7 @@ impl SinkerUtil {
         let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
         for _ in 0..parallel_size {
             let sinker = MysqlSinker {
+                url: url.to_string(),
                 conn_pool: conn_pool.clone(),
                 meta_manager: meta_manager.clone(),
                 router: router.clone(),
@@ -429,6 +446,29 @@ impl SinkerUtil {
             let sinker = PgStructSinker {
                 conn_pool: conn_pool.clone(),
                 conflict_policy: conflict_policy.clone(),
+            };
+            sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
+        }
+        Ok(sub_sinkers)
+    }
+
+    async fn create_redis_sinker<'a>(
+        url: &str,
+        parallel_size: usize,
+        batch_size: usize,
+        method: &str,
+    ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
+        let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
+        for _ in 0..parallel_size {
+            let mut conn = TaskUtil::create_redis_conn(url).await?;
+            let version = TaskUtil::get_redis_version(&mut conn)?;
+            let method = RedisWriteMethod::from_str(method).unwrap();
+            let sinker = RedisSinker {
+                conn,
+                batch_size,
+                now_db_id: -1,
+                version,
+                method,
             };
             sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
         }

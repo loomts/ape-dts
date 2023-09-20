@@ -1,90 +1,49 @@
-use core::fmt;
+use thiserror::Error;
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum Error {
-    ConfigError {
-        error: String,
-    },
+    #[error("config error: {0}")]
+    ConfigError(String),
 
-    BinlogError {
-        error: mysql_binlog_connector_rust::binlog_error::BinlogError,
-    },
+    #[error("extractor error: {0}")]
+    ExtractorError(String),
 
-    SqlxError {
-        error: sqlx::Error,
-    },
+    #[error("sinker error: {0}")]
+    SinkerError(String),
 
-    Unexpected {
-        error: String,
-    },
+    #[error("pull mysql binlog error: {0}")]
+    BinlogError(#[from] mysql_binlog_connector_rust::binlog_error::BinlogError),
 
-    MetadataError {
-        error: String,
-    },
+    #[error("sqlx error: {0}")]
+    SqlxError(#[from] sqlx::Error),
 
-    IoError {
-        error: std::io::Error,
-    },
+    #[error("unexpected error: {0}")]
+    Unexpected(String),
 
-    YamlError {
-        error: serde_yaml::Error,
-    },
+    #[error("parse redis rdb error: {0}")]
+    RedisRdbError(String),
 
-    EnvVarError {
-        error: std::env::VarError,
-    },
+    #[error("metadata error: {0}")]
+    MetadataError(String),
 
-    StructError {
-        error: String,
-    },
+    #[error("io error: {0}")]
+    IoError(#[from] std::io::Error),
 
-    ColumnNotMatch,
-}
+    #[error("yaml error: {0}")]
+    YamlError(#[from] serde_yaml::Error),
 
-impl From<mysql_binlog_connector_rust::binlog_error::BinlogError> for Error {
-    fn from(err: mysql_binlog_connector_rust::binlog_error::BinlogError) -> Self {
-        Self::BinlogError { error: err }
-    }
-}
+    #[error("from utf8 error: {0}")]
+    FromUtf8Error(#[from] std::string::FromUtf8Error),
 
-impl From<sqlx::Error> for Error {
-    fn from(err: sqlx::Error) -> Self {
-        Self::SqlxError { error: err }
-    }
-}
+    #[error("mongodb error: {0}")]
+    MongodbError(#[from] mongodb::error::Error),
 
-impl From<std::io::Error> for Error {
-    fn from(err: std::io::Error) -> Self {
-        Self::IoError { error: err }
-    }
-}
+    #[error("struct error: {0}")]
+    StructError(String),
 
-impl From<serde_yaml::Error> for Error {
-    fn from(err: serde_yaml::Error) -> Self {
-        Self::YamlError { error: err }
-    }
-}
+    #[error("precheck error: {0}")]
+    PreCheckError(String),
 
-impl From<std::env::VarError> for Error {
-    fn from(err: std::env::VarError) -> Self {
-        Self::EnvVarError { error: err }
-    }
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let err_msg: String = match self {
-            Error::ConfigError { error } => error.to_owned(),
-            Error::BinlogError { .. } => String::from("binlog error"),
-            Error::SqlxError { error } => error.to_string(),
-            Error::Unexpected { error } => error.to_owned(),
-            Error::MetadataError { error } => error.to_owned(),
-            Error::IoError { error } => error.to_string(),
-            Error::YamlError { error } => error.to_string(),
-            Error::EnvVarError { error } => error.to_string(),
-            Error::StructError { error } => error.to_owned(),
-            Error::ColumnNotMatch => String::from("column not match"),
-        };
-        write!(f, "err_msg:{}", err_msg)
-    }
+    #[error("kafka error: {0}")]
+    KafkaError(#[from] kafka::Error),
 }

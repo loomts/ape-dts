@@ -1,14 +1,20 @@
 use std::{
     collections::HashMap,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
-use dt_common::{constants::MongoConstants, error::Error, log_info, utils::time_util::TimeUtil};
-use dt_meta::{col_value::ColValue, dt_data::DtData, row_data::RowData, row_type::RowType};
+use dt_common::{error::Error, log_info, utils::time_util::TimeUtil};
+use dt_meta::{
+    col_value::ColValue, dt_data::DtData, mongo::mongo_constant::MongoConstants, row_data::RowData,
+    row_type::RowType,
+};
 use mongodb::{
-    bson::{doc, oid::ObjectId, Document},
+    bson::{doc, oid::ObjectId, Bson, Document},
     options::FindOptions,
     Client,
 };
@@ -18,17 +24,17 @@ use crate::{
     Extractor,
 };
 
-pub struct MongoSnapshotExtractor<'a> {
+pub struct MongoSnapshotExtractor {
     pub resumer: SnapshotResumer,
-    pub buffer: &'a ConcurrentQueue<DtData>,
+    pub buffer: Arc<ConcurrentQueue<DtData>>,
     pub db: String,
     pub tb: String,
-    pub shut_down: &'a AtomicBool,
+    pub shut_down: Arc<AtomicBool>,
     pub mongo_client: Client,
 }
 
 #[async_trait]
-impl Extractor for MongoSnapshotExtractor<'_> {
+impl Extractor for MongoSnapshotExtractor {
     async fn extract(&mut self) -> Result<(), Error> {
         log_info!(
             "MongoSnapshotExtractor starts, schema: {}, tb: {}",
@@ -37,13 +43,9 @@ impl Extractor for MongoSnapshotExtractor<'_> {
         );
         self.extract_internal().await
     }
-
-    async fn close(&mut self) -> Result<(), Error> {
-        Ok(())
-    }
 }
 
-impl MongoSnapshotExtractor<'_> {
+impl MongoSnapshotExtractor {
     pub async fn extract_internal(&mut self) -> Result<(), Error> {
         log_info!("start extracting data from {}.{}", self.db, self.tb);
 
@@ -70,8 +72,7 @@ impl MongoSnapshotExtractor<'_> {
         let mut cursor = collection.find(filter, find_options).await.unwrap();
         while cursor.advance().await.unwrap() {
             let doc = cursor.deserialize_current().unwrap();
-
-            let id = doc.get_object_id(MongoConstants::ID).unwrap().to_string();
+            let id = Self::get_object_id(&doc);
 
             let mut after = HashMap::new();
             after.insert(MongoConstants::DOC.to_string(), ColValue::MongoDoc(doc));
@@ -84,7 +85,7 @@ impl MongoSnapshotExtractor<'_> {
                 before: None,
             };
 
-            BaseExtractor::push_row(self.buffer, row_data)
+            BaseExtractor::push_row(self.buffer.as_ref(), row_data)
                 .await
                 .unwrap();
             all_count += 1;
@@ -104,5 +105,15 @@ impl MongoSnapshotExtractor<'_> {
 
         self.shut_down.store(true, Ordering::Release);
         Ok(())
+    }
+
+    fn get_object_id(doc: &Document) -> String {
+        if let Some(id) = doc.get(MongoConstants::ID) {
+            match id {
+                Bson::ObjectId(v) => return v.to_string(),
+                _ => return String::new(),
+            }
+        }
+        String::new()
     }
 }

@@ -1,27 +1,34 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{cmp, sync::Arc};
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
-use dt_common::error::Error;
+use dt_common::{config::sinker_config::SinkerBasicConfig, error::Error};
 use dt_connector::Sinker;
 use dt_meta::{ddl_data::DdlData, dt_data::DtData, row_data::RowData, row_type::RowType};
 
-use crate::Parallelizer;
+use crate::{Merger, Parallelizer};
 
-use super::{
-    base_parallelizer::BaseParallelizer,
-    rdb_merger::{RdbMerger, TbMergedData},
-};
+use super::base_parallelizer::BaseParallelizer;
 
 pub struct MergeParallelizer {
     pub base_parallelizer: BaseParallelizer,
-    pub merger: RdbMerger,
+    pub merger: Box<dyn Merger + Send + Sync>,
     pub parallel_size: usize,
+    pub sinker_basic_config: SinkerBasicConfig,
 }
 
-const INSERT: &str = "insert";
-const DELETE: &str = "delete";
-const UNMERGED: &str = "unmerged";
+enum MergeType {
+    Insert,
+    Delete,
+    Unmerged,
+}
+
+pub struct TbMergedData {
+    pub tb: String,
+    pub delete_rows: Vec<RowData>,
+    pub insert_rows: Vec<RowData>,
+    pub unmerged_rows: Vec<RowData>,
+}
 
 #[async_trait]
 impl Parallelizer for MergeParallelizer {
@@ -38,14 +45,13 @@ impl Parallelizer for MergeParallelizer {
         data: Vec<RowData>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
     ) -> Result<(), Error> {
-        let mut merged_datas = self.merger.merge(data).await?;
-        self.sink_internal(&mut merged_datas, sinkers, DELETE)
+        let mut tb_merged_datas = self.merger.merge(data).await?;
+        self.sink_dml_internal(&mut tb_merged_datas, sinkers, MergeType::Delete)
             .await?;
-        self.sink_internal(&mut merged_datas, sinkers, INSERT)
+        self.sink_dml_internal(&mut tb_merged_datas, sinkers, MergeType::Insert)
             .await?;
-        self.sink_internal(&mut merged_datas, sinkers, UNMERGED)
-            .await?;
-        Ok(())
+        self.sink_dml_internal(&mut tb_merged_datas, sinkers, MergeType::Unmerged)
+            .await
     }
 
     async fn sink_ddl(
@@ -61,36 +67,52 @@ impl Parallelizer for MergeParallelizer {
 }
 
 impl MergeParallelizer {
-    #[inline(always)]
-    async fn sink_internal(
+    async fn sink_dml_internal(
         &self,
-        merged_datas: &mut HashMap<String, TbMergedData>,
+        tb_merged_datas: &mut Vec<TbMergedData>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-        sink_type: &str,
+        merge_type: MergeType,
     ) -> Result<(), Error> {
-        let parallel_size = sinkers.len();
-        let mut i = 0;
         let mut futures = Vec::new();
-        for (_full_tb, tb_merged_data) in merged_datas.iter_mut() {
-            let data = match sink_type {
-                DELETE => tb_merged_data.get_delete_rows(),
-                INSERT => tb_merged_data.get_insert_rows(),
-                _ => tb_merged_data.get_unmerged_rows(),
+        for tb_merged_data in tb_merged_datas.iter_mut() {
+            let data: Vec<RowData> = match merge_type {
+                MergeType::Delete => tb_merged_data.delete_rows.drain(..).collect(),
+                MergeType::Insert => tb_merged_data.insert_rows.drain(..).collect(),
+                MergeType::Unmerged => tb_merged_data.unmerged_rows.drain(..).collect(),
             };
             if data.is_empty() {
                 continue;
             }
 
-            let sinker_type_clone = sink_type.to_string();
-            let sinker = sinkers[i % parallel_size].clone();
-            let future = tokio::spawn(async move {
-                match sinker_type_clone.as_str() {
-                    DELETE | INSERT => sinker.lock().await.sink_dml(data, true).await.unwrap(),
-                    _ => Self::sink_unmerged_rows(sinker, data).await.unwrap(),
-                };
-            });
-            futures.push(future);
-            i += 1;
+            // make sure NO too much threads generated
+            let batch_size = cmp::max(
+                data.len() / self.parallel_size,
+                cmp::max(self.sinker_basic_config.batch_size, 1),
+            );
+
+            match merge_type {
+                MergeType::Insert | MergeType::Delete => {
+                    let mut i = 0;
+                    while i < data.len() {
+                        let sub_size = cmp::min(batch_size, data.len() - i);
+                        let sub_data = data[i..i + sub_size].to_vec();
+                        let sinker = sinkers[futures.len() % self.parallel_size].clone();
+                        let future = tokio::spawn(async move {
+                            sinker.lock().await.sink_dml(sub_data, true).await.unwrap();
+                        });
+                        futures.push(future);
+                        i += batch_size;
+                    }
+                }
+
+                MergeType::Unmerged => {
+                    let sinker = sinkers[futures.len() % self.parallel_size].clone();
+                    let future = tokio::spawn(async move {
+                        Self::sink_unmerged_rows(sinker, data).await.unwrap();
+                    });
+                    futures.push(future);
+                }
+            }
         }
 
         // wait for sub sinkers to finish and unwrap errors
@@ -111,6 +133,7 @@ impl MergeParallelizer {
                 if data[start].row_type == RowType::Insert {
                     sinker.lock().await.sink_dml(sub_data, true).await?;
                 } else {
+                    // for Delete / Update, the safest way is serial
                     sinker.lock().await.sink_dml(sub_data, false).await?;
                 }
                 start = i;

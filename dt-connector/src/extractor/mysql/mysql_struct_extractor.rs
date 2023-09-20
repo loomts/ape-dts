@@ -1,4 +1,4 @@
-use std::sync::atomic::AtomicBool;
+use std::sync::{atomic::AtomicBool, Arc};
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
@@ -14,27 +14,23 @@ use crate::{
     meta_fetcher::mysql::mysql_struct_fetcher::MysqlStructFetcher, Extractor,
 };
 
-pub struct MysqlStructExtractor<'a> {
+pub struct MysqlStructExtractor {
     pub conn_pool: Pool<MySql>,
-    pub buffer: &'a ConcurrentQueue<DtData>,
+    pub buffer: Arc<ConcurrentQueue<DtData>>,
     pub db: String,
     pub filter: RdbFilter,
-    pub shut_down: &'a AtomicBool,
+    pub shut_down: Arc<AtomicBool>,
 }
 
 #[async_trait]
-impl Extractor for MysqlStructExtractor<'_> {
+impl Extractor for MysqlStructExtractor {
     async fn extract(&mut self) -> Result<(), Error> {
         log_info!("MysqlStructExtractor starts, schema: {}", self.db,);
         self.extract_internal().await
     }
-
-    async fn close(&mut self) -> Result<(), Error> {
-        Ok(())
-    }
 }
 
-impl MysqlStructExtractor<'_> {
+impl MysqlStructExtractor {
     pub async fn extract_internal(&mut self) -> Result<(), Error> {
         let mut mysql_fetcher = MysqlStructFetcher {
             conn_pool: self.conn_pool.to_owned(),
@@ -54,17 +50,18 @@ impl MysqlStructExtractor<'_> {
             self.push_dt_data(&meta).await;
         }
 
-        BaseExtractor::wait_task_finish(self.buffer, self.shut_down).await
+        BaseExtractor::wait_task_finish(self.buffer.as_ref(), self.shut_down.as_ref()).await
     }
 
     pub async fn push_dt_data(&mut self, meta: &StructModel) {
         let ddl_data = DdlData {
             schema: self.db.clone(),
+            tb: String::new(),
             query: String::new(),
             meta: Some(meta.to_owned()),
             ddl_type: DdlType::Unknown,
         };
-        BaseExtractor::push_dt_data(self.buffer, DtData::Ddl { ddl_data })
+        BaseExtractor::push_dt_data(self.buffer.as_ref(), DtData::Ddl { ddl_data })
             .await
             .unwrap()
     }

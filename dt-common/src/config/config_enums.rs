@@ -1,6 +1,10 @@
+use std::str::FromStr;
+
 use strum::{Display, EnumString, IntoStaticStr};
 
-#[derive(Clone, Display, EnumString, IntoStaticStr, Debug)]
+use crate::error::Error;
+
+#[derive(Clone, Display, EnumString, IntoStaticStr, Debug, PartialEq, Eq)]
 pub enum DbType {
     #[strum(serialize = "mysql")]
     Mysql,
@@ -14,9 +18,11 @@ pub enum DbType {
     Foxlake,
     #[strum(serialize = "mongo")]
     Mongo,
+    #[strum(serialize = "redis")]
+    Redis,
 }
 
-#[derive(Display, EnumString, IntoStaticStr)]
+#[derive(Display, EnumString, IntoStaticStr, Debug, Clone)]
 pub enum ExtractType {
     #[strum(serialize = "snapshot")]
     Snapshot,
@@ -26,11 +32,9 @@ pub enum ExtractType {
     CheckLog,
     #[strum(serialize = "struct")]
     Struct,
-    #[strum(serialize = "basic")]
-    Basic,
 }
 
-#[derive(EnumString, IntoStaticStr)]
+#[derive(Display, EnumString, IntoStaticStr)]
 pub enum SinkType {
     #[strum(serialize = "write")]
     Write,
@@ -38,8 +42,6 @@ pub enum SinkType {
     Check,
     #[strum(serialize = "struct")]
     Struct,
-    #[strum(serialize = "basic")]
-    Basic,
 }
 
 #[derive(EnumString, IntoStaticStr, Clone, Display)]
@@ -58,14 +60,8 @@ pub enum ParallelType {
     Table,
     #[strum(serialize = "mongo")]
     Mongo,
-}
-
-#[derive(EnumString, IntoStaticStr, Display)]
-pub enum PipelineType {
-    #[strum(serialize = "basic")]
-    Basic,
-    #[strum(serialize = "transaction")]
-    Transaction,
+    #[strum(serialize = "redis")]
+    Redis,
 }
 
 pub enum RouteType {
@@ -73,10 +69,20 @@ pub enum RouteType {
     Tb,
 }
 
-#[derive(EnumString, Clone, IntoStaticStr)]
+#[derive(Clone, Debug, IntoStaticStr)]
 pub enum ConflictPolicyEnum {
     #[strum(serialize = "ignore")]
     Ignore,
     #[strum(serialize = "interrupt")]
     Interrupt,
+}
+
+impl FromStr for ConflictPolicyEnum {
+    type Err = Error;
+    fn from_str(str: &str) -> Result<Self, Self::Err> {
+        match str {
+            "ignore" => Ok(Self::Ignore),
+            _ => Ok(Self::Interrupt),
+        }
+    }
 }

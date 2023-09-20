@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::atomic::AtomicBool};
+use std::{
+    collections::HashMap,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
@@ -21,17 +24,17 @@ use crate::{
     BatchCheckExtractor, Extractor,
 };
 
-pub struct MysqlCheckExtractor<'a> {
+pub struct MysqlCheckExtractor {
     pub conn_pool: Pool<MySql>,
     pub meta_manager: MysqlMetaManager,
     pub check_log_dir: String,
-    pub buffer: &'a ConcurrentQueue<DtData>,
+    pub buffer: Arc<ConcurrentQueue<DtData>>,
     pub batch_size: usize,
-    pub shut_down: &'a AtomicBool,
+    pub shut_down: Arc<AtomicBool>,
 }
 
 #[async_trait]
-impl Extractor for MysqlCheckExtractor<'_> {
+impl Extractor for MysqlCheckExtractor {
     async fn extract(&mut self) -> Result<(), Error> {
         log_info!(
             "MysqlCheckExtractor starts, check_log_dir: {}",
@@ -40,21 +43,17 @@ impl Extractor for MysqlCheckExtractor<'_> {
 
         let mut base_check_extractor = BaseCheckExtractor {
             check_log_dir: self.check_log_dir.clone(),
-            buffer: self.buffer,
+            buffer: self.buffer.clone(),
             batch_size: self.batch_size,
-            shut_down: self.shut_down,
+            shut_down: self.shut_down.clone(),
         };
 
         base_check_extractor.extract(self).await
     }
-
-    async fn close(&mut self) -> Result<(), Error> {
-        Ok(())
-    }
 }
 
 #[async_trait]
-impl BatchCheckExtractor for MysqlCheckExtractor<'_> {
+impl BatchCheckExtractor for MysqlCheckExtractor {
     async fn batch_extract(&mut self, check_logs: &[CheckLog]) -> Result<(), Error> {
         if check_logs.is_empty() {
             return Ok(());
@@ -84,7 +83,7 @@ impl BatchCheckExtractor for MysqlCheckExtractor<'_> {
                 row_data.before = row_data.after.clone();
             }
 
-            BaseExtractor::push_row(self.buffer, row_data)
+            BaseExtractor::push_row(self.buffer.as_ref(), row_data)
                 .await
                 .unwrap();
         }
@@ -92,7 +91,7 @@ impl BatchCheckExtractor for MysqlCheckExtractor<'_> {
     }
 }
 
-impl MysqlCheckExtractor<'_> {
+impl MysqlCheckExtractor {
     fn build_check_row_datas(
         check_logs: &[CheckLog],
         tb_meta: &MysqlTbMeta,

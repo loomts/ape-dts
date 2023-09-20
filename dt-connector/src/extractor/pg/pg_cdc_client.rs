@@ -81,9 +81,10 @@ impl PgCdcClient {
             start_lsn = if let Row(row) = &res[0] {
                 row.get("consistent_point").unwrap().to_string()
             } else {
-                return Err(Error::MetadataError {
-                    error: format!("failed in: {}", query),
-                });
+                return Err(Error::ExtractorError(format!(
+                    "failed to create replication slot by query: {}",
+                    query
+                )));
             };
         }
 

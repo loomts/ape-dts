@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::atomic::AtomicBool};
+use std::{
+    collections::HashMap,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use async_recursion::async_recursion;
 use async_trait::async_trait;
@@ -13,34 +16,34 @@ use dt_meta::{
 use mysql_binlog_connector_rust::{
     binlog_client::BinlogClient,
     event::{
-        event_data::EventData, event_header::EventHeader, row_event::RowEvent,
-        table_map_event::TableMapEvent,
+        event_data::EventData, event_header::EventHeader, query_event::QueryEvent,
+        row_event::RowEvent, table_map_event::TableMapEvent,
     },
 };
 
 use dt_common::{
     error::Error,
-    log_info,
+    log_error, log_info,
     utils::{position_util::PositionUtil, rdb_filter::RdbFilter},
 };
 
 use crate::{extractor::base_extractor::BaseExtractor, Extractor};
 
-pub struct MysqlCdcExtractor<'a> {
+pub struct MysqlCdcExtractor {
     pub meta_manager: MysqlMetaManager,
-    pub buffer: &'a ConcurrentQueue<DtData>,
+    pub buffer: Arc<ConcurrentQueue<DtData>>,
     pub filter: RdbFilter,
     pub url: String,
     pub binlog_filename: String,
     pub binlog_position: u32,
     pub server_id: u64,
-    pub shut_down: &'a AtomicBool,
+    pub shut_down: Arc<AtomicBool>,
 }
 
 const QUERY_BEGIN: &str = "BEGIN";
 
 #[async_trait]
-impl Extractor for MysqlCdcExtractor<'_> {
+impl Extractor for MysqlCdcExtractor {
     async fn extract(&mut self) -> Result<(), Error> {
         log_info!(
             "MysqlCdcExtractor starts, binlog_filename: {}, binlog_position: {}",
@@ -49,13 +52,9 @@ impl Extractor for MysqlCdcExtractor<'_> {
         );
         self.extract_internal().await
     }
-
-    async fn close(&mut self) -> Result<(), Error> {
-        Ok(())
-    }
 }
 
-impl MysqlCdcExtractor<'_> {
+impl MysqlCdcExtractor {
     async fn extract_internal(&mut self) -> Result<(), Error> {
         let mut client = BinlogClient {
             url: self.url.clone(),
@@ -167,22 +166,7 @@ impl MysqlCdcExtractor<'_> {
             }
 
             EventData::Query(query) => {
-                let mut ddl_data = DdlData {
-                    schema: query.schema,
-                    query: query.query.clone(),
-                    ddl_type: DdlType::Unknown,
-                    meta: None,
-                };
-
-                if query.query != QUERY_BEGIN {
-                    if let Ok((ddl_type, schema, _)) = DdlParser::parse(&query.query) {
-                        ddl_data.ddl_type = ddl_type;
-                        if let Some(schema) = schema {
-                            ddl_data.schema = schema;
-                        }
-                    }
-                    BaseExtractor::push_dt_data(self.buffer, DtData::Ddl { ddl_data }).await?;
-                }
+                self.handle_query_event(query).await?;
             }
 
             EventData::Xid(xid) => {
@@ -190,7 +174,7 @@ impl MysqlCdcExtractor<'_> {
                     xid: xid.xid.to_string(),
                     position: position.to_string(),
                 };
-                BaseExtractor::push_dt_data(self.buffer, commit).await?;
+                BaseExtractor::push_dt_data(self.buffer.as_ref(), commit).await?;
             }
 
             _ => {}
@@ -207,7 +191,7 @@ impl MysqlCdcExtractor<'_> {
         ) {
             return Ok(());
         }
-        BaseExtractor::push_row(self.buffer, row_data).await
+        BaseExtractor::push_row(self.buffer.as_ref(), row_data).await
     }
 
     async fn parse_row_data(
@@ -222,7 +206,9 @@ impl MysqlCdcExtractor<'_> {
             .await?;
 
         if included_columns.len() != event.column_values.len() {
-            return Err(Error::ColumnNotMatch);
+            return Err(Error::ExtractorError(
+                "included_columns not match column_values in binlog".into(),
+            ));
         }
 
         let mut data = HashMap::new();
@@ -235,9 +221,66 @@ impl MysqlCdcExtractor<'_> {
 
             let col_type = tb_meta.col_type_map.get(key).unwrap();
             let raw_value = event.column_values.remove(i);
-            let value = MysqlColValueConvertor::from_binlog(col_type, raw_value);
+            let value = MysqlColValueConvertor::from_binlog(col_type, raw_value)?;
             data.insert(key.clone(), value);
         }
         Ok(data)
+    }
+
+    async fn handle_query_event(&mut self, query: QueryEvent) -> Result<(), Error> {
+        if query.query == QUERY_BEGIN {
+            return Ok(());
+        }
+
+        log_info!("received ddl: {:?}", query);
+        let mut ddl_data = DdlData {
+            schema: query.schema,
+            tb: String::new(),
+            query: query.query.clone(),
+            ddl_type: DdlType::Unknown,
+            meta: None,
+        };
+
+        let parse_result = DdlParser::parse(&query.query);
+        if let Err(error) = parse_result {
+            // clear all metadata cache
+            self.meta_manager.invalidate_cache("", "");
+            log_error!(
+                    "failed to parse ddl, will try ignore it, please execute the ddl manually in target, sql: {}, error: {}",
+                    ddl_data.query,
+                    error
+                );
+            return Ok(());
+        }
+
+        // case 1, execute: use db_1; create table tb_1(id int);
+        // binlog query.schema == db_1, schema from DdlParser == None
+        // case 2, execute: create table db_1.tb_1(id int);
+        // binlog query.schema == empty, schema from DdlParser == db_1
+        // case 3, execute: use db_1; create table db_2.tb_1(id int);
+        // binlog query.schema == db_1, schema from DdlParser == db_2
+        let (ddl_type, schema, tb) = parse_result.unwrap();
+        ddl_data.ddl_type = ddl_type;
+        if let Some(schema) = schema {
+            ddl_data.schema = schema;
+        }
+        if let Some(tb) = tb {
+            ddl_data.tb = tb;
+        }
+
+        // invalidate metadata cache
+        self.meta_manager
+            .invalidate_cache(&ddl_data.schema, &ddl_data.tb);
+
+        let filter = if ddl_data.tb.is_empty() {
+            self.filter.filter_db(&ddl_data.schema)
+        } else {
+            self.filter.filter_tb(&ddl_data.schema, &ddl_data.tb)
+        };
+
+        if !self.filter.filter_ddl() && !filter {
+            BaseExtractor::push_dt_data(self.buffer.as_ref(), DtData::Ddl { ddl_data }).await?;
+        }
+        Ok(())
     }
 }

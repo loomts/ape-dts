@@ -36,7 +36,7 @@ impl BaseTestRunner {
     ) -> Result<Self, Error> {
         let project_root = TestConfigUtil::get_project_root();
         let tmp_dir = if config_tmp_relative_dir.is_empty() {
-            format!("{}/tmp", project_root)
+            format!("{}/tmp/{}", project_root, relative_test_dir)
         } else {
             format!("{}/tmp/{}", project_root, config_tmp_relative_dir)
         };
@@ -55,7 +55,7 @@ impl BaseTestRunner {
         TestConfigUtil::update_task_config_url(
             &dst_task_config_file,
             &dst_task_config_file,
-            &project_root,
+            &test_dir,
             config_replace_police,
         );
 
@@ -98,7 +98,7 @@ impl BaseTestRunner {
         Ok(task)
     }
 
-    pub async fn wait_task_finish(task: &JoinHandle<()>) -> Result<(), Error> {
+    pub async fn wait_task_finish(&self, task: &JoinHandle<()>) -> Result<(), Error> {
         task.abort();
         while !task.is_finished() {
             TimeUtil::sleep_millis(1).await;

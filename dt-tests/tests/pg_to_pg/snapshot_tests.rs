@@ -3,6 +3,7 @@ mod test {
 
     use std::collections::HashMap;
 
+    use dt_common::config::config_enums::DbType;
     use serial_test::serial;
 
     use crate::test_runner::test_base::TestBase;
@@ -63,6 +64,7 @@ mod test {
 
         TestBase::run_snapshot_test_and_check_dst_count(
             "pg_to_pg/snapshot/resume_test",
+            &DbType::Pg,
             dst_expected_counts,
         )
         .await;
@@ -91,6 +93,7 @@ mod test {
 
         TestBase::run_snapshot_test_and_check_dst_count(
             "pg_to_pg/snapshot/special_character_in_name_test",
+            &DbType::Pg,
             dst_expected_counts,
         )
         .await;

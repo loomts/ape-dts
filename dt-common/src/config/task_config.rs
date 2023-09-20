@@ -6,19 +6,21 @@ use crate::error::Error;
 
 use super::{
     config_enums::{ConflictPolicyEnum, DbType, ExtractType, ParallelType, PipelineType, SinkType},
-    extractor_config::ExtractorConfig,
+    extractor_config::{ExtractorBasicConfig, ExtractorConfig},
     filter_config::FilterConfig,
     parallelizer_config::ParallelizerConfig,
     pipeline_config::{ExtraConfig, PipelineConfig},
     resumer_config::ResumerConfig,
     router_config::RouterConfig,
     runtime_config::RuntimeConfig,
-    sinker_config::SinkerConfig,
+    sinker_config::{SinkerBasicConfig, SinkerConfig},
 };
 
 #[derive(Clone)]
 pub struct TaskConfig {
+    pub extractor_basic: ExtractorBasicConfig,
     pub extractor: ExtractorConfig,
+    pub sinker_basic: SinkerBasicConfig,
     pub sinker: SinkerConfig,
     pub runtime: RuntimeConfig,
     pub parallelizer: ParallelizerConfig,
@@ -52,11 +54,15 @@ impl TaskConfig {
         let mut ini = Ini::new();
         ini.read(config_str).unwrap();
 
+        let (extractor_basic, extractor) = Self::load_extractor_config(&ini).unwrap();
+        let (sinker_basic, sinker) = Self::load_sinker_config(&ini).unwrap();
         Self {
-            extractor: Self::load_extractor_config(&ini).unwrap(),
+            extractor_basic,
+            extractor,
             parallelizer: Self::load_paralleizer_config(&ini),
-            sinker: Self::load_sinker_config(&ini).unwrap(),
             pipeline: Self::load_pipeline_config(&ini),
+            sinker_basic,
+            sinker,
             runtime: Self::load_runtime_config(&ini).unwrap(),
             filter: Self::load_filter_config(&ini).unwrap(),
             router: Self::load_router_config(&ini).unwrap(),
@@ -64,50 +70,53 @@ impl TaskConfig {
         }
     }
 
-    fn load_extractor_config(ini: &Ini) -> Result<ExtractorConfig, Error> {
+    fn load_extractor_config(ini: &Ini) -> Result<(ExtractorBasicConfig, ExtractorConfig), Error> {
         let db_type = DbType::from_str(&ini.get(EXTRACTOR, DB_TYPE).unwrap()).unwrap();
         let extract_type =
             ExtractType::from_str(&ini.get(EXTRACTOR, "extract_type").unwrap()).unwrap();
         let url = ini.get(EXTRACTOR, URL).unwrap();
+        let basic = ExtractorBasicConfig {
+            db_type: db_type.clone(),
+            extract_type: extract_type.clone(),
+            url: url.clone(),
+        };
 
-        match db_type {
+        let sinker = match db_type {
             DbType::Mysql => match extract_type {
-                ExtractType::Snapshot => Ok(ExtractorConfig::MysqlSnapshot {
+                ExtractType::Snapshot => ExtractorConfig::MysqlSnapshot {
                     url,
                     db: String::new(),
                     tb: String::new(),
-                }),
+                },
 
-                ExtractType::Cdc => Ok(ExtractorConfig::MysqlCdc {
+                ExtractType::Cdc => ExtractorConfig::MysqlCdc {
                     url,
                     binlog_filename: ini.get(EXTRACTOR, "binlog_filename").unwrap(),
                     binlog_position: ini.getuint(EXTRACTOR, "binlog_position").unwrap().unwrap()
                         as u32,
                     server_id: ini.getuint(EXTRACTOR, "server_id").unwrap().unwrap(),
-                }),
+                },
 
-                ExtractType::CheckLog => Ok(ExtractorConfig::MysqlCheck {
+                ExtractType::CheckLog => ExtractorConfig::MysqlCheck {
                     url,
                     check_log_dir: ini.get(EXTRACTOR, CHECK_LOG_DIR).unwrap(),
                     batch_size: ini.getuint(EXTRACTOR, BATCH_SIZE).unwrap().unwrap() as usize,
-                }),
+                },
 
-                ExtractType::Struct => Ok(ExtractorConfig::MysqlStruct {
+                ExtractType::Struct => ExtractorConfig::MysqlStruct {
                     url,
                     db: String::new(),
-                }),
-
-                ExtractType::Basic => Ok(ExtractorConfig::Basic { url, db_type }),
+                },
             },
 
             DbType::Pg => match extract_type {
-                ExtractType::Snapshot => Ok(ExtractorConfig::PgSnapshot {
+                ExtractType::Snapshot => ExtractorConfig::PgSnapshot {
                     url,
                     db: String::new(),
                     tb: String::new(),
-                }),
+                },
 
-                ExtractType::Cdc => Ok(ExtractorConfig::PgCdc {
+                ExtractType::Cdc => ExtractorConfig::PgCdc {
                     url,
                     slot_name: ini.get(EXTRACTOR, "slot_name").unwrap(),
                     start_lsn: ini.get(EXTRACTOR, "start_lsn").unwrap(),
@@ -115,141 +124,174 @@ impl TaskConfig {
                         .getuint(EXTRACTOR, "heartbeat_interval_secs")
                         .unwrap()
                         .unwrap(),
-                }),
+                },
 
-                ExtractType::CheckLog => Ok(ExtractorConfig::PgCheck {
+                ExtractType::CheckLog => ExtractorConfig::PgCheck {
                     url,
                     check_log_dir: ini.get(EXTRACTOR, CHECK_LOG_DIR).unwrap(),
                     batch_size: ini.getuint(EXTRACTOR, BATCH_SIZE).unwrap().unwrap() as usize,
-                }),
+                },
 
-                ExtractType::Struct => Ok(ExtractorConfig::PgStruct {
+                ExtractType::Struct => ExtractorConfig::PgStruct {
                     url,
                     db: String::new(),
-                }),
-
-                ExtractType::Basic => Ok(ExtractorConfig::Basic { url, db_type }),
+                },
             },
 
             DbType::Mongo => match extract_type {
-                ExtractType::Snapshot => Ok(ExtractorConfig::MongoSnapshot {
+                ExtractType::Snapshot => ExtractorConfig::MongoSnapshot {
                     url,
                     db: String::new(),
                     tb: String::new(),
-                }),
+                },
 
-                ExtractType::Cdc => {
-                    let start_timestamp: i64 = match ini.getint(EXTRACTOR, "start_timestamp") {
-                        Ok(ts_option) => {
-                            if let Some(ts) = ts_option {
-                                ts
-                            } else {
-                                0
-                            }
-                        }
-                        Err(_) => 0,
-                    };
-                    let resume_token: String = match ini.get(EXTRACTOR, "resume_token") {
-                        Some(val) => val,
-                        None => String::from(""),
-                    };
-                    Ok(ExtractorConfig::MongoCdc {
-                        url,
-                        resume_token,
-                        start_timestamp,
-                    })
+                ExtractType::Cdc => ExtractorConfig::MongoCdc {
+                    url,
+                    resume_token: Self::get_optional_value(ini, EXTRACTOR, "resume_token"),
+                    start_timestamp: Self::get_optional_value(ini, EXTRACTOR, "start_timestamp"),
+                    source: Self::get_optional_value(ini, EXTRACTOR, "source"),
+                },
+
+                extract_type => {
+                    return Err(Error::ConfigError(format!(
+                        "extract type: {} not supported",
+                        extract_type
+                    )))
                 }
-
-                ExtractType::Basic => Ok(ExtractorConfig::Basic { url, db_type }),
-
-                _ => Err(Error::Unexpected {
-                    error: "extractor db type not supported".to_string(),
-                }),
             },
 
-            _ => Err(Error::Unexpected {
-                error: "extractor db type not supported".to_string(),
-            }),
-        }
+            DbType::Redis => {
+                let repl_port = ini.getuint(EXTRACTOR, "repl_port").unwrap().unwrap();
+                match extract_type {
+                    ExtractType::Snapshot => ExtractorConfig::RedisSnapshot { url, repl_port },
+
+                    ExtractType::Cdc => ExtractorConfig::RedisCdc {
+                        url,
+                        repl_port,
+                        run_id: ini.get(EXTRACTOR, "run_id").unwrap(),
+                        repl_offset: ini.getuint(EXTRACTOR, "repl_offset").unwrap().unwrap(),
+                        heartbeat_interval_secs: ini
+                            .getuint(EXTRACTOR, "heartbeat_interval_secs")
+                            .unwrap()
+                            .unwrap(),
+                        now_db_id: ini.getint(EXTRACTOR, "now_db_id").unwrap().unwrap(),
+                    },
+
+                    extract_type => {
+                        return Err(Error::ConfigError(format!(
+                            "extract type: {} not supported",
+                            extract_type
+                        )))
+                    }
+                }
+            }
+
+            DbType::Kafka => ExtractorConfig::Kafka {
+                url,
+                group: ini.get(EXTRACTOR, "group").unwrap(),
+                topic: ini.get(EXTRACTOR, "topic").unwrap(),
+                partition: Self::get_optional_value(ini, EXTRACTOR, "partition"),
+                offset: Self::get_optional_value(ini, EXTRACTOR, "offset"),
+                ack_interval_secs: Self::get_optional_value(ini, EXTRACTOR, "ack_interval_secs"),
+            },
+
+            db_type => {
+                return Err(Error::ConfigError(format!(
+                    "extractor db type: {} not supported",
+                    db_type
+                )))
+            }
+        };
+        Ok((basic, sinker))
     }
 
-    fn load_sinker_config(ini: &Ini) -> Result<SinkerConfig, Error> {
+    fn load_sinker_config(ini: &Ini) -> Result<(SinkerBasicConfig, SinkerConfig), Error> {
         let db_type = DbType::from_str(&ini.get(SINKER, DB_TYPE).unwrap()).unwrap();
         let sink_type = SinkType::from_str(&ini.get(SINKER, "sink_type").unwrap()).unwrap();
         let url = ini.get(SINKER, URL).unwrap();
         let batch_size: usize = Self::get_optional_value(ini, SINKER, BATCH_SIZE);
 
+        let basic = SinkerBasicConfig {
+            db_type: db_type.clone(),
+            url: url.clone(),
+            batch_size,
+        };
+
         let conflict_policy_str: String = Self::get_optional_value(ini, SINKER, "conflict_policy");
         let conflict_policy = ConflictPolicyEnum::from_str(&conflict_policy_str)
             .unwrap_or(ConflictPolicyEnum::Interrupt);
 
-        match db_type {
+        let sinker = match db_type {
             DbType::Mysql => match sink_type {
-                SinkType::Write => Ok(SinkerConfig::Mysql { url, batch_size }),
+                SinkType::Write => SinkerConfig::Mysql { url, batch_size },
 
-                SinkType::Check => Ok(SinkerConfig::MysqlCheck {
+                SinkType::Check => SinkerConfig::MysqlCheck {
                     url,
                     batch_size,
                     check_log_dir: ini.get(SINKER, CHECK_LOG_DIR),
-                }),
+                },
 
-                SinkType::Struct => Ok(SinkerConfig::MysqlStruct {
+                SinkType::Struct => SinkerConfig::MysqlStruct {
                     url,
                     conflict_policy,
-                }),
-
-                SinkType::Basic => Ok(SinkerConfig::Basic { url, db_type }),
+                },
             },
 
             DbType::Pg => match sink_type {
-                SinkType::Write => Ok(SinkerConfig::Pg { url, batch_size }),
+                SinkType::Write => SinkerConfig::Pg { url, batch_size },
 
-                SinkType::Check => Ok(SinkerConfig::PgCheck {
+                SinkType::Check => SinkerConfig::PgCheck {
                     url,
                     batch_size,
                     check_log_dir: ini.get(SINKER, CHECK_LOG_DIR),
-                }),
+                },
 
-                SinkType::Struct => Ok(SinkerConfig::PgStruct {
+                SinkType::Struct => SinkerConfig::PgStruct {
                     url,
                     conflict_policy,
-                }),
-
-                SinkType::Basic => Ok(SinkerConfig::Basic { url, db_type }),
+                },
             },
 
             DbType::Mongo => match sink_type {
-                SinkType::Write => Ok(SinkerConfig::Mongo { url, batch_size }),
+                SinkType::Write => SinkerConfig::Mongo { url, batch_size },
 
-                SinkType::Basic => Ok(SinkerConfig::Basic { url, db_type }),
-
-                _ => Err(Error::Unexpected {
-                    error: "sinker db type not supported".to_string(),
-                }),
+                db_type => {
+                    return Err(Error::ConfigError(format!(
+                        "sinker db type: {} not supported",
+                        db_type
+                    )))
+                }
             },
 
-            DbType::Kafka => Ok(SinkerConfig::Kafka {
+            DbType::Kafka => SinkerConfig::Kafka {
                 url,
                 batch_size,
                 ack_timeout_secs: ini.getuint(SINKER, "ack_timeout_secs").unwrap().unwrap(),
                 required_acks: ini.get(SINKER, "required_acks").unwrap(),
-            }),
+            },
 
-            DbType::OpenFaas => Ok(SinkerConfig::OpenFaas {
+            DbType::OpenFaas => SinkerConfig::OpenFaas {
                 url,
                 batch_size,
                 timeout_secs: ini.getuint(SINKER, "timeout_secs").unwrap().unwrap(),
-            }),
+            },
 
-            DbType::Foxlake => Ok(SinkerConfig::Foxlake {
+            DbType::Foxlake => SinkerConfig::Foxlake {
                 batch_size,
                 bucket: ini.get(SINKER, "bucket").unwrap(),
                 access_key: ini.get(SINKER, "access_key").unwrap(),
                 secret_key: ini.get(SINKER, "secret_key").unwrap(),
                 region: ini.get(SINKER, "region").unwrap(),
                 root_dir: ini.get(SINKER, "root_dir").unwrap(),
-            }),
-        }
+            },
+
+            DbType::Redis => SinkerConfig::Redis {
+                url,
+                batch_size,
+                method: Self::get_optional_value(ini, SINKER, "method"),
+            },
+        };
+        Ok((basic, sinker))
     }
 
     fn load_paralleizer_config(ini: &Ini) -> ParallelizerConfig {

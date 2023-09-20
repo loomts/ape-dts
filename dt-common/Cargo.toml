@@ -23,3 +23,5 @@ serde_yaml = { workspace = true }
 regex = { workspace = true }
 nom = { workspace = true }
 tokio = { workspace = true }
+thiserror = { workspace = true }
+kafka = { workspace = true }

@@ -4,7 +4,7 @@ use crate::{call_batch_fn, Sinker};
 
 use dt_common::error::Error;
 
-use dt_meta::{ddl_data::DdlData, row_data::RowData};
+use dt_meta::dt_data::DtData;
 
 use kafka::producer::{Producer, Record};
 
@@ -18,16 +18,8 @@ pub struct KafkaSinker {
 
 #[async_trait]
 impl Sinker for KafkaSinker {
-    async fn sink_dml(&mut self, mut data: Vec<RowData>, _batch: bool) -> Result<(), Error> {
+    async fn sink_raw(&mut self, mut data: Vec<DtData>, _batch: bool) -> Result<(), Error> {
         call_batch_fn!(self, data, Self::send);
-        Ok(())
-    }
-
-    async fn sink_ddl(&mut self, _data: Vec<DdlData>, _batch: bool) -> Result<(), Error> {
-        Ok(())
-    }
-
-    async fn close(&mut self) -> Result<(), Error> {
         Ok(())
     }
 }
@@ -35,22 +27,24 @@ impl Sinker for KafkaSinker {
 impl KafkaSinker {
     async fn send(
         &mut self,
-        data: &mut [RowData],
+        data: &mut [DtData],
         sinked_count: usize,
         batch_size: usize,
     ) -> Result<(), Error> {
-        let mut topics = Vec::new();
-        for rd in data.iter().skip(sinked_count).take(batch_size) {
-            let topic = self.kafka_router.get_route(&rd.schema, &rd.tb);
-            topics.push(topic);
-        }
+        // let mut topics = Vec::new();
+        // for rd in data.iter().skip(sinked_count).take(batch_size) {
+        //     let topic = self.kafka_router.get_route(&rd.schema, &rd.tb);
+        //     topics.push(topic);
+        // }
+
+        let topic = self.kafka_router.get_route("", "");
 
         let mut messages = Vec::new();
-        for (i, rd) in data.iter().skip(sinked_count).take(batch_size).enumerate() {
+        for (_, dt_data) in data.iter().skip(sinked_count).take(batch_size).enumerate() {
             messages.push(Record {
                 key: (),
-                value: rd.to_string(),
-                topic: &topics[i - sinked_count],
+                value: dt_data.to_string(),
+                topic: &topic,
                 partition: -1,
             });
         }

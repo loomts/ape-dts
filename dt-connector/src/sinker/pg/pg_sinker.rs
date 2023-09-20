@@ -10,7 +10,6 @@ use sqlx::{Pool, Postgres};
 
 use dt_meta::{
     col_value::ColValue,
-    ddl_data::DdlData,
     pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
     row_data::RowData,
     row_type::RowType,
@@ -51,10 +50,6 @@ impl Sinker for PgSinker {
 
     async fn close(&mut self) -> Result<(), Error> {
         return close_conn_pool!(self);
-    }
-
-    async fn sink_ddl(&mut self, _data: Vec<DdlData>, _batch: bool) -> Result<(), Error> {
-        Ok(())
     }
 }
 

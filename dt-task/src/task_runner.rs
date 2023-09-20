@@ -24,6 +24,7 @@ use dt_pipeline::{
 };
 use futures::future::join;
 use log4rs::config::RawConfig;
+use tokio::try_join;
 
 use super::{
     extractor_util::ExtractorUtil, parallelizer_util::ParallelizerUtil, sinker_util::SinkerUtil,
@@ -119,10 +120,7 @@ impl TaskRunner {
                     },
 
                     _ => {
-                        return Err(Error::Unexpected {
-                            error: "unexpected extractor config type for rdb snapshot task"
-                                .to_string(),
-                        });
+                        return Err(Error::ConfigError("unsupported extractor config".into()));
                     }
                 };
 
@@ -133,25 +131,33 @@ impl TaskRunner {
     }
 
     async fn start_single_task(&self, extractor_config: &ExtractorConfig) -> Result<(), Error> {
-        let buffer = ConcurrentQueue::bounded(self.config.pipeline.buffer_size);
-        let shut_down = AtomicBool::new(false);
+        let buffer = Arc::new(ConcurrentQueue::bounded(self.config.pipeline.buffer_size));
+        let shut_down = Arc::new(AtomicBool::new(false));
         let syncer = Arc::new(Mutex::new(Syncer {
             checkpoint_position: String::new(),
         }));
 
         let mut extractor = self
-            .create_extractor(extractor_config, &buffer, &shut_down, syncer.clone())
+            .create_extractor(
+                extractor_config,
+                buffer.clone(),
+                shut_down.clone(),
+                syncer.clone(),
+            )
             .await?;
 
         let mut pipeline = self.create_pipeline(&buffer, &shut_down, &syncer).await?;
 
-        let result = join(extractor.extract(), pipeline.start()).await;
-        pipeline.stop().await?;
-        extractor.close().await?;
-        if result.0.is_err() {
-            return result.0;
-        }
-        result.1
+        let f1 = tokio::spawn(async move {
+            extractor.extract().await.unwrap();
+            extractor.close().await.unwrap();
+        });
+        let f2 = tokio::spawn(async move {
+            pipeline.start().await.unwrap();
+            pipeline.stop().await.unwrap();
+        });
+        let _ = try_join!(f1, f2);
+        Ok(())
     }
 
     async fn create_pipeline<'a>(
@@ -170,6 +176,7 @@ impl TaskRunner {
                 let obj = BasicPipeline {
                     buffer,
                     parallelizer,
+                    sinker_basic_config: self.config.sinker_basic.clone(),
                     sinkers,
                     shut_down,
                     checkpoint_interval_secs: self.config.pipeline.checkpoint_interval_secs,
@@ -196,13 +203,13 @@ impl TaskRunner {
         Ok(pipeline)
     }
 
-    async fn create_extractor<'a>(
+    async fn create_extractor(
         &self,
         extractor_config: &ExtractorConfig,
-        buffer: &'a ConcurrentQueue<DtData>,
-        shut_down: &'a AtomicBool,
+        buffer: Arc<ConcurrentQueue<DtData>>,
+        shut_down: Arc<AtomicBool>,
         syncer: Arc<Mutex<Syncer>>,
-    ) -> Result<Box<dyn Extractor + 'a + Send>, Error> {
+    ) -> Result<Box<dyn Extractor + Send>, Error> {
         let resumer = SnapshotResumer {
             resumer_values: self.config.resumer.resume_values.clone(),
             db_type: extractor_config.get_db_type(),
@@ -337,12 +344,14 @@ impl TaskRunner {
                 url,
                 resume_token,
                 start_timestamp,
+                source,
             } => {
                 let filter = RdbFilter::from_config(&self.config.filter, DbType::Mongo)?;
                 let extractor = ExtractorUtil::create_mongo_cdc_extractor(
                     url,
                     resume_token,
                     start_timestamp,
+                    source,
                     buffer,
                     filter,
                     shut_down,
@@ -378,10 +387,59 @@ impl TaskRunner {
                 .await?;
                 Box::new(extractor)
             }
-            _ => {
-                return Err(Error::ConfigError {
-                    error: String::from("extractor_config type is not supported."),
-                })
+
+            ExtractorConfig::RedisSnapshot { url, repl_port } => {
+                let extractor = ExtractorUtil::create_redis_snapshot_extractor(
+                    url, *repl_port, buffer, shut_down,
+                )
+                .await?;
+                Box::new(extractor)
+            }
+
+            ExtractorConfig::RedisCdc {
+                url,
+                run_id,
+                repl_offset,
+                now_db_id,
+                repl_port,
+                heartbeat_interval_secs,
+            } => {
+                let extractor = ExtractorUtil::create_redis_cdc_extractor(
+                    url,
+                    run_id,
+                    *repl_offset,
+                    *repl_port,
+                    *now_db_id,
+                    *heartbeat_interval_secs,
+                    buffer,
+                    shut_down,
+                    syncer,
+                )
+                .await?;
+                Box::new(extractor)
+            }
+
+            ExtractorConfig::Kafka {
+                url,
+                group,
+                topic,
+                partition,
+                offset,
+                ack_interval_secs,
+            } => {
+                let extractor = ExtractorUtil::create_kafka_extractor(
+                    url,
+                    group,
+                    topic,
+                    *partition,
+                    *offset,
+                    *ack_interval_secs,
+                    buffer,
+                    shut_down,
+                    syncer,
+                )
+                .await?;
+                Box::new(extractor)
             }
         };
         Ok(extractor)

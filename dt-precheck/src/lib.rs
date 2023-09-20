@@ -6,7 +6,6 @@ use crate::{
 
 pub mod builder;
 pub mod config;
-pub mod error;
 pub mod fetcher;
 pub mod meta;
 pub mod prechecker;

@@ -1,4 +1,4 @@
-use std::sync::atomic::AtomicBool;
+use std::sync::{atomic::AtomicBool, Arc};
 
 use concurrent_queue::ConcurrentQueue;
 
@@ -12,14 +12,14 @@ use crate::{
 
 use super::base_extractor::BaseExtractor;
 
-pub struct BaseCheckExtractor<'a> {
+pub struct BaseCheckExtractor {
     pub check_log_dir: String,
-    pub buffer: &'a ConcurrentQueue<DtData>,
+    pub buffer: Arc<ConcurrentQueue<DtData>>,
     pub batch_size: usize,
-    pub shut_down: &'a AtomicBool,
+    pub shut_down: Arc<AtomicBool>,
 }
 
-impl BaseCheckExtractor<'_> {
+impl BaseCheckExtractor {
     pub async fn extract(
         &mut self,
         extractor: &mut (dyn BatchCheckExtractor + Send),
@@ -48,7 +48,7 @@ impl BaseCheckExtractor<'_> {
         }
 
         Self::batch_extract_and_clear(extractor, &mut batch).await;
-        BaseExtractor::wait_task_finish(self.buffer, self.shut_down).await
+        BaseExtractor::wait_task_finish(self.buffer.as_ref(), self.shut_down.as_ref()).await
     }
 
     async fn batch_extract_and_clear(

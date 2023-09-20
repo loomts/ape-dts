@@ -5,9 +5,12 @@ use mongodb::{
     Client, Collection,
 };
 
-use dt_common::{constants::MongoConstants, error::Error, log_error};
+use dt_common::{error::Error, log_error};
 
-use dt_meta::{col_value::ColValue, ddl_data::DdlData, row_data::RowData, row_type::RowType};
+use dt_meta::{
+    col_value::ColValue, mongo::mongo_constant::MongoConstants, row_data::RowData,
+    row_type::RowType,
+};
 
 use crate::{call_batch_fn, sinker::rdb_router::RdbRouter, Sinker};
 
@@ -40,14 +43,6 @@ impl Sinker for MongoSinker {
         }
         Ok(())
     }
-
-    async fn close(&mut self) -> Result<(), Error> {
-        Ok(())
-    }
-
-    async fn sink_ddl(&mut self, _data: Vec<DdlData>, _batch: bool) -> Result<(), Error> {
-        Ok(())
-    }
 }
 
 impl MongoSinker {
@@ -60,7 +55,7 @@ impl MongoSinker {
                 RowType::Insert => {
                     let after = row_data.after.as_mut().unwrap();
                     if let Some(ColValue::MongoDoc(doc)) = after.remove(MongoConstants::DOC) {
-                        self.upsert(&collection, &doc, &doc).await.unwrap();
+                        self.upsert(&collection, doc.clone(), doc).await.unwrap();
                     }
                 }
 
@@ -85,12 +80,17 @@ impl MongoSinker {
                     let update_doc =
                         if let Some(ColValue::MongoDoc(doc)) = after.remove(MongoConstants::DOC) {
                             Some(doc)
+                        } else if let Some(ColValue::MongoDoc(doc)) =
+                            after.remove(MongoConstants::DIFF_DOC)
+                        {
+                            // for Update row_data from oplog (NOT change stream), after contains diff_doc instead of doc
+                            Some(doc)
                         } else {
                             None
                         };
 
                     if query_doc.is_some() && query_doc.is_some() {
-                        self.upsert(&collection, &query_doc.unwrap(), &update_doc.unwrap())
+                        self.upsert(&collection, query_doc.unwrap(), update_doc.unwrap())
                             .await
                             .unwrap();
                     }
@@ -113,7 +113,7 @@ impl MongoSinker {
         for rd in data.iter().skip(start_index).take(batch_size) {
             let before = rd.before.as_ref().unwrap();
             if let Some(ColValue::MongoDoc(doc)) = before.get(MongoConstants::DOC) {
-                ids.push(doc.get_object_id(MongoConstants::ID).unwrap());
+                ids.push(doc.get(MongoConstants::ID).unwrap());
             }
         }
 
@@ -139,7 +139,6 @@ impl MongoSinker {
         let mut docs = Vec::new();
         for rd in data.iter().skip(start_index).take(batch_size) {
             let after = rd.after.as_ref().unwrap();
-            // TODO, support mysql / pg -> mongo
             if let Some(ColValue::MongoDoc(doc)) = after.get(MongoConstants::DOC) {
                 docs.push(doc);
             }
@@ -161,15 +160,13 @@ impl MongoSinker {
     async fn upsert(
         &mut self,
         collection: &Collection<Document>,
-        query_doc: &Document,
-        update_doc: &Document,
+        query_doc: Document,
+        update_doc: Document,
     ) -> Result<(), Error> {
-        let query =
-            doc! {MongoConstants::ID : query_doc.get_object_id(MongoConstants::ID).unwrap()};
         let update = doc! {MongoConstants::SET: update_doc};
         let options = UpdateOptions::builder().upsert(true).build();
         collection
-            .update_one(query, update, Some(options))
+            .update_one(query_doc, update, Some(options))
             .await
             .unwrap();
         Ok(())

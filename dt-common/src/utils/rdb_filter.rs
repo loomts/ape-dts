@@ -28,6 +28,8 @@ pub struct RdbFilter {
     pub transaction_worker: TransactionWorker,
 }
 
+const DDL: &str = "ddl";
+
 impl RdbFilter {
     pub fn from_config(config: &FilterConfig, db_type: DbType) -> Result<Self, Error> {
         match config {
@@ -122,10 +124,18 @@ impl RdbFilter {
     }
 
     pub fn filter_event(&mut self, db: &str, tb: &str, row_type: &str) -> bool {
-        if self.do_events.is_empty() || !self.do_events.contains(&row_type.to_string()) {
+        if self.do_events.is_empty() || !self.do_events.contains(row_type) {
             return false;
         }
         self.filter_transaction_tb(db, tb)
+    }
+
+    pub fn filter_ddl(&mut self) -> bool {
+        // filter ddl by default
+        if self.do_events.is_empty() {
+            return true;
+        }
+        !self.do_events.contains(DDL)
     }
 
     fn contain_tb(
@@ -217,9 +227,10 @@ impl RdbFilter {
         let tokens = ConfigTokenParser::parse(config_str, &delimiters, escape_pairs);
         for token in tokens.iter() {
             if !SqlUtil::is_valid_token(token, db_type, escape_pairs) {
-                return Err(Error::ConfigError {
-                    error: format!("invalid filter config, check error near: {}", token),
-                });
+                return Err(Error::ConfigError(format!(
+                    "invalid filter config, check error near: {}",
+                    token
+                )));
             }
         }
         Ok(tokens)

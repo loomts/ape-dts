@@ -1,12 +1,7 @@
 use super::config_enums::{ConflictPolicyEnum, DbType};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum SinkerConfig {
-    Basic {
-        url: String,
-        db_type: DbType,
-    },
-
     Mysql {
         url: String,
         batch_size: usize,
@@ -65,6 +60,19 @@ pub enum SinkerConfig {
         region: String,
         root_dir: String,
     },
+
+    Redis {
+        url: String,
+        batch_size: usize,
+        method: String,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub struct SinkerBasicConfig {
+    pub db_type: DbType,
+    pub url: String,
+    pub batch_size: usize,
 }
 
 impl SinkerConfig {
@@ -78,7 +86,23 @@ impl SinkerConfig {
             Self::Foxlake { .. } => DbType::Foxlake,
             Self::MysqlStruct { .. } => DbType::Mysql,
             Self::PgStruct { .. } => DbType::Pg,
-            Self::Basic { db_type, .. } => db_type.clone(),
+            Self::Redis { .. } => DbType::Redis,
+        }
+    }
+
+    pub fn get_url(&self) -> String {
+        match self {
+            Self::Mysql { url, .. }
+            | Self::MysqlCheck { url, .. }
+            | Self::Pg { url, .. }
+            | Self::PgCheck { url, .. }
+            | Self::Mongo { url, .. }
+            | Self::Kafka { url, .. }
+            | Self::OpenFaas { url, .. }
+            | Self::MysqlStruct { url, .. }
+            | Self::PgStruct { url, .. }
+            | Self::Redis { url, .. } => url.to_owned(),
+            Self::Foxlake { .. } => String::new(),
         }
     }
 

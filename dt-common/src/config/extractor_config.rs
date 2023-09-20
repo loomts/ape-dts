@@ -1,12 +1,7 @@
-use super::config_enums::DbType;
+use super::config_enums::{DbType, ExtractType};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ExtractorConfig {
-    Basic {
-        url: String,
-        db_type: DbType,
-    },
-
     MysqlStruct {
         url: String,
         db: String,
@@ -64,8 +59,40 @@ pub enum ExtractorConfig {
     MongoCdc {
         url: String,
         resume_token: String,
-        start_timestamp: i64,
+        start_timestamp: u32,
+        // op_log, change_stream
+        source: String,
     },
+
+    RedisSnapshot {
+        url: String,
+        repl_port: u64,
+    },
+
+    RedisCdc {
+        url: String,
+        run_id: String,
+        repl_offset: u64,
+        repl_port: u64,
+        heartbeat_interval_secs: u64,
+        now_db_id: i64,
+    },
+
+    Kafka {
+        url: String,
+        group: String,
+        topic: String,
+        partition: i32,
+        offset: i64,
+        ack_interval_secs: u64,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub struct ExtractorBasicConfig {
+    pub db_type: DbType,
+    pub extract_type: ExtractType,
+    pub url: String,
 }
 
 impl ExtractorConfig {
@@ -75,14 +102,31 @@ impl ExtractorConfig {
             | Self::MysqlSnapshot { .. }
             | Self::MysqlCdc { .. }
             | Self::MysqlCheck { .. } => DbType::Mysql,
-
             Self::PgStruct { .. }
             | Self::PgSnapshot { .. }
             | Self::PgCdc { .. }
             | Self::PgCheck { .. } => DbType::Pg,
-
             Self::MongoSnapshot { .. } | Self::MongoCdc { .. } => DbType::Mongo,
-            Self::Basic { db_type, .. } => db_type.clone(),
+            Self::RedisSnapshot { .. } | Self::RedisCdc { .. } => DbType::Redis,
+            Self::Kafka { .. } => DbType::Kafka,
+        }
+    }
+
+    pub fn get_url(&self) -> String {
+        match self {
+            Self::MysqlStruct { url, .. }
+            | Self::MysqlSnapshot { url, .. }
+            | Self::MysqlCdc { url, .. }
+            | Self::MysqlCheck { url, .. }
+            | Self::PgStruct { url, .. }
+            | Self::PgSnapshot { url, .. }
+            | Self::PgCdc { url, .. }
+            | Self::PgCheck { url, .. }
+            | Self::MongoSnapshot { url, .. }
+            | Self::MongoCdc { url, .. }
+            | Self::RedisSnapshot { url, .. }
+            | Self::RedisCdc { url, .. }
+            | Self::Kafka { url, .. } => url.to_owned(),
         }
     }
 

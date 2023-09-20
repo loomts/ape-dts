@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use dt_common::{
     config::{
         config_enums::DbType, config_token_parser::ConfigTokenParser,
@@ -7,8 +9,11 @@ use dt_common::{
     utils::{sql_util::SqlUtil, time_util::TimeUtil},
 };
 use dt_connector::rdb_query_builder::RdbQueryBuilder;
-use dt_meta::{mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager};
-use dt_task::task_util::TaskUtil;
+use dt_meta::{
+    ddl_type::DdlType, mysql::mysql_meta_manager::MysqlMetaManager,
+    pg::pg_meta_manager::PgMetaManager, sql_parser::ddl_parser::DdlParser,
+};
+use dt_task::{extractor_util::ExtractorUtil, task_util::TaskUtil};
 use futures::TryStreamExt;
 use sqlx::{MySql, Pool, Postgres, Row};
 
@@ -26,6 +31,7 @@ pub struct RdbTestRunner {
 
 pub const SRC: &str = "src";
 pub const DST: &str = "dst";
+pub const PUBLIC: &str = "public";
 
 #[allow(dead_code)]
 impl RdbTestRunner {
@@ -52,61 +58,17 @@ impl RdbTestRunner {
         let mut src_conn_pool_pg = None;
         let mut dst_conn_pool_pg = None;
 
-        let config = TaskConfig::new(&base.task_config_file);
-        match config.extractor {
-            ExtractorConfig::MysqlCdc { url, .. }
-            | ExtractorConfig::MysqlSnapshot { url, .. }
-            | ExtractorConfig::MysqlCheck { url, .. }
-            | ExtractorConfig::MysqlStruct { url, .. } => {
-                src_conn_pool_mysql = Some(TaskUtil::create_mysql_conn_pool(&url, 1, false).await?);
-            }
-
-            ExtractorConfig::PgCdc { url, .. }
-            | ExtractorConfig::PgSnapshot { url, .. }
-            | ExtractorConfig::PgCheck { url, .. }
-            | ExtractorConfig::PgStruct { url, .. } => {
-                src_conn_pool_pg = Some(TaskUtil::create_pg_conn_pool(&url, 1, false).await?);
-            }
-
-            ExtractorConfig::Basic { url, db_type, .. } => match db_type {
-                DbType::Mysql => {
-                    src_conn_pool_mysql =
-                        Some(TaskUtil::create_mysql_conn_pool(&url, 1, false).await?);
-                }
-                DbType::Pg => {
-                    src_conn_pool_pg = Some(TaskUtil::create_pg_conn_pool(&url, 1, false).await?);
-                }
-                _ => {}
-            },
-
-            _ => {}
+        let (src_db_type, src_url, dst_db_type, dst_url) = Self::parse_conn_info(&base);
+        if src_db_type == DbType::Mysql {
+            src_conn_pool_mysql = Some(TaskUtil::create_mysql_conn_pool(&src_url, 1, false).await?);
+        } else {
+            src_conn_pool_pg = Some(TaskUtil::create_pg_conn_pool(&src_url, 1, false).await?);
         }
 
-        match config.sinker {
-            SinkerConfig::Mysql { url, .. }
-            | SinkerConfig::MysqlCheck { url, .. }
-            | SinkerConfig::MysqlStruct { url, .. } => {
-                dst_conn_pool_mysql = Some(TaskUtil::create_mysql_conn_pool(&url, 1, false).await?);
-            }
-
-            SinkerConfig::Pg { url, .. }
-            | SinkerConfig::PgCheck { url, .. }
-            | SinkerConfig::PgStruct { url, .. } => {
-                dst_conn_pool_pg = Some(TaskUtil::create_pg_conn_pool(&url, 1, false).await?);
-            }
-
-            SinkerConfig::Basic { url, db_type, .. } => match db_type {
-                DbType::Mysql => {
-                    dst_conn_pool_mysql =
-                        Some(TaskUtil::create_mysql_conn_pool(&url, 1, false).await?);
-                }
-                DbType::Pg => {
-                    dst_conn_pool_pg = Some(TaskUtil::create_pg_conn_pool(&url, 1, false).await?);
-                }
-                _ => {}
-            },
-
-            _ => {}
+        if dst_db_type == DbType::Mysql {
+            dst_conn_pool_mysql = Some(TaskUtil::create_mysql_conn_pool(&dst_url, 1, false).await?);
+        } else {
+            dst_conn_pool_pg = Some(TaskUtil::create_pg_conn_pool(&dst_url, 1, false).await?);
         }
 
         Ok(Self {
@@ -118,9 +80,53 @@ impl RdbTestRunner {
         })
     }
 
-    pub async fn run_snapshot_test(&self, compare_data: bool) -> Result<(), Error> {
-        let (src_tbs, dst_tbs, cols_list) = Self::parse_ddl(&self.base.src_ddl_sqls).unwrap();
+    fn parse_conn_info(base: &BaseTestRunner) -> (DbType, String, DbType, String) {
+        let mut src_db_type = DbType::Mysql;
+        let mut src_url = String::new();
+        let mut dst_db_type = DbType::Mysql;
+        let mut dst_url = String::new();
 
+        let config = TaskConfig::new(&base.task_config_file);
+        match config.extractor {
+            ExtractorConfig::MysqlCdc { url, .. }
+            | ExtractorConfig::MysqlSnapshot { url, .. }
+            | ExtractorConfig::MysqlCheck { url, .. }
+            | ExtractorConfig::MysqlStruct { url, .. } => {
+                src_url = url.clone();
+            }
+
+            ExtractorConfig::PgCdc { url, .. }
+            | ExtractorConfig::PgSnapshot { url, .. }
+            | ExtractorConfig::PgCheck { url, .. }
+            | ExtractorConfig::PgStruct { url, .. } => {
+                src_db_type = DbType::Pg;
+                src_url = url.clone();
+            }
+
+            _ => {}
+        }
+
+        match config.sinker {
+            SinkerConfig::Mysql { url, .. }
+            | SinkerConfig::MysqlCheck { url, .. }
+            | SinkerConfig::MysqlStruct { url, .. } => {
+                dst_url = url.clone();
+            }
+
+            SinkerConfig::Pg { url, .. }
+            | SinkerConfig::PgCheck { url, .. }
+            | SinkerConfig::PgStruct { url, .. } => {
+                dst_db_type = DbType::Pg;
+                dst_url = url.clone();
+            }
+
+            _ => {}
+        }
+
+        (src_db_type, src_url, dst_db_type, dst_url)
+    }
+
+    pub async fn run_snapshot_test(&self, compare_data: bool) -> Result<(), Error> {
         // prepare src and dst tables
         self.execute_test_ddl_sqls().await?;
         self.execute_test_dml_sqls().await?;
@@ -129,19 +135,33 @@ impl RdbTestRunner {
         self.base.start_task().await?;
 
         // compare data
+        let db_tbs = self.get_compare_db_tbs().await?;
         if compare_data {
             assert!(
-                self.compare_data_for_tbs(&src_tbs, &dst_tbs, &cols_list)
+                self.compare_data_for_tbs(&db_tbs.clone(), &db_tbs.clone())
                     .await?
-            );
+            )
         }
-
         Ok(())
     }
 
-    pub async fn run_cdc_test(&self, start_millis: u64, parse_millis: u64) -> Result<(), Error> {
-        let (src_tbs, dst_tbs, cols_list) = Self::parse_ddl(&self.base.src_ddl_sqls).unwrap();
+    pub async fn run_ddl_test(&self, start_millis: u64, parse_millis: u64) -> Result<(), Error> {
+        self.execute_test_ddl_sqls().await?;
+        let task = self.base.spawn_task().await?;
+        TimeUtil::sleep_millis(start_millis).await;
 
+        self.execute_src_sqls(&self.base.src_dml_sqls).await?;
+        TimeUtil::sleep_millis(parse_millis).await;
+
+        let db_tbs = self.get_compare_db_tbs().await?;
+        assert!(
+            self.compare_data_for_tbs(&db_tbs.clone(), &db_tbs.clone())
+                .await?
+        );
+        self.base.wait_task_finish(&task).await
+    }
+
+    pub async fn run_cdc_test(&self, start_millis: u64, parse_millis: u64) -> Result<(), Error> {
         // prepare src and dst tables
         self.execute_test_ddl_sqls().await?;
 
@@ -149,6 +169,12 @@ impl RdbTestRunner {
         let task = self.base.spawn_task().await?;
         TimeUtil::sleep_millis(start_millis).await;
 
+        self.execute_test_sqls_and_compare(parse_millis).await?;
+
+        self.base.wait_task_finish(&task).await
+    }
+
+    pub async fn execute_test_sqls_and_compare(&self, parse_millis: u64) -> Result<(), Error> {
         // load dml sqls
         let mut src_insert_sqls = Vec::new();
         let mut src_update_sqls = Vec::new();
@@ -166,29 +192,27 @@ impl RdbTestRunner {
 
         // insert src data
         self.execute_src_sqls(&src_insert_sqls).await?;
-        TimeUtil::sleep_millis(start_millis).await;
-        assert!(
-            self.compare_data_for_tbs(&src_tbs, &dst_tbs, &cols_list)
-                .await?
-        );
+        TimeUtil::sleep_millis(parse_millis).await;
+
+        let db_tbs = self.get_compare_db_tbs().await?;
+        let src_db_tbs = db_tbs.clone();
+        let dst_db_tbs = db_tbs.clone();
+        assert!(self.compare_data_for_tbs(&src_db_tbs, &dst_db_tbs).await?);
 
         // update src data
         self.execute_src_sqls(&src_update_sqls).await?;
-        TimeUtil::sleep_millis(parse_millis).await;
-        assert!(
-            self.compare_data_for_tbs(&src_tbs, &dst_tbs, &cols_list)
-                .await?
-        );
+        if !src_update_sqls.is_empty() {
+            TimeUtil::sleep_millis(parse_millis).await;
+        }
+        assert!(self.compare_data_for_tbs(&src_db_tbs, &dst_db_tbs).await?);
 
         // delete src data
         self.execute_src_sqls(&src_delete_sqls).await?;
-        TimeUtil::sleep_millis(parse_millis).await;
-        assert!(
-            self.compare_data_for_tbs(&src_tbs, &dst_tbs, &cols_list)
-                .await?
-        );
-
-        BaseTestRunner::wait_task_finish(&task).await
+        if !src_delete_sqls.is_empty() {
+            TimeUtil::sleep_millis(parse_millis).await;
+        }
+        assert!(self.compare_data_for_tbs(&src_db_tbs, &dst_db_tbs).await?);
+        Ok(())
     }
 
     pub async fn initialization_ddl(&self) -> Result<(), Error> {
@@ -227,22 +251,23 @@ impl RdbTestRunner {
 
     pub async fn run_cycle_cdc_data_check(
         &self,
+        transaction_database: String,
         transaction_table_full_name: String,
         expect_num: Option<u8>,
     ) -> Result<(), Error> {
-        let (src_tbs, dst_tbs, cols_list) = Self::parse_ddl_with_cycle(
-            &self.base.src_ddl_sqls,
-            transaction_table_full_name.to_owned(),
-        )
-        .unwrap();
-
         let dml_count = match expect_num {
             Some(num) => num,
             None => self.base.src_dml_sqls.len() as u8,
         };
 
+        let db_tbs = self.get_compare_db_tbs_from_sqls()?;
+        let db_tbs_without_transaction: Vec<(String, String)> = db_tbs
+            .iter()
+            .filter(|s| !transaction_database.eq(s.0.as_str()))
+            .map(|s| (s.0.clone(), s.1.clone()))
+            .collect();
         assert!(
-            self.compare_data_for_tbs(&src_tbs, &dst_tbs, &cols_list)
+            self.compare_data_for_tbs(&db_tbs_without_transaction, &db_tbs_without_transaction)
                 .await?
         );
 
@@ -291,7 +316,7 @@ impl RdbTestRunner {
         self.execute_src_sqls(&self.base.src_dml_sqls).await?;
         TimeUtil::sleep_millis(parse_millis).await;
 
-        BaseTestRunner::wait_task_finish(&task).await
+        self.base.wait_task_finish(&task).await
     }
 
     pub async fn execute_test_dml_sqls(&self) -> Result<(), Error> {
@@ -313,7 +338,7 @@ impl RdbTestRunner {
         }
     }
 
-    async fn execute_src_sqls(&self, sqls: &Vec<String>) -> Result<(), Error> {
+    pub async fn execute_src_sqls(&self, sqls: &Vec<String>) -> Result<(), Error> {
         if let Some(pool) = &self.src_conn_pool_mysql {
             Self::execute_sqls_mysql(sqls, pool).await?;
         }
@@ -333,11 +358,10 @@ impl RdbTestRunner {
         Ok(())
     }
 
-    async fn compare_data_for_tbs(
+    pub async fn compare_data_for_tbs(
         &self,
-        src_tbs: &Vec<String>,
-        dst_tbs: &Vec<String>,
-        cols_list: &Vec<Vec<String>>,
+        src_db_tbs: &Vec<(String, String)>,
+        dst_db_tbs: &Vec<(String, String)>,
     ) -> Result<bool, Error> {
         let filtered_tbs_file = format!("{}/filtered_tbs.txt", &self.base.test_dir);
         let filtered_tbs = if BaseTestRunner::check_file_exists(&filtered_tbs_file) {
@@ -346,16 +370,14 @@ impl RdbTestRunner {
             Vec::new()
         };
 
-        for i in 0..src_tbs.len() {
-            let src_tb = &src_tbs[i];
-            let dst_tb = &dst_tbs[i];
-            if filtered_tbs.contains(src_tb) {
-                let dst_data = self.fetch_data(&dst_tb, DST).await?;
+        for i in 0..src_db_tbs.len() {
+            if filtered_tbs.contains(&format!("{}.{}", &src_db_tbs[i].0, &src_db_tbs[i].1)) {
+                let dst_data = self.fetch_data(&dst_db_tbs[i], DST).await?;
                 if dst_data.len() > 0 {
                     return Ok(false);
                 }
             } else {
-                if !self.compare_tb_data(src_tb, dst_tb, &cols_list[i]).await? {
+                if !self.compare_tb_data(&src_db_tbs[i], &dst_db_tbs[i]).await? {
                     return Ok(false);
                 }
             }
@@ -365,22 +387,22 @@ impl RdbTestRunner {
 
     async fn compare_tb_data(
         &self,
-        src_tb: &str,
-        dst_tb: &str,
-        cols: &Vec<String>,
+        src_db_tb: &(String, String),
+        dst_db_tb: &(String, String),
     ) -> Result<bool, Error> {
-        let src_data = self.fetch_data(src_tb, SRC).await?;
-        let dst_data = self.fetch_data(dst_tb, DST).await?;
+        let src_data = self.fetch_data(src_db_tb, SRC).await?;
+        let dst_data = self.fetch_data(dst_db_tb, DST).await?;
         println!(
-            "comparing row data for src_tb: {}, src_data count: {}",
-            src_tb,
+            "comparing row data for src_tb: {:?}, src_data count: {}",
+            src_db_tb,
             src_data.len()
         );
 
-        if !Self::compare_row_data(cols, &src_data, &dst_data) {
+        let cols = self.get_tb_cols(src_db_tb).await?;
+        if !Self::compare_row_data(&cols, &src_data, &dst_data) {
             println!(
-                "compare_tb_data failed, src_tb: {}, dst_tb: {}",
-                src_tb, dst_tb
+                "compare tb data failed, src_tb: {:?}, dst_tb: {:?}",
+                src_db_tb, dst_db_tb,
             );
             return Ok(false);
         }
@@ -402,8 +424,8 @@ impl RdbTestRunner {
                 let dst_col_value = &dst_row_data[j];
                 if src_col_value != dst_col_value {
                     println!(
-                        "col: {}, src_col_value: {:?}, dst_col_value: {:?}",
-                        cols[j], src_col_value, dst_col_value
+                        "row index: {}, col: {}, src_col_value: {:?}, dst_col_value: {:?}",
+                        i, cols[j], src_col_value, dst_col_value
                     );
                     return false;
                 }
@@ -419,7 +441,12 @@ impl RdbTestRunner {
         col_order: u8,
         expect_num: u8,
     ) -> Result<bool, Error> {
-        let result = self.fetch_data(full_tb_name, from).await?;
+        let db_tb: Vec<&str> = full_tb_name.split(".").collect();
+        assert_eq!(db_tb.len(), 2);
+
+        let result = self
+            .fetch_data(&(db_tb[0].to_string(), db_tb[1].to_string()), from)
+            .await?;
 
         assert!(result.len() == 1);
         let row_data = result.get(0).unwrap();
@@ -437,7 +464,7 @@ impl RdbTestRunner {
 
     pub async fn fetch_data(
         &self,
-        full_tb_name: &str,
+        db_tb: &(String, String),
         from: &str,
     ) -> Result<Vec<Vec<Option<Vec<u8>>>>, Error> {
         let conn_pool_mysql = if from == SRC {
@@ -453,16 +480,16 @@ impl RdbTestRunner {
         };
 
         let data = if let Some(pool) = conn_pool_mysql {
-            self.fetch_data_mysql(full_tb_name, pool).await?
+            self.fetch_data_mysql(db_tb, pool, from).await?
         } else if let Some(pool) = conn_pool_pg {
-            self.fetch_data_pg(full_tb_name, pool).await?
+            self.fetch_data_pg(db_tb, pool, from).await?
         } else {
             Vec::new()
         };
         Ok(data)
     }
 
-    fn parse_full_tb_name(full_tb_name: &str, db_type: DbType) -> (String, String) {
+    pub fn parse_full_tb_name(full_tb_name: &str, db_type: &DbType) -> (String, String) {
         let escape_pairs = SqlUtil::get_escape_pairs(&db_type);
         let tokens = ConfigTokenParser::parse(full_tb_name, &vec!['.'], &escape_pairs);
         let (db, tb) = if tokens.len() > 1 {
@@ -479,22 +506,22 @@ impl RdbTestRunner {
 
     async fn fetch_data_mysql(
         &self,
-        full_tb_name: &str,
+        db_tb: &(String, String),
         conn_pool: &Pool<MySql>,
+        from: &str,
     ) -> Result<Vec<Vec<Option<Vec<u8>>>>, Error> {
-        let (db, tb) = Self::parse_full_tb_name(full_tb_name, DbType::Mysql);
-        let mut meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
-        let tb_meta = meta_manager.get_tb_meta(&db, &tb).await?;
-        let cols = &tb_meta.basic.cols;
-
-        let sql = format!("SELECT * FROM `{}`.`{}` ORDER BY `{}`", &db, &tb, &cols[0],);
+        let cols = self.get_tb_cols_with_direction(db_tb, Some(from)).await?;
+        let sql = format!(
+            "SELECT * FROM `{}`.`{}` ORDER BY `{}`",
+            &db_tb.0, &db_tb.1, &cols[0],
+        );
         let query = sqlx::query(&sql);
         let mut rows = query.fetch(conn_pool);
 
         let mut result = Vec::new();
         while let Some(row) = rows.try_next().await.unwrap() {
             let mut row_values = Vec::new();
-            for col in cols {
+            for col in cols.iter() {
                 let value: Option<Vec<u8>> = row.get_unchecked(col.as_str());
                 row_values.push(value);
             }
@@ -506,22 +533,19 @@ impl RdbTestRunner {
 
     async fn fetch_data_pg(
         &self,
-        full_tb_name: &str,
+        db_tb: &(String, String),
         conn_pool: &Pool<Postgres>,
+        from: &str,
     ) -> Result<Vec<Vec<Option<Vec<u8>>>>, Error> {
-        let (mut db, tb) = Self::parse_full_tb_name(full_tb_name, DbType::Pg);
-        if db.is_empty() {
-            db = "public".to_string();
-        }
         let mut meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
-        let tb_meta = meta_manager.get_tb_meta(&db, &tb).await?;
-        let cols = &tb_meta.basic.cols;
+        let tb_meta = meta_manager.get_tb_meta(&db_tb.0, &db_tb.1).await?;
         let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
-        let cols_str = query_builder.build_extract_cols_str().unwrap();
 
+        let cols = self.get_tb_cols_with_direction(&db_tb, Some(from)).await?;
+        let cols_str = query_builder.build_extract_cols_str().unwrap();
         let sql = format!(
             r#"SELECT {} FROM "{}"."{}" ORDER BY "{}" ASC"#,
-            cols_str, &db, &tb, &cols[0],
+            cols_str, &db_tb.0, &db_tb.1, &cols[0],
         );
         let query = sqlx::query(&sql);
         let mut rows = query.fetch(conn_pool);
@@ -529,7 +553,7 @@ impl RdbTestRunner {
         let mut result = Vec::new();
         while let Some(row) = rows.try_next().await.unwrap() {
             let mut row_values = Vec::new();
-            for col in cols {
+            for col in cols.iter() {
                 let value: Option<Vec<u8>> = row.get_unchecked(col.as_str());
                 row_values.push(value);
             }
@@ -557,104 +581,106 @@ impl RdbTestRunner {
         Ok(())
     }
 
-    fn parse_ddl(
-        src_ddl_sqls: &Vec<String>,
-    ) -> Result<(Vec<String>, Vec<String>, Vec<Vec<String>>), Error> {
-        let mut src_tbs = Vec::new();
-        let mut cols_list = Vec::new();
-        for sql in src_ddl_sqls {
-            if sql.to_lowercase().contains("create table") {
-                let (tb, cols) = Self::parse_create_table(&sql).unwrap();
-                src_tbs.push(tb);
-                cols_list.push(cols);
-            }
-        }
-        let dst_tbs = src_tbs.clone();
-
-        Ok((src_tbs, dst_tbs, cols_list))
-    }
-
-    fn parse_ddl_with_cycle(
-        src_ddl_sqls: &Vec<String>,
-        transaction_table_full_name: String,
-    ) -> Result<(Vec<String>, Vec<String>, Vec<Vec<String>>), Error> {
-        let mut src_tbs = Vec::new();
-        let mut cols_list = Vec::new();
-        let transaction_db = transaction_table_full_name
-            .split('.')
-            .collect::<Vec<&str>>()
-            .get(0)
-            .unwrap()
-            .clone();
-
-        for sql in src_ddl_sqls {
-            let new_sql = sql
-                .to_lowercase()
-                .replace("create table if not exists", "create table");
-            if new_sql.to_lowercase().contains("create table") {
-                let (tb, cols) = Self::parse_create_table(&new_sql).unwrap();
-                if tb.starts_with(format!("{}.", transaction_db).as_str()) {
-                    continue;
-                }
-                src_tbs.push(tb);
-                cols_list.push(cols);
-            }
-        }
-        let dst_tbs = src_tbs.clone();
-
-        Ok((src_tbs, dst_tbs, cols_list))
-    }
-
-    fn parse_create_table(sql: &str) -> Result<(String, Vec<String>), Error> {
-        // since both (sqlparser = "0.30.0", sql-parse = "0.11.0") have bugs in parsing create table sql,
-        // we take a simple workaround to get table name and column names.
-
-        // CREATE TABLE bitbin_table (pk SERIAL, bvunlimited1 BIT VARYING, p GEOMETRY(POINT,3187), PRIMARY KEY(pk));
-        let mut tokens = Vec::new();
-        let mut token = String::new();
-        let mut brakets = 0;
-
-        for b in sql.as_bytes() {
-            let c = char::from(*b);
-            if c == ' ' || c == '(' || c == ')' || c == ',' {
-                if !token.is_empty() {
-                    tokens.push(token.clone());
-                    token.clear();
-                }
-
-                if c == '(' {
-                    brakets += 1;
-                } else if c == ')' {
-                    brakets -= 1;
-                    if brakets == 0 {
-                        break;
-                    }
-                }
-
-                if c == ',' && brakets == 1 {
-                    tokens.push(",".to_string());
-                }
+    /// get compare dbs from src_ddl_sqls
+    async fn get_compare_dbs(&self, url: &str, db_type: &DbType) -> Result<HashSet<String>, Error> {
+        let all_dbs = ExtractorUtil::list_dbs(url, db_type).await?;
+        let mut dbs = HashSet::new();
+        for sql in self.base.src_ddl_sqls.iter() {
+            if !sql.to_lowercase().contains("database") {
                 continue;
             }
-            token.push(c);
-        }
-
-        let tb = tokens[2].clone();
-        let mut cols = vec![tokens[3].clone()];
-        for i in 3..tokens.len() {
-            let token_lowercase = tokens[i].to_lowercase();
-            if token_lowercase == "primary"
-                || token_lowercase == "unique"
-                || token_lowercase == "key"
-            {
-                break;
-            }
-
-            if tokens[i - 1] == "," {
-                cols.push(tokens[i].clone());
+            let ddl = DdlParser::parse(sql).unwrap();
+            if ddl.0 == DdlType::DropDatabase || ddl.0 == DdlType::CreateDatabase {
+                let db = ddl.1.unwrap();
+                // db may be dropped in test sql (ddl test)
+                if all_dbs.contains(&db) {
+                    dbs.insert(db);
+                }
             }
         }
+        Ok(dbs)
+    }
 
-        Ok((tb, cols))
+    /// get compare tbs
+    pub async fn get_compare_db_tbs(&self) -> Result<Vec<(String, String)>, Error> {
+        let mut db_tbs = vec![];
+
+        let (src_db_type, src_url, _, _) = Self::parse_conn_info(&self.base);
+
+        if src_db_type == DbType::Mysql {
+            let dbs = self.get_compare_dbs(&src_url, &src_db_type).await?;
+            for db in dbs.iter() {
+                let tbs = ExtractorUtil::list_tbs(&src_url, db, &src_db_type).await?;
+                for tb in tbs.iter() {
+                    db_tbs.push((db.to_string(), tb.to_string()));
+                }
+            }
+        } else {
+            db_tbs = self.get_compare_db_tbs_from_sqls()?
+        }
+
+        Ok(db_tbs)
+    }
+
+    pub fn get_compare_db_tbs_from_sqls(&self) -> Result<Vec<(String, String)>, Error> {
+        let mut db_tbs = vec![];
+
+        for sql in self.base.src_ddl_sqls.iter() {
+            if !sql.to_lowercase().contains("table") {
+                continue;
+            }
+            let ddl = DdlParser::parse(sql).unwrap();
+            if ddl.0 == DdlType::CreateTable {
+                let db = if let Some(db) = ddl.1 {
+                    db
+                } else {
+                    PUBLIC.to_string()
+                };
+                let tb = ddl.2.unwrap();
+                db_tbs.push((db, tb));
+            }
+        }
+
+        Ok(db_tbs)
+    }
+
+    async fn get_tb_cols(&self, db_tb: &(String, String)) -> Result<Vec<String>, Error> {
+        self.get_tb_cols_with_direction(db_tb, None).await
+    }
+
+    async fn get_tb_cols_with_direction(
+        &self,
+        db_tb: &(String, String),
+        from: Option<&str>,
+    ) -> Result<Vec<String>, Error> {
+        let f = match from {
+            Some(s) => s,
+            None => self::SRC,
+        };
+
+        let conn_pool_mysql = if f == SRC {
+            &self.src_conn_pool_mysql
+        } else {
+            &self.dst_conn_pool_mysql
+        };
+
+        let conn_pool_pg = if f == SRC {
+            &self.src_conn_pool_pg
+        } else {
+            &self.dst_conn_pool_pg
+        };
+
+        let cols = if let Some(conn_pool) = conn_pool_mysql {
+            let mut meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
+            let tb_meta = meta_manager.get_tb_meta(&db_tb.0, &db_tb.1).await?;
+            tb_meta.basic.cols.clone()
+        } else if let Some(conn_pool) = conn_pool_pg {
+            let mut meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
+            let tb_meta = meta_manager.get_tb_meta(&db_tb.0, &db_tb.1).await?;
+            tb_meta.basic.cols.clone()
+        } else {
+            vec![]
+        };
+        Ok(cols)
     }
 }

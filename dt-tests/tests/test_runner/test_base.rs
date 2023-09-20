@@ -1,17 +1,16 @@
 use std::collections::{HashMap, HashSet};
 
+use dt_common::config::config_enums::DbType;
 use dt_common::utils::time_util::TimeUtil;
 use futures::executor::block_on;
 
-use crate::{
-    test_config_util::TestConfigUtil,
-    test_runner::{base_test_runner::BaseTestRunner, rdb_test_runner::DST},
-};
+use crate::{test_config_util::TestConfigUtil, test_runner::rdb_test_runner::DST};
 
 use super::{
-    mongo_test_runner::MongoTestRunner, rdb_check_test_runner::RdbCheckTestRunner,
-    rdb_precheck_test_runner::RdbPrecheckTestRunner, rdb_struct_test_runner::RdbStructTestRunner,
-    rdb_test_runner::RdbTestRunner,
+    mongo_test_runner::MongoTestRunner, precheck_test_runner::PrecheckTestRunner,
+    rdb_check_test_runner::RdbCheckTestRunner, rdb_kafka_rdb_test_runner::RdbKafkaRdbTestRunner,
+    rdb_struct_test_runner::RdbStructTestRunner, rdb_test_runner::RdbTestRunner,
+    redis_test_runner::RedisTestRunner,
 };
 
 pub struct TestBase {}
@@ -25,18 +24,24 @@ impl TestBase {
 
     pub async fn run_snapshot_test_and_check_dst_count(
         test_dir: &str,
+        db_type: &DbType,
         dst_expected_counts: HashMap<&str, usize>,
     ) {
         let runner = RdbTestRunner::new(test_dir).await.unwrap();
         runner.run_snapshot_test(false).await.unwrap();
 
-        let assert_dst_count = |tb: &str, count: usize| {
-            let dst_data = block_on(runner.fetch_data(tb, DST)).unwrap();
+        let assert_dst_count = |db_tb: &(String, String), count: usize| {
+            let dst_data = block_on(runner.fetch_data(db_tb, DST)).unwrap();
+            println!(
+                "check dst table {:?} record count, expect: {}",
+                db_tb, count
+            );
             assert_eq!(dst_data.len(), count);
         };
 
-        for (tb, count) in dst_expected_counts.iter() {
-            assert_dst_count(tb, *count);
+        for (db_tb, count) in dst_expected_counts {
+            let db_tb = RdbTestRunner::parse_full_tb_name(db_tb, db_type);
+            assert_dst_count(&db_tb, count);
         }
     }
 
@@ -48,6 +53,14 @@ impl TestBase {
             .unwrap();
         // runner.run_cdc_test_with_different_configs(start_millis, parse_millis))
         //     .unwrap();
+    }
+
+    pub async fn run_ddl_test(test_dir: &str, start_millis: u64, parse_millis: u64) {
+        let runner = RdbTestRunner::new(test_dir).await.unwrap();
+        runner
+            .run_ddl_test(start_millis, parse_millis)
+            .await
+            .unwrap();
     }
 
     pub async fn run_cycle_cdc_test(
@@ -102,13 +115,20 @@ impl TestBase {
             };
 
             runner
-                .run_cycle_cdc_data_check(transaction_full_name, expect_num)
+                .run_cycle_cdc_data_check(
+                    String::from(transaction_database),
+                    transaction_full_name,
+                    expect_num,
+                )
                 .await
                 .unwrap();
         }
 
         for handler in handlers {
-            BaseTestRunner::wait_task_finish(&handler).await.unwrap();
+            handler.abort();
+            while !handler.is_finished() {
+                TimeUtil::sleep_millis(1).await;
+            }
         }
     }
 
@@ -157,6 +177,51 @@ impl TestBase {
             .unwrap();
     }
 
+    pub async fn run_mongo_cdc_resume_test(test_dir: &str, start_millis: u64, parse_millis: u64) {
+        let runner = MongoTestRunner::new(test_dir).await.unwrap();
+        runner
+            .run_cdc_resume_test(start_millis, parse_millis)
+            .await
+            .unwrap();
+    }
+
+    pub async fn run_redis_snapshot_test(test_dir: &str) {
+        let mut runner = RedisTestRunner::new_default(test_dir).await.unwrap();
+        runner.run_snapshot_test().await.unwrap();
+    }
+
+    pub async fn run_redis_rejson_snapshot_test(test_dir: &str) {
+        let mut runner = RedisTestRunner::new(test_dir, vec![' '], vec![('\'', '\'')])
+            .await
+            .unwrap();
+        runner.run_snapshot_test().await.unwrap();
+    }
+
+    pub async fn run_redis_redisearch_snapshot_test(test_dir: &str) {
+        let mut runner = RedisTestRunner::new(test_dir, vec![' '], vec![('\'', '\'')])
+            .await
+            .unwrap();
+        runner.run_snapshot_test().await.unwrap();
+    }
+
+    pub async fn run_redis_cdc_test(test_dir: &str, start_millis: u64, parse_millis: u64) {
+        let mut runner = RedisTestRunner::new_default(test_dir).await.unwrap();
+        runner
+            .run_cdc_test(start_millis, parse_millis)
+            .await
+            .unwrap();
+    }
+
+    pub async fn run_redis_rejson_cdc_test(test_dir: &str, start_millis: u64, parse_millis: u64) {
+        let mut runner = RedisTestRunner::new(test_dir, vec![' '], vec![('\'', '\'')])
+            .await
+            .unwrap();
+        runner
+            .run_cdc_test(start_millis, parse_millis)
+            .await
+            .unwrap();
+    }
+
     pub async fn run_mysql_struct_test(test_dir: &str) {
         let mut runner = RdbStructTestRunner::new(test_dir).await.unwrap();
         runner.run_mysql_struct_test().await.unwrap();
@@ -177,21 +242,34 @@ impl TestBase {
         src_expected_results: &HashMap<String, bool>,
         dst_expected_results: &HashMap<String, bool>,
     ) {
-        let runner = RdbPrecheckTestRunner::new(test_dir).await.unwrap();
-        runner.base.execute_test_ddl_sqls().await.unwrap();
-        let results: Vec<
-            Result<dt_precheck::meta::check_result::CheckResult, dt_precheck::error::Error>,
-        > = runner.run_check().await;
-
+        let runner = PrecheckTestRunner::new(test_dir).await.unwrap();
         runner
-            .validate(
-                &results,
+            .run_check(
                 ignore_check_items,
-                &src_expected_results,
-                &dst_expected_results,
+                src_expected_results,
+                dst_expected_results,
             )
-            .await;
+            .await
+            .unwrap();
+    }
 
-        runner.base.execute_clean_sqls().await.unwrap();
+    pub async fn run_rdb_kafka_rdb_cdc_test(test_dir: &str, start_millis: u64, parse_millis: u64) {
+        let runner = RdbKafkaRdbTestRunner::new(test_dir).await.unwrap();
+        runner
+            .run_cdc_test(start_millis, parse_millis)
+            .await
+            .unwrap();
+    }
+
+    pub async fn run_rdb_kafka_rdb_snapshot_test(
+        test_dir: &str,
+        start_millis: u64,
+        parse_millis: u64,
+    ) {
+        let runner = RdbKafkaRdbTestRunner::new(test_dir).await.unwrap();
+        runner
+            .run_snapshot_test(start_millis, parse_millis)
+            .await
+            .unwrap();
     }
 }

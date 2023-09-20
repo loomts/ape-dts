@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: configmap-redis-7-0-src
+data:
+  redis.conf: |
+    enable-module-command yes

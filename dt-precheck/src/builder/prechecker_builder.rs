@@ -1,24 +1,21 @@
 use std::vec;
 
 use dt_common::{
-    config::{
-        config_enums::DbType, extractor_config::ExtractorConfig, sinker_config::SinkerConfig,
-        task_config::TaskConfig,
-    },
+    config::{config_enums::DbType, task_config::TaskConfig},
+    error::Error,
     utils::rdb_filter::RdbFilter,
 };
 
 use crate::{
     config::precheck_config::PrecheckConfig,
-    error::Error,
     fetcher::{
         mongo::mongo_fetcher::MongoFetcher, mysql::mysql_fetcher::MysqlFetcher,
-        postgresql::pg_fetcher::PgFetcher,
+        postgresql::pg_fetcher::PgFetcher, redis::redis_fetcher::RedisFetcher,
     },
     meta::check_result::CheckResult,
     prechecker::{
         mongo_prechecker::MongoPrechecker, mysql_prechecker::MySqlPrechecker,
-        pg_prechecker::PostgresqlPrechecker, traits::Prechecker,
+        pg_prechecker::PostgresqlPrechecker, redis_prechecker::RedisPrechecker, traits::Prechecker,
     },
 };
 
@@ -35,49 +32,33 @@ impl PrecheckerBuilder {
         }
     }
 
-    pub fn valid_config(&self) -> Result<bool, Error> {
-        if let ExtractorConfig::Basic { url, .. } = &self.task_config.extractor {
-            if url.is_empty() {
-                return Ok(false);
-            }
-        }
-        if let SinkerConfig::Basic { url, .. } = &self.task_config.sinker {
-            if url.is_empty() {
-                return Ok(false);
-            }
-        }
-        Ok(true)
+    pub fn valid_config(&self) -> bool {
+        !self.task_config.extractor.get_url().is_empty()
+            && !self.task_config.sinker.get_url().is_empty()
     }
 
     pub fn build_checker(&self, is_source: bool) -> Option<Box<dyn Prechecker + Send>> {
-        let mut db_type_option: Option<&DbType> = None;
-        if is_source {
-            if let ExtractorConfig::Basic { db_type, .. } = &self.task_config.extractor {
-                db_type_option = Some(db_type)
-            }
-        } else if let SinkerConfig::Basic { db_type, .. } = &self.task_config.sinker {
-            db_type_option = Some(db_type)
-        }
-        if db_type_option.is_none() {
-            println!("build checker failed, maybe config is wrong");
-            return None;
-        }
-        let filter =
-            RdbFilter::from_config(&self.task_config.filter, db_type_option.unwrap().clone())
-                .unwrap();
-        let checker: Option<Box<dyn Prechecker + Send>> = match db_type_option.unwrap() {
+        let (db_type, url) = if is_source {
+            (
+                self.task_config.extractor.get_db_type(),
+                self.task_config.extractor.get_url(),
+            )
+        } else {
+            (
+                self.task_config.sinker.get_db_type(),
+                self.task_config.sinker.get_url(),
+            )
+        };
+
+        let filter = RdbFilter::from_config(&self.task_config.filter, db_type.clone()).unwrap();
+        let checker: Option<Box<dyn Prechecker + Send>> = match db_type {
             DbType::Mysql => Some(Box::new(MySqlPrechecker {
                 filter_config: self.task_config.filter.clone(),
                 precheck_config: self.precheck_config.clone(),
-                db_type_option: Some(db_type_option.unwrap().clone()),
                 is_source,
                 fetcher: MysqlFetcher {
                     pool: None,
-                    source_config: self.task_config.extractor.clone(),
-                    filter_config: self.task_config.filter.clone(),
-                    sinker_config: self.task_config.sinker.clone(),
-                    router_config: self.task_config.router.clone(),
-                    db_type_option: Some(db_type_option.unwrap().clone()),
+                    url: url.clone(),
                     is_source,
                     filter,
                 },
@@ -85,15 +66,10 @@ impl PrecheckerBuilder {
             DbType::Pg => Some(Box::new(PostgresqlPrechecker {
                 filter_config: self.task_config.filter.clone(),
                 precheck_config: self.precheck_config.clone(),
-                db_type_option: Some(db_type_option.unwrap().clone()),
                 is_source,
                 fetcher: PgFetcher {
                     pool: None,
-                    source_config: self.task_config.extractor.clone(),
-                    filter_config: self.task_config.filter.clone(),
-                    sinker_config: self.task_config.sinker.clone(),
-                    router_config: self.task_config.router.clone(),
-                    db_type_option: Some(db_type_option.unwrap().clone()),
+                    url: url.clone(),
                     is_source,
                     filter,
                 },
@@ -101,18 +77,24 @@ impl PrecheckerBuilder {
             DbType::Mongo => Some(Box::new(MongoPrechecker {
                 fetcher: MongoFetcher {
                     pool: None,
-                    source_config: self.task_config.extractor.clone(),
-                    filter_config: self.task_config.filter.clone(),
-                    sinker_config: self.task_config.sinker.clone(),
-                    router_config: self.task_config.router.clone(),
+                    url: url.clone(),
                     is_source,
-                    db_type_option: Some(db_type_option.unwrap().clone()),
                     filter,
                 },
                 filter_config: self.task_config.filter.clone(),
                 precheck_config: self.precheck_config.clone(),
                 is_source,
-                db_type_option: Some(db_type_option.unwrap().clone()),
+            })),
+            DbType::Redis => Some(Box::new(RedisPrechecker {
+                fetcher: RedisFetcher {
+                    conn: None,
+                    url: url.clone(),
+                    is_source,
+                    filter,
+                },
+                task_config: self.task_config.clone(),
+                precheck_config: self.precheck_config.clone(),
+                is_source,
             })),
             _ => None,
         };
@@ -120,45 +102,35 @@ impl PrecheckerBuilder {
     }
 
     pub async fn check(&self) -> Result<Vec<Result<CheckResult, Error>>, Error> {
-        if !self.valid_config().unwrap() {
-            return Err(Error::PreCheckError {
-                error: "config is invalid.".to_string(),
-            });
+        if !self.valid_config() {
+            return Err(Error::PreCheckError("config is invalid.".into()));
         }
         let (source_checker_option, sink_checker_option) =
             (self.build_checker(true), self.build_checker(false));
         if source_checker_option.is_none() || sink_checker_option.is_none() {
-            return Err(Error::PreCheckError {
-                error: "config is invalid when build checker.maybe db_type is wrong.".to_string(),
-            });
+            return Err(Error::PreCheckError(
+                "config is invalid when build checker.maybe db_type is wrong.".into(),
+            ));
         }
         let (mut source_checker, mut sink_checker) =
             (source_checker_option.unwrap(), sink_checker_option.unwrap());
-        let mut check_results: Vec<Result<CheckResult, Error>> = vec![];
 
         println!("[*]begin to check the connection");
-        let check_source_connection = source_checker.build_connection().await;
-        let check_sink_connection = sink_checker.build_connection().await;
+        let check_source_connection = source_checker.build_connection().await?;
+        let check_sink_connection = sink_checker.build_connection().await?;
+
         // if connection failed, no need to do other check
-        if check_source_connection.is_err() {
-            return Err(check_source_connection.err().unwrap());
+        if !check_source_connection.is_validate || !check_sink_connection.is_validate {
+            check_source_connection.log();
+            check_sink_connection.log();
+            return Err(Error::PreCheckError(
+                "connection failed, precheck not passed.".into(),
+            ));
         }
-        if check_sink_connection.is_err() {
-            return Err(check_sink_connection.err().unwrap());
-        }
-        check_results.push(check_source_connection.clone());
-        check_results.push(check_sink_connection.clone());
-        if !&check_source_connection.unwrap().is_validate
-            || !&check_sink_connection.unwrap().is_validate
-        {
-            for connection_check in check_results {
-                let result_tmp = connection_check.unwrap();
-                result_tmp.log();
-            }
-            return Err(Error::PreCheckError {
-                error: "connection failed, precheck not passed.".to_string(),
-            });
-        }
+
+        let mut check_results: Vec<Result<CheckResult, Error>> = vec![];
+        check_results.push(Ok(check_source_connection));
+        check_results.push(Ok(check_sink_connection));
 
         println!("[*]begin to check the database version");
         check_results.push(source_checker.check_database_version().await);
@@ -197,9 +169,7 @@ impl PrecheckerBuilder {
                     }
                 }
                 if error_count > 0 {
-                    Err(Error::PreCheckError {
-                        error: "precheck not passed.".to_string(),
-                    })
+                    Err(Error::PreCheckError("precheck not passed.".into()))
                 } else {
                     Ok(())
                 }

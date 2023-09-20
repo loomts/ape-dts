@@ -185,8 +185,9 @@ impl PgMetaManager {
             return Ok(oid);
         }
 
-        Err(Error::MetadataError {
-            error: format!("failed in get_oid for {}", tb),
-        })
+        Err(Error::MetadataError(format!(
+            "failed to get oid for: {} by query: {}",
+            tb, sql
+        )))
     }
 }
