@@ -6,6 +6,7 @@ use std::{
     time::Instant,
 };
 
+use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
     config::{config_enums::DbType, sinker_config::SinkerBasicConfig},
@@ -17,10 +18,11 @@ use dt_common::{
 };
 use dt_connector::Sinker;
 use dt_meta::{ddl_data::DdlData, dt_data::DtData, row_data::RowData};
+use dt_parallelizer::Parallelizer;
 
-use crate::Parallelizer;
+use crate::Pipeline;
 
-pub struct Pipeline {
+pub struct BasePipeline {
     pub buffer: Arc<ConcurrentQueue<DtData>>,
     pub parallelizer: Box<dyn Parallelizer + Send>,
     pub sinker_basic_config: SinkerBasicConfig,
@@ -31,15 +33,16 @@ pub struct Pipeline {
     pub syncer: Arc<Mutex<Syncer>>,
 }
 
-impl Pipeline {
-    pub async fn stop(&mut self) -> Result<(), Error> {
+#[async_trait]
+impl Pipeline for BasePipeline {
+    async fn stop(&mut self) -> Result<(), Error> {
         for sinker in self.sinkers.iter_mut() {
             sinker.lock().await.close().await.unwrap();
         }
         Ok(())
     }
 
-    pub async fn start(&mut self) -> Result<(), Error> {
+    async fn start(&mut self) -> Result<(), Error> {
         log_info!(
             "{} starts, parallel_size: {}, checkpoint_interval_secs: {}",
             self.parallelizer.get_name(),
@@ -103,7 +106,9 @@ impl Pipeline {
 
         Ok(())
     }
+}
 
+impl BasePipeline {
     async fn sink_raw(
         &mut self,
         all_data: Vec<DtData>,

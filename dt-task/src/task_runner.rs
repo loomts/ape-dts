@@ -7,8 +7,8 @@ use std::{
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
     config::{
-        config_enums::DbType, extractor_config::ExtractorConfig, sinker_config::SinkerConfig,
-        task_config::TaskConfig,
+        config_enums::DbType, datamarker_config::DataMarkerSettingEnum,
+        extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
     },
     error::Error,
     syncer::Syncer,
@@ -16,12 +16,14 @@ use dt_common::{
 };
 use dt_connector::{extractor::snapshot_resumer::SnapshotResumer, Extractor};
 use dt_meta::{dt_data::DtData, row_type::RowType};
-use dt_pipeline::pipeline::Pipeline;
+use dt_pipeline::{base_pipeline::BasePipeline, Pipeline};
 
 use log4rs::config::RawConfig;
 use tokio::try_join;
 
-use super::{extractor_util::ExtractorUtil, pipeline_util::PipelineUtil, sinker_util::SinkerUtil};
+use super::{
+    extractor_util::ExtractorUtil, parallelizer_util::ParallelizerUtil, sinker_util::SinkerUtil,
+};
 
 pub struct TaskRunner {
     config: TaskConfig,
@@ -139,18 +141,9 @@ impl TaskRunner {
             )
             .await?;
 
-        let sinkers = SinkerUtil::create_sinkers(&self.config).await?;
-        let parallelizer = PipelineUtil::create_parallelizer(&self.config).await?;
-        let mut pipeline = Pipeline {
-            buffer,
-            parallelizer,
-            sinker_basic_config: self.config.sinker_basic.clone(),
-            sinkers,
-            shut_down: shut_down.clone(),
-            checkpoint_interval_secs: self.config.pipeline.checkpoint_interval_secs,
-            batch_sink_interval_secs: self.config.pipeline.batch_sink_interval_secs,
-            syncer,
-        };
+        let mut pipeline = self
+            .create_pipeline(buffer, shut_down.clone(), syncer)
+            .await?;
 
         let f1 = tokio::spawn(async move {
             extractor.extract().await.unwrap();
@@ -162,6 +155,31 @@ impl TaskRunner {
         });
         let _ = try_join!(f1, f2);
         Ok(())
+    }
+
+    async fn create_pipeline(
+        &self,
+        buffer: Arc<ConcurrentQueue<DtData>>,
+        shut_down: Arc<AtomicBool>,
+        syncer: Arc<Mutex<Syncer>>,
+    ) -> Result<Box<dyn Pipeline + Send>, Error> {
+        let transaction_command = self.fetch_transaction_command();
+
+        let parallelizer = ParallelizerUtil::create_parallelizer(&self.config).await?;
+        let sinkers = SinkerUtil::create_sinkers(&self.config, transaction_command).await?;
+
+        let pipeline = BasePipeline {
+            buffer,
+            parallelizer,
+            sinker_basic_config: self.config.sinker_basic.clone(),
+            sinkers,
+            shut_down,
+            checkpoint_interval_secs: self.config.pipeline.checkpoint_interval_secs,
+            batch_sink_interval_secs: self.config.pipeline.batch_sink_interval_secs,
+            syncer: syncer.to_owned(),
+        };
+
+        Ok(Box::new(pipeline))
     }
 
     async fn create_extractor(
@@ -215,7 +233,17 @@ impl TaskRunner {
                 binlog_position,
                 server_id,
             } => {
-                let filter = RdbFilter::from_config(&self.config.filter, DbType::Mysql)?;
+                let filter = RdbFilter::from_config_with_transaction(
+                    &self.config.filter,
+                    DbType::Mysql,
+                    &self.config.datamarker,
+                )?;
+
+                let datamarker_filter = ExtractorUtil::datamarker_filter_builder(
+                    &self.config.extractor,
+                    &self.config.datamarker,
+                )?;
+
                 let extractor = ExtractorUtil::create_mysql_cdc_extractor(
                     url,
                     binlog_filename,
@@ -225,6 +253,7 @@ impl TaskRunner {
                     filter,
                     &self.config.runtime.log_level,
                     shut_down,
+                    datamarker_filter,
                 )
                 .await?;
                 Box::new(extractor)
@@ -400,6 +429,18 @@ impl TaskRunner {
             }
         };
         Ok(extractor)
+    }
+
+    fn fetch_transaction_command(&self) -> String {
+        match &self.config.datamarker.setting {
+            Some(s) => match s {
+                DataMarkerSettingEnum::Transaction {
+                    transaction_command,
+                    ..
+                } => transaction_command.to_owned(),
+            },
+            None => String::from(""),
+        }
     }
 
     fn init_log4rs(&self) -> Result<(), Error> {

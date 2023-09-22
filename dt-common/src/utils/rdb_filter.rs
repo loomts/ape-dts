@@ -2,8 +2,10 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     config::{
-        config_enums::DbType, config_token_parser::ConfigTokenParser, filter_config::FilterConfig,
+        config_enums::DbType, config_token_parser::ConfigTokenParser,
+        datamarker_config::DataMarkerConfig, filter_config::FilterConfig,
     },
+    datamarker::transaction_control::TransactionWorker,
     error::Error,
     utils::sql_util::SqlUtil,
 };
@@ -19,6 +21,8 @@ pub struct RdbFilter {
     pub ignore_tbs: HashSet<(String, String)>,
     pub do_events: HashSet<String>,
     pub cache: HashMap<(String, String), bool>,
+
+    pub transaction_worker: TransactionWorker,
 }
 
 const DDL: &str = "ddl";
@@ -42,9 +46,23 @@ impl RdbFilter {
                     ignore_tbs: Self::parse_pair_tokens(ignore_tbs, &db_type, &escape_pairs)?,
                     do_events: Self::parse_individual_tokens(do_events, &db_type, &escape_pairs)?,
                     cache: HashMap::new(),
+
+                    transaction_worker: TransactionWorker::default(),
                 })
             }
         }
+    }
+
+    pub fn from_config_with_transaction(
+        config: &FilterConfig,
+        db_type: DbType,
+        datamarker_config: &DataMarkerConfig,
+    ) -> Result<Self, Error> {
+        let mut filter = Self::from_config(config, db_type)?;
+
+        filter.transaction_worker = TransactionWorker::from(datamarker_config);
+
+        Ok(filter)
     }
 
     pub fn filter_db(&mut self, db: &str) -> bool {
@@ -81,11 +99,27 @@ impl RdbFilter {
         filter
     }
 
+    pub fn filter_transaction_tb(&mut self, db: &str, tb: &str) -> bool {
+        if !self.filter_tb(db, tb) {
+            return false;
+        }
+
+        if !self.transaction_worker.is_validate() {
+            // not enable transaction
+            return true;
+        }
+
+        self.transaction_worker
+            .pick_infos(db, tb)
+            .unwrap()
+            .is_none()
+    }
+
     pub fn filter_event(&mut self, db: &str, tb: &str, row_type: &str) -> bool {
         if self.do_events.is_empty() || !self.do_events.contains(row_type) {
             return false;
         }
-        self.filter_tb(db, tb)
+        self.filter_transaction_tb(db, tb)
     }
 
     pub fn filter_ddl(&mut self) -> bool {

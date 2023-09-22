@@ -1,4 +1,5 @@
 pub mod check_log;
+pub mod datamarker;
 pub mod extractor;
 pub mod meta_fetcher;
 pub mod rdb_query_builder;

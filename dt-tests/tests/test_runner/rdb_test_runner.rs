@@ -36,7 +36,21 @@ pub const PUBLIC: &str = "public";
 #[allow(dead_code)]
 impl RdbTestRunner {
     pub async fn new(relative_test_dir: &str) -> Result<Self, Error> {
-        let base = BaseTestRunner::new(relative_test_dir).await.unwrap();
+        Self::new_internal(relative_test_dir, TestConfigUtil::OVERRIDE_WHOLE, "").await
+    }
+
+    pub async fn new_internal(
+        relative_test_dir: &str,
+        config_override_police: &str,
+        config_tmp_relative_dir: &str,
+    ) -> Result<Self, Error> {
+        let base = BaseTestRunner::new_internal(
+            relative_test_dir,
+            config_override_police,
+            config_tmp_relative_dir,
+        )
+        .await
+        .unwrap();
 
         // prepare conn pools
         let mut src_conn_pool_mysql = None;
@@ -371,9 +385,9 @@ impl RdbTestRunner {
         };
 
         let data = if let Some(pool) = conn_pool_mysql {
-            self.fetch_data_mysql(db_tb, pool).await?
+            self.fetch_data_mysql(db_tb, pool, from).await?
         } else if let Some(pool) = conn_pool_pg {
-            self.fetch_data_pg(db_tb, pool).await?
+            self.fetch_data_pg(db_tb, pool, from).await?
         } else {
             Vec::new()
         };
@@ -399,8 +413,9 @@ impl RdbTestRunner {
         &self,
         db_tb: &(String, String),
         conn_pool: &Pool<MySql>,
+        from: &str,
     ) -> Result<Vec<Vec<Option<Vec<u8>>>>, Error> {
-        let cols = self.get_tb_cols(db_tb).await?;
+        let cols = self.get_tb_cols_with_direction(db_tb, Some(from)).await?;
         let sql = format!(
             "SELECT * FROM `{}`.`{}` ORDER BY `{}`",
             &db_tb.0, &db_tb.1, &cols[0],
@@ -425,12 +440,13 @@ impl RdbTestRunner {
         &self,
         db_tb: &(String, String),
         conn_pool: &Pool<Postgres>,
+        from: &str,
     ) -> Result<Vec<Vec<Option<Vec<u8>>>>, Error> {
         let mut meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
         let tb_meta = meta_manager.get_tb_meta(&db_tb.0, &db_tb.1).await?;
         let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
 
-        let cols = self.get_tb_cols(&db_tb).await?;
+        let cols = self.get_tb_cols_with_direction(&db_tb, Some(from)).await?;
         let cols_str = query_builder.build_extract_cols_str().unwrap();
         let sql = format!(
             r#"SELECT {} FROM "{}"."{}" ORDER BY "{}" ASC"#,
@@ -493,6 +509,7 @@ impl RdbTestRunner {
     /// get compare tbs
     pub async fn get_compare_db_tbs(&self) -> Result<Vec<(String, String)>, Error> {
         let mut db_tbs = vec![];
+
         let (src_db_type, src_url, _, _) = Self::parse_conn_info(&self.base);
 
         if src_db_type == DbType::Mysql {
@@ -504,31 +521,65 @@ impl RdbTestRunner {
                 }
             }
         } else {
-            for sql in self.base.src_ddl_sqls.iter() {
-                if !sql.to_lowercase().contains("table") {
-                    continue;
-                }
-                let ddl = DdlParser::parse(sql).unwrap();
-                if ddl.0 == DdlType::CreateTable {
-                    let db = if let Some(db) = ddl.1 {
-                        db
-                    } else {
-                        PUBLIC.to_string()
-                    };
-                    let tb = ddl.2.unwrap();
-                    db_tbs.push((db, tb));
-                }
+            db_tbs = self.get_compare_db_tbs_from_sqls()?
+        }
+
+        Ok(db_tbs)
+    }
+
+    pub fn get_compare_db_tbs_from_sqls(&self) -> Result<Vec<(String, String)>, Error> {
+        let mut db_tbs = vec![];
+
+        for sql in self.base.src_ddl_sqls.iter() {
+            if !sql.to_lowercase().contains("table") {
+                continue;
+            }
+            let ddl = DdlParser::parse(sql).unwrap();
+            if ddl.0 == DdlType::CreateTable {
+                let db = if let Some(db) = ddl.1 {
+                    db
+                } else {
+                    PUBLIC.to_string()
+                };
+                let tb = ddl.2.unwrap();
+                db_tbs.push((db, tb));
             }
         }
+
         Ok(db_tbs)
     }
 
     async fn get_tb_cols(&self, db_tb: &(String, String)) -> Result<Vec<String>, Error> {
-        let cols = if let Some(conn_pool) = &self.src_conn_pool_mysql {
+        self.get_tb_cols_with_direction(db_tb, None).await
+    }
+
+    async fn get_tb_cols_with_direction(
+        &self,
+        db_tb: &(String, String),
+        from: Option<&str>,
+    ) -> Result<Vec<String>, Error> {
+        let f = match from {
+            Some(s) => s,
+            None => self::SRC,
+        };
+
+        let conn_pool_mysql = if f == SRC {
+            &self.src_conn_pool_mysql
+        } else {
+            &self.dst_conn_pool_mysql
+        };
+
+        let conn_pool_pg = if f == SRC {
+            &self.src_conn_pool_pg
+        } else {
+            &self.dst_conn_pool_pg
+        };
+
+        let cols = if let Some(conn_pool) = conn_pool_mysql {
             let mut meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
             let tb_meta = meta_manager.get_tb_meta(&db_tb.0, &db_tb.1).await?;
             tb_meta.basic.cols.clone()
-        } else if let Some(conn_pool) = &self.src_conn_pool_pg {
+        } else if let Some(conn_pool) = conn_pool_pg {
             let mut meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
             let tb_meta = meta_manager.get_tb_meta(&db_tb.0, &db_tb.1).await?;
             tb_meta.basic.cols.clone()

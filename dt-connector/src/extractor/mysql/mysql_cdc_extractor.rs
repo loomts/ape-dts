@@ -27,7 +27,9 @@ use dt_common::{
     utils::{position_util::PositionUtil, rdb_filter::RdbFilter},
 };
 
-use crate::{extractor::base_extractor::BaseExtractor, Extractor};
+use crate::{
+    datamarker::traits::DataMarkerFilter, extractor::base_extractor::BaseExtractor, Extractor,
+};
 
 pub struct MysqlCdcExtractor {
     pub meta_manager: MysqlMetaManager,
@@ -38,6 +40,8 @@ pub struct MysqlCdcExtractor {
     pub binlog_position: u32,
     pub server_id: u64,
     pub shut_down: Arc<AtomicBool>,
+
+    pub datamarker_filter: Option<Box<dyn DataMarkerFilter + Send>>,
 }
 
 const QUERY_BEGIN: &str = "BEGIN";
@@ -174,6 +178,14 @@ impl MysqlCdcExtractor {
                     xid: xid.xid.to_string(),
                     position: position.to_string(),
                 };
+
+                if match &mut self.datamarker_filter {
+                    Some(f) => f.filter_dtdata(&commit)?,
+                    _ => false,
+                } {
+                    return Ok(());
+                }
+
                 BaseExtractor::push_dt_data(self.buffer.as_ref(), commit).await?;
             }
 
@@ -191,6 +203,14 @@ impl MysqlCdcExtractor {
         ) {
             return Ok(());
         }
+
+        if match &mut self.datamarker_filter {
+            Some(f) => f.filter_rowdata(&row_data)?,
+            None => false,
+        } {
+            return Ok(());
+        }
+
         BaseExtractor::push_row(self.buffer.as_ref(), row_data).await
     }
 

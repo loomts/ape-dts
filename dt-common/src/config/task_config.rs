@@ -6,8 +6,10 @@ use crate::error::Error;
 
 use super::{
     config_enums::{ConflictPolicyEnum, DbType, ExtractType, ParallelType, SinkType},
+    datamarker_config::{DataMarkerConfig, DataMarkerSettingEnum, DataMarkerTypeEnum},
     extractor_config::{ExtractorBasicConfig, ExtractorConfig},
     filter_config::FilterConfig,
+    parallelizer_config::ParallelizerConfig,
     pipeline_config::PipelineConfig,
     resumer_config::ResumerConfig,
     router_config::RouterConfig,
@@ -22,10 +24,12 @@ pub struct TaskConfig {
     pub sinker_basic: SinkerBasicConfig,
     pub sinker: SinkerConfig,
     pub runtime: RuntimeConfig,
+    pub parallelizer: ParallelizerConfig,
     pub pipeline: PipelineConfig,
     pub filter: FilterConfig,
     pub router: RouterConfig,
     pub resumer: ResumerConfig,
+    pub datamarker: DataMarkerConfig,
 }
 
 const EXTRACTOR: &str = "extractor";
@@ -33,11 +37,13 @@ const CHECK_LOG_DIR: &str = "check_log_dir";
 const SINKER: &str = "sinker";
 const DB_TYPE: &str = "db_type";
 const URL: &str = "url";
+const PARALLELIZER: &str = "parallelizer";
 const PIPELINE: &str = "pipeline";
 const RUNTIME: &str = "runtime";
 const FILTER: &str = "filter";
 const ROUTER: &str = "router";
 const RESUMER: &str = "resumer";
+const DATAMARKER_SECTION: &str = "datamarker";
 const BATCH_SIZE: &str = "batch_size";
 
 impl TaskConfig {
@@ -55,6 +61,7 @@ impl TaskConfig {
         Self {
             extractor_basic,
             extractor,
+            parallelizer: Self::load_paralleizer_config(&ini),
             pipeline: Self::load_pipeline_config(&ini),
             sinker_basic,
             sinker,
@@ -62,6 +69,7 @@ impl TaskConfig {
             filter: Self::load_filter_config(&ini).unwrap(),
             router: Self::load_router_config(&ini).unwrap(),
             resumer: Self::load_resumer_config(&ini).unwrap(),
+            datamarker: Self::load_datamarker_config(&ini),
         }
     }
 
@@ -288,18 +296,45 @@ impl TaskConfig {
         Ok((basic, sinker))
     }
 
+    fn load_paralleizer_config(ini: &Ini) -> ParallelizerConfig {
+        // compatible with older versions, Paralleizer settings are set under the pipeline section
+        let parallel_sections: Vec<String> = ini
+            .sections()
+            .iter()
+            .filter(|&s| *s == PARALLELIZER)
+            .cloned()
+            .collect();
+
+        if parallel_sections.is_empty() {
+            ParallelizerConfig {
+                parallel_size: ini.getuint(PIPELINE, "parallel_size").unwrap().unwrap() as usize,
+                parallel_type: ParallelType::from_str(&ini.get(PIPELINE, "parallel_type").unwrap())
+                    .unwrap(),
+            }
+        } else {
+            ParallelizerConfig {
+                parallel_size: ini.getuint(PARALLELIZER, "parallel_size").unwrap().unwrap()
+                    as usize,
+                parallel_type: ParallelType::from_str(
+                    &ini.get(PARALLELIZER, "parallel_type").unwrap(),
+                )
+                .unwrap(),
+            }
+        }
+    }
+
     fn load_pipeline_config(ini: &Ini) -> PipelineConfig {
+        let buffer_size = ini.getuint(PIPELINE, "buffer_size").unwrap().unwrap() as usize;
         let batch_sink_interval_secs: u64 =
             Self::get_optional_value(ini, PIPELINE, "batch_sink_interval_secs");
+        let checkpoint_interval_secs = ini
+            .getuint(PIPELINE, "checkpoint_interval_secs")
+            .unwrap()
+            .unwrap_or(1);
+
         PipelineConfig {
-            buffer_size: ini.getuint(PIPELINE, "buffer_size").unwrap().unwrap() as usize,
-            parallel_size: ini.getuint(PIPELINE, "parallel_size").unwrap().unwrap() as usize,
-            parallel_type: ParallelType::from_str(&ini.get(PIPELINE, "parallel_type").unwrap())
-                .unwrap(),
-            checkpoint_interval_secs: ini
-                .getuint(PIPELINE, "checkpoint_interval_secs")
-                .unwrap()
-                .unwrap(),
+            buffer_size,
+            checkpoint_interval_secs,
             batch_sink_interval_secs,
         }
     }
@@ -338,6 +373,44 @@ impl TaskConfig {
         Ok(ResumerConfig { resume_values })
     }
 
+    fn load_datamarker_config(ini: &Ini) -> DataMarkerConfig {
+        let datamarker_sections: Vec<String> = ini
+            .sections()
+            .iter()
+            .filter(|&s| *s == DATAMARKER_SECTION)
+            .cloned()
+            .collect();
+
+        if datamarker_sections.is_empty() {
+            return DataMarkerConfig { setting: None };
+        }
+
+        let datamarker_type = ini
+            .get(DATAMARKER_SECTION, "type")
+            .unwrap_or(DataMarkerTypeEnum::Transaction.to_string());
+        match DataMarkerTypeEnum::from_str(&datamarker_type) {
+            Ok(e) => match e {
+                DataMarkerTypeEnum::Transaction => DataMarkerConfig {
+                    setting: Some(DataMarkerSettingEnum::Transaction {
+                        transaction_db: ini.get(DATAMARKER_SECTION, "transaction_db").unwrap(),
+                        transaction_table: ini
+                            .get(DATAMARKER_SECTION, "transaction_table")
+                            .unwrap(),
+                        transaction_express: ini
+                            .get(DATAMARKER_SECTION, "transaction_express")
+                            .unwrap(),
+                        transaction_command: ini
+                            .get(DATAMARKER_SECTION, "transaction_command")
+                            .unwrap(),
+                        white_nodes: ini.get(DATAMARKER_SECTION, "white_nodes").unwrap(),
+                        black_nodes: ini.get(DATAMARKER_SECTION, "black_nodes").unwrap(),
+                    }),
+                },
+            },
+            _ => DataMarkerConfig { setting: None },
+        }
+    }
+
     fn get_optional_value<T>(ini: &Ini, section: &str, key: &str) -> T
     where
         T: Default,
@@ -348,5 +421,67 @@ impl TaskConfig {
             return value.parse::<T>().unwrap();
         }
         T::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    fn mock_props(confs: &str) -> DataMarkerConfig {
+        let mut inis = Ini::new();
+        inis.read(String::from(confs)).unwrap();
+        TaskConfig::load_datamarker_config(&inis)
+    }
+
+    #[test]
+    fn load_datamarker_config_test() {
+        let mut conf: &str = "
+        [datamarker]
+        type=hehe
+        ";
+        let mut config = mock_props(conf);
+        assert!(config.setting.is_none());
+
+        conf = "
+        [datamarker]
+
+        transaction_db=ape_dt
+        transaction_table=ape_dt_topo1_node1_node2
+        transaction_express=ape_dt_(?<topology>.*)_(?<source>.*)_(?<sink>.*)
+        transaction_command=update ape_dt_topo1_node1_node2 set n = n + 1
+        white_nodes=4,5,6
+        black_nodes=1,2,3
+        ";
+        config = mock_props(conf);
+
+        match config.setting {
+            Some(s) => match s {
+                DataMarkerSettingEnum::Transaction {
+                    transaction_db,
+                    transaction_table,
+                    transaction_express,
+                    transaction_command,
+                    white_nodes,
+                    black_nodes,
+                } => {
+                    assert_eq!(transaction_db, "ape_dt");
+                    assert_eq!(transaction_table, "ape_dt_topo1_node1_node2");
+                    assert_eq!(
+                        transaction_express,
+                        "ape_dt_(?<topology>.*)_(?<source>.*)_(?<sink>.*)"
+                    );
+                    assert_eq!(
+                        transaction_command,
+                        "update ape_dt_topo1_node1_node2 set n = n + 1"
+                    );
+
+                    assert_eq!(white_nodes, "4,5,6");
+                    assert_eq!(black_nodes, "1,2,3");
+                }
+            },
+            None => assert!(false),
+        }
     }
 }

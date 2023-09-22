@@ -3,7 +3,7 @@ use std::{
     env,
     fs::{self, File},
     io::Read,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use configparser::ini::Ini;
@@ -32,6 +32,9 @@ impl TestConfigUtil {
     pub const EXTRACTOR_CHECK_LOG_DIR: &str = "extractor_check_log_dir";
     pub const SINKER_CHECK_LOG_DIR: &str = "sinker_check_log_dir";
 
+    pub const REPLACE_PARAM: &str = "replace";
+    pub const OVERRIDE_WHOLE: &str = "override";
+
     pub fn get_project_root() -> String {
         project_root::get_project_root()
             .unwrap()
@@ -47,6 +50,26 @@ impl TestConfigUtil {
             TEST_PROJECT,
             relative_dir
         )
+    }
+
+    // result: (absolute_sub_path, sub_path_dir_name)
+    pub fn get_absolute_sub_dir(relative_dir: &str) -> Vec<(String, String)> {
+        let mut result_dir: Vec<(String, String)> = vec![];
+
+        let absolute_dir = TestConfigUtil::get_absolute_dir(relative_dir);
+        let path = PathBuf::from(absolute_dir.as_str());
+
+        let entries = fs::read_dir(path).unwrap();
+        for entry in entries {
+            if let Ok(sub_path) = entry {
+                if sub_path.path().is_dir() {
+                    let sub_path_dir = sub_path.file_name().to_string_lossy().to_string();
+                    result_dir.push((format!("{}/{}", absolute_dir, sub_path_dir), sub_path_dir));
+                }
+            }
+        }
+
+        result_dir
     }
 
     pub fn transfer_config(config: Vec<(&str, &str, &str)>) -> Vec<(String, String, String)> {
@@ -97,16 +120,17 @@ impl TestConfigUtil {
         ])
     }
 
-    pub fn update_task_config_url(
-        src_task_config_file: &str,
-        dst_task_config_file: &str,
-        test_dir: &str,
-    ) {
+    pub fn load_env(test_dir: &str, env_file_name: &str) -> bool {
         let mut env_file = String::new();
         // recursively search .env from test dir up to parent dirs
         let mut dir = Path::new(test_dir);
+        let final_file_name = if env_file_name == "" {
+            ".env"
+        } else {
+            env_file_name
+        };
         loop {
-            let path = dir.join(".env");
+            let path = dir.join(final_file_name);
             if fs::metadata(&path).is_ok() {
                 env_file = path.to_str().unwrap().to_string();
                 break;
@@ -119,34 +143,76 @@ impl TestConfigUtil {
             }
         }
 
-        println!("use .env file: {}", env_file);
+        println!("use env file: {}", env_file);
         if env_file.is_empty() {
-            return;
+            return false;
         }
 
         dotenv::from_path(env_file).unwrap();
+
+        true
+    }
+
+    pub fn update_task_config_url(
+        src_task_config_file: &str,
+        dst_task_config_file: &str,
+        test_dir: &str,
+        policy: &str,
+    ) {
+        // environment variable settings in .env.local have higher priority
+        Self::load_env(test_dir, ".env.local");
+
+        if !Self::load_env(test_dir, ".env") {
+            return;
+        }
+
         let config = TaskConfig::new(&src_task_config_file);
         let mut update_configs = Vec::new();
 
-        let extractor_url = match &config.extractor.get_db_type() {
-            DbType::Mysql => env::var("mysql_extractor_url").unwrap(),
-            DbType::Pg => env::var("pg_extractor_url").unwrap(),
-            DbType::Mongo => env::var("mongo_extractor_url").unwrap(),
-            DbType::Redis => env::var("redis_extractor_url").unwrap(),
-            DbType::Kafka => env::var("kafka_extractor_url").unwrap(),
-            _ => String::new(),
-        };
-        update_configs.push((EXTRACTOR.into(), URL.into(), extractor_url));
+        match policy {
+            Self::REPLACE_PARAM => {
+                update_configs.push((
+                    EXTRACTOR.to_string(),
+                    URL.to_string(),
+                    Self::convert_with_envs(config.extractor.get_url()).unwrap(),
+                ));
+                update_configs.push((
+                    SINKER.to_string(),
+                    URL.to_string(),
+                    Self::convert_with_envs(config.sinker.get_url()).unwrap(),
+                ));
+            }
+            _ => {
+                match env::var("override_enable") {
+                    Ok(v) => {
+                        if v.eq("false") {
+                            return;
+                        }
+                    }
+                    Err(_) => {}
+                }
 
-        let sinker_url = match &config.sinker.get_db_type() {
-            DbType::Mysql => env::var("mysql_sinker_url").unwrap(),
-            DbType::Pg => env::var("pg_sinker_url").unwrap(),
-            DbType::Mongo => env::var("mongo_sinker_url").unwrap(),
-            DbType::Redis => env::var("redis_sinker_url").unwrap(),
-            DbType::Kafka => env::var("kafka_sinker_url").unwrap(),
-            _ => String::new(),
-        };
-        update_configs.push((SINKER.into(), URL.into(), sinker_url));
+                let extractor_url = match &config.extractor.get_db_type() {
+                    DbType::Mysql => env::var("mysql_extractor_url").unwrap(),
+                    DbType::Pg => env::var("pg_extractor_url").unwrap(),
+                    DbType::Mongo => env::var("mongo_extractor_url").unwrap(),
+                    DbType::Redis => env::var("redis_extractor_url").unwrap(),
+                    DbType::Kafka => env::var("kafka_extractor_url").unwrap(),
+                    _ => String::new(),
+                };
+                update_configs.push((EXTRACTOR.into(), URL.into(), extractor_url));
+
+                let sinker_url = match &config.sinker.get_db_type() {
+                    DbType::Mysql => env::var("mysql_sinker_url").unwrap(),
+                    DbType::Pg => env::var("pg_sinker_url").unwrap(),
+                    DbType::Mongo => env::var("mongo_sinker_url").unwrap(),
+                    DbType::Redis => env::var("redis_sinker_url").unwrap(),
+                    DbType::Kafka => env::var("kafka_sinker_url").unwrap(),
+                    _ => String::new(),
+                };
+                update_configs.push((SINKER.into(), URL.into(), sinker_url));
+            }
+        }
 
         TestConfigUtil::update_task_config(
             &src_task_config_file,
@@ -251,5 +317,37 @@ impl TestConfigUtil {
     pub fn should_do_clean_or_not() -> bool {
         let opt = env::var("do_clean_after_test");
         opt.is_ok_and(|x| x == "true")
+    }
+
+    // convert_with_envs: format the database_url with envs, such as:
+    // change: mysql://{test_user}:{test_password}@{test_url}
+    // to: mysql://test:123456@127.0.0.1:3306
+    // when have the envs: test_user=test, test_password=123456, test_url=127.0.0.1:3306
+    pub fn convert_with_envs(database_url: String) -> Option<String> {
+        if database_url.is_empty() {
+            return None;
+        }
+        let (mut new_url_bytes, mut pos, mut left_pos): (Vec<u8>, i64, i64) = (vec![], 0, -1);
+
+        for ch in database_url.chars() {
+            if ch == '{' {
+                left_pos = pos;
+            } else if ch == '}' && pos > left_pos && left_pos >= 0 {
+                let new_env = String::from_utf8(
+                    database_url.as_bytes()[(left_pos + 1) as usize..pos as usize].to_vec(),
+                )
+                .unwrap();
+                if env::var(&new_env).is_ok() {
+                    let env_val_tmp = env::var(new_env).unwrap();
+                    new_url_bytes.extend_from_slice(env_val_tmp.as_bytes());
+                }
+                left_pos = -1;
+            } else if left_pos == -1 {
+                new_url_bytes.push(ch as u8);
+            }
+            pos += 1;
+        }
+
+        Some(String::from_utf8(new_url_bytes).unwrap())
     }
 }
