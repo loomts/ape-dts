@@ -50,7 +50,7 @@ impl RdbCycleTestRunner {
             .await
             .unwrap();
 
-            runner.initialization_ddl().await.unwrap();
+            runner.initialize_ddl().await.unwrap();
 
             runner_map.insert(sub_path.1.to_owned(), runner);
         }
@@ -65,7 +65,7 @@ impl RdbCycleTestRunner {
         // init all datas
         for sub_path in &sub_paths {
             let runner = runner_map.get(sub_path.1.as_str()).unwrap();
-            runner.initialization_data().await.unwrap();
+            runner.initialize_data().await.unwrap();
         }
         TimeUtil::sleep_millis(parse_millis).await;
 
@@ -161,14 +161,14 @@ impl RdbCycleTestRunner {
         Ok(true)
     }
 
-    pub async fn initialization_ddl(&self) -> Result<(), Error> {
+    pub async fn initialize_ddl(&self) -> Result<(), Error> {
         // prepare src and dst tables
         self.rdb_test_runner.execute_test_ddl_sqls().await?;
 
         Ok(())
     }
 
-    pub async fn initialization_data(&self) -> Result<(), Error> {
+    pub async fn initialize_data(&self) -> Result<(), Error> {
         let mut src_insert_sqls = Vec::new();
         let mut src_update_sqls = Vec::new();
         let mut src_delete_sqls = Vec::new();
