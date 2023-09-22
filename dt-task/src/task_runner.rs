@@ -7,8 +7,8 @@ use std::{
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
     config::{
-        config_enums::DbType, extractor_config::ExtractorConfig, pipeline_config::ExtraConfig,
-        sinker_config::SinkerConfig, task_config::TaskConfig,
+        config_enums::DbType, datamarker_config::DataMarkerSettingEnum,
+        extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
     },
     error::Error,
     syncer::Syncer,
@@ -16,12 +16,10 @@ use dt_common::{
 };
 use dt_connector::{extractor::snapshot_resumer::SnapshotResumer, Extractor};
 use dt_meta::{dt_data::DtData, row_type::RowType};
-use dt_pipeline::{base_pipeline::BasePipeline, drainers::traits::DataDrainer, Pipeline};
+use dt_pipeline::{base_pipeline::BasePipeline, Pipeline};
 
 use log4rs::config::RawConfig;
 use tokio::try_join;
-
-use crate::pipeline_util::PipelineUtil;
 
 use super::{
     extractor_util::ExtractorUtil, parallelizer_util::ParallelizerUtil, sinker_util::SinkerUtil,
@@ -170,11 +168,6 @@ impl TaskRunner {
         let parallelizer = ParallelizerUtil::create_parallelizer(&self.config).await?;
         let sinkers = SinkerUtil::create_sinkers(&self.config, transaction_command).await?;
 
-        let drainer: Box<dyn DataDrainer + Send> = PipelineUtil::build_drainer(
-            self.config.pipeline.clone(),
-            self.config.extractor.clone(),
-        )?;
-
         let pipeline = BasePipeline {
             buffer,
             parallelizer,
@@ -184,7 +177,6 @@ impl TaskRunner {
             checkpoint_interval_secs: self.config.pipeline.checkpoint_interval_secs,
             batch_sink_interval_secs: self.config.pipeline.batch_sink_interval_secs,
             syncer: syncer.to_owned(),
-            drainer,
         };
 
         Ok(Box::new(pipeline))
@@ -244,8 +236,14 @@ impl TaskRunner {
                 let filter = RdbFilter::from_config_with_transaction(
                     &self.config.filter,
                     DbType::Mysql,
-                    &self.config.pipeline,
+                    &self.config.datamarker,
                 )?;
+
+                let datamarker_filter = ExtractorUtil::datamarker_filter_builder(
+                    &self.config.extractor,
+                    &self.config.datamarker,
+                )?;
+
                 let extractor = ExtractorUtil::create_mysql_cdc_extractor(
                     url,
                     binlog_filename,
@@ -255,6 +253,7 @@ impl TaskRunner {
                     filter,
                     &self.config.runtime.log_level,
                     shut_down,
+                    datamarker_filter,
                 )
                 .await?;
                 Box::new(extractor)
@@ -433,12 +432,14 @@ impl TaskRunner {
     }
 
     fn fetch_transaction_command(&self) -> String {
-        match &self.config.pipeline.extra_config {
-            ExtraConfig::Transaction {
-                transaction_command,
-                ..
-            } => transaction_command.to_owned(),
-            _ => String::from(""),
+        match &self.config.datamarker.setting {
+            Some(s) => match s {
+                DataMarkerSettingEnum::Transaction {
+                    transaction_command,
+                    ..
+                } => transaction_command.to_owned(),
+            },
+            None => String::from(""),
         }
     }
 

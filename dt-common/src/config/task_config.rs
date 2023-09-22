@@ -5,11 +5,12 @@ use configparser::ini::Ini;
 use crate::error::Error;
 
 use super::{
-    config_enums::{ConflictPolicyEnum, DbType, ExtractType, ParallelType, PipelineType, SinkType},
+    config_enums::{ConflictPolicyEnum, DbType, ExtractType, ParallelType, SinkType},
+    datamarker_config::{DataMarkerConfig, DataMarkerSettingEnum, DataMarkerTypeEnum},
     extractor_config::{ExtractorBasicConfig, ExtractorConfig},
     filter_config::FilterConfig,
     parallelizer_config::ParallelizerConfig,
-    pipeline_config::{ExtraConfig, PipelineConfig},
+    pipeline_config::PipelineConfig,
     resumer_config::ResumerConfig,
     router_config::RouterConfig,
     runtime_config::RuntimeConfig,
@@ -28,6 +29,7 @@ pub struct TaskConfig {
     pub filter: FilterConfig,
     pub router: RouterConfig,
     pub resumer: ResumerConfig,
+    pub datamarker: DataMarkerConfig,
 }
 
 const EXTRACTOR: &str = "extractor";
@@ -37,11 +39,11 @@ const DB_TYPE: &str = "db_type";
 const URL: &str = "url";
 const PARALLELIZER: &str = "parallelizer";
 const PIPELINE: &str = "pipeline";
-const PIPELINE_TYPE: &str = "type";
 const RUNTIME: &str = "runtime";
 const FILTER: &str = "filter";
 const ROUTER: &str = "router";
 const RESUMER: &str = "resumer";
+const DATAMARKER_SECTION: &str = "datamarker";
 const BATCH_SIZE: &str = "batch_size";
 
 impl TaskConfig {
@@ -67,6 +69,7 @@ impl TaskConfig {
             filter: Self::load_filter_config(&ini).unwrap(),
             router: Self::load_router_config(&ini).unwrap(),
             resumer: Self::load_resumer_config(&ini).unwrap(),
+            datamarker: Self::load_datamarker_config(&ini),
         }
     }
 
@@ -218,8 +221,7 @@ impl TaskConfig {
         };
 
         let conflict_policy_str: String = Self::get_optional_value(ini, SINKER, "conflict_policy");
-        let conflict_policy = ConflictPolicyEnum::from_str(&conflict_policy_str)
-            .unwrap_or(ConflictPolicyEnum::Interrupt);
+        let conflict_policy = ConflictPolicyEnum::from_str(&conflict_policy_str).unwrap();
 
         let sinker = match db_type {
             DbType::Mysql => match sink_type {
@@ -294,23 +296,16 @@ impl TaskConfig {
         Ok((basic, sinker))
     }
 
-    fn load_pipeline_type(ini: &Ini) -> Option<PipelineType> {
-        match &ini.get(PIPELINE, PIPELINE_TYPE) {
-            Some(t) => Some(PipelineType::from_str(t).unwrap()),
-            None => None,
-        }
-    }
-
     fn load_paralleizer_config(ini: &Ini) -> ParallelizerConfig {
         // compatible with older versions, Paralleizer settings are set under the pipeline section
         let parallel_sections: Vec<String> = ini
             .sections()
             .iter()
             .filter(|&s| *s == PARALLELIZER)
-            .map(|s| s.clone())
+            .cloned()
             .collect();
 
-        if parallel_sections.len() == 0 || Self::load_pipeline_type(&ini).is_none() {
+        if parallel_sections.is_empty() {
             ParallelizerConfig {
                 parallel_size: ini.getuint(PIPELINE, "parallel_size").unwrap().unwrap() as usize,
                 parallel_type: ParallelType::from_str(&ini.get(PIPELINE, "parallel_type").unwrap())
@@ -329,11 +324,6 @@ impl TaskConfig {
     }
 
     fn load_pipeline_config(ini: &Ini) -> PipelineConfig {
-        let pipeline_type: PipelineType = match Self::load_pipeline_type(ini) {
-            Some(t) => t,
-            None => PipelineType::Basic,
-        };
-
         let buffer_size = ini.getuint(PIPELINE, "buffer_size").unwrap().unwrap() as usize;
         let batch_sink_interval_secs: u64 =
             Self::get_optional_value(ini, PIPELINE, "batch_sink_interval_secs");
@@ -342,23 +332,10 @@ impl TaskConfig {
             .unwrap()
             .unwrap_or(1);
 
-        let extra_config = match pipeline_type {
-            PipelineType::Transaction => ExtraConfig::Transaction {
-                transaction_db: ini.get(PIPELINE, "transaction_db").unwrap(),
-                transaction_table: ini.get(PIPELINE, "transaction_table").unwrap(),
-                transaction_express: ini.get(PIPELINE, "transaction_express").unwrap(),
-                transaction_command: ini.get(PIPELINE, "transaction_command").unwrap(),
-                white_nodes: ini.get(PIPELINE, "white_nodes").unwrap(),
-                black_nodes: ini.get(PIPELINE, "black_nodes").unwrap(),
-            },
-            _ => ExtraConfig::Basic {},
-        };
-
         PipelineConfig {
             buffer_size,
             checkpoint_interval_secs,
             batch_sink_interval_secs,
-            extra_config,
         }
     }
 
@@ -396,6 +373,44 @@ impl TaskConfig {
         Ok(ResumerConfig { resume_values })
     }
 
+    fn load_datamarker_config(ini: &Ini) -> DataMarkerConfig {
+        let datamarker_sections: Vec<String> = ini
+            .sections()
+            .iter()
+            .filter(|&s| *s == DATAMARKER_SECTION)
+            .cloned()
+            .collect();
+
+        if datamarker_sections.is_empty() {
+            return DataMarkerConfig { setting: None };
+        }
+
+        let datamarker_type = ini
+            .get(DATAMARKER_SECTION, "type")
+            .unwrap_or(DataMarkerTypeEnum::Transaction.to_string());
+        match DataMarkerTypeEnum::from_str(&datamarker_type) {
+            Ok(e) => match e {
+                DataMarkerTypeEnum::Transaction => DataMarkerConfig {
+                    setting: Some(DataMarkerSettingEnum::Transaction {
+                        transaction_db: ini.get(DATAMARKER_SECTION, "transaction_db").unwrap(),
+                        transaction_table: ini
+                            .get(DATAMARKER_SECTION, "transaction_table")
+                            .unwrap(),
+                        transaction_express: ini
+                            .get(DATAMARKER_SECTION, "transaction_express")
+                            .unwrap(),
+                        transaction_command: ini
+                            .get(DATAMARKER_SECTION, "transaction_command")
+                            .unwrap(),
+                        white_nodes: ini.get(DATAMARKER_SECTION, "white_nodes").unwrap(),
+                        black_nodes: ini.get(DATAMARKER_SECTION, "black_nodes").unwrap(),
+                    }),
+                },
+            },
+            _ => DataMarkerConfig { setting: None },
+        }
+    }
+
     fn get_optional_value<T>(ini: &Ini, section: &str, key: &str) -> T
     where
         T: Default,
@@ -414,87 +429,59 @@ mod tests {
 
     use super::*;
 
-    fn mock_props(confs: &str) -> PipelineConfig {
+    fn mock_props(confs: &str) -> DataMarkerConfig {
         let mut inis = Ini::new();
         inis.read(String::from(confs)).unwrap();
-        TaskConfig::load_pipeline_config(&inis)
+        TaskConfig::load_datamarker_config(&inis)
     }
 
     #[test]
-    fn load_pipeline_config_test() {
+    fn load_datamarker_config_test() {
         let mut conf: &str = "
-        [pipeline]
-        type=basic
-
-        buffer_size=4
-        checkpoint_interval_secs=1
-        batch_sink_interval_secs=10
+        [datamarker]
+        type=hehe
         ";
-        let mut pipeline_config = mock_props(conf);
-        assert_eq!(
-            pipeline_config.get_pipeline_type().to_string(),
-            PipelineType::Basic.to_string()
-        );
-        assert_eq!(pipeline_config.buffer_size, 4);
-        assert_eq!(pipeline_config.checkpoint_interval_secs, 1);
-        assert_eq!(pipeline_config.batch_sink_interval_secs, 10);
+        let mut config = mock_props(conf);
+        assert!(config.setting.is_none());
 
         conf = "
-        [pipeline]
-        type=basic
-
-        buffer_size=4
-        ";
-        pipeline_config = mock_props(conf);
-        assert_eq!(
-            pipeline_config.get_pipeline_type().to_string(),
-            PipelineType::Basic.to_string()
-        );
-        assert_eq!(pipeline_config.buffer_size, 4);
-        assert_eq!(pipeline_config.checkpoint_interval_secs, 1);
-        assert_eq!(pipeline_config.batch_sink_interval_secs, 0);
-
-        conf = "
-        [pipeline]
-        type=transaction
-        buffer_size=4
+        [datamarker]
 
         transaction_db=ape_dt
         transaction_table=ape_dt_topo1_node1_node2
         transaction_express=ape_dt_(?<topology>.*)_(?<source>.*)_(?<sink>.*)
-        transaction_command=update ape_dt_topo1_node1_node2 set n = n + 1;
-        topology_key=topo1
+        transaction_command=update ape_dt_topo1_node1_node2 set n = n + 1
         white_nodes=4,5,6
         black_nodes=1,2,3
         ";
-        pipeline_config = mock_props(conf);
-        assert_eq!(
-            pipeline_config.get_pipeline_type().to_string(),
-            PipelineType::Transaction.to_string()
-        );
-        match pipeline_config.extra_config {
-            ExtraConfig::Basic {} => assert!(false),
-            ExtraConfig::Transaction {
-                transaction_db,
-                transaction_table,
-                transaction_express,
-                transaction_command,
-                white_nodes,
-                black_nodes,
-            } => {
-                assert_eq!(transaction_db, "ape_dt");
-                assert_eq!(transaction_table, "ape_dt_topo1_node1_node2");
-                assert_eq!(
+        config = mock_props(conf);
+
+        match config.setting {
+            Some(s) => match s {
+                DataMarkerSettingEnum::Transaction {
+                    transaction_db,
+                    transaction_table,
                     transaction_express,
-                    "ape_dt_(?<topology>.*)_(?<source>.*)_(?<sink>.*)"
-                );
-                assert_eq!(
                     transaction_command,
-                    "update ape_dt_topo1_node1_node2 set n = n + 1"
-                );
-                assert_eq!(white_nodes, "4,5,6");
-                assert_eq!(black_nodes, "1,2,3");
-            }
+                    white_nodes,
+                    black_nodes,
+                } => {
+                    assert_eq!(transaction_db, "ape_dt");
+                    assert_eq!(transaction_table, "ape_dt_topo1_node1_node2");
+                    assert_eq!(
+                        transaction_express,
+                        "ape_dt_(?<topology>.*)_(?<source>.*)_(?<sink>.*)"
+                    );
+                    assert_eq!(
+                        transaction_command,
+                        "update ape_dt_topo1_node1_node2 set n = n + 1"
+                    );
+
+                    assert_eq!(white_nodes, "4,5,6");
+                    assert_eq!(black_nodes, "1,2,3");
+                }
+            },
+            None => assert!(false),
         }
     }
 }

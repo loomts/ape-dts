@@ -17,10 +17,10 @@ use dt_common::{
     utils::time_util::TimeUtil,
 };
 use dt_connector::Sinker;
-use dt_meta::dt_data::DtData;
+use dt_meta::{ddl_data::DdlData, dt_data::DtData, row_data::RowData};
 use dt_parallelizer::Parallelizer;
 
-use crate::{drainers::traits::DataDrainer, Pipeline};
+use crate::Pipeline;
 
 pub struct BasePipeline {
     pub buffer: Arc<ConcurrentQueue<DtData>>,
@@ -31,8 +31,6 @@ pub struct BasePipeline {
     pub checkpoint_interval_secs: u64,
     pub batch_sink_interval_secs: u64,
     pub syncer: Arc<Mutex<Syncer>>,
-
-    pub drainer: Box<dyn DataDrainer + Send>,
 }
 
 #[async_trait]
@@ -115,8 +113,7 @@ impl BasePipeline {
         &mut self,
         all_data: Vec<DtData>,
     ) -> Result<(usize, Option<String>, Option<String>), Error> {
-        let (data, last_received_position, last_commit_position) =
-            self.drainer.drain_raw(all_data)?;
+        let (data, last_received_position, last_commit_position) = Self::fetch_raw(all_data);
         let count = data.len();
         if count > 0 {
             self.parallelizer
@@ -131,8 +128,7 @@ impl BasePipeline {
         &mut self,
         all_data: Vec<DtData>,
     ) -> Result<(usize, Option<String>, Option<String>), Error> {
-        let (data, last_received_position, last_commit_position) =
-            self.drainer.drain_dmls(all_data)?;
+        let (data, last_received_position, last_commit_position) = Self::fetch_dml(all_data);
         let count = data.len();
         if count > 0 {
             self.parallelizer
@@ -147,8 +143,7 @@ impl BasePipeline {
         &mut self,
         all_data: Vec<DtData>,
     ) -> Result<(usize, Option<String>, Option<String>), Error> {
-        let (data, last_received_position, last_commit_position) =
-            self.drainer.drain_ddl(all_data)?;
+        let (data, last_received_position, last_commit_position) = Self::fetch_ddl(all_data);
         let count = data.len();
         if count > 0 {
             self.parallelizer
@@ -166,6 +161,89 @@ impl BasePipeline {
             }
         }
         Ok((count, last_received_position, last_commit_position))
+    }
+
+    fn fetch_raw(mut data: Vec<DtData>) -> (Vec<DtData>, Option<String>, Option<String>) {
+        let mut raw_data = Vec::new();
+        let mut last_received_position = Option::None;
+        let mut last_commit_position = Option::None;
+        for i in data.drain(..) {
+            match &i {
+                DtData::Commit { position, .. } => {
+                    last_commit_position = Some(position.to_string());
+                    last_received_position = last_commit_position.clone();
+                    continue;
+                }
+
+                DtData::Redis { entry } => {
+                    last_received_position = Some(entry.position.to_string());
+                    last_commit_position = last_received_position.clone();
+                    if !entry.is_raw() && entry.cmd.get_name().eq_ignore_ascii_case("ping") {
+                        continue;
+                    }
+                    raw_data.push(i);
+                }
+
+                DtData::Dml { row_data } => {
+                    last_received_position = Some(row_data.position.clone());
+                    raw_data.push(i);
+                }
+
+                _ => {
+                    raw_data.push(i);
+                }
+            }
+        }
+
+        (raw_data, last_received_position, last_commit_position)
+    }
+
+    fn fetch_dml(mut data: Vec<DtData>) -> (Vec<RowData>, Option<String>, Option<String>) {
+        let mut dml_data = Vec::new();
+        let mut last_received_position = Option::None;
+        let mut last_commit_position = Option::None;
+        for i in data.drain(..) {
+            match i {
+                DtData::Commit { position, .. } => {
+                    last_commit_position = Some(position);
+                    last_received_position = last_commit_position.clone();
+                    continue;
+                }
+
+                DtData::Dml { row_data } => {
+                    last_received_position = Some(row_data.position.clone());
+                    dml_data.push(row_data);
+                }
+
+                _ => {}
+            }
+        }
+
+        (dml_data, last_received_position, last_commit_position)
+    }
+
+    fn fetch_ddl(mut data: Vec<DtData>) -> (Vec<DdlData>, Option<String>, Option<String>) {
+        // TODO, change result name
+        let mut result = Vec::new();
+        let mut last_received_position = Option::None;
+        let mut last_commit_position = Option::None;
+        for i in data.drain(..) {
+            match i {
+                DtData::Commit { position, .. } => {
+                    last_commit_position = Some(position);
+                    last_received_position = last_commit_position.clone();
+                    continue;
+                }
+
+                DtData::Ddl { ddl_data } => {
+                    result.push(ddl_data);
+                }
+
+                _ => {}
+            }
+        }
+
+        (result, last_received_position, last_commit_position)
     }
 
     #[inline(always)]
