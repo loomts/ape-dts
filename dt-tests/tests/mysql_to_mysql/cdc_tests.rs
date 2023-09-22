@@ -4,7 +4,7 @@ mod test {
 
     use serial_test::serial;
 
-    use crate::test_runner::test_base::TestBase;
+    use crate::test_runner::{rdb_cycle_test_runner::RdbCycleTestRunner, test_base::TestBase};
 
     #[tokio::test]
     #[serial]
@@ -45,7 +45,7 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn circle_basic_test() {
-        TestBase::run_cycle_cdc_test(
+        RdbCycleTestRunner::run_cycle_cdc_test(
             "mysql_to_mysql/cdc/cycle_basic_test",
             3000,
             2000,
@@ -58,7 +58,7 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn circle_star_test() {
-        TestBase::run_cycle_cdc_test(
+        RdbCycleTestRunner::run_cycle_cdc_test(
             "mysql_to_mysql/cdc/cycle_star_test",
             3000,
             2000,
@@ -78,7 +78,7 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn circle_net_test() {
-        TestBase::run_cycle_cdc_test(
+        RdbCycleTestRunner::run_cycle_cdc_test(
             "mysql_to_mysql/cdc/cycle_net_test",
             3000,
             2000,

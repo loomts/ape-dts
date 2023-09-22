@@ -2,7 +2,7 @@ use core::fmt;
 use std::collections::HashMap;
 
 use crate::{
-    config::pipeline_config::{ExtraConfig, PipelineConfig},
+    config::datamarker_config::{DataMarkerConfig, DataMarkerSettingEnum},
     error::Error,
 };
 use regex::Regex;
@@ -44,23 +44,25 @@ pub struct TransactionWorker {
 }
 
 impl TransactionWorker {
-    pub fn from(pipeline_config: &PipelineConfig) -> Self {
-        match &pipeline_config.extra_config {
-            ExtraConfig::Transaction {
-                transaction_db,
-                transaction_table,
-                transaction_express,
-                white_nodes,
-                black_nodes,
-                ..
-            } => Self {
-                transaction_db: transaction_db.to_owned(),
-                transaction_table: transaction_table.to_owned(),
-                transaction_express: transaction_express.to_owned(),
-                white_nodes: white_nodes.to_owned(),
-                black_nodes: black_nodes.to_owned(),
+    pub fn from(datamarker_config: &DataMarkerConfig) -> Self {
+        match &datamarker_config.setting {
+            Some(setting) => match setting {
+                DataMarkerSettingEnum::Transaction {
+                    transaction_db,
+                    transaction_table,
+                    transaction_express,
+                    white_nodes,
+                    black_nodes,
+                    ..
+                } => Self {
+                    transaction_db: transaction_db.clone(),
+                    transaction_table: transaction_table.clone(),
+                    transaction_express: transaction_express.clone(),
+                    white_nodes: white_nodes.clone(),
+                    black_nodes: black_nodes.clone(),
+                },
             },
-            _ => Self::default(),
+            None => Self::default(),
         }
     }
 
@@ -183,26 +185,23 @@ mod tests {
 
     use super::*;
 
-    fn build_pipeline_config(
+    fn build_datamarker_config(
         transaction_db: String,
         transaction_table: String,
         transaction_express: String,
         transaction_command: String,
         white_nodes: String,
         black_nodes: String,
-    ) -> PipelineConfig {
-        PipelineConfig {
-            extra_config: ExtraConfig::Transaction {
+    ) -> DataMarkerConfig {
+        DataMarkerConfig {
+            setting: Some(DataMarkerSettingEnum::Transaction {
                 transaction_db,
                 transaction_table,
                 transaction_express,
                 transaction_command,
                 white_nodes,
                 black_nodes,
-            },
-            buffer_size: 100,
-            checkpoint_interval_secs: 10,
-            batch_sink_interval_secs: 0,
+            }),
         }
     }
 
@@ -214,7 +213,7 @@ mod tests {
         white_nodes: String,
         black_nodes: String,
     ) -> TransactionWorker {
-        let config = build_pipeline_config(
+        let config = build_datamarker_config(
             transaction_db,
             transaction_table,
             transaction_express,

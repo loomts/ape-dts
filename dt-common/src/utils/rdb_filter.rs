@@ -2,18 +2,15 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     config::{
-        config_enums::{DbType, PipelineType},
-        config_token_parser::ConfigTokenParser,
-        filter_config::FilterConfig,
-        pipeline_config::PipelineConfig,
+        config_enums::DbType, config_token_parser::ConfigTokenParser,
+        datamarker_config::DataMarkerConfig, filter_config::FilterConfig,
     },
+    datamarker::transaction_control::TransactionWorker,
     error::Error,
     utils::sql_util::SqlUtil,
 };
 
 use regex::Regex;
-
-use super::transaction_circle_control::TransactionWorker;
 
 #[derive(Debug, Clone)]
 pub struct RdbFilter {
@@ -59,16 +56,11 @@ impl RdbFilter {
     pub fn from_config_with_transaction(
         config: &FilterConfig,
         db_type: DbType,
-        transaction_config: &PipelineConfig,
+        datamarker_config: &DataMarkerConfig,
     ) -> Result<Self, Error> {
         let mut filter = Self::from_config(config, db_type)?;
 
-        if transaction_config.get_pipeline_type().to_string()
-            == PipelineType::Transaction.to_string()
-        {
-            let worker = TransactionWorker::from(transaction_config);
-            filter.transaction_worker = worker;
-        }
+        filter.transaction_worker = TransactionWorker::from(datamarker_config);
 
         Ok(filter)
     }

@@ -215,73 +215,6 @@ impl RdbTestRunner {
         Ok(())
     }
 
-    pub async fn initialization_ddl(&self) -> Result<(), Error> {
-        // prepare src and dst tables
-        self.execute_test_ddl_sqls().await?;
-
-        Ok(())
-    }
-
-    pub async fn initialization_data(&self) -> Result<(), Error> {
-        let mut src_insert_sqls = Vec::new();
-        let mut src_update_sqls = Vec::new();
-        let mut src_delete_sqls = Vec::new();
-
-        for sql in self.base.src_dml_sqls.iter() {
-            if sql.to_lowercase().starts_with("insert") {
-                src_insert_sqls.push(sql.clone());
-            } else if sql.to_lowercase().starts_with("update") {
-                src_update_sqls.push(sql.clone());
-            } else {
-                src_delete_sqls.push(sql.clone());
-            }
-        }
-
-        // insert src data
-        self.execute_src_sqls(&src_insert_sqls).await?;
-
-        // update src data
-        self.execute_src_sqls(&src_update_sqls).await?;
-
-        // delete src data
-        self.execute_src_sqls(&src_delete_sqls).await?;
-
-        Ok(())
-    }
-
-    pub async fn run_cycle_cdc_data_check(
-        &self,
-        transaction_database: String,
-        transaction_table_full_name: String,
-        expect_num: Option<u8>,
-    ) -> Result<(), Error> {
-        let dml_count = match expect_num {
-            Some(num) => num,
-            None => self.base.src_dml_sqls.len() as u8,
-        };
-
-        let db_tbs = self.get_compare_db_tbs_from_sqls()?;
-        let db_tbs_without_transaction: Vec<(String, String)> = db_tbs
-            .iter()
-            .filter(|s| !transaction_database.eq(s.0.as_str()))
-            .map(|s| (s.0.clone(), s.1.clone()))
-            .collect();
-        assert!(
-            self.compare_data_for_tbs(&db_tbs_without_transaction, &db_tbs_without_transaction)
-                .await?
-        );
-
-        self.check_transaction_table_data(
-            DST,
-            transaction_table_full_name.as_str(),
-            0,
-            dml_count as u8,
-        )
-        .await?;
-
-        Ok(())
-    }
-
     pub async fn run_cdc_test_with_different_configs(
         &self,
         start_millis: u64,
@@ -432,34 +365,6 @@ impl RdbTestRunner {
             }
         }
         true
-    }
-
-    pub async fn check_transaction_table_data(
-        &self,
-        from: &str,
-        full_tb_name: &str,
-        col_order: u8,
-        expect_num: u8,
-    ) -> Result<bool, Error> {
-        let db_tb: Vec<&str> = full_tb_name.split(".").collect();
-        assert_eq!(db_tb.len(), 2);
-
-        let result = self
-            .fetch_data(&(db_tb[0].to_string(), db_tb[1].to_string()), from)
-            .await?;
-
-        assert!(result.len() == 1);
-        let row_data = result.get(0).unwrap();
-        assert!(row_data.len() >= col_order as usize);
-        let col_datas = row_data
-            .get(col_order as usize)
-            .unwrap()
-            .to_owned()
-            .unwrap();
-
-        assert_eq!(col_datas.get(0).unwrap().clone(), expect_num);
-
-        Ok(true)
     }
 
     pub async fn fetch_data(

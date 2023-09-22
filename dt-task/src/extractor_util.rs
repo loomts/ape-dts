@@ -1,31 +1,45 @@
 use std::{
+    collections::HashMap,
     str::FromStr,
     sync::{atomic::AtomicBool, Arc, Mutex},
 };
 
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
-    config::config_enums::DbType, error::Error, syncer::Syncer, utils::rdb_filter::RdbFilter,
+    config::{
+        config_enums::DbType, datamarker_config::DataMarkerConfig,
+        extractor_config::ExtractorConfig,
+    },
+    datamarker::transaction_control::TransactionWorker,
+    error::Error,
+    syncer::Syncer,
+    utils::rdb_filter::RdbFilter,
 };
-use dt_connector::extractor::{
-    kafka::kafka_extractor::KafkaExtractor,
-    mongo::{
-        mongo_cdc_extractor::MongoCdcExtractor, mongo_snapshot_extractor::MongoSnapshotExtractor,
+use dt_connector::{
+    datamarker::{
+        mysql::mysql_transaction_marker::MysqlTransactionMarker, traits::DataMarkerFilter,
     },
-    mysql::{
-        mysql_cdc_extractor::MysqlCdcExtractor, mysql_check_extractor::MysqlCheckExtractor,
-        mysql_snapshot_extractor::MysqlSnapshotExtractor,
-        mysql_struct_extractor::MysqlStructExtractor,
+    extractor::{
+        kafka::kafka_extractor::KafkaExtractor,
+        mongo::{
+            mongo_cdc_extractor::MongoCdcExtractor,
+            mongo_snapshot_extractor::MongoSnapshotExtractor,
+        },
+        mysql::{
+            mysql_cdc_extractor::MysqlCdcExtractor, mysql_check_extractor::MysqlCheckExtractor,
+            mysql_snapshot_extractor::MysqlSnapshotExtractor,
+            mysql_struct_extractor::MysqlStructExtractor,
+        },
+        pg::{
+            pg_cdc_extractor::PgCdcExtractor, pg_check_extractor::PgCheckExtractor,
+            pg_snapshot_extractor::PgSnapshotExtractor, pg_struct_extractor::PgStructExtractor,
+        },
+        redis::{
+            redis_cdc_extractor::RedisCdcExtractor, redis_client::RedisClient,
+            redis_snapshot_extractor::RedisSnapshotExtractor,
+        },
+        snapshot_resumer::SnapshotResumer,
     },
-    pg::{
-        pg_cdc_extractor::PgCdcExtractor, pg_check_extractor::PgCheckExtractor,
-        pg_snapshot_extractor::PgSnapshotExtractor, pg_struct_extractor::PgStructExtractor,
-    },
-    redis::{
-        redis_cdc_extractor::RedisCdcExtractor, redis_client::RedisClient,
-        redis_snapshot_extractor::RedisSnapshotExtractor,
-    },
-    snapshot_resumer::SnapshotResumer,
 };
 use dt_meta::{
     dt_data::DtData, mongo::mongo_cdc_source::MongoCdcSource,
@@ -156,6 +170,7 @@ impl ExtractorUtil {
         filter: RdbFilter,
         log_level: &str,
         shut_down: Arc<AtomicBool>,
+        datamarker_filter: Option<Box<dyn DataMarkerFilter + Send>>,
     ) -> Result<MysqlCdcExtractor, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool = TaskUtil::create_mysql_conn_pool(url, 2, enable_sqlx_log).await?;
@@ -170,6 +185,7 @@ impl ExtractorUtil {
             binlog_position,
             server_id,
             shut_down,
+            datamarker_filter,
         })
     }
 
@@ -447,5 +463,37 @@ impl ExtractorUtil {
             shut_down,
             syncer,
         })
+    }
+
+    pub fn datamarker_filter_builder(
+        extractor_config: &ExtractorConfig,
+        datamarker_config: &DataMarkerConfig,
+    ) -> Result<Option<Box<dyn DataMarkerFilter + Send>>, Error> {
+        let transaction_worker = TransactionWorker::from(datamarker_config);
+
+        if !transaction_worker.is_validate() {
+            return Ok(None);
+        }
+
+        let result = transaction_worker.pick_infos(
+            &transaction_worker.transaction_db,
+            &transaction_worker.transaction_table,
+        );
+        let current_topology = result.unwrap().unwrap();
+        if current_topology.is_empty() {
+            return Ok(None);
+        }
+
+        match extractor_config {
+            ExtractorConfig::MysqlCdc { .. } => Ok(Some(Box::new(MysqlTransactionMarker {
+                transaction_worker,
+                current_topology,
+                do_transaction_filter: false,
+                cache: HashMap::new(),
+            }))),
+            _ => Err(Error::ConfigError(String::from(
+                "extractor type not support transaction filter yet.",
+            ))),
+        }
     }
 }
