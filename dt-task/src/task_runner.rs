@@ -420,6 +420,7 @@ impl TaskRunner {
                     *partition,
                     *offset,
                     *ack_interval_secs,
+                    &self.config.sinker_basic,
                     buffer,
                     shut_down,
                     syncer,

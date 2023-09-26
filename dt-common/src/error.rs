@@ -46,4 +46,10 @@ pub enum Error {
 
     #[error("kafka error: {0}")]
     KafkaError(#[from] kafka::Error),
+
+    #[error("avro encode error: {0}")]
+    AvroEncodeError(#[from] apache_avro::Error),
+
+    #[error("enum parse error: {0}")]
+    EnumParseError(#[from] strum::ParseError),
 }

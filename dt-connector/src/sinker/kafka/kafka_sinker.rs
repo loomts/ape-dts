@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use crate::{call_batch_fn, Sinker};
+use crate::{avro::avro_converter::AvroConverter, call_batch_fn, Sinker};
 
 use dt_common::error::Error;
 
@@ -14,12 +14,13 @@ pub struct KafkaSinker {
     pub batch_size: usize,
     pub kafka_router: KafkaRouter,
     pub producer: Producer,
+    pub avro_converter: AvroConverter,
 }
 
 #[async_trait]
 impl Sinker for KafkaSinker {
     async fn sink_raw(&mut self, mut data: Vec<DtData>, _batch: bool) -> Result<(), Error> {
-        call_batch_fn!(self, data, Self::send);
+        call_batch_fn!(self, data, Self::send_avro);
         Ok(())
     }
 }
@@ -31,12 +32,6 @@ impl KafkaSinker {
         sinked_count: usize,
         batch_size: usize,
     ) -> Result<(), Error> {
-        // let mut topics = Vec::new();
-        // for rd in data.iter().skip(sinked_count).take(batch_size) {
-        //     let topic = self.kafka_router.get_route(&rd.schema, &rd.tb);
-        //     topics.push(topic);
-        // }
-
         let topic = self.kafka_router.get_route("", "");
 
         let mut messages = Vec::new();
@@ -47,6 +42,42 @@ impl KafkaSinker {
                 topic: &topic,
                 partition: -1,
             });
+        }
+
+        self.producer.send_all(&messages).unwrap();
+        Ok(())
+    }
+
+    async fn send_avro(
+        &mut self,
+        data: &mut [DtData],
+        sinked_count: usize,
+        batch_size: usize,
+    ) -> Result<(), Error> {
+        // TODO, support route by db & tb
+        // TODO, create topic if NOT exists
+        let topic = self.kafka_router.get_route("", "");
+        let mut messages = Vec::new();
+
+        for (_, dt_data) in data
+            .iter_mut()
+            .skip(sinked_count)
+            .take(batch_size)
+            .enumerate()
+        {
+            if let DtData::Dml { row_data } = dt_data {
+                let key = self.avro_converter.row_data_to_avro_key(row_data).await?;
+                let payload = self
+                    .avro_converter
+                    .row_data_to_avro_value(row_data.clone())
+                    .unwrap();
+                messages.push(Record {
+                    key,
+                    value: payload,
+                    topic: &topic,
+                    partition: -1,
+                });
+            }
         }
 
         self.producer.send_all(&messages).unwrap();
