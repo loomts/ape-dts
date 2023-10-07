@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
+use dt_common::log_position;
 use dt_common::utils::time_util::TimeUtil;
 use dt_common::{error::Error, log_info};
 use dt_meta::dt_data::DtData;
@@ -71,6 +72,14 @@ impl RedisPsyncExtractor<'_> {
                 let tokens: Vec<&str> = s.split_whitespace().collect();
                 self.run_id = tokens[1].to_string();
                 self.repl_offset = tokens[2].parse::<u64>().unwrap();
+
+                log_position!(
+                    "current_position | {}",
+                    format!(
+                        "run_id:{},repl_offset:{},repl_port:{}",
+                        self.run_id, self.repl_offset, self.repl_port
+                    )
+                )
             } else if s != "CONTINUE" {
                 return Err(Error::ExtractorError(
                     "PSYNC command response is NOT CONTINUE".into(),
@@ -141,9 +150,19 @@ impl RedisPsyncExtractor<'_> {
             }
 
             if loader.is_end {
+                log_info!("fetch rdb finished");
                 break;
             }
         }
+
+        log_position!(
+            "current_position | {}",
+            format!(
+                "run_id:{},repl_offset:{},repl_port:{}",
+                self.run_id, self.repl_offset, self.repl_port
+            )
+        );
+
         Ok(())
     }
 }
