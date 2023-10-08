@@ -72,14 +72,6 @@ impl RedisPsyncExtractor<'_> {
                 let tokens: Vec<&str> = s.split_whitespace().collect();
                 self.run_id = tokens[1].to_string();
                 self.repl_offset = tokens[2].parse::<u64>().unwrap();
-
-                log_position!(
-                    "current_position | {}",
-                    format!(
-                        "run_id:{},repl_offset:{},repl_port:{}",
-                        self.run_id, self.repl_offset, self.repl_port
-                    )
-                )
             } else if s != "CONTINUE" {
                 return Err(Error::ExtractorError(
                     "PSYNC command response is NOT CONTINUE".into(),
@@ -158,8 +150,11 @@ impl RedisPsyncExtractor<'_> {
         log_position!(
             "current_position | {}",
             format!(
-                "run_id:{},repl_offset:{},repl_port:{}",
-                self.run_id, self.repl_offset, self.repl_port
+                "run_id:{},repl_offset:{},repl_next_offset:{},repl_port:{}",
+                self.run_id,
+                self.repl_offset,
+                self.repl_offset + 1,
+                self.repl_port
             )
         );
 
