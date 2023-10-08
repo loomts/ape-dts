@@ -14,7 +14,7 @@ Session.vim
 .settings/
 
 ## Configuration
-# /Cargo.lock
+Cargo.lock
 
 ## Build
 /target
