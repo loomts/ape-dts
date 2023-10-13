@@ -6,7 +6,7 @@ use dt_meta::{
     col_value::ColValue, rdb_meta_manager::RdbMetaManager, row_data::RowData, row_type::RowType,
 };
 
-use super::avro_converter_schema::AvroConverterSchema;
+use super::avro_converter_schema::{AvroConverterSchema, AvroFieldDef};
 
 #[derive(Clone)]
 pub struct AvroConverter {
@@ -14,23 +14,17 @@ pub struct AvroConverter {
     pub meta_manager: Option<RdbMetaManager>,
 }
 
+const BEFORE: &str = "before";
+const AFTER: &str = "after";
+const OPERATION: &str = "operation";
+const SCHEMA: &str = "schema";
+const TB: &str = "tb";
+const FIELDS: &str = "fields";
+
 impl AvroConverter {
-    pub const BEFORE: &str = "before";
-    pub const AFTER: &str = "after";
-    pub const ROW_TYPE: &str = "row_type";
-    pub const SCHEMA: &str = "schema";
-    pub const TB: &str = "tb";
-
-    pub const STRING_COLS: &str = "string_cols";
-    pub const LONG_COLS: &str = "long_cols";
-    pub const DOUBLE_COLS: &str = "double_cols";
-    pub const BYTES_COLS: &str = "bytes_cols";
-    pub const BOOLEAN_COLS: &str = "boolean_cols";
-    pub const NULL_COLS: &str = "null_cols";
-
     pub fn new(meta_manager: Option<RdbMetaManager>) -> Self {
         AvroConverter {
-            schema: AvroConverterSchema::get_row_data_schema(),
+            schema: AvroConverterSchema::get_avro_schema(),
             meta_manager,
         }
     }
@@ -60,26 +54,58 @@ impl AvroConverter {
     }
 
     pub fn row_data_to_avro_value(&self, row_data: RowData) -> Result<Vec<u8>, Error> {
-        let to_avro_value = |col_values: Option<HashMap<String, ColValue>>| {
+        let mut cols = vec![];
+        let mut merge_cols = |col_values: &Option<HashMap<String, ColValue>>| {
             if let Some(value) = col_values {
-                Self::col_values_to_avro(&value)
-            } else {
-                Self::col_values_to_avro(&HashMap::new())
+                for key in value.keys() {
+                    if !cols.contains(key) {
+                        cols.push(key.into())
+                    }
+                }
             }
         };
+        merge_cols(&row_data.before);
+        merge_cols(&row_data.after);
+        cols.sort();
 
-        let before = to_avro_value(row_data.before);
-        let after = to_avro_value(row_data.after);
+        // before
+        let before = if let Value::Array(v) = Self::col_values_to_avro(&cols, &row_data.before) {
+            Value::Union(1, Box::new(Value::Array(v)))
+        } else {
+            Value::Union(0, Box::new(Value::Null))
+        };
+
+        // after
+        let after = if let Value::Array(v) = Self::col_values_to_avro(&cols, &row_data.after) {
+            Value::Union(1, Box::new(Value::Array(v)))
+        } else {
+            Value::Union(0, Box::new(Value::Null))
+        };
+
+        // fields
+        let fields = if cols.is_empty() {
+            Value::Union(0, Box::new(Value::Null))
+        } else {
+            let mut fields = vec![];
+            for col in cols {
+                fields.push(AvroFieldDef {
+                    name: col,
+                    type_name: "".into(),
+                });
+            }
+            Value::Union(1, Box::new(apache_avro::to_value(fields).unwrap()))
+        };
 
         let value = Value::Record(vec![
-            (Self::SCHEMA.into(), Value::String(row_data.schema.into())),
-            (Self::TB.into(), Value::String(row_data.tb.into())),
+            (SCHEMA.into(), Value::String(row_data.schema.into())),
+            (TB.into(), Value::String(row_data.tb.into())),
             (
-                Self::ROW_TYPE.into(),
+                OPERATION.into(),
                 Value::String(row_data.row_type.to_string()),
             ),
-            (Self::BEFORE.into(), before),
-            (Self::AFTER.into(), after),
+            (FIELDS.into(), fields),
+            (BEFORE.into(), before),
+            (AFTER.into(), after),
         ]);
         Ok(to_avro_datum(&self.schema, value)?)
     }
@@ -98,81 +124,88 @@ impl AvroConverter {
             String::new()
         };
 
-        let schema = avro_to_string(avro_map.remove(Self::SCHEMA));
-        let tb = avro_to_string(avro_map.remove(Self::TB));
-        let row_type = avro_to_string(avro_map.remove(Self::ROW_TYPE));
-        let before = self.avro_to_col_values(avro_map.remove(Self::BEFORE));
-        let after = self.avro_to_col_values(avro_map.remove(Self::AFTER));
+        let schema = avro_to_string(avro_map.remove(SCHEMA));
+        let tb = avro_to_string(avro_map.remove(TB));
+        let operation = avro_to_string(avro_map.remove(OPERATION));
+        let fields = self.avro_to_fields(avro_map.remove(FIELDS));
+        let before = self.avro_to_col_values(avro_map.remove(BEFORE), &fields);
+        let after = self.avro_to_col_values(avro_map.remove(AFTER), &fields);
 
         Ok(RowData {
             schema,
             tb,
-            row_type: RowType::from_str(&row_type)?,
+            row_type: RowType::from_str(&operation)?,
             before,
             after,
             position: String::new(),
         })
     }
 
-    fn avro_to_col_values(&self, value: Option<Value>) -> Option<HashMap<String, ColValue>> {
-        let to_col_values = |avro_map: &mut HashMap<String, Value>, field: &str| {
-            let mut col_values = HashMap::new();
-            if let Some(avro_cols) = avro_map.remove(field) {
-                if let Value::Map(avro_col_map) = avro_cols {
-                    for (name, value) in avro_col_map {
-                        col_values.insert(name.to_owned(), Self::avro_to_col_value(value));
-                    }
-                }
-            }
-            col_values
-        };
-
+    fn avro_to_fields(&self, value: Option<Value>) -> Vec<AvroFieldDef> {
         if let Some(v) = value {
-            let mut avro_map = Self::avro_to_map(v);
-            let mut col_values = HashMap::new();
-            col_values.extend(to_col_values(&mut avro_map, Self::STRING_COLS));
-            col_values.extend(to_col_values(&mut avro_map, Self::LONG_COLS));
-            col_values.extend(to_col_values(&mut avro_map, Self::DOUBLE_COLS));
-            col_values.extend(to_col_values(&mut avro_map, Self::BYTES_COLS));
-            col_values.extend(to_col_values(&mut avro_map, Self::BOOLEAN_COLS));
-            col_values.extend(to_col_values(&mut avro_map, Self::NULL_COLS));
-            if col_values.is_empty() {
-                return None;
+            return apache_avro::from_value(&v).unwrap();
+        }
+        vec![]
+    }
+
+    fn avro_to_col_values(
+        &self,
+        value: Option<Value>,
+        fields: &Vec<AvroFieldDef>,
+    ) -> Option<HashMap<String, ColValue>> {
+        if value.is_none() {
+            return None;
+        }
+
+        // Some(Union(1,
+        //  Array([
+        //  Union(5, Boolean(true)),
+        //  Union(4, Bytes([5, 6, 7, 8])),
+        //  Union(3, Double(2.2)),
+        //  Union(2, Long(2)),
+        //  Union(0, Null),
+        //  Union(1, String("string_value"))
+        // ])))
+
+        if let Value::Union(1, v) = value.unwrap() {
+            if let Value::Array(mut arrary_v) = *v {
+                let mut col_values = HashMap::new();
+                for i in 0..fields.len() {
+                    let col_v = arrary_v.remove(0);
+                    col_values.insert(fields[i].name.clone(), Self::avro_to_col_value(col_v));
+                }
+                return Some(col_values);
             }
-            return Some(col_values);
         }
         None
     }
 
-    fn col_values_to_avro(col_values: &HashMap<String, ColValue>) -> Value {
-        let mut string_cols = HashMap::new();
-        let mut long_cols = HashMap::new();
-        let mut double_cols = HashMap::new();
-        let mut bytes_cols = HashMap::new();
-        let mut boolean_cols = HashMap::new();
-        let mut null_cols = HashMap::new();
-
-        for (name, value) in col_values.iter() {
-            let avro_value = Self::col_value_to_avro(&value);
-            match avro_value {
-                Value::String(_) => string_cols.insert(name.into(), avro_value),
-                Value::Long(_) => long_cols.insert(name.into(), avro_value),
-                Value::Double(_) => double_cols.insert(name.into(), avro_value),
-                Value::Bytes(_) => bytes_cols.insert(name.into(), avro_value),
-                Value::Boolean(_) => boolean_cols.insert(name.into(), avro_value),
-                Value::Null => null_cols.insert(name.into(), avro_value),
-                _ => None,
-            };
+    fn col_values_to_avro(
+        cols: &Vec<String>,
+        col_values: &Option<HashMap<String, ColValue>>,
+    ) -> Value {
+        if cols.is_empty() || col_values.is_none() {
+            return Value::Null;
         }
 
-        Value::Record(vec![
-            (Self::STRING_COLS.into(), Value::Map(string_cols)),
-            (Self::LONG_COLS.into(), Value::Map(long_cols)),
-            (Self::DOUBLE_COLS.into(), Value::Map(double_cols)),
-            (Self::BYTES_COLS.into(), Value::Map(bytes_cols)),
-            (Self::BOOLEAN_COLS.into(), Value::Map(boolean_cols)),
-            (Self::NULL_COLS.into(), Value::Map(null_cols)),
-        ])
+        let mut avro_values = vec![];
+        for col in cols {
+            if let Some(col_value) = col_values.as_ref().unwrap().get(col) {
+                let avro_value = Self::col_value_to_avro(col_value);
+                let union_position = match avro_value {
+                    Value::Null => 0,
+                    Value::String(_) => 1,
+                    Value::Long(_) => 2,
+                    Value::Double(_) => 3,
+                    Value::Bytes(_) => 4,
+                    Value::Boolean(_) => 5,
+                    // Not supported
+                    _ => 0,
+                };
+                avro_values.push(Value::Union(union_position, Box::new(avro_value)));
+            }
+        }
+        Value::Array(avro_values)
     }
 
     fn col_value_to_avro(value: &ColValue) -> Value {
@@ -220,6 +253,7 @@ impl AvroConverter {
             Value::String(v) => ColValue::String(v),
             Value::Boolean(v) => ColValue::Bool(v),
             Value::Null => ColValue::None,
+            Value::Union(_, v) => Self::avro_to_col_value(*v),
             // NOT supported
             _ => ColValue::None,
         }
