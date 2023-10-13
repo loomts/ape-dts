@@ -13,7 +13,7 @@ use super::{
     rdb_tb_meta::RdbTbMeta, row_type::RowType,
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct RowData {
     pub schema: String,
     pub tb: String,

@@ -1,6 +1,8 @@
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
 
-use crate::{extractor::base_extractor::BaseExtractor, Extractor};
+use crate::{
+    avro::avro_converter::AvroConverter, extractor::base_extractor::BaseExtractor, Extractor,
+};
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
@@ -20,14 +22,21 @@ pub struct KafkaExtractor {
     pub partition: i32,
     pub offset: i64,
     pub ack_interval_secs: u64,
+    pub avro_converter: AvroConverter,
     pub syncer: Arc<Mutex<Syncer>>,
 }
 
 #[async_trait]
 impl Extractor for KafkaExtractor {
     async fn extract(&mut self) -> Result<(), Error> {
-        let consumer = self.create_consumer();
         log_info!("KafkaCdcExtractor starts");
+        let consumer = self.create_consumer();
+        self.extract_avro(consumer).await
+    }
+}
+
+impl KafkaExtractor {
+    async fn extract(&mut self, consumer: StreamConsumer) -> Result<(), Error> {
         loop {
             let msg = consumer.recv().await.unwrap();
             let msg_position = format!("offset:{}", msg.offset());
@@ -42,9 +51,21 @@ impl Extractor for KafkaExtractor {
             }
         }
     }
-}
 
-impl KafkaExtractor {
+    async fn extract_avro(&mut self, consumer: StreamConsumer) -> Result<(), Error> {
+        loop {
+            let msg = consumer.recv().await.unwrap();
+            if let Some(payload) = msg.payload() {
+                let mut row_data = self
+                    .avro_converter
+                    .avro_value_to_row_data(payload.to_vec())
+                    .unwrap();
+                row_data.position = format!("offset:{}", msg.offset());
+                BaseExtractor::push_row(&self.buffer, row_data).await?;
+            }
+        }
+    }
+
     fn create_consumer(&self) -> StreamConsumer {
         let mut config = ClientConfig::new();
         config.set("bootstrap.servers", &self.url);

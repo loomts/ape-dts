@@ -1,3 +1,4 @@
+pub mod avro;
 pub mod check_log;
 pub mod datamarker;
 pub mod extractor;

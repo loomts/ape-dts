@@ -8,7 +8,7 @@ use concurrent_queue::ConcurrentQueue;
 use dt_common::{
     config::{
         config_enums::DbType, datamarker_config::DataMarkerConfig,
-        extractor_config::ExtractorConfig,
+        extractor_config::ExtractorConfig, sinker_config::SinkerBasicConfig,
     },
     datamarker::transaction_control::TransactionWorker,
     error::Error,
@@ -16,6 +16,7 @@ use dt_common::{
     utils::rdb_filter::RdbFilter,
 };
 use dt_connector::{
+    avro::avro_converter::AvroConverter,
     datamarker::{
         mysql::mysql_transaction_marker::MysqlTransactionMarker, traits::DataMarkerFilter,
     },
@@ -44,6 +45,7 @@ use dt_connector::{
 use dt_meta::{
     dt_data::DtData, mongo::mongo_cdc_source::MongoCdcSource,
     mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
+    rdb_meta_manager::RdbMetaManager,
 };
 use futures::TryStreamExt;
 use sqlx::Row;
@@ -448,10 +450,28 @@ impl ExtractorUtil {
         partition: i32,
         offset: i64,
         ack_interval_secs: u64,
+        sinker_basic_config: &SinkerBasicConfig,
         buffer: Arc<ConcurrentQueue<DtData>>,
         shut_down: Arc<AtomicBool>,
         syncer: Arc<Mutex<Syncer>>,
     ) -> Result<KafkaExtractor, Error> {
+        // kafka extractor may need to get sinker meta data if sinker is RDB
+        let sinker_url = &sinker_basic_config.url;
+        let meta_manager = match sinker_basic_config.db_type {
+            DbType::Mysql => {
+                let conn_pool = TaskUtil::create_mysql_conn_pool(sinker_url, 1, true).await?;
+                let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
+                Some(RdbMetaManager::from_mysql(meta_manager))
+            }
+            DbType::Pg => {
+                let conn_pool = TaskUtil::create_pg_conn_pool(sinker_url, 1, true).await?;
+                let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
+                Some(RdbMetaManager::from_pg(meta_manager))
+            }
+            _ => None,
+        };
+        let avro_converter = AvroConverter::new(meta_manager);
+
         Ok(KafkaExtractor {
             url: url.into(),
             group: group.into(),
@@ -461,6 +481,7 @@ impl ExtractorUtil {
             ack_interval_secs,
             buffer,
             shut_down,
+            avro_converter,
             syncer,
         })
     }
