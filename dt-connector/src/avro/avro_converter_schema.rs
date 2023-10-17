@@ -57,8 +57,8 @@ const SCHEMA_STR: &str = r#"
                 [
                     "null",
                     {
-                        "type": "array",
-                        "items": 
+                        "type": "map",
+                        "values": 
                         [
                             "null",
                             "string",
@@ -80,8 +80,8 @@ const SCHEMA_STR: &str = r#"
                 [
                     "null",
                     {
-                        "type": "array",
-                        "items": 
+                        "type": "map",
+                        "values": 
                         [
                             "null",
                             "string",
