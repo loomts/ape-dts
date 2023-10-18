@@ -76,7 +76,7 @@ impl KafkaExtractor {
         let consumer: StreamConsumer = config.create().unwrap();
         // only support extract data from one topic, one partition
         let mut tpl = TopicPartitionList::new();
-        if self.offset > 0 {
+        if self.offset >= 0 {
             tpl.add_partition_offset(&self.topic, self.partition, Offset::Offset(self.offset))
                 .unwrap();
         } else {
