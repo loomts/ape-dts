@@ -7,12 +7,13 @@ use concurrent_queue::ConcurrentQueue;
 use dt_common::error::Error;
 use dt_common::log_error;
 use dt_common::log_info;
-use dt_common::syncer::Syncer;
-use dt_common::utils::position_util::PositionUtil;
 use dt_common::utils::time_util::TimeUtil;
 use dt_meta::dt_data::DtData;
+use dt_meta::dt_data::DtItem;
+use dt_meta::position::Position;
 use dt_meta::redis::redis_entry::RedisEntry;
 use dt_meta::redis::redis_object::RedisCmd;
+use dt_meta::syncer::Syncer;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -20,7 +21,7 @@ use std::time::Instant;
 
 pub struct RedisCdcExtractor {
     pub conn: RedisClient,
-    pub buffer: Arc<ConcurrentQueue<DtData>>,
+    pub buffer: Arc<ConcurrentQueue<DtItem>>,
     pub run_id: String,
     pub repl_offset: u64,
     pub repl_port: u64,
@@ -86,20 +87,25 @@ impl RedisCdcExtractor {
                 let mut entry = RedisEntry::new();
                 entry.cmd = cmd;
                 entry.db_id = self.now_db_id;
-                entry.position = format!(
-                    "run_id:{},repl_offset:{},now_db_id:{}",
-                    self.run_id, self.repl_offset, self.now_db_id
-                );
-                self.push_to_buf(entry).await;
+                let position = Position::Redis {
+                    run_id: self.run_id.clone(),
+                    repl_offset: self.repl_offset,
+                    now_db_id: self.now_db_id,
+                };
+                self.push_to_buf(entry, position).await;
             }
         }
     }
 
-    async fn push_to_buf(&mut self, entry: RedisEntry) {
+    async fn push_to_buf(&mut self, entry: RedisEntry, position: Position) {
         while self.buffer.is_full() {
             TimeUtil::sleep_millis(1).await;
         }
-        self.buffer.push(DtData::Redis { entry }).unwrap();
+        let item = DtItem {
+            dt_data: DtData::Redis { entry },
+            position,
+        };
+        self.buffer.push(item).unwrap();
     }
 
     async fn handle_redis_value(&mut self, value: Value) -> Result<RedisCmd, Error> {
@@ -127,19 +133,15 @@ impl RedisCdcExtractor {
     }
 
     async fn heartbeat(&mut self) -> Result<(), Error> {
-        let position = self.syncer.lock().unwrap().checkpoint_position.clone();
-        let repl_offset = if !position.is_empty() {
-            let position_info = PositionUtil::parse(&position);
-            position_info
-                .get("repl_offset")
-                .unwrap()
-                .parse::<u64>()
-                .unwrap()
-        } else {
-            self.repl_offset as u64
-        };
+        let mut position_repl_offset = self.repl_offset;
+        if let Position::Redis { repl_offset, .. } = self.syncer.lock().unwrap().checkpoint_position
+        {
+            if repl_offset >= self.repl_offset {
+                position_repl_offset = repl_offset
+            }
+        }
 
-        let repl_offset = &repl_offset.to_string();
+        let repl_offset = &position_repl_offset.to_string();
         let args = vec!["replconf", "ack", repl_offset];
         let cmd = RedisCmd::from_str_args(&args);
         log_info!("heartbeat cmd: {:?}", cmd);

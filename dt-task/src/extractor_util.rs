@@ -12,7 +12,6 @@ use dt_common::{
     },
     datamarker::transaction_control::TransactionWorker,
     error::Error,
-    syncer::Syncer,
     utils::rdb_filter::RdbFilter,
 };
 use dt_connector::{
@@ -43,9 +42,9 @@ use dt_connector::{
     },
 };
 use dt_meta::{
-    dt_data::DtData, mongo::mongo_cdc_source::MongoCdcSource,
+    dt_data::DtItem, mongo::mongo_cdc_source::MongoCdcSource,
     mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
-    rdb_meta_manager::RdbMetaManager,
+    rdb_meta_manager::RdbMetaManager, syncer::Syncer,
 };
 use futures::TryStreamExt;
 use sqlx::Row;
@@ -168,7 +167,7 @@ impl ExtractorUtil {
         binlog_filename: &str,
         binlog_position: u32,
         server_id: u64,
-        buffer: Arc<ConcurrentQueue<DtData>>,
+        buffer: Arc<ConcurrentQueue<DtItem>>,
         filter: RdbFilter,
         log_level: &str,
         shut_down: Arc<AtomicBool>,
@@ -197,7 +196,7 @@ impl ExtractorUtil {
         slot_name: &str,
         start_lsn: &str,
         heartbeat_interval_secs: u64,
-        buffer: Arc<ConcurrentQueue<DtData>>,
+        buffer: Arc<ConcurrentQueue<DtItem>>,
         filter: RdbFilter,
         log_level: &str,
         shut_down: Arc<AtomicBool>,
@@ -227,7 +226,7 @@ impl ExtractorUtil {
         tb: &str,
         slice_size: usize,
         resumer: SnapshotResumer,
-        buffer: Arc<ConcurrentQueue<DtData>>,
+        buffer: Arc<ConcurrentQueue<DtItem>>,
         log_level: &str,
         shut_down: Arc<AtomicBool>,
     ) -> Result<MysqlSnapshotExtractor, Error> {
@@ -252,7 +251,7 @@ impl ExtractorUtil {
         url: &str,
         check_log_dir: &str,
         batch_size: usize,
-        buffer: Arc<ConcurrentQueue<DtData>>,
+        buffer: Arc<ConcurrentQueue<DtItem>>,
         log_level: &str,
         shut_down: Arc<AtomicBool>,
     ) -> Result<MysqlCheckExtractor, Error> {
@@ -274,7 +273,7 @@ impl ExtractorUtil {
         url: &str,
         check_log_dir: &str,
         batch_size: usize,
-        buffer: Arc<ConcurrentQueue<DtData>>,
+        buffer: Arc<ConcurrentQueue<DtItem>>,
         log_level: &str,
         shut_down: Arc<AtomicBool>,
     ) -> Result<PgCheckExtractor, Error> {
@@ -299,7 +298,7 @@ impl ExtractorUtil {
         tb: &str,
         slice_size: usize,
         resumer: SnapshotResumer,
-        buffer: Arc<ConcurrentQueue<DtData>>,
+        buffer: Arc<ConcurrentQueue<DtItem>>,
         log_level: &str,
         shut_down: Arc<AtomicBool>,
     ) -> Result<PgSnapshotExtractor, Error> {
@@ -324,7 +323,7 @@ impl ExtractorUtil {
         db: &str,
         tb: &str,
         resumer: SnapshotResumer,
-        buffer: Arc<ConcurrentQueue<DtData>>,
+        buffer: Arc<ConcurrentQueue<DtItem>>,
         shut_down: Arc<AtomicBool>,
     ) -> Result<MongoSnapshotExtractor, Error> {
         let mongo_client = TaskUtil::create_mongo_client(url).await.unwrap();
@@ -343,7 +342,7 @@ impl ExtractorUtil {
         resume_token: &str,
         start_timestamp: &u32,
         source: &str,
-        buffer: Arc<ConcurrentQueue<DtData>>,
+        buffer: Arc<ConcurrentQueue<DtItem>>,
         filter: RdbFilter,
         shut_down: Arc<AtomicBool>,
     ) -> Result<MongoCdcExtractor, Error> {
@@ -362,7 +361,7 @@ impl ExtractorUtil {
     pub async fn create_mysql_struct_extractor(
         url: &str,
         db: &str,
-        buffer: Arc<ConcurrentQueue<DtData>>,
+        buffer: Arc<ConcurrentQueue<DtItem>>,
         filter: RdbFilter,
         log_level: &str,
         shut_down: Arc<AtomicBool>,
@@ -383,7 +382,7 @@ impl ExtractorUtil {
     pub async fn create_pg_struct_extractor(
         url: &str,
         db: &str,
-        buffer: Arc<ConcurrentQueue<DtData>>,
+        buffer: Arc<ConcurrentQueue<DtItem>>,
         filter: RdbFilter,
         log_level: &str,
         shut_down: Arc<AtomicBool>,
@@ -404,7 +403,7 @@ impl ExtractorUtil {
     pub async fn create_redis_snapshot_extractor(
         url: &str,
         repl_port: u64,
-        buffer: Arc<ConcurrentQueue<DtData>>,
+        buffer: Arc<ConcurrentQueue<DtItem>>,
         shut_down: Arc<AtomicBool>,
     ) -> Result<RedisSnapshotExtractor, Error> {
         // let conn = TaskUtil::create_redis_conn(url).await?;
@@ -424,7 +423,7 @@ impl ExtractorUtil {
         repl_port: u64,
         now_db_id: i64,
         heartbeat_interval_secs: u64,
-        buffer: Arc<ConcurrentQueue<DtData>>,
+        buffer: Arc<ConcurrentQueue<DtItem>>,
         shut_down: Arc<AtomicBool>,
         syncer: Arc<Mutex<Syncer>>,
     ) -> Result<RedisCdcExtractor, Error> {
@@ -451,7 +450,7 @@ impl ExtractorUtil {
         offset: i64,
         ack_interval_secs: u64,
         sinker_basic_config: &SinkerBasicConfig,
-        buffer: Arc<ConcurrentQueue<DtData>>,
+        buffer: Arc<ConcurrentQueue<DtItem>>,
         shut_down: Arc<AtomicBool>,
         syncer: Arc<Mutex<Syncer>>,
     ) -> Result<KafkaExtractor, Error> {

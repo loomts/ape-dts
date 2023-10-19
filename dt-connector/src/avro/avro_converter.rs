@@ -137,7 +137,6 @@ impl AvroConverter {
             row_type: RowType::from_str(&operation)?,
             before,
             after,
-            position: String::new(),
         })
     }
 
@@ -314,7 +313,6 @@ mod tests {
             row_type: RowType::Insert,
             before: None,
             after: Some(after),
-            position: String::new(),
         };
 
         // insert
