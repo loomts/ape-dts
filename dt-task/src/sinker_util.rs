@@ -9,7 +9,6 @@ use dt_common::{
     error::Error,
 };
 use dt_connector::{
-    avro::avro_converter::AvroConverter,
     sinker::{
         foxlake_sinker::FoxlakeSinker,
         kafka::{kafka_router::KafkaRouter, kafka_sinker::KafkaSinker},
@@ -26,8 +25,9 @@ use dt_connector::{
     Sinker,
 };
 use dt_meta::{
-    mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
-    rdb_meta_manager::RdbMetaManager, redis::redis_write_method::RedisWriteMethod,
+    avro::avro_converter::AvroConverter, mysql::mysql_meta_manager::MysqlMetaManager,
+    pg::pg_meta_manager::PgMetaManager, rdb_meta_manager::RdbMetaManager,
+    redis::redis_write_method::RedisWriteMethod,
 };
 use kafka::producer::{Producer, RequiredAcks};
 use reqwest::Client;

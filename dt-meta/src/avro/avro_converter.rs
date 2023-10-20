@@ -2,7 +2,8 @@ use std::{collections::HashMap, str::FromStr};
 
 use apache_avro::{from_avro_datum, to_avro_datum, types::Value, Schema};
 use dt_common::error::Error;
-use dt_meta::{
+
+use crate::{
     col_value::ColValue, rdb_meta_manager::RdbMetaManager, row_data::RowData, row_type::RowType,
 };
 
@@ -267,7 +268,6 @@ impl AvroConverter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dt_meta::row_type::RowType;
 
     const STRING_COL: &str = "string_col";
     const LONG_COL: &str = "long_col";

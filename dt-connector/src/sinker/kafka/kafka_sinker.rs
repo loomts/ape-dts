@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 
-use crate::{avro::avro_converter::AvroConverter, call_batch_fn, Sinker};
+use crate::{call_batch_fn, Sinker};
 
 use dt_common::error::Error;
 
-use dt_meta::dt_data::DtData;
+use dt_meta::{avro::avro_converter::AvroConverter, dt_data::DtData};
 
 use kafka::producer::{Producer, Record};
 

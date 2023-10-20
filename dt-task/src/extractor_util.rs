@@ -15,7 +15,6 @@ use dt_common::{
     utils::rdb_filter::RdbFilter,
 };
 use dt_connector::{
-    avro::avro_converter::AvroConverter,
     datamarker::{
         mysql::mysql_transaction_marker::MysqlTransactionMarker, traits::DataMarkerFilter,
     },
@@ -42,7 +41,7 @@ use dt_connector::{
     },
 };
 use dt_meta::{
-    dt_data::DtItem, mongo::mongo_cdc_source::MongoCdcSource,
+    avro::avro_converter::AvroConverter, dt_data::DtItem, mongo::mongo_cdc_source::MongoCdcSource,
     mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
     rdb_meta_manager::RdbMetaManager, syncer::Syncer,
 };
