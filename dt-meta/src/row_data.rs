@@ -20,8 +20,6 @@ pub struct RowData {
     pub row_type: RowType,
     pub before: Option<HashMap<String, ColValue>>,
     pub after: Option<HashMap<String, ColValue>>,
-    #[serde(skip)]
-    pub position: String,
 }
 
 impl RowData {
@@ -50,7 +48,6 @@ impl RowData {
             before: None,
             after: Some(after),
             row_type: RowType::Insert,
-            position: String::new(),
         }
     }
 

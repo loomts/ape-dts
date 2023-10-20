@@ -11,11 +11,10 @@ use dt_common::{
         extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
     },
     error::Error,
-    syncer::Syncer,
     utils::rdb_filter::RdbFilter,
 };
 use dt_connector::{extractor::snapshot_resumer::SnapshotResumer, Extractor};
-use dt_meta::{dt_data::DtData, row_type::RowType};
+use dt_meta::{dt_data::DtItem, position::Position, row_type::RowType, syncer::Syncer};
 use dt_pipeline::{base_pipeline::BasePipeline, Pipeline};
 
 use log4rs::config::RawConfig;
@@ -129,7 +128,7 @@ impl TaskRunner {
         let buffer = Arc::new(ConcurrentQueue::bounded(self.config.pipeline.buffer_size));
         let shut_down = Arc::new(AtomicBool::new(false));
         let syncer = Arc::new(Mutex::new(Syncer {
-            checkpoint_position: String::new(),
+            checkpoint_position: Position::None,
         }));
 
         let mut extractor = self
@@ -159,7 +158,7 @@ impl TaskRunner {
 
     async fn create_pipeline(
         &self,
-        buffer: Arc<ConcurrentQueue<DtData>>,
+        buffer: Arc<ConcurrentQueue<DtItem>>,
         shut_down: Arc<AtomicBool>,
         syncer: Arc<Mutex<Syncer>>,
     ) -> Result<Box<dyn Pipeline + Send>, Error> {
@@ -185,7 +184,7 @@ impl TaskRunner {
     async fn create_extractor(
         &self,
         extractor_config: &ExtractorConfig,
-        buffer: Arc<ConcurrentQueue<DtData>>,
+        buffer: Arc<ConcurrentQueue<DtItem>>,
         shut_down: Arc<AtomicBool>,
         syncer: Arc<Mutex<Syncer>>,
     ) -> Result<Box<dyn Extractor + Send>, Error> {

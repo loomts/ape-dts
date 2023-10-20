@@ -6,15 +6,15 @@ use crate::{
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
-use dt_common::{error::Error, log_info, syncer::Syncer};
-use dt_meta::dt_data::DtData;
+use dt_common::{error::Error, log_info};
+use dt_meta::{dt_data::DtItem, position::Position, syncer::Syncer};
 use rdkafka::{
     consumer::{Consumer, StreamConsumer},
     ClientConfig, Message, Offset, TopicPartitionList,
 };
 
 pub struct KafkaExtractor {
-    pub buffer: Arc<ConcurrentQueue<DtData>>,
+    pub buffer: Arc<ConcurrentQueue<DtItem>>,
     pub shut_down: Arc<AtomicBool>,
     pub url: String,
     pub group: String,
@@ -36,32 +36,20 @@ impl Extractor for KafkaExtractor {
 }
 
 impl KafkaExtractor {
-    async fn extract(&mut self, consumer: StreamConsumer) -> Result<(), Error> {
-        loop {
-            let msg = consumer.recv().await.unwrap();
-            let msg_position = format!("offset:{}", msg.offset());
-            if let Some(payload) = msg.payload() {
-                let mut dt_data: DtData = serde_json::from_slice(payload).unwrap();
-                match &mut dt_data {
-                    DtData::Commit { position, .. } => *position = msg_position,
-                    DtData::Dml { row_data } => row_data.position = msg_position,
-                    _ => {}
-                };
-                BaseExtractor::push_dt_data(&self.buffer, dt_data).await?;
-            }
-        }
-    }
-
     async fn extract_avro(&mut self, consumer: StreamConsumer) -> Result<(), Error> {
         loop {
             let msg = consumer.recv().await.unwrap();
             if let Some(payload) = msg.payload() {
-                let mut row_data = self
+                let row_data = self
                     .avro_converter
                     .avro_value_to_row_data(payload.to_vec())
                     .unwrap();
-                row_data.position = format!("offset:{}", msg.offset());
-                BaseExtractor::push_row(&self.buffer, row_data).await?;
+                let position = Position::Kafka {
+                    topic: self.topic.clone(),
+                    partition: self.partition,
+                    offset: msg.offset(),
+                };
+                BaseExtractor::push_row(&self.buffer, row_data, position).await?;
             }
         }
     }

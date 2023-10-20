@@ -3,7 +3,8 @@ use concurrent_queue::ConcurrentQueue;
 use dt_common::log_position;
 use dt_common::utils::time_util::TimeUtil;
 use dt_common::{error::Error, log_info};
-use dt_meta::dt_data::DtData;
+use dt_meta::dt_data::{DtData, DtItem};
+use dt_meta::position::Position;
 use dt_meta::redis::redis_object::RedisCmd;
 
 use std::sync::Arc;
@@ -17,7 +18,7 @@ use super::redis_client::RedisClient;
 
 pub struct RedisPsyncExtractor<'a> {
     pub conn: &'a mut RedisClient,
-    pub buffer: Arc<ConcurrentQueue<DtData>>,
+    pub buffer: Arc<ConcurrentQueue<DtItem>>,
     pub run_id: String,
     pub repl_offset: u64,
     pub now_db_id: i64,
@@ -138,7 +139,11 @@ impl RedisPsyncExtractor<'_> {
                     TimeUtil::sleep_millis(1).await;
                 }
                 self.now_db_id = entry.db_id;
-                self.buffer.push(DtData::Redis { entry }).unwrap();
+                let item = DtItem {
+                    dt_data: DtData::Redis { entry },
+                    position: Position::None,
+                };
+                self.buffer.push(item).unwrap();
             }
 
             if loader.is_end {

@@ -26,28 +26,6 @@ impl Sinker for KafkaSinker {
 }
 
 impl KafkaSinker {
-    async fn send(
-        &mut self,
-        data: &mut [DtData],
-        sinked_count: usize,
-        batch_size: usize,
-    ) -> Result<(), Error> {
-        let topic = self.kafka_router.get_route("", "");
-
-        let mut messages = Vec::new();
-        for (_, dt_data) in data.iter().skip(sinked_count).take(batch_size).enumerate() {
-            messages.push(Record {
-                key: (),
-                value: dt_data.to_string(),
-                topic: &topic,
-                partition: -1,
-            });
-        }
-
-        self.producer.send_all(&messages).unwrap();
-        Ok(())
-    }
-
     async fn send_avro(
         &mut self,
         data: &mut [DtData],

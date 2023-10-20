@@ -5,14 +5,14 @@ use crate::Extractor;
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 use dt_common::error::Error;
-use dt_meta::dt_data::DtData;
+use dt_meta::dt_data::DtItem;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 pub struct RedisSnapshotExtractor {
     pub conn: RedisClient,
     pub repl_port: u64,
-    pub buffer: Arc<ConcurrentQueue<DtData>>,
+    pub buffer: Arc<ConcurrentQueue<DtItem>>,
     pub shut_down: Arc<AtomicBool>,
 }
 
