@@ -1,13 +1,13 @@
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
 
-use crate::{
-    avro::avro_converter::AvroConverter, extractor::base_extractor::BaseExtractor, Extractor,
-};
+use crate::{extractor::base_extractor::BaseExtractor, Extractor};
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{error::Error, log_info};
-use dt_meta::{dt_data::DtItem, position::Position, syncer::Syncer};
+use dt_meta::{
+    avro::avro_converter::AvroConverter, dt_data::DtItem, position::Position, syncer::Syncer,
+};
 use rdkafka::{
     consumer::{Consumer, StreamConsumer},
     ClientConfig, Message, Offset, TopicPartitionList,
