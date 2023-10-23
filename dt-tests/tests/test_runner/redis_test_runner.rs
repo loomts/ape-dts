@@ -17,7 +17,13 @@ use redis::{Connection, ConnectionLike, Value};
 const SRC: &str = "src";
 const DST: &str = "dst";
 
-const SYSTEM_KEYS: [&str; 4] = ["backup1", "backup2", "backup3", "backup4"];
+const SYSTEM_KEYS: [&str; 5] = [
+    "backup1",
+    "backup2",
+    "backup3",
+    "backup4",
+    "ape_dts_heartbeat_key",
+];
 
 pub struct RedisTestRunner {
     pub base: BaseTestRunner,

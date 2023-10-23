@@ -27,7 +27,7 @@ use tokio_postgres::replication::LogicalReplicationStream;
 use dt_common::{
     error::Error,
     log_error, log_info,
-    utils::{position_util::PositionUtil, rdb_filter::RdbFilter, time_util::TimeUtil},
+    utils::{rdb_filter::RdbFilter, time_util::TimeUtil},
 };
 
 use crate::{extractor::pg::pg_cdc_client::PgCdcClient, Extractor};
@@ -87,7 +87,7 @@ impl PgCdcExtractor {
         let get_position = |lsn: &str, timestamp: i64| -> Position {
             Position::PgCdc {
                 lsn: lsn.into(),
-                timestamp: PositionUtil::format_timestamp_millis(
+                timestamp: Position::format_timestamp_millis(
                     timestamp / 1000 + SECS_FROM_1970_TO_2000 * 1000,
                 ),
             }

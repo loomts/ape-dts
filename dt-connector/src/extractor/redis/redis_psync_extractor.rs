@@ -152,6 +152,7 @@ impl RedisPsyncExtractor<'_> {
             }
         }
 
+        // this log to mark the snapshot rdb was all received
         log_position!(
             "current_position | {}",
             format!(

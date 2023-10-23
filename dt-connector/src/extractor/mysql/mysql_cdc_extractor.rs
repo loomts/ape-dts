@@ -27,11 +27,7 @@ use mysql_binlog_connector_rust::{
     },
 };
 
-use dt_common::{
-    error::Error,
-    log_error, log_info,
-    utils::{position_util::PositionUtil, rdb_filter::RdbFilter},
-};
+use dt_common::{error::Error, log_error, log_info, utils::rdb_filter::RdbFilter};
 
 use crate::{
     datamarker::traits::DataMarkerFilter, extractor::base_extractor::BaseExtractor, Extractor,
@@ -104,7 +100,7 @@ impl MysqlCdcExtractor {
             server_id: String::new(),
             binlog_filename: binlog_filename.into(),
             next_event_position: header.next_event_position,
-            timestamp: PositionUtil::format_timestamp_millis(header.timestamp as i64 * 1000),
+            timestamp: Position::format_timestamp_millis(header.timestamp as i64 * 1000),
         };
 
         match data {
