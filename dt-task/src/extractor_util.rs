@@ -403,6 +403,7 @@ impl ExtractorUtil {
         url: &str,
         repl_port: u64,
         buffer: Arc<ConcurrentQueue<DtItem>>,
+        filter: RdbFilter,
         shut_down: Arc<AtomicBool>,
     ) -> Result<RedisSnapshotExtractor, Error> {
         // let conn = TaskUtil::create_redis_conn(url).await?;
@@ -412,6 +413,7 @@ impl ExtractorUtil {
             buffer,
             shut_down,
             repl_port,
+            filter,
         })
     }
 
@@ -424,6 +426,7 @@ impl ExtractorUtil {
         heartbeat_interval_secs: u64,
         heartbeat_key: &str,
         buffer: Arc<ConcurrentQueue<DtItem>>,
+        filter: RdbFilter,
         shut_down: Arc<AtomicBool>,
         syncer: Arc<Mutex<Syncer>>,
     ) -> Result<RedisCdcExtractor, Error> {
@@ -440,6 +443,7 @@ impl ExtractorUtil {
             syncer,
             repl_port,
             now_db_id: now_db_id,
+            filter,
         })
     }
 
