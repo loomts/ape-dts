@@ -6,11 +6,7 @@ use std::{
 use async_trait::async_trait;
 use chrono::Utc;
 use concurrent_queue::ConcurrentQueue;
-use dt_common::{
-    error::Error,
-    log_info,
-    utils::{position_util::PositionUtil, rdb_filter::RdbFilter},
-};
+use dt_common::{error::Error, log_info, utils::rdb_filter::RdbFilter};
 use dt_meta::{
     col_value::ColValue,
     dt_data::DtItem,
@@ -259,7 +255,7 @@ impl MongoCdcExtractor {
         let position = Position::MongoCdc {
             resume_token: String::new(),
             operation_time: ts.time,
-            timestamp: PositionUtil::format_timestamp_millis(ts.time as i64 * 1000),
+            timestamp: Position::format_timestamp_millis(ts.time as i64 * 1000),
         };
         let row_data = RowData {
             schema: db,
@@ -295,7 +291,7 @@ impl MongoCdcExtractor {
                     Position::MongoCdc {
                         resume_token: json!(resume_token).to_string(),
                         operation_time: operation_time.time,
-                        timestamp: PositionUtil::format_timestamp_millis(
+                        timestamp: Position::format_timestamp_millis(
                             operation_time.time as i64 * 1000,
                         ),
                     }

@@ -388,6 +388,7 @@ impl TaskRunner {
                 now_db_id,
                 repl_port,
                 heartbeat_interval_secs,
+                heartbeat_key,
             } => {
                 let extractor = ExtractorUtil::create_redis_cdc_extractor(
                     url,
@@ -396,6 +397,7 @@ impl TaskRunner {
                     *repl_port,
                     *now_db_id,
                     *heartbeat_interval_secs,
+                    heartbeat_key,
                     buffer,
                     shut_down,
                     syncer,
