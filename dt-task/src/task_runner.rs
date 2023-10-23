@@ -374,8 +374,9 @@ impl TaskRunner {
             }
 
             ExtractorConfig::RedisSnapshot { url, repl_port } => {
+                let filter = RdbFilter::from_config(&self.config.filter, DbType::Redis)?;
                 let extractor = ExtractorUtil::create_redis_snapshot_extractor(
-                    url, *repl_port, buffer, shut_down,
+                    url, *repl_port, buffer, filter, shut_down,
                 )
                 .await?;
                 Box::new(extractor)
@@ -390,6 +391,7 @@ impl TaskRunner {
                 heartbeat_interval_secs,
                 heartbeat_key,
             } => {
+                let filter = RdbFilter::from_config(&self.config.filter, DbType::Redis)?;
                 let extractor = ExtractorUtil::create_redis_cdc_extractor(
                     url,
                     run_id,
@@ -399,6 +401,7 @@ impl TaskRunner {
                     *heartbeat_interval_secs,
                     heartbeat_key,
                     buffer,
+                    filter,
                     shut_down,
                     syncer,
                 )

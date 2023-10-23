@@ -131,6 +131,10 @@ impl RedisString {
     pub fn as_bytes(&self) -> &[u8] {
         &self.bytes
     }
+
+    pub fn to_string(&self) -> String {
+        String::from_utf8_lossy(&self.bytes).to_string()
+    }
 }
 
 impl From<Vec<u8>> for RedisString {

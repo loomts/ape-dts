@@ -7,8 +7,7 @@ use concurrent_queue::ConcurrentQueue;
 use dt_common::error::Error;
 use dt_common::log_error;
 use dt_common::log_info;
-use dt_common::utils::time_util::TimeUtil;
-use dt_meta::dt_data::DtData;
+use dt_common::utils::rdb_filter::RdbFilter;
 use dt_meta::dt_data::DtItem;
 use dt_meta::position::Position;
 use dt_meta::redis::redis_entry::RedisEntry;
@@ -32,6 +31,7 @@ pub struct RedisCdcExtractor {
     pub heartbeat_key: String,
     pub shut_down: Arc<AtomicBool>,
     pub syncer: Arc<Mutex<Syncer>>,
+    pub filter: RdbFilter,
 }
 
 #[async_trait]
@@ -44,6 +44,7 @@ impl Extractor for RedisCdcExtractor {
             repl_offset: self.repl_offset,
             repl_port: self.repl_port,
             now_db_id: self.now_db_id,
+            filter: self.filter.clone(),
         };
 
         // receive rdb data if needed
@@ -105,20 +106,10 @@ impl RedisCdcExtractor {
                     now_db_id: self.now_db_id,
                     timestamp: heartbeat_timestamp.clone(),
                 };
-                self.push_to_buf(entry, position).await;
+                RedisPsyncExtractor::push_to_buf(&self.buffer, &mut self.filter, entry, position)
+                    .await;
             }
         }
-    }
-
-    async fn push_to_buf(&mut self, entry: RedisEntry, position: Position) {
-        while self.buffer.is_full() {
-            TimeUtil::sleep_millis(1).await;
-        }
-        let item = DtItem {
-            dt_data: DtData::Redis { entry },
-            position,
-        };
-        self.buffer.push(item).unwrap();
     }
 
     async fn handle_redis_value(&mut self, value: Value) -> Result<RedisCmd, Error> {
