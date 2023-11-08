@@ -11,6 +11,9 @@ pub enum Position {
         offset: i64,
     },
     RdbSnapshot {
+        db_type: String,
+        schema: String,
+        tb: String,
         order_col: String,
         value: String,
     },

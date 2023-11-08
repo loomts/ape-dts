@@ -8,7 +8,7 @@ use std::{
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
-use dt_common::{error::Error, log_info, utils::time_util::TimeUtil};
+use dt_common::{config::config_enums::DbType, error::Error, log_info, utils::time_util::TimeUtil};
 use dt_meta::{
     col_value::ColValue, dt_data::DtItem, mongo::mongo_constant::MongoConstants,
     position::Position, row_data::RowData, row_type::RowType,
@@ -84,6 +84,9 @@ impl MongoSnapshotExtractor {
                 before: None,
             };
             let position = Position::RdbSnapshot {
+                db_type: DbType::Mongo.to_string(),
+                schema: self.db.clone(),
+                tb: self.tb.clone(),
                 order_col: MongoConstants::ID.into(),
                 value: id,
             };
