@@ -116,24 +116,8 @@ impl SinkerUtil {
             } => {
                 let router = KafkaRouter::from_config(&task_config.router)?;
                 // kafka sinker may need meta data from RDB extractor
-                let extractor_url = &task_config.extractor_basic.url;
-                let meta_manager = match task_config.extractor_basic.db_type {
-                    DbType::Mysql => {
-                        let conn_pool =
-                            TaskUtil::create_mysql_conn_pool(extractor_url, 1, true).await?;
-                        let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
-                        Some(RdbMetaManager::from_mysql(meta_manager))
-                    }
-                    DbType::Pg => {
-                        let conn_pool =
-                            TaskUtil::create_pg_conn_pool(extractor_url, 1, true).await?;
-                        let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
-                        Some(RdbMetaManager::from_pg(meta_manager))
-                    }
-                    _ => None,
-                };
+                let meta_manager = Self::get_extractor_meta_manager(&task_config).await?;
                 let avro_converter = AvroConverter::new(meta_manager);
-
                 SinkerUtil::create_kafka_sinker(
                     url,
                     &router,
@@ -211,11 +195,14 @@ impl SinkerUtil {
                 batch_size,
                 method,
             } => {
+                // redis sinker may need meta data from RDB extractor
+                let meta_manager = Self::get_extractor_meta_manager(&task_config).await?;
                 SinkerUtil::create_redis_sinker(
                     url,
                     task_config.parallelizer.parallel_size,
                     *batch_size,
                     method,
+                    meta_manager,
                 )
                 .await?
             }
@@ -347,11 +334,13 @@ impl SinkerUtil {
         let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
         for _ in 0..parallel_size {
             // TODO, authentication, https://github.com/kafka-rust/kafka-rust/blob/master/examples/example-ssl.rs
+
             let producer = Producer::from_hosts(brokers.clone())
                 .with_ack_timeout(std::time::Duration::from_secs(ack_timeout_secs))
                 .with_required_acks(acks)
                 .create()
                 .unwrap();
+
             let sinker = KafkaSinker {
                 batch_size,
                 kafka_router: router.clone(),
@@ -482,6 +471,7 @@ impl SinkerUtil {
         parallel_size: usize,
         batch_size: usize,
         method: &str,
+        meta_manager: Option<RdbMetaManager>,
     ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
         let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
         for _ in 0..parallel_size {
@@ -494,9 +484,30 @@ impl SinkerUtil {
                 now_db_id: -1,
                 version,
                 method,
+                meta_manager: meta_manager.clone(),
             };
             sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
         }
         Ok(sub_sinkers)
+    }
+
+    async fn get_extractor_meta_manager(
+        task_config: &TaskConfig,
+    ) -> Result<Option<RdbMetaManager>, Error> {
+        let extractor_url = &task_config.extractor_basic.url;
+        let meta_manager = match task_config.extractor_basic.db_type {
+            DbType::Mysql => {
+                let conn_pool = TaskUtil::create_mysql_conn_pool(extractor_url, 1, true).await?;
+                let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
+                Some(RdbMetaManager::from_mysql(meta_manager))
+            }
+            DbType::Pg => {
+                let conn_pool = TaskUtil::create_pg_conn_pool(extractor_url, 1, true).await?;
+                let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
+                Some(RdbMetaManager::from_pg(meta_manager))
+            }
+            _ => None,
+        };
+        Ok(meta_manager)
     }
 }

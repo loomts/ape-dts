@@ -3,6 +3,7 @@ mod mongo_to_mongo;
 mod mysql_to_foxlake;
 mod mysql_to_kafka_to_mysql;
 mod mysql_to_mysql;
+mod mysql_to_redis;
 mod pg_to_pg;
 mod redis_to_redis;
 mod test_config_util;

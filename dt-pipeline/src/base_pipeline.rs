@@ -9,7 +9,7 @@ use std::{
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
-    config::{config_enums::DbType, sinker_config::SinkerBasicConfig},
+    config::sinker_config::SinkerBasicConfig,
     error::Error,
     log_info, log_monitor, log_position,
     monitor::{counter::Counter, statistic_counter::StatisticCounter},
@@ -36,6 +36,12 @@ pub struct BasePipeline {
     pub checkpoint_interval_secs: u64,
     pub batch_sink_interval_secs: u64,
     pub syncer: Arc<Mutex<Syncer>>,
+}
+
+enum SinkMethod {
+    Raw,
+    Ddl,
+    Dml,
 }
 
 #[async_trait]
@@ -76,18 +82,11 @@ impl Pipeline for BasePipeline {
             // process all row_datas in buffer at a time
             let mut sink_count = 0;
             if !data.is_empty() {
-                let (count, last_received, last_commit);
-                let sink_raw = match self.sinker_basic_config.db_type {
-                    DbType::Redis | DbType::Kafka => true,
-                    _ => false,
+                let (count, last_received, last_commit) = match Self::get_sink_method(&data) {
+                    SinkMethod::Ddl => self.sink_ddl(data).await.unwrap(),
+                    SinkMethod::Dml => self.sink_dml(data).await.unwrap(),
+                    SinkMethod::Raw => self.sink_raw(data).await.unwrap(),
                 };
-                if sink_raw {
-                    (count, last_received, last_commit) = self.sink_raw(data).await.unwrap();
-                } else if data[0].is_ddl() {
-                    (count, last_received, last_commit) = self.sink_ddl(data).await.unwrap();
-                } else {
-                    (count, last_received, last_commit) = self.sink_dml(data).await.unwrap();
-                }
 
                 sink_count = count;
                 last_received_position = last_received;
@@ -246,6 +245,20 @@ impl BasePipeline {
         }
 
         (result, last_received_position, last_commit_position)
+    }
+
+    fn get_sink_method(data: &Vec<DtItem>) -> SinkMethod {
+        for i in data {
+            match i.dt_data {
+                DtData::Ddl { .. } => return SinkMethod::Ddl,
+                DtData::Dml { .. } => return SinkMethod::Dml,
+                DtData::Redis { .. } => return SinkMethod::Raw,
+                DtData::Begin {} | DtData::Commit { .. } => {
+                    continue;
+                }
+            }
+        }
+        SinkMethod::Raw
     }
 
     #[inline(always)]

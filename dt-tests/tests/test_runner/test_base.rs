@@ -9,8 +9,8 @@ use crate::test_runner::rdb_test_runner::DST;
 use super::{
     mongo_test_runner::MongoTestRunner, precheck_test_runner::PrecheckTestRunner,
     rdb_check_test_runner::RdbCheckTestRunner, rdb_kafka_rdb_test_runner::RdbKafkaRdbTestRunner,
-    rdb_struct_test_runner::RdbStructTestRunner, rdb_test_runner::RdbTestRunner,
-    redis_test_runner::RedisTestRunner,
+    rdb_redis_test_runner::RdbRedisTestRunner, rdb_struct_test_runner::RdbStructTestRunner,
+    rdb_test_runner::RdbTestRunner, redis_test_runner::RedisTestRunner,
 };
 
 pub struct TestBase {}
@@ -122,14 +122,14 @@ impl TestBase {
     }
 
     pub async fn run_redis_rejson_snapshot_test(test_dir: &str) {
-        let mut runner = RedisTestRunner::new(test_dir, vec![' '], vec![('\'', '\'')])
+        let mut runner = RedisTestRunner::new(test_dir, vec![('\'', '\'')])
             .await
             .unwrap();
         runner.run_snapshot_test().await.unwrap();
     }
 
     pub async fn run_redis_redisearch_snapshot_test(test_dir: &str) {
-        let mut runner = RedisTestRunner::new(test_dir, vec![' '], vec![('\'', '\'')])
+        let mut runner = RedisTestRunner::new(test_dir, vec![('\'', '\'')])
             .await
             .unwrap();
         runner.run_snapshot_test().await.unwrap();
@@ -144,7 +144,7 @@ impl TestBase {
     }
 
     pub async fn run_redis_rejson_cdc_test(test_dir: &str, start_millis: u64, parse_millis: u64) {
-        let mut runner = RedisTestRunner::new(test_dir, vec![' '], vec![('\'', '\'')])
+        let mut runner = RedisTestRunner::new(test_dir, vec![('\'', '\'')])
             .await
             .unwrap();
         runner
@@ -202,5 +202,18 @@ impl TestBase {
             .run_snapshot_test(start_millis, parse_millis)
             .await
             .unwrap();
+    }
+
+    pub async fn run_rdb_redis_cdc_test(test_dir: &str, start_millis: u64, parse_millis: u64) {
+        let mut runner = RdbRedisTestRunner::new(test_dir).await.unwrap();
+        runner
+            .run_cdc_test(start_millis, parse_millis)
+            .await
+            .unwrap();
+    }
+
+    pub async fn run_rdb_redis_snapshot_test(test_dir: &str) {
+        let mut runner = RdbRedisTestRunner::new(test_dir).await.unwrap();
+        runner.run_snapshot_test().await.unwrap();
     }
 }

@@ -95,39 +95,3 @@ pub struct ExtractorBasicConfig {
     pub extract_type: ExtractType,
     pub url: String,
 }
-
-impl ExtractorConfig {
-    pub fn get_db_type(&self) -> DbType {
-        match self {
-            Self::MysqlStruct { .. }
-            | Self::MysqlSnapshot { .. }
-            | Self::MysqlCdc { .. }
-            | Self::MysqlCheck { .. } => DbType::Mysql,
-            Self::PgStruct { .. }
-            | Self::PgSnapshot { .. }
-            | Self::PgCdc { .. }
-            | Self::PgCheck { .. } => DbType::Pg,
-            Self::MongoSnapshot { .. } | Self::MongoCdc { .. } => DbType::Mongo,
-            Self::RedisSnapshot { .. } | Self::RedisCdc { .. } => DbType::Redis,
-            Self::Kafka { .. } => DbType::Kafka,
-        }
-    }
-
-    pub fn get_url(&self) -> String {
-        match self {
-            Self::MysqlStruct { url, .. }
-            | Self::MysqlSnapshot { url, .. }
-            | Self::MysqlCdc { url, .. }
-            | Self::MysqlCheck { url, .. }
-            | Self::PgStruct { url, .. }
-            | Self::PgSnapshot { url, .. }
-            | Self::PgCdc { url, .. }
-            | Self::PgCheck { url, .. }
-            | Self::MongoSnapshot { url, .. }
-            | Self::MongoCdc { url, .. }
-            | Self::RedisSnapshot { url, .. }
-            | Self::RedisCdc { url, .. }
-            | Self::Kafka { url, .. } => url.to_owned(),
-        }
-    }
-}

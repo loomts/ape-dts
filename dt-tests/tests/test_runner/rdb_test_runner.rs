@@ -8,18 +8,15 @@ use dt_common::{
     error::Error,
     utils::{sql_util::SqlUtil, time_util::TimeUtil},
 };
-use dt_connector::rdb_query_builder::RdbQueryBuilder;
-use dt_meta::{
-    ddl_type::DdlType, mysql::mysql_meta_manager::MysqlMetaManager,
-    pg::pg_meta_manager::PgMetaManager, sql_parser::ddl_parser::DdlParser,
-};
+
+use dt_meta::{ddl_type::DdlType, row_data::RowData, sql_parser::ddl_parser::DdlParser};
 use dt_task::{extractor_util::ExtractorUtil, task_util::TaskUtil};
-use futures::TryStreamExt;
-use sqlx::{MySql, Pool, Postgres, Row};
+
+use sqlx::{MySql, Pool, Postgres};
 
 use crate::test_config_util::TestConfigUtil;
 
-use super::base_test_runner::BaseTestRunner;
+use super::{base_test_runner::BaseTestRunner, rdb_util::RdbUtil};
 
 pub struct RdbTestRunner {
     pub base: BaseTestRunner,
@@ -273,20 +270,20 @@ impl RdbTestRunner {
 
     pub async fn execute_src_sqls(&self, sqls: &Vec<String>) -> Result<(), Error> {
         if let Some(pool) = &self.src_conn_pool_mysql {
-            Self::execute_sqls_mysql(sqls, pool).await?;
+            RdbUtil::execute_sqls_mysql(pool, sqls).await?;
         }
         if let Some(pool) = &self.src_conn_pool_pg {
-            Self::execute_sqls_pg(sqls, pool).await?;
+            RdbUtil::execute_sqls_pg(pool, sqls).await?;
         }
         Ok(())
     }
 
     async fn execute_dst_sqls(&self, sqls: &Vec<String>) -> Result<(), Error> {
         if let Some(pool) = &self.dst_conn_pool_mysql {
-            Self::execute_sqls_mysql(sqls, pool).await?;
+            RdbUtil::execute_sqls_mysql(pool, sqls).await?;
         }
         if let Some(pool) = &self.dst_conn_pool_pg {
-            Self::execute_sqls_pg(sqls, pool).await?;
+            RdbUtil::execute_sqls_pg(pool, sqls).await?;
         }
         Ok(())
     }
@@ -331,8 +328,7 @@ impl RdbTestRunner {
             src_data.len()
         );
 
-        let cols = self.get_tb_cols(src_db_tb).await?;
-        if !Self::compare_row_data(&cols, &src_data, &dst_data) {
+        if !Self::compare_row_data(&src_data, &dst_data) {
             println!(
                 "compare tb data failed, src_tb: {:?}, dst_tb: {:?}",
                 src_db_tb, dst_db_tb,
@@ -342,23 +338,18 @@ impl RdbTestRunner {
         Ok(true)
     }
 
-    fn compare_row_data(
-        cols: &Vec<String>,
-        src_data: &Vec<Vec<Option<Vec<u8>>>>,
-        dst_data: &Vec<Vec<Option<Vec<u8>>>>,
-    ) -> bool {
+    fn compare_row_data(src_data: &Vec<RowData>, dst_data: &Vec<RowData>) -> bool {
         assert_eq!(src_data.len(), dst_data.len());
         for i in 0..src_data.len() {
-            let src_row_data = &src_data[i];
-            let dst_row_data = &dst_data[i];
+            let src_col_values = src_data[i].after.as_ref().unwrap();
+            let dst_col_values = dst_data[i].after.as_ref().unwrap();
 
-            for j in 0..src_row_data.len() {
-                let src_col_value = &src_row_data[j];
-                let dst_col_value = &dst_row_data[j];
+            for (col, src_col_value) in src_col_values {
+                let dst_col_value = dst_col_values.get(col).unwrap();
                 if src_col_value != dst_col_value {
                     println!(
                         "row index: {}, col: {}, src_col_value: {:?}, dst_col_value: {:?}",
-                        i, cols[j], src_col_value, dst_col_value
+                        i, col, src_col_value, dst_col_value
                     );
                     return false;
                 }
@@ -371,23 +362,12 @@ impl RdbTestRunner {
         &self,
         db_tb: &(String, String),
         from: &str,
-    ) -> Result<Vec<Vec<Option<Vec<u8>>>>, Error> {
-        let conn_pool_mysql = if from == SRC {
-            &self.src_conn_pool_mysql
-        } else {
-            &self.dst_conn_pool_mysql
-        };
-
-        let conn_pool_pg = if from == SRC {
-            &self.src_conn_pool_pg
-        } else {
-            &self.dst_conn_pool_pg
-        };
-
+    ) -> Result<Vec<RowData>, Error> {
+        let (conn_pool_mysql, conn_pool_pg) = self.get_conn_pool(from);
         let data = if let Some(pool) = conn_pool_mysql {
-            self.fetch_data_mysql(db_tb, pool, from).await?
+            RdbUtil::fetch_data_mysql(pool, db_tb).await?
         } else if let Some(pool) = conn_pool_pg {
-            self.fetch_data_pg(db_tb, pool, from).await?
+            RdbUtil::fetch_data_pg(pool, db_tb).await?
         } else {
             Vec::new()
         };
@@ -407,83 +387,6 @@ impl RdbTestRunner {
             SqlUtil::unescape(&db, &escape_pairs[0]),
             SqlUtil::unescape(&tb, &escape_pairs[0]),
         )
-    }
-
-    async fn fetch_data_mysql(
-        &self,
-        db_tb: &(String, String),
-        conn_pool: &Pool<MySql>,
-        from: &str,
-    ) -> Result<Vec<Vec<Option<Vec<u8>>>>, Error> {
-        let cols = self.get_tb_cols_with_direction(db_tb, Some(from)).await?;
-        let sql = format!(
-            "SELECT * FROM `{}`.`{}` ORDER BY `{}`",
-            &db_tb.0, &db_tb.1, &cols[0],
-        );
-        let query = sqlx::query(&sql);
-        let mut rows = query.fetch(conn_pool);
-
-        let mut result = Vec::new();
-        while let Some(row) = rows.try_next().await.unwrap() {
-            let mut row_values = Vec::new();
-            for col in cols.iter() {
-                let value: Option<Vec<u8>> = row.get_unchecked(col.as_str());
-                row_values.push(value);
-            }
-            result.push(row_values);
-        }
-
-        Ok(result)
-    }
-
-    async fn fetch_data_pg(
-        &self,
-        db_tb: &(String, String),
-        conn_pool: &Pool<Postgres>,
-        from: &str,
-    ) -> Result<Vec<Vec<Option<Vec<u8>>>>, Error> {
-        let mut meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
-        let tb_meta = meta_manager.get_tb_meta(&db_tb.0, &db_tb.1).await?;
-        let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
-
-        let cols = self.get_tb_cols_with_direction(&db_tb, Some(from)).await?;
-        let cols_str = query_builder.build_extract_cols_str().unwrap();
-        let sql = format!(
-            r#"SELECT {} FROM "{}"."{}" ORDER BY "{}" ASC"#,
-            cols_str, &db_tb.0, &db_tb.1, &cols[0],
-        );
-        let query = sqlx::query(&sql);
-        let mut rows = query.fetch(conn_pool);
-
-        let mut result = Vec::new();
-        while let Some(row) = rows.try_next().await.unwrap() {
-            let mut row_values = Vec::new();
-            for col in cols.iter() {
-                let value: Option<Vec<u8>> = row.get_unchecked(col.as_str());
-                row_values.push(value);
-            }
-            result.push(row_values);
-        }
-
-        Ok(result)
-    }
-
-    async fn execute_sqls_mysql(sqls: &Vec<String>, conn_pool: &Pool<MySql>) -> Result<(), Error> {
-        for sql in sqls {
-            println!("executing sql: {}", sql);
-            let query = sqlx::query(sql);
-            query.execute(conn_pool).await.unwrap();
-        }
-        Ok(())
-    }
-
-    async fn execute_sqls_pg(sqls: &Vec<String>, conn_pool: &Pool<Postgres>) -> Result<(), Error> {
-        for sql in sqls.iter() {
-            println!("executing sql: {}", sql);
-            let query = sqlx::query(sql);
-            query.execute(conn_pool).await.unwrap();
-        }
-        Ok(())
     }
 
     /// get compare dbs from src_ddl_sqls
@@ -521,16 +424,18 @@ impl RdbTestRunner {
                 }
             }
         } else {
-            db_tbs = self.get_compare_db_tbs_from_sqls()?
+            db_tbs = Self::get_compare_db_tbs_from_sqls(&self.base.src_ddl_sqls)?
         }
 
         Ok(db_tbs)
     }
 
-    pub fn get_compare_db_tbs_from_sqls(&self) -> Result<Vec<(String, String)>, Error> {
+    pub fn get_compare_db_tbs_from_sqls(
+        ddl_sqls: &Vec<String>,
+    ) -> Result<Vec<(String, String)>, Error> {
         let mut db_tbs = vec![];
 
-        for sql in self.base.src_ddl_sqls.iter() {
+        for sql in ddl_sqls.iter() {
             if !sql.to_lowercase().contains("table") {
                 continue;
             }
@@ -549,43 +454,29 @@ impl RdbTestRunner {
         Ok(db_tbs)
     }
 
-    async fn get_tb_cols(&self, db_tb: &(String, String)) -> Result<Vec<String>, Error> {
-        self.get_tb_cols_with_direction(db_tb, None).await
-    }
-
-    async fn get_tb_cols_with_direction(
+    async fn get_tb_cols(
         &self,
         db_tb: &(String, String),
-        from: Option<&str>,
+        from: &str,
     ) -> Result<Vec<String>, Error> {
-        let f = match from {
-            Some(s) => s,
-            None => self::SRC,
-        };
-
-        let conn_pool_mysql = if f == SRC {
-            &self.src_conn_pool_mysql
-        } else {
-            &self.dst_conn_pool_mysql
-        };
-
-        let conn_pool_pg = if f == SRC {
-            &self.src_conn_pool_pg
-        } else {
-            &self.dst_conn_pool_pg
-        };
-
+        let (conn_pool_mysql, conn_pool_pg) = self.get_conn_pool(from);
         let cols = if let Some(conn_pool) = conn_pool_mysql {
-            let mut meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
-            let tb_meta = meta_manager.get_tb_meta(&db_tb.0, &db_tb.1).await?;
+            let tb_meta = RdbUtil::get_tb_meta_mysql(conn_pool, db_tb).await?;
             tb_meta.basic.cols.clone()
         } else if let Some(conn_pool) = conn_pool_pg {
-            let mut meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
-            let tb_meta = meta_manager.get_tb_meta(&db_tb.0, &db_tb.1).await?;
+            let tb_meta = RdbUtil::get_tb_meta_pg(conn_pool, db_tb).await?;
             tb_meta.basic.cols.clone()
         } else {
             vec![]
         };
         Ok(cols)
+    }
+
+    fn get_conn_pool(&self, from: &str) -> (&Option<Pool<MySql>>, &Option<Pool<Postgres>>) {
+        if from == SRC {
+            (&self.src_conn_pool_mysql, &self.src_conn_pool_pg)
+        } else {
+            (&self.dst_conn_pool_mysql, &self.dst_conn_pool_pg)
+        }
     }
 }
