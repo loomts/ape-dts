@@ -109,8 +109,11 @@ impl MysqlCdcExtractor {
             }
 
             EventData::TransactionPayload(event) => {
-                for event in event.uncompressed_events {
-                    self.parse_events(event.0, event.1, binlog_filename, table_map_event_map)
+                for (mut inner_header, data) in event.uncompressed_events {
+                    // headers of uncompressed events have no next_event_position,
+                    // use header of TransactionPayload instead
+                    inner_header.next_event_position = header.next_event_position;
+                    self.parse_events(inner_header, data, binlog_filename, table_map_event_map)
                         .await?;
                 }
             }

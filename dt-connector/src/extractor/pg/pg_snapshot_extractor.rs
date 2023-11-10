@@ -6,7 +6,7 @@ use futures::TryStreamExt;
 
 use sqlx::{Pool, Postgres};
 
-use dt_common::log_info;
+use dt_common::{config::config_enums::DbType, log_info};
 
 use dt_meta::{
     adaptor::{pg_col_value_convertor::PgColValueConvertor, sqlx_ext::SqlxPgExt},
@@ -146,6 +146,9 @@ impl PgSnapshotExtractor {
                     PgColValueConvertor::from_query(&row, order_col, order_col_type).unwrap();
                 let position = if let Some(value) = start_value.to_option_string() {
                     Position::RdbSnapshot {
+                        db_type: DbType::Pg.to_string(),
+                        schema: self.schema.clone(),
+                        tb: self.tb.clone(),
                         order_col: order_col.into(),
                         value,
                     }

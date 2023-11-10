@@ -31,7 +31,7 @@ impl PrecheckTestRunner {
 
         Ok(Self {
             checker_connector,
-            db_type: task_config.extractor.get_db_type().clone(),
+            db_type: task_config.extractor_basic.db_type.clone(),
             test_dir: test_dir.to_owned(),
         })
     }

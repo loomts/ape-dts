@@ -174,12 +174,12 @@ impl TestConfigUtil {
                 update_configs.push((
                     EXTRACTOR.to_string(),
                     URL.to_string(),
-                    Self::convert_with_envs(config.extractor.get_url()).unwrap(),
+                    Self::convert_with_envs(config.extractor_basic.url).unwrap(),
                 ));
                 update_configs.push((
                     SINKER.to_string(),
                     URL.to_string(),
-                    Self::convert_with_envs(config.sinker.get_url()).unwrap(),
+                    Self::convert_with_envs(config.sinker_basic.url).unwrap(),
                 ));
             }
             _ => {
@@ -192,7 +192,7 @@ impl TestConfigUtil {
                     Err(_) => {}
                 }
 
-                let extractor_url = match &config.extractor.get_db_type() {
+                let extractor_url = match &config.extractor_basic.db_type {
                     DbType::Mysql => env::var("mysql_extractor_url").unwrap(),
                     DbType::Pg => env::var("pg_extractor_url").unwrap(),
                     DbType::Mongo => env::var("mongo_extractor_url").unwrap(),
@@ -202,7 +202,7 @@ impl TestConfigUtil {
                 };
                 update_configs.push((EXTRACTOR.into(), URL.into(), extractor_url));
 
-                let sinker_url = match &config.sinker.get_db_type() {
+                let sinker_url = match &config.sinker_basic.db_type {
                     DbType::Mysql => env::var("mysql_sinker_url").unwrap(),
                     DbType::Pg => env::var("pg_sinker_url").unwrap(),
                     DbType::Mongo => env::var("mongo_sinker_url").unwrap(),

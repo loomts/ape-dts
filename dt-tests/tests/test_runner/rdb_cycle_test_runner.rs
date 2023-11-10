@@ -9,9 +9,8 @@ pub struct RdbCycleTestRunner {
     rdb_test_runner: RdbTestRunner,
 }
 
-pub const _SRC: &str = "src";
-pub const DST: &str = "dst";
-pub const _PUBLIC: &str = "public";
+const DST: &str = "dst";
+const TRANSACTION_TABLE_COUNT_COL: &str = "n";
 
 impl RdbCycleTestRunner {
     pub async fn new(
@@ -27,6 +26,10 @@ impl RdbCycleTestRunner {
             )
             .await?,
         })
+    }
+
+    pub async fn close(&self) -> Result<(), Error> {
+        self.rdb_test_runner.close().await
     }
 
     pub async fn run_cycle_cdc_test(
@@ -81,7 +84,7 @@ impl RdbCycleTestRunner {
             };
 
             runner
-                .run_cycle_cdc_data_check(
+                .check_cycle_cdc_data(
                     String::from(transaction_database),
                     transaction_full_name,
                     expect_num,
@@ -96,9 +99,13 @@ impl RdbCycleTestRunner {
                 TimeUtil::sleep_millis(1).await;
             }
         }
+
+        for (_, runner) in runner_map {
+            runner.close().await.unwrap();
+        }
     }
 
-    pub async fn run_cycle_cdc_data_check(
+    async fn check_cycle_cdc_data(
         &self,
         transaction_database: String,
         transaction_table_full_name: String,
@@ -109,7 +116,8 @@ impl RdbCycleTestRunner {
             None => self.rdb_test_runner.base.src_dml_sqls.len() as u8,
         };
 
-        let db_tbs = self.rdb_test_runner.get_compare_db_tbs_from_sqls()?;
+        let db_tbs =
+            RdbTestRunner::get_compare_db_tbs_from_sqls(&self.rdb_test_runner.base.src_ddl_sqls)?;
         let db_tbs_without_transaction: Vec<(String, String)> = db_tbs
             .iter()
             .filter(|s| !transaction_database.eq(s.0.as_str()))
@@ -124,21 +132,17 @@ impl RdbCycleTestRunner {
         self.check_transaction_table_data(
             DST,
             transaction_table_full_name.as_str(),
-            0,
             dml_count as u8,
         )
-        .await?;
-
-        Ok(())
+        .await
     }
 
-    pub async fn check_transaction_table_data(
+    async fn check_transaction_table_data(
         &self,
         from: &str,
         full_tb_name: &str,
-        col_order: u8,
         expect_num: u8,
-    ) -> Result<bool, Error> {
+    ) -> Result<(), Error> {
         let db_tb: Vec<&str> = full_tb_name.split(".").collect();
         assert_eq!(db_tb.len(), 2);
 
@@ -149,26 +153,27 @@ impl RdbCycleTestRunner {
 
         assert!(result.len() == 1);
         let row_data = result.get(0).unwrap();
-        assert!(row_data.len() >= col_order as usize);
-        let col_datas = row_data
-            .get(col_order as usize)
+        let transaction_count = row_data
+            .after
+            .as_ref()
             .unwrap()
-            .to_owned()
+            .get(TRANSACTION_TABLE_COUNT_COL)
             .unwrap();
-
-        assert_eq!(col_datas.get(0).unwrap().clone(), expect_num);
-
-        Ok(true)
+        assert_eq!(
+            transaction_count.to_option_string(),
+            Some(expect_num.to_string())
+        );
+        Ok(())
     }
 
-    pub async fn initialize_ddl(&self) -> Result<(), Error> {
+    async fn initialize_ddl(&self) -> Result<(), Error> {
         // prepare src and dst tables
         self.rdb_test_runner.execute_test_ddl_sqls().await?;
 
         Ok(())
     }
 
-    pub async fn initialize_data(&self) -> Result<(), Error> {
+    async fn initialize_data(&self) -> Result<(), Error> {
         let mut src_insert_sqls = Vec::new();
         let mut src_update_sqls = Vec::new();
         let mut src_delete_sqls = Vec::new();

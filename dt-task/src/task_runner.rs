@@ -59,7 +59,7 @@ impl TaskRunner {
     }
 
     async fn start_multi_task(&self, url: &str) -> Result<(), Error> {
-        let db_type = self.config.extractor.get_db_type();
+        let db_type = self.config.extractor_basic.db_type.clone();
         let mut filter = RdbFilter::from_config(&self.config.filter, db_type.clone())?;
         let dbs = ExtractorUtil::list_dbs(url, &db_type).await?;
         for db in dbs.iter() {
@@ -190,7 +190,7 @@ impl TaskRunner {
     ) -> Result<Box<dyn Extractor + Send>, Error> {
         let resumer = SnapshotResumer {
             resumer_values: self.config.resumer.resume_values.clone(),
-            db_type: extractor_config.get_db_type(),
+            db_type: self.config.extractor_basic.db_type.clone(),
         };
 
         let extractor: Box<dyn Extractor + Send> = match extractor_config {

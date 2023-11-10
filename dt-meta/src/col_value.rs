@@ -71,7 +71,6 @@ impl ColValue {
             ColValue::Timestamp(v) => Some(v.to_string()),
             ColValue::Year(v) => Some(v.to_string()),
             ColValue::String(v) => Some(v.to_string()),
-            ColValue::Blob(v) => Some(format!("{:?}", v)),
             ColValue::Bit(v) => Some(v.to_string()),
             ColValue::Set(v) => Some(v.to_string()),
             ColValue::Set2(v) => Some(v.to_string()),
@@ -80,7 +79,22 @@ impl ColValue {
             // TODO: support JSON
             ColValue::Json(v) => Some(format!("{:?}", v)),
             ColValue::Json2(v) => Some(v.to_string()),
+            ColValue::Blob(v) => {
+                if let Ok(str) = String::from_utf8(v.clone()) {
+                    Some(str)
+                } else {
+                    Some(format!("{:?}", v))
+                }
+            }
             _ => Option::None,
+        }
+    }
+
+    pub fn is_nan(&self) -> bool {
+        match &self {
+            ColValue::Float(v) => v.is_nan(),
+            ColValue::Double(v) => v.is_nan(),
+            _ => false,
         }
     }
 }

@@ -33,20 +33,20 @@ impl PrecheckerBuilder {
     }
 
     pub fn valid_config(&self) -> bool {
-        !self.task_config.extractor.get_url().is_empty()
-            && !self.task_config.sinker.get_url().is_empty()
+        !self.task_config.extractor_basic.url.is_empty()
+            && !self.task_config.sinker_basic.url.is_empty()
     }
 
     pub fn build_checker(&self, is_source: bool) -> Option<Box<dyn Prechecker + Send>> {
         let (db_type, url) = if is_source {
             (
-                self.task_config.extractor.get_db_type(),
-                self.task_config.extractor.get_url(),
+                self.task_config.extractor_basic.db_type.clone(),
+                self.task_config.extractor_basic.url.clone(),
             )
         } else {
             (
-                self.task_config.sinker.get_db_type(),
-                self.task_config.sinker.get_url(),
+                self.task_config.sinker_basic.db_type.clone(),
+                self.task_config.sinker_basic.url.clone(),
             )
         };
 

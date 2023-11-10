@@ -93,6 +93,7 @@ impl ExtractorUtil {
             }
             schemas.push(schema);
         }
+        conn_pool.close().await;
         Ok(schemas)
     }
 
@@ -112,6 +113,7 @@ impl ExtractorUtil {
             let tb: String = row.try_get(0)?;
             tbs.push(tb);
         }
+        conn_pool.close().await;
         Ok(tbs)
     }
 
@@ -128,6 +130,7 @@ impl ExtractorUtil {
             }
             dbs.push(db);
         }
+        conn_pool.close().await;
         Ok(dbs)
     }
 
@@ -141,6 +144,7 @@ impl ExtractorUtil {
             let tb: String = row.try_get(0)?;
             tbs.push(tb);
         }
+        conn_pool.close().await;
         Ok(tbs)
     }
 
