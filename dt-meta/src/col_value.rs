@@ -89,6 +89,14 @@ impl ColValue {
             _ => Option::None,
         }
     }
+
+    pub fn is_nan(&self) -> bool {
+        match &self {
+            ColValue::Float(v) => v.is_nan(),
+            ColValue::Double(v) => v.is_nan(),
+            _ => false,
+        }
+    }
 }
 
 // impl Serialize for ColValue {

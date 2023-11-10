@@ -67,19 +67,19 @@ mod test {
     // test sinking rdb data by rewrite instead of restore
     #[tokio::test]
     #[serial]
-    async fn cdc_rewrite_test() {
+    async fn snapshot_rewrite_test() {
         TestBase::run_redis_snapshot_test("redis_to_redis/snapshot/7_0/rewrite_test").await;
     }
 
     #[tokio::test]
     #[serial]
-    async fn cdc_rewrite_stream_test() {
+    async fn snapshot_rewrite_stream_test() {
         TestBase::run_redis_snapshot_test("redis_to_redis/snapshot/7_0/rewrite_stream_test").await;
     }
 
     #[tokio::test]
     #[serial]
-    async fn cdc_filter_db_test() {
+    async fn snapshot_filter_db_test() {
         TestBase::run_redis_snapshot_test("redis_to_redis/snapshot/7_0/filter_db_test").await;
     }
 }

@@ -44,6 +44,13 @@ impl RdbRedisTestRunner {
         })
     }
 
+    pub async fn close(&self) -> Result<(), Error> {
+        if let Some(pool) = &self.mysql_conn_pool {
+            pool.close().await;
+        }
+        Ok(())
+    }
+
     pub async fn run_snapshot_test(&mut self) -> Result<(), Error> {
         // src ddl
         self.execute_sqls(&self.base.src_ddl_sqls).await?;

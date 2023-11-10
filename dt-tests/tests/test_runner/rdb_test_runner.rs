@@ -77,6 +77,22 @@ impl RdbTestRunner {
         })
     }
 
+    pub async fn close(&self) -> Result<(), Error> {
+        if let Some(pool) = &self.src_conn_pool_mysql {
+            pool.close().await;
+        }
+        if let Some(pool) = &self.dst_conn_pool_mysql {
+            pool.close().await;
+        }
+        if let Some(pool) = &self.src_conn_pool_pg {
+            pool.close().await;
+        }
+        if let Some(pool) = &self.dst_conn_pool_pg {
+            pool.close().await;
+        }
+        Ok(())
+    }
+
     fn parse_conn_info(base: &BaseTestRunner) -> (DbType, String, DbType, String) {
         let mut src_db_type = DbType::Mysql;
         let mut src_url = String::new();
@@ -347,6 +363,9 @@ impl RdbTestRunner {
             for (col, src_col_value) in src_col_values {
                 let dst_col_value = dst_col_values.get(col).unwrap();
                 if src_col_value != dst_col_value {
+                    if src_col_value.is_nan() && dst_col_value.is_nan() {
+                        continue;
+                    }
                     println!(
                         "row index: {}, col: {}, src_col_value: {:?}, dst_col_value: {:?}",
                         i, col, src_col_value, dst_col_value

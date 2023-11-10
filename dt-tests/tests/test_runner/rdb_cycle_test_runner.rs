@@ -28,6 +28,10 @@ impl RdbCycleTestRunner {
         })
     }
 
+    pub async fn close(&self) -> Result<(), Error> {
+        self.rdb_test_runner.close().await
+    }
+
     pub async fn run_cycle_cdc_test(
         test_dir: &str,
         start_millis: u64,
@@ -95,9 +99,13 @@ impl RdbCycleTestRunner {
                 TimeUtil::sleep_millis(1).await;
             }
         }
+
+        for (_, runner) in runner_map {
+            runner.close().await.unwrap();
+        }
     }
 
-    pub async fn check_cycle_cdc_data(
+    async fn check_cycle_cdc_data(
         &self,
         transaction_database: String,
         transaction_table_full_name: String,
@@ -129,7 +137,7 @@ impl RdbCycleTestRunner {
         .await
     }
 
-    pub async fn check_transaction_table_data(
+    async fn check_transaction_table_data(
         &self,
         from: &str,
         full_tb_name: &str,
@@ -158,14 +166,14 @@ impl RdbCycleTestRunner {
         Ok(())
     }
 
-    pub async fn initialize_ddl(&self) -> Result<(), Error> {
+    async fn initialize_ddl(&self) -> Result<(), Error> {
         // prepare src and dst tables
         self.rdb_test_runner.execute_test_ddl_sqls().await?;
 
         Ok(())
     }
 
-    pub async fn initialize_data(&self) -> Result<(), Error> {
+    async fn initialize_data(&self) -> Result<(), Error> {
         let mut src_insert_sqls = Vec::new();
         let mut src_update_sqls = Vec::new();
         let mut src_delete_sqls = Vec::new();

@@ -20,6 +20,7 @@ impl TestBase {
     pub async fn run_snapshot_test(test_dir: &str) {
         let runner = RdbTestRunner::new(test_dir).await.unwrap();
         runner.run_snapshot_test(true).await.unwrap();
+        runner.close().await.unwrap();
     }
 
     pub async fn run_snapshot_test_and_check_dst_count(
@@ -43,6 +44,7 @@ impl TestBase {
             let db_tb = RdbTestRunner::parse_full_tb_name(db_tb, db_type);
             assert_dst_count(&db_tb, count);
         }
+        runner.close().await.unwrap();
     }
 
     pub async fn run_cdc_test(test_dir: &str, start_millis: u64, parse_millis: u64) {
@@ -51,6 +53,7 @@ impl TestBase {
             .run_cdc_test(start_millis, parse_millis)
             .await
             .unwrap();
+        runner.close().await.unwrap();
         // runner.run_cdc_test_with_different_configs(start_millis, parse_millis))
         //     .unwrap();
     }
@@ -61,6 +64,7 @@ impl TestBase {
             .run_ddl_test(start_millis, parse_millis)
             .await
             .unwrap();
+        runner.close().await.unwrap();
     }
 
     pub async fn run_check_test(test_dir: &str) {
@@ -210,10 +214,12 @@ impl TestBase {
             .run_cdc_test(start_millis, parse_millis)
             .await
             .unwrap();
+        runner.close().await.unwrap();
     }
 
     pub async fn run_rdb_redis_snapshot_test(test_dir: &str) {
         let mut runner = RdbRedisTestRunner::new(test_dir).await.unwrap();
         runner.run_snapshot_test().await.unwrap();
+        runner.close().await.unwrap();
     }
 }
