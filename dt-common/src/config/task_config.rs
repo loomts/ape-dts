@@ -298,6 +298,12 @@ impl TaskConfig {
                 batch_size,
                 method: Self::get_value(ini, SINKER, "method"),
             },
+
+            DbType::StarRocks => SinkerConfig::Starrocks {
+                url,
+                batch_size,
+                stream_load_port: Self::get_value(ini, SINKER, "stream_load_port"),
+            },
         };
         Ok((basic, sinker))
     }

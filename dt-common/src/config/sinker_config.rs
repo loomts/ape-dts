@@ -66,6 +66,12 @@ pub enum SinkerConfig {
         batch_size: usize,
         method: String,
     },
+
+    Starrocks {
+        url: String,
+        batch_size: usize,
+        stream_load_port: String,
+    },
 }
 
 #[derive(Clone, Debug)]

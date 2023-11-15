@@ -1,4 +1,4 @@
-use dt_common::error::Error;
+use dt_common::{config::config_enums::DbType, error::Error};
 use dt_connector::rdb_query_builder::RdbQueryBuilder;
 use dt_meta::{
     mysql::{mysql_meta_manager::MysqlMetaManager, mysql_tb_meta::MysqlTbMeta},
@@ -15,17 +15,28 @@ impl RdbUtil {
         conn_pool: &Pool<MySql>,
         db_tb: &(String, String),
     ) -> Result<Vec<RowData>, Error> {
-        let tb_meta = Self::get_tb_meta_mysql(conn_pool, db_tb).await?;
+        Self::fetch_data_mysql_compatible(conn_pool, db_tb, &DbType::Mysql).await
+    }
+
+    pub async fn fetch_data_mysql_compatible(
+        conn_pool: &Pool<MySql>,
+        db_tb: &(String, String),
+        db_type: &DbType,
+    ) -> Result<Vec<RowData>, Error> {
+        let tb_meta = Self::get_tb_meta_mysql_compatible(conn_pool, db_tb, db_type).await?;
         let sql = format!(
             "SELECT * FROM `{}`.`{}` ORDER BY `{}` ASC",
             &db_tb.0, &db_tb.1, &tb_meta.basic.cols[0],
         );
 
-        let query = sqlx::query(&sql);
+        let mut query = sqlx::query(&sql);
+        if *db_type == DbType::StarRocks {
+            query = query.disable_arguments();
+        }
         let mut rows = query.fetch(conn_pool);
         let mut result = Vec::new();
         while let Some(row) = rows.try_next().await.unwrap() {
-            let row_data = RowData::from_mysql_row(&row, &tb_meta);
+            let row_data = RowData::from_mysql_compatible_row(&row, &tb_meta, db_type);
             result.push(row_data);
         }
 
@@ -61,7 +72,18 @@ impl RdbUtil {
         conn_pool: &Pool<MySql>,
         db_tb: &(String, String),
     ) -> Result<MysqlTbMeta, Error> {
-        let mut meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
+        Self::get_tb_meta_mysql_compatible(conn_pool, db_tb, &DbType::Mysql).await
+    }
+
+    pub async fn get_tb_meta_mysql_compatible(
+        conn_pool: &Pool<MySql>,
+        db_tb: &(String, String),
+        db_type: &DbType,
+    ) -> Result<MysqlTbMeta, Error> {
+        let mut meta_manager =
+            MysqlMetaManager::new_mysql_compatible(conn_pool.clone(), db_type.clone())
+                .init()
+                .await?;
         meta_manager.get_tb_meta(&db_tb.0, &db_tb.1).await
     }
 
@@ -79,7 +101,7 @@ impl RdbUtil {
     ) -> Result<(), Error> {
         for sql in sqls {
             println!("executing sql: {}", sql);
-            let query = sqlx::query(sql);
+            let query = sqlx::query(sql).disable_arguments();
             query.execute(conn_pool).await.unwrap();
         }
         Ok(())

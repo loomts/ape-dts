@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use dt_common::config::config_enums::DbType;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{mysql::MySqlRow, postgres::PgRow};
@@ -24,9 +25,19 @@ pub struct RowData {
 
 impl RowData {
     pub fn from_mysql_row(row: &MySqlRow, tb_meta: &MysqlTbMeta) -> Self {
+        Self::from_mysql_compatible_row(row, tb_meta, &DbType::Mysql)
+    }
+
+    pub fn from_mysql_compatible_row(
+        row: &MySqlRow,
+        tb_meta: &MysqlTbMeta,
+        db_type: &DbType,
+    ) -> Self {
         let mut after = HashMap::new();
         for (col, col_type) in &tb_meta.col_type_map {
-            let col_val = MysqlColValueConvertor::from_query(row, col, col_type).unwrap();
+            let col_val =
+                MysqlColValueConvertor::from_query_mysql_compatible(row, col, col_type, db_type)
+                    .unwrap();
             after.insert(col.to_string(), col_val);
         }
         Self::build_insert_row_data(after, &tb_meta.basic)

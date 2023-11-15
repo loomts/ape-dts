@@ -9,7 +9,9 @@ use dt_common::{
     utils::{sql_util::SqlUtil, time_util::TimeUtil},
 };
 
-use dt_meta::{ddl_type::DdlType, row_data::RowData, sql_parser::ddl_parser::DdlParser};
+use dt_meta::{
+    col_value::ColValue, ddl_type::DdlType, row_data::RowData, sql_parser::ddl_parser::DdlParser,
+};
 use dt_task::{extractor_util::ExtractorUtil, task_util::TaskUtil};
 
 use sqlx::{MySql, Pool, Postgres};
@@ -33,21 +35,16 @@ pub const PUBLIC: &str = "public";
 #[allow(dead_code)]
 impl RdbTestRunner {
     pub async fn new(relative_test_dir: &str) -> Result<Self, Error> {
-        Self::new_internal(relative_test_dir, TestConfigUtil::OVERRIDE_WHOLE, "").await
+        Self::new_internal(relative_test_dir, "").await
     }
 
     pub async fn new_internal(
         relative_test_dir: &str,
-        config_override_police: &str,
         config_tmp_relative_dir: &str,
     ) -> Result<Self, Error> {
-        let base = BaseTestRunner::new_internal(
-            relative_test_dir,
-            config_override_police,
-            config_tmp_relative_dir,
-        )
-        .await
-        .unwrap();
+        let base = BaseTestRunner::new_internal(relative_test_dir, config_tmp_relative_dir)
+            .await
+            .unwrap();
 
         // prepare conn pools
         let mut src_conn_pool_mysql = None;
@@ -122,7 +119,8 @@ impl RdbTestRunner {
         match config.sinker {
             SinkerConfig::Mysql { url, .. }
             | SinkerConfig::MysqlCheck { url, .. }
-            | SinkerConfig::MysqlStruct { url, .. } => {
+            | SinkerConfig::MysqlStruct { url, .. }
+            | SinkerConfig::Starrocks { url, .. } => {
                 dst_url = url.clone();
             }
 
@@ -344,7 +342,7 @@ impl RdbTestRunner {
             src_data.len()
         );
 
-        if !Self::compare_row_data(&src_data, &dst_data) {
+        if !self.compare_row_data(&src_data, &dst_data) {
             println!(
                 "compare tb data failed, src_tb: {:?}, dst_tb: {:?}",
                 src_db_tb, dst_db_tb,
@@ -354,25 +352,47 @@ impl RdbTestRunner {
         Ok(true)
     }
 
-    fn compare_row_data(src_data: &Vec<RowData>, dst_data: &Vec<RowData>) -> bool {
+    fn compare_row_data(&self, src_data: &Vec<RowData>, dst_data: &Vec<RowData>) -> bool {
         assert_eq!(src_data.len(), dst_data.len());
+        let src_db_type = self.get_db_type(SRC);
+        let dst_db_type = self.get_db_type(DST);
         for i in 0..src_data.len() {
             let src_col_values = src_data[i].after.as_ref().unwrap();
             let dst_col_values = dst_data[i].after.as_ref().unwrap();
 
             for (col, src_col_value) in src_col_values {
                 let dst_col_value = dst_col_values.get(col).unwrap();
-                if src_col_value != dst_col_value {
-                    if src_col_value.is_nan() && dst_col_value.is_nan() {
-                        continue;
-                    }
-                    println!(
-                        "row index: {}, col: {}, src_col_value: {:?}, dst_col_value: {:?}",
-                        i, col, src_col_value, dst_col_value
-                    );
-                    return false;
+                if Self::compare_col_value(src_col_value, dst_col_value, &src_db_type, &dst_db_type)
+                {
+                    continue;
                 }
+                println!(
+                    "row index: {}, col: {}, src_col_value: {:?}, dst_col_value: {:?}",
+                    i, col, src_col_value, dst_col_value
+                );
+                return false;
             }
+        }
+        true
+    }
+
+    fn compare_col_value(
+        src_col_value: &ColValue,
+        dst_col_value: &ColValue,
+        src_db_type: &DbType,
+        dst_db_type: &DbType,
+    ) -> bool {
+        if src_col_value != dst_col_value {
+            if src_col_value.is_nan() && dst_col_value.is_nan() {
+                return true;
+            }
+            // different databases support different column types,
+            // for example: we use Year in mysql, but INT in StarRocks,
+            // so try to compare after both converted to string.
+            if src_db_type != dst_db_type {
+                return src_col_value.to_option_string() == dst_col_value.to_option_string();
+            }
+            return false;
         }
         true
     }
@@ -384,7 +404,8 @@ impl RdbTestRunner {
     ) -> Result<Vec<RowData>, Error> {
         let (conn_pool_mysql, conn_pool_pg) = self.get_conn_pool(from);
         let data = if let Some(pool) = conn_pool_mysql {
-            RdbUtil::fetch_data_mysql(pool, db_tb).await?
+            let db_type = self.get_db_type(from);
+            RdbUtil::fetch_data_mysql_compatible(pool, db_tb, &db_type).await?
         } else if let Some(pool) = conn_pool_pg {
             RdbUtil::fetch_data_pg(pool, db_tb).await?
         } else {
@@ -496,6 +517,15 @@ impl RdbTestRunner {
             (&self.src_conn_pool_mysql, &self.src_conn_pool_pg)
         } else {
             (&self.dst_conn_pool_mysql, &self.dst_conn_pool_pg)
+        }
+    }
+
+    fn get_db_type(&self, from: &str) -> DbType {
+        let config = TaskConfig::new(&self.base.task_config_file);
+        if from == SRC {
+            config.extractor_basic.db_type
+        } else {
+            config.sinker_basic.db_type
         }
     }
 }

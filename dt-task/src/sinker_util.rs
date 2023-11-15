@@ -21,6 +21,7 @@ use dt_connector::{
         pg::{pg_checker::PgChecker, pg_sinker::PgSinker, pg_struct_sinker::PgStructSinker},
         rdb_router::RdbRouter,
         redis::redis_sinker::RedisSinker,
+        starrocks::starrocks_sinker::StarRocksSinker,
     },
     Sinker,
 };
@@ -30,7 +31,7 @@ use dt_meta::{
     redis::redis_write_method::RedisWriteMethod,
 };
 use kafka::producer::{Producer, RequiredAcks};
-use reqwest::Client;
+use reqwest::{redirect::Policy, Client, Url};
 use rusoto_core::Region;
 use rusoto_s3::S3Client;
 
@@ -203,6 +204,20 @@ impl SinkerUtil {
                     *batch_size,
                     method,
                     meta_manager,
+                )
+                .await?
+            }
+
+            SinkerConfig::Starrocks {
+                url,
+                batch_size,
+                stream_load_port,
+            } => {
+                SinkerUtil::create_starrocks_sinker(
+                    url,
+                    stream_load_port,
+                    task_config.parallelizer.parallel_size,
+                    *batch_size,
                 )
                 .await?
             }
@@ -485,6 +500,43 @@ impl SinkerUtil {
                 version,
                 method,
                 meta_manager: meta_manager.clone(),
+            };
+            sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
+        }
+        Ok(sub_sinkers)
+    }
+
+    async fn create_starrocks_sinker<'a>(
+        url: &str,
+        stream_load_port: &str,
+        parallel_size: usize,
+        batch_size: usize,
+    ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
+        let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
+        for _ in 0..parallel_size {
+            let url_info = Url::parse(url).unwrap();
+            let host = url_info.host_str().unwrap().to_string();
+            let username = url_info.username().to_string();
+            let password = if let Some(password) = url_info.password() {
+                password.to_string()
+            } else {
+                String::new()
+            };
+
+            let custom = Policy::custom(|attempt| attempt.stop());
+            let client = reqwest::Client::builder()
+                .http1_title_case_headers()
+                .redirect(custom)
+                .build()
+                .unwrap();
+
+            let sinker = StarRocksSinker {
+                client,
+                host,
+                port: stream_load_port.into(),
+                username,
+                password,
+                batch_size,
             };
             sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
         }
