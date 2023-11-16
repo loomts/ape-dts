@@ -82,7 +82,9 @@ impl SqlUtil {
             }
         }
         // token NOT surrounded by escapes
-        is_valid_token(token, db_type)
+        // is_valid_token(token, db_type)
+        // TODO: currently disable token validation since precheck does not support escape, 2023-11-16
+        true
     }
 }
 
