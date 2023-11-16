@@ -4,7 +4,7 @@ use crate::{call_batch_fn, Sinker};
 
 use dt_common::error::Error;
 
-use dt_meta::{avro::avro_converter::AvroConverter, dt_data::DtData};
+use dt_meta::{avro::avro_converter::AvroConverter, dt_data::DtData, row_data::RowData};
 
 use kafka::producer::{Producer, Record};
 
@@ -19,7 +19,7 @@ pub struct KafkaSinker {
 
 #[async_trait]
 impl Sinker for KafkaSinker {
-    async fn sink_raw(&mut self, mut data: Vec<DtData>, _batch: bool) -> Result<(), Error> {
+    async fn sink_dml(&mut self, mut data: Vec<RowData>, _batch: bool) -> Result<(), Error> {
         call_batch_fn!(self, data, Self::send_avro);
         Ok(())
     }
@@ -28,7 +28,7 @@ impl Sinker for KafkaSinker {
 impl KafkaSinker {
     async fn send_avro(
         &mut self,
-        data: &mut [DtData],
+        data: &mut [RowData],
         sinked_count: usize,
         batch_size: usize,
     ) -> Result<(), Error> {
@@ -37,25 +37,23 @@ impl KafkaSinker {
         let topic = self.kafka_router.get_route("", "");
         let mut messages = Vec::new();
 
-        for (_, dt_data) in data
+        for (_, row_data) in data
             .iter_mut()
             .skip(sinked_count)
             .take(batch_size)
             .enumerate()
         {
-            if let DtData::Dml { row_data } = dt_data {
-                let key = self.avro_converter.row_data_to_avro_key(row_data).await?;
-                let payload = self
-                    .avro_converter
-                    .row_data_to_avro_value(row_data.clone())
-                    .unwrap();
-                messages.push(Record {
-                    key,
-                    value: payload,
-                    topic: &topic,
-                    partition: -1,
-                });
-            }
+            let key = self.avro_converter.row_data_to_avro_key(row_data).await?;
+            let payload = self
+                .avro_converter
+                .row_data_to_avro_value(row_data.clone())
+                .unwrap();
+            messages.push(Record {
+                key,
+                value: payload,
+                topic: &topic,
+                partition: -1,
+            });
         }
 
         self.producer.send_all(&messages).unwrap();
