@@ -166,3 +166,8 @@ docker run --name some-redis-2 \
 --save 60 1 \
 --loglevel warning
 ```
+
+## StarRocks
+### target
+docker run -p 9030:9030 -p 8030:8030 -p 8040:8040 \ 
+  -itd starrocks.docker.scarf.sh/starrocks/allin1-ubuntu

@@ -55,4 +55,7 @@ pub enum Error {
 
     #[error("enum parse error: {0}")]
     EnumParseError(#[from] strum::ParseError),
+
+    #[error("http request error: {0}")]
+    HttpError(String),
 }

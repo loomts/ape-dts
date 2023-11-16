@@ -15,13 +15,11 @@ const TRANSACTION_TABLE_COUNT_COL: &str = "n";
 impl RdbCycleTestRunner {
     pub async fn new(
         relative_test_dir: &str,
-        config_override_police: &str,
         config_tmp_relative_dir: &str,
     ) -> Result<Self, Error> {
         Ok(Self {
             rdb_test_runner: RdbTestRunner::new_internal(
                 relative_test_dir,
-                config_override_police,
                 config_tmp_relative_dir,
             )
             .await?,
@@ -47,7 +45,6 @@ impl RdbCycleTestRunner {
         for sub_path in &sub_paths {
             let runner = RdbCycleTestRunner::new(
                 format!("{}/{}", test_dir, sub_path.1).as_str(),
-                TestConfigUtil::REPLACE_PARAM,
                 sub_path.1.as_str(),
             )
             .await

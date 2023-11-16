@@ -8,3 +8,4 @@ mod pg_to_pg;
 mod redis_to_redis;
 mod test_config_util;
 mod test_runner;
+mod mysql_to_starrocks;

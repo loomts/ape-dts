@@ -17,7 +17,7 @@ exclude = [
 ]
 
 [workspace.dependencies]
-sqlx = {version = "0.6.2", features = ["runtime-async-std-rustls", "mysql", "postgres", "decimal", "bigdecimal", "ipnetwork", "mac_address", "bit-vec", "time", "chrono", "json", "uuid"]}
+sqlx = {git = "https://github.com/qianyiwen2019/sqlx", features = ["runtime-async-std-rustls", "mysql", "postgres", "bigdecimal", "ipnetwork", "mac_address", "bit-vec", "time", "chrono", "json", "uuid"]}
 futures = "0.3.25"
 mysql-binlog-connector-rust = { path = "./plugins/mysql-binlog-connector-rust" }
 serde = {version = "1", features = ["derive"]}
@@ -32,9 +32,9 @@ log4rs = "1.2.0"
 serial_test = "2.0.0"
 async-trait = "0.1.64"
 async-recursion = "1.0.2"
-tokio-postgres = {git = "https://github.com/petrosagg/rust-postgres"}
-postgres-protocol = {git = "https://github.com/petrosagg/rust-postgres"}
-postgres-types= {git = "https://github.com/petrosagg/rust-postgres"}
+tokio-postgres = {git = "https://github.com/qianyiwen2019/rust-postgres"}
+postgres-protocol = {git = "https://github.com/qianyiwen2019/rust-postgres"}
+postgres-types= {git = "https://github.com/qianyiwen2019/rust-postgres"}
 tokio = { version = "1.25.0", features = ["full"] }
 bytes = "1.0"
 configparser = "3.0.2"

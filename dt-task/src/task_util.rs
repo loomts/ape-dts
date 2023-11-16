@@ -1,7 +1,7 @@
 use std::{str::FromStr, time::Duration};
 
 use dt_common::{
-    config::{sinker_config::SinkerConfig, task_config::TaskConfig},
+    config::{config_enums::DbType, sinker_config::SinkerConfig, task_config::TaskConfig},
     error::Error,
 };
 use dt_connector::sinker::redis::cmd_encoder::CmdEncoder;
@@ -101,7 +101,14 @@ impl TaskUtil {
         let log_level = &config.runtime.log_level;
         let meta_manager = match &config.sinker {
             SinkerConfig::Mysql { url, .. } | SinkerConfig::MysqlCheck { url, .. } => {
-                let mysql_meta_manager = Self::create_mysql_meta_manager(url, log_level).await?;
+                let mysql_meta_manager =
+                    Self::create_mysql_meta_manager(url, log_level, DbType::Mysql).await?;
+                RdbMetaManager::from_mysql(mysql_meta_manager)
+            }
+
+            SinkerConfig::Starrocks { url, .. } => {
+                let mysql_meta_manager =
+                    Self::create_mysql_meta_manager(url, log_level, DbType::StarRocks).await?;
                 RdbMetaManager::from_mysql(mysql_meta_manager)
             }
 
@@ -120,10 +127,13 @@ impl TaskUtil {
     pub async fn create_mysql_meta_manager(
         url: &str,
         log_level: &str,
+        db_type: DbType,
     ) -> Result<MysqlMetaManager, Error> {
         let enable_sqlx_log = Self::check_enable_sqlx_log(log_level);
         let conn_pool = Self::create_mysql_conn_pool(url, 1, enable_sqlx_log).await?;
-        MysqlMetaManager::new(conn_pool.clone()).init().await
+        MysqlMetaManager::new_mysql_compatible(conn_pool.clone(), db_type)
+            .init()
+            .await
     }
 
     pub async fn create_pg_meta_manager(

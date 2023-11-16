@@ -26,12 +26,11 @@ static mut LOG4RS_INITED: bool = false;
 #[allow(dead_code)]
 impl BaseTestRunner {
     pub async fn new(relative_test_dir: &str) -> Result<Self, Error> {
-        Self::new_internal(relative_test_dir, TestConfigUtil::OVERRIDE_WHOLE, "").await
+        Self::new_internal(relative_test_dir, "").await
     }
 
     pub async fn new_internal(
         relative_test_dir: &str,
-        config_replace_police: &str,
         config_tmp_relative_dir: &str,
     ) -> Result<Self, Error> {
         let project_root = TestConfigUtil::get_project_root();
@@ -52,11 +51,10 @@ impl BaseTestRunner {
         );
 
         // update extractor / sinker urls from .env
-        TestConfigUtil::update_task_config_url(
+        TestConfigUtil::update_task_config_from_env(
             &dst_task_config_file,
             &dst_task_config_file,
             &test_dir,
-            config_replace_police,
         );
 
         let (

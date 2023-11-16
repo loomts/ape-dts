@@ -2,7 +2,7 @@ use std::io::{Cursor, Seek, SeekFrom};
 
 use byteorder::{LittleEndian, ReadBytesExt};
 use chrono::{TimeZone, Utc};
-use dt_common::error::Error;
+use dt_common::{config::config_enums::DbType, error::Error};
 use mysql_binlog_connector_rust::column::{
     column_value::ColumnValue, json::json_binary::JsonBinary,
 };
@@ -141,15 +141,10 @@ impl MysqlColValueConvertor {
                 } else {
                     v
                 };
-
-                if let Ok(str) = String::from_utf8(final_v.clone()) {
-                    ColValue::String(str)
-                } else {
-                    ColValue::Blob(final_v)
-                }
+                Self::try_blob_to_string(final_v, col_type)
             }
 
-            ColumnValue::Blob(v) => ColValue::Blob(v),
+            ColumnValue::Blob(v) => Self::try_blob_to_string(v, col_type),
             ColumnValue::Bit(v) => ColValue::Bit(v),
             ColumnValue::Set(v) => ColValue::Set(v),
             ColumnValue::Enum(v) => ColValue::Enum(v),
@@ -251,6 +246,15 @@ impl MysqlColValueConvertor {
         col: &str,
         col_type: &MysqlColType,
     ) -> Result<ColValue, Error> {
+        Self::from_query_mysql_compatible(row, col, col_type, &DbType::Mysql)
+    }
+
+    pub fn from_query_mysql_compatible(
+        row: &MySqlRow,
+        col: &str,
+        col_type: &MysqlColType,
+        db_type: &DbType,
+    ) -> Result<ColValue, Error> {
         let value: Option<Vec<u8>> = row.get_unchecked(col);
         if value.is_none() {
             return Ok(ColValue::None);
@@ -303,19 +307,31 @@ impl MysqlColValueConvertor {
             }
             MysqlColType::Time => {
                 let value: Vec<u8> = row.get_unchecked(col);
-                return MysqlColValueConvertor::parse_time(value);
+                return Self::parse_time(value);
             }
             MysqlColType::Date => {
-                let value: Vec<u8> = row.get_unchecked(col);
-                return MysqlColValueConvertor::parse_date(value);
+                if *db_type == DbType::StarRocks {
+                    let value: Vec<u8> = row.get_unchecked(col);
+                    let str: String = String::from_utf8_lossy(&value).to_string();
+                    return Ok(ColValue::Date(str));
+                } else {
+                    let value: Vec<u8> = row.get_unchecked(col);
+                    return Self::parse_date(value);
+                }
             }
             MysqlColType::DateTime => {
-                let value: Vec<u8> = row.get_unchecked(col);
-                return MysqlColValueConvertor::parse_datetime(value);
+                if *db_type == DbType::StarRocks {
+                    let value: Vec<u8> = row.get_unchecked(col);
+                    let str: String = String::from_utf8_lossy(&value).to_string();
+                    return Ok(ColValue::DateTime(str));
+                } else {
+                    let value: Vec<u8> = row.get_unchecked(col);
+                    return Self::parse_datetime(value);
+                }
             }
             MysqlColType::Timestamp { timezone_offset: _ } => {
                 let value: Vec<u8> = row.get_unchecked(col);
-                return MysqlColValueConvertor::parse_timestamp(value);
+                return Self::parse_timestamp(value);
             }
             MysqlColType::Year => {
                 let value: u16 = row.try_get(col)?;
@@ -364,5 +380,20 @@ impl MysqlColValueConvertor {
             _ => {}
         }
         Ok(ColValue::None)
+    }
+
+    fn try_blob_to_string(blob: Vec<u8>, col_type: &MysqlColType) -> ColValue {
+        // TODO, transfer blob into string with the column charset by encoding_rs
+        match col_type {
+            // tinytext, text, mediumtext, longtext, char, varchar, binary, varbinary
+            MysqlColType::String { .. } => {
+                if let Ok(str) = String::from_utf8(blob.clone()) {
+                    ColValue::String(str)
+                } else {
+                    ColValue::Blob(blob)
+                }
+            }
+            _ => ColValue::Blob(blob),
+        }
     }
 }
