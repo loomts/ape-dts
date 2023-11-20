@@ -188,10 +188,8 @@ impl TaskRunner {
         shut_down: Arc<AtomicBool>,
         syncer: Arc<Mutex<Syncer>>,
     ) -> Result<Box<dyn Extractor + Send>, Error> {
-        let resumer = SnapshotResumer {
-            resumer_values: self.config.resumer.resume_values.clone(),
-            db_type: self.config.extractor_basic.db_type.clone(),
-        };
+        let resumer =
+            SnapshotResumer::new(&self.config.extractor_basic.db_type, &self.config.resumer)?;
 
         let extractor: Box<dyn Extractor + Send> = match extractor_config {
             ExtractorConfig::MysqlSnapshot { url, db, tb } => {
