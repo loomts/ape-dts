@@ -1,9 +1,14 @@
 use std::{
+    collections::HashMap,
     fs::{self, File},
     io::Read,
-    sync::{atomic::AtomicBool, Arc, Mutex},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
 };
 
+use async_rwlock::RwLock;
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
     config::{
@@ -11,9 +16,11 @@ use dt_common::{
         extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
     },
     error::Error,
-    utils::rdb_filter::RdbFilter,
+    log_monitor,
+    monitor::monitor::{CounterType, Monitor},
+    utils::{rdb_filter::RdbFilter, time_util::TimeUtil},
 };
-use dt_connector::{extractor::snapshot_resumer::SnapshotResumer, Extractor};
+use dt_connector::{extractor::snapshot_resumer::SnapshotResumer, Extractor, Sinker};
 use dt_meta::{dt_data::DtItem, position::Position, row_type::RowType, syncer::Syncer};
 use dt_pipeline::{base_pipeline::BasePipeline, Pipeline};
 
@@ -131,6 +138,7 @@ impl TaskRunner {
             checkpoint_position: Position::None,
         }));
 
+        // extractor
         let mut extractor = self
             .create_extractor(
                 extractor_config,
@@ -139,20 +147,46 @@ impl TaskRunner {
                 syncer.clone(),
             )
             .await?;
+        let extractor_monitor = extractor.get_monitor();
 
+        // sinkers
+        let transaction_command = self.fetch_transaction_command();
+        let sinkers = SinkerUtil::create_sinkers(&self.config, transaction_command).await?;
+
+        let mut sinker_monitors = Vec::new();
+        for sinker in sinkers.iter() {
+            sinker_monitors.push(sinker.lock().await.get_monitor())
+        }
+
+        // pipeline
         let mut pipeline = self
-            .create_pipeline(buffer, shut_down.clone(), syncer)
+            .create_pipeline(buffer, shut_down.clone(), syncer, sinkers)
             .await?;
+        let pipeline_monitor = pipeline.get_monitor();
 
+        // start threads
         let f1 = tokio::spawn(async move {
             extractor.extract().await.unwrap();
             extractor.close().await.unwrap();
         });
+
         let f2 = tokio::spawn(async move {
             pipeline.start().await.unwrap();
             pipeline.stop().await.unwrap();
         });
-        let _ = try_join!(f1, f2);
+
+        let interval_secs = self.config.pipeline.checkpoint_interval_secs as usize;
+        let f3 = tokio::spawn(async move {
+            Self::flush_monitors(
+                interval_secs,
+                shut_down,
+                extractor_monitor,
+                pipeline_monitor,
+                sinker_monitors,
+            )
+            .await
+        });
+        let _ = try_join!(f1, f2, f3);
         Ok(())
     }
 
@@ -161,12 +195,9 @@ impl TaskRunner {
         buffer: Arc<ConcurrentQueue<DtItem>>,
         shut_down: Arc<AtomicBool>,
         syncer: Arc<Mutex<Syncer>>,
+        sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
     ) -> Result<Box<dyn Pipeline + Send>, Error> {
-        let transaction_command = self.fetch_transaction_command();
-
         let parallelizer = ParallelizerUtil::create_parallelizer(&self.config).await?;
-        let sinkers = SinkerUtil::create_sinkers(&self.config, transaction_command).await?;
-
         let pipeline = BasePipeline {
             buffer,
             parallelizer,
@@ -175,7 +206,8 @@ impl TaskRunner {
             shut_down,
             checkpoint_interval_secs: self.config.pipeline.checkpoint_interval_secs,
             batch_sink_interval_secs: self.config.pipeline.batch_sink_interval_secs,
-            syncer: syncer.to_owned(),
+            syncer,
+            monitor: Arc::new(RwLock::new(Monitor::new_default())),
         };
 
         Ok(Box::new(pipeline))
@@ -475,5 +507,141 @@ impl TaskRunner {
         let config: RawConfig = serde_yaml::from_str(&config_str)?;
         log4rs::init_raw_config(config).unwrap();
         Ok(())
+    }
+
+    async fn flush_monitors(
+        interval_secs: usize,
+        shut_down: Arc<AtomicBool>,
+        extractor_monitor: Option<Arc<RwLock<Monitor>>>,
+        pipeline_monitor: Option<Arc<RwLock<Monitor>>>,
+        mut sinker_monitors: Vec<Option<Arc<RwLock<Monitor>>>>,
+    ) {
+        // override the interval_secs
+        if let Some(monitor) = &extractor_monitor {
+            monitor.write().await.time_window_secs = interval_secs;
+        }
+        if let Some(monitor) = &pipeline_monitor {
+            monitor.write().await.time_window_secs = interval_secs;
+        }
+        for monitor in sinker_monitors.iter_mut() {
+            if let Some(monitor) = monitor {
+                monitor.write().await.time_window_secs = interval_secs;
+            }
+        }
+
+        loop {
+            // do an extra flush before exit if task finished
+            let finished = shut_down.load(Ordering::Acquire);
+            if !finished {
+                TimeUtil::sleep_millis(interval_secs as u64 * 1000).await;
+            }
+
+            // aggregate extractor counters
+            if let Some(monitor) = &extractor_monitor {
+                for (counter_type, counter) in monitor.write().await.time_window_counters.iter_mut()
+                {
+                    counter.refresh_window();
+                    let agrregate = match counter_type {
+                        _ => 0,
+                    };
+                    log_monitor!("extractor | {} | {}", counter_type.to_string(), agrregate)
+                }
+
+                for (counter_type, counter) in monitor.read().await.accumulate_counters.iter() {
+                    log_monitor!(
+                        "extractor | {} | {}",
+                        counter_type.to_string(),
+                        counter.value
+                    )
+                }
+            }
+
+            // aggregate pipeline counters
+            if let Some(monitor) = &pipeline_monitor {
+                for (counter_type, counter) in monitor.write().await.time_window_counters.iter_mut()
+                {
+                    counter.refresh_window();
+                    let agrregate = match counter_type {
+                        CounterType::BufferSize => counter.avg_by_count(),
+                        _ => 0,
+                    };
+                    log_monitor!("pipeline | {} | {}", counter_type.to_string(), agrregate)
+                }
+
+                for (counter_type, counter) in monitor.read().await.accumulate_counters.iter() {
+                    log_monitor!(
+                        "pipeline | {} | {}",
+                        counter_type.to_string(),
+                        counter.value
+                    )
+                }
+            }
+
+            // aggregate sinker monitors
+            let mut time_window_aggregates = HashMap::new();
+            let mut accumulate_aggregates = HashMap::new();
+            for monitor in sinker_monitors.iter_mut() {
+                if monitor.is_none() {
+                    continue;
+                }
+
+                if let Some(monitor) = monitor {
+                    // time window counters
+                    for (counter_type, counter) in
+                        monitor.write().await.time_window_counters.iter_mut()
+                    {
+                        counter.refresh_window();
+                        let (sum, count) =
+                            if let Some((sum, count)) = time_window_aggregates.get(counter_type) {
+                                (*sum, *count)
+                            } else {
+                                (0, 0)
+                            };
+                        time_window_aggregates.insert(
+                            counter_type.clone(),
+                            (counter.sum() + sum, counter.count() + count),
+                        );
+                    }
+
+                    // accumulate counters
+                    for (counter_type, counter) in monitor.read().await.accumulate_counters.iter() {
+                        let sum = if let Some(sum) = accumulate_aggregates.get(counter_type) {
+                            *sum
+                        } else {
+                            0
+                        };
+                        accumulate_aggregates.insert(counter_type.clone(), counter.value + sum);
+                    }
+                }
+            }
+
+            for (counter_type, (sum, count)) in time_window_aggregates {
+                let agrregate = match counter_type {
+                    CounterType::BatchWriteFailures | CounterType::SerialWrites => sum,
+
+                    CounterType::Records => sum / interval_secs,
+
+                    CounterType::BytesPerQuery
+                    | CounterType::RecordsPerQuery
+                    | CounterType::RtPerQuery => {
+                        if count > 0 {
+                            sum / count
+                        } else {
+                            0
+                        }
+                    }
+                    _ => 0,
+                };
+                log_monitor!("sinker | {} | {}", counter_type.to_string(), agrregate);
+            }
+
+            for (counter_type, sum) in accumulate_aggregates {
+                log_monitor!("sinker | {} | {}", counter_type.to_string(), sum);
+            }
+
+            if finished {
+                break;
+            }
+        }
     }
 }

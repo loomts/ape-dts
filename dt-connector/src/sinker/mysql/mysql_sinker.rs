@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{str::FromStr, sync::Arc, time::Instant};
 
 use crate::{
     call_batch_fn, close_conn_pool,
@@ -7,7 +7,12 @@ use crate::{
     Sinker,
 };
 
-use dt_common::{error::Error, log_error, log_info};
+use async_rwlock::RwLock;
+use dt_common::{
+    error::Error,
+    log_error, log_info,
+    monitor::monitor::{CounterType, Monitor},
+};
 
 use dt_meta::{
     ddl_data::DdlData,
@@ -31,7 +36,7 @@ pub struct MysqlSinker {
     pub meta_manager: MysqlMetaManager,
     pub router: RdbRouter,
     pub batch_size: usize,
-
+    pub monitor: Arc<RwLock<Monitor>>,
     pub transaction_command: String,
 }
 
@@ -91,6 +96,10 @@ impl Sinker for MysqlSinker {
         }
         Ok(())
     }
+
+    fn get_monitor(&self) -> Option<Arc<RwLock<Monitor>>> {
+        Some(self.monitor.clone())
+    }
 }
 
 impl MysqlSinker {
@@ -147,6 +156,8 @@ impl MysqlSinker {
             query_builder.get_batch_delete_query(data, start_index, batch_size)?;
         let query = query_builder.create_mysql_query(&sql, &cols, &binds);
 
+        let start_time = Instant::now();
+
         if self.is_transaction_enable() {
             let mut transaction = self.conn_pool.begin().await.unwrap();
 
@@ -159,6 +170,8 @@ impl MysqlSinker {
             query.execute(&self.conn_pool).await.unwrap();
         }
 
+        self.update_monitor(batch_size, start_time.elapsed().as_micros())
+            .await;
         Ok(())
     }
 
@@ -176,6 +189,7 @@ impl MysqlSinker {
         sql = self.handle_dialect(&sql);
         let query = query_builder.create_mysql_query(&sql, &cols, &binds);
 
+        let start_time = Instant::now();
         let execute_error: Option<sqlx::Error>;
 
         if self.is_transaction_enable() {
@@ -207,6 +221,9 @@ impl MysqlSinker {
             let sub_data = &data[start_index..start_index + batch_size];
             self.serial_sink(sub_data.to_vec()).await.unwrap();
         }
+
+        self.update_monitor(batch_size, start_time.elapsed().as_micros())
+            .await;
         Ok(())
     }
 
@@ -229,5 +246,14 @@ impl MysqlSinker {
 
     fn is_transaction_enable(&self) -> bool {
         !self.transaction_command.is_empty()
+    }
+
+    async fn update_monitor(&mut self, record_count: usize, rt: u128) {
+        self.monitor
+            .write()
+            .await
+            .add_counter(CounterType::RecordsPerQuery, record_count)
+            .add_counter(CounterType::Records, record_count)
+            .add_counter(CounterType::RtPerQuery, rt as usize);
     }
 }

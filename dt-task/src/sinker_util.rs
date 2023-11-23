@@ -1,5 +1,6 @@
 use std::{str::FromStr, sync::Arc, time::Duration};
 
+use async_rwlock::RwLock;
 use dt_common::{
     config::{
         config_enums::{ConflictPolicyEnum, DbType},
@@ -7,6 +8,7 @@ use dt_common::{
         task_config::TaskConfig,
     },
     error::Error,
+    monitor::monitor::Monitor,
 };
 use dt_connector::{
     sinker::{
@@ -240,6 +242,9 @@ impl SinkerUtil {
 
         let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
         let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
+        // to avoid contention for monitor write lock between sinker threads,
+        // create a monitor for each sinker instead of sharing a single monitor between sinkers,
+        // sometimes a sinker may cost several millis to get write lock for a global monitor.
         for _ in 0..parallel_size {
             let sinker = MysqlSinker {
                 url: url.to_string(),
@@ -248,6 +253,7 @@ impl SinkerUtil {
                 router: router.clone(),
                 batch_size,
                 transaction_command: transaction_command.to_owned(),
+                monitor: Arc::new(RwLock::new(Monitor::new_default())),
             };
             sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
         }

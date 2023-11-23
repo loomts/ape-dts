@@ -4,6 +4,7 @@ use std::{
     sync::{atomic::AtomicBool, Arc, Mutex},
 };
 
+use async_rwlock::RwLock;
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
     config::{
@@ -12,6 +13,7 @@ use dt_common::{
     },
     datamarker::transaction_control::TransactionWorker,
     error::Error,
+    monitor::monitor::Monitor,
     utils::rdb_filter::RdbFilter,
 };
 use dt_connector::{
@@ -247,6 +249,7 @@ impl ExtractorUtil {
             tb: tb.to_string(),
             slice_size,
             shut_down,
+            monitor: Arc::new(RwLock::new(Monitor::new_default())),
         })
     }
 
