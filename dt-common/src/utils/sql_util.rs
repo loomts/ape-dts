@@ -63,7 +63,7 @@ impl SqlUtil {
         let is_valid_token = |token: &str, db_type: &DbType| -> bool {
             match db_type {
                 DbType::Mysql | DbType::Pg => {
-                    let pattern = format!(r"^[a-zA-Z0-9_\?\*]{{1,{}}}$", max_token_len);
+                    let pattern = format!(r"^[a-zA-Z0-9_\?\*\-]{{1,{}}}$", max_token_len);
                     Regex::new(&pattern).unwrap().is_match(token)
                 }
                 // TODO
@@ -72,7 +72,7 @@ impl SqlUtil {
         };
 
         for escape_pair in escape_pairs.iter() {
-            // token is surrounded by escapes
+            // token is enclosed by escapes
             if Self::is_escaped(token, escape_pair) {
                 let unescaped_token = Self::unescape(token, escape_pair);
                 return !unescaped_token.contains(escape_pair.0)
@@ -81,7 +81,7 @@ impl SqlUtil {
                     && unescaped_token.len() <= max_token_len;
             }
         }
-        // token NOT surrounded by escapes
+        // token NOT enclosed by escapes
         // is_valid_token(token, db_type)
         // TODO: currently disable token validation since precheck does not support escape, 2023-11-16
         true
@@ -116,6 +116,11 @@ mod tests {
         assert!(SqlUtil::is_valid_token("?", &db_type, &escape_pairs));
         assert!(SqlUtil::is_valid_token("*?", &db_type, &escape_pairs));
         assert!(SqlUtil::is_valid_token("a*b?c", &db_type, &escape_pairs));
+        assert!(SqlUtil::is_valid_token(
+            "a*b?c-d-e",
+            &db_type,
+            &escape_pairs
+        ));
 
         // empty
         assert!(!SqlUtil::is_valid_token("", &db_type, &escape_pairs));
