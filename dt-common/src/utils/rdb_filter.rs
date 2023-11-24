@@ -106,8 +106,8 @@ impl RdbFilter {
     }
 
     pub fn filter_event(&mut self, db: &str, tb: &str, row_type: &str) -> bool {
-        if self.do_events.is_empty() || !self.do_events.contains(row_type) {
-            return false;
+        if !self.do_events.is_empty() && !self.do_events.contains(row_type) {
+            return true;
         }
         self.filter_transaction_tb(db, tb)
     }
@@ -775,5 +775,36 @@ mod tests {
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
         assert!(!rdb_fitler.filter_db("test_db_*"));
+    }
+
+    #[test]
+    fn test_rdb_filter_event() {
+        let db_type = DbType::Mysql;
+
+        // keep do_events emtpy
+        let config = FilterConfig::Rdb {
+            do_dbs: "test_db_*".to_string(),
+            ignore_dbs: "test_db_2".to_string(),
+            do_tbs: String::new(),
+            ignore_tbs: String::new(),
+            do_events: String::new(),
+        };
+        let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
+        assert!(!rdb_fitler.filter_event("test_db_1", "aaaa", "insert"));
+        assert!(!rdb_fitler.filter_event("test_db_1", "aaaa", "update"));
+        assert!(!rdb_fitler.filter_event("test_db_1", "aaaa", "delete"));
+
+        // explicitly set do_events
+        let config = FilterConfig::Rdb {
+            do_dbs: "test_db_*".to_string(),
+            ignore_dbs: "test_db_2".to_string(),
+            do_tbs: String::new(),
+            ignore_tbs: String::new(),
+            do_events: String::from("insert"),
+        };
+        let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
+        assert!(!rdb_fitler.filter_event("test_db_1", "aaaa", "insert"));
+        assert!(rdb_fitler.filter_event("test_db_1", "aaaa", "update"));
+        assert!(rdb_fitler.filter_event("test_db_1", "aaaa", "delete"));
     }
 }

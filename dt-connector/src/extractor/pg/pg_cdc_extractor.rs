@@ -37,6 +37,7 @@ use dt_meta::{
     dt_data::{DtData, DtItem},
     pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
     position::Position,
+    rdb_tb_meta::RdbTbMeta,
     row_data::RowData,
     row_type::RowType,
     syncer::Syncer,
@@ -206,12 +207,19 @@ impl PgCdcExtractor {
     }
 
     async fn decode_relation(&mut self, event: &RelationBody) -> Result<(), Error> {
-        // todo, use event.rel_id()
-        let mut tb_meta = self
-            .meta_manager
-            .get_tb_meta(event.namespace()?, event.name()?)
-            .await?;
+        let schema = event.namespace()?;
+        let tb = event.name()?;
+        // if the tb is filtered, we won't try to get the tb_meta since we may get privilege errors,
+        // but we need to keep the oid —— tb_meta map which may be used for decoding events.
+        if self.filter.filter_tb(schema, tb) {
+            let tb_meta = Self::mock_pg_tb_meta(schema, tb, event.rel_id() as i32);
+            self.meta_manager
+                .update_tb_meta_by_oid(event.rel_id() as i32, tb_meta)?;
+            return Ok(());
+        }
 
+        // todo, use event.rel_id()
+        let mut tb_meta = self.meta_manager.get_tb_meta(schema, tb).await?;
         let mut col_names = Vec::new();
         for column in event.columns() {
             // todo: check type_id in oid_to_type
@@ -245,8 +253,11 @@ impl PgCdcExtractor {
         let tb_meta = self
             .meta_manager
             .get_tb_meta_by_oid(event.rel_id() as i32)?;
-        let col_values = self.parse_row_data(&tb_meta, event.tuple().tuple_data())?;
+        if self.filter_event(&tb_meta, RowType::Insert) {
+            return Ok(());
+        }
 
+        let col_values = self.parse_row_data(&tb_meta, event.tuple().tuple_data())?;
         let row_data = RowData {
             schema: tb_meta.basic.schema,
             tb: tb_meta.basic.tb,
@@ -265,10 +276,12 @@ impl PgCdcExtractor {
         let tb_meta = self
             .meta_manager
             .get_tb_meta_by_oid(event.rel_id() as i32)?;
+        if self.filter_event(&tb_meta, RowType::Update) {
+            return Ok(());
+        }
+
         let basic = &tb_meta.basic;
-
         let col_values_after = self.parse_row_data(&tb_meta, event.new_tuple().tuple_data())?;
-
         let col_values_before = if let Some(old_tuple) = event.old_tuple() {
             self.parse_row_data(&tb_meta, old_tuple.tuple_data())?
         } else if let Some(key_tuple) = event.key_tuple() {
@@ -301,6 +314,9 @@ impl PgCdcExtractor {
         let tb_meta = self
             .meta_manager
             .get_tb_meta_by_oid(event.rel_id() as i32)?;
+        if self.filter_event(&tb_meta, RowType::Delete) {
+            return Ok(());
+        }
 
         let col_values = if let Some(old_tuple) = event.old_tuple() {
             self.parse_row_data(&tb_meta, old_tuple.tuple_data())?
@@ -357,19 +373,35 @@ impl PgCdcExtractor {
         row_data: RowData,
         position: Position,
     ) -> Result<(), Error> {
-        if self.filter.filter_event(
-            &row_data.schema,
-            &row_data.tb,
-            &row_data.row_type.to_string(),
-        ) {
-            return Ok(());
-        }
-
         let item = DtItem {
             dt_data: DtData::Dml { row_data },
             position,
         };
         self.buffer.push(item).unwrap();
         Ok(())
+    }
+
+    fn filter_event(&mut self, tb_meta: &PgTbMeta, row_type: RowType) -> bool {
+        self.filter.filter_event(
+            &tb_meta.basic.schema,
+            &tb_meta.basic.tb,
+            &row_type.to_string(),
+        )
+    }
+
+    fn mock_pg_tb_meta(schema: &str, tb: &str, oid: i32) -> PgTbMeta {
+        PgTbMeta {
+            basic: RdbTbMeta {
+                schema: schema.into(),
+                tb: tb.into(),
+                cols: Vec::new(),
+                key_map: HashMap::new(),
+                order_col: None,
+                partition_col: String::new(),
+                id_cols: Vec::new(),
+            },
+            oid,
+            col_type_map: HashMap::new(),
+        }
     }
 }

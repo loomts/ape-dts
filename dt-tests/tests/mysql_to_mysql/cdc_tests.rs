@@ -44,6 +44,23 @@ mod test {
 
     #[tokio::test]
     #[serial]
+    async fn cdc_special_character_in_name_test() {
+        TestBase::run_cdc_test(
+            "mysql_to_mysql/cdc/special_character_in_name_test",
+            3000,
+            2000,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn cdc_wildchar_filter_test() {
+        TestBase::run_cdc_test("mysql_to_mysql/cdc/wildchar_filter_test", 3000, 2000).await;
+    }
+
+    #[tokio::test]
+    #[serial]
     async fn circle_basic_test() {
         RdbCycleTestRunner::run_cycle_cdc_test(
             "mysql_to_mysql/cdc/cycle_basic_test",

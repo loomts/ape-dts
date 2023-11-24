@@ -121,6 +121,10 @@ impl MysqlCdcExtractor {
             EventData::WriteRows(mut w) => {
                 for event in w.rows.iter_mut() {
                     let table_map_event = table_map_event_map.get(&w.table_id).unwrap();
+                    if self.filter_event(table_map_event, RowType::Insert) {
+                        continue;
+                    }
+
                     let col_values = self
                         .parse_row_data(table_map_event, &w.included_columns, event)
                         .await?;
@@ -138,6 +142,10 @@ impl MysqlCdcExtractor {
             EventData::UpdateRows(mut u) => {
                 for event in u.rows.iter_mut() {
                     let table_map_event = table_map_event_map.get(&u.table_id).unwrap();
+                    if self.filter_event(table_map_event, RowType::Update) {
+                        continue;
+                    }
+
                     let col_values_before = self
                         .parse_row_data(table_map_event, &u.included_columns_before, &mut event.0)
                         .await?;
@@ -158,6 +166,10 @@ impl MysqlCdcExtractor {
             EventData::DeleteRows(mut d) => {
                 for event in d.rows.iter_mut() {
                     let table_map_event = table_map_event_map.get(&d.table_id).unwrap();
+                    if self.filter_event(table_map_event, RowType::Delete) {
+                        continue;
+                    }
+
                     let col_values = self
                         .parse_row_data(table_map_event, &d.included_columns, event)
                         .await?;
@@ -202,14 +214,6 @@ impl MysqlCdcExtractor {
         row_data: RowData,
         position: Position,
     ) -> Result<(), Error> {
-        if self.filter.filter_event(
-            &row_data.schema,
-            &row_data.tb,
-            &row_data.row_type.to_string(),
-        ) {
-            return Ok(());
-        }
-
         if match &mut self.datamarker_filter {
             Some(f) => f.filter_rowdata(&row_data)?,
             None => false,
@@ -313,5 +317,13 @@ impl MysqlCdcExtractor {
                 .await?;
         }
         Ok(())
+    }
+
+    fn filter_event(&mut self, table_map_event: &TableMapEvent, row_type: RowType) -> bool {
+        self.filter.filter_event(
+            &table_map_event.database_name,
+            &table_map_event.table_name,
+            &row_type.to_string(),
+        )
     }
 }

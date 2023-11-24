@@ -24,8 +24,8 @@ mod test {
 
     #[tokio::test]
     #[serial]
-    async fn snapshot_wildchar_test() {
-        TestBase::run_snapshot_test("pg_to_pg/snapshot/wildchar_test").await;
+    async fn snapshot_wildchar_filter_test() {
+        TestBase::run_snapshot_test("pg_to_pg/snapshot/wildchar_filter_test").await;
     }
 
     #[tokio::test]
@@ -73,30 +73,7 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn snapshot_special_character_in_name_test() {
-        let mut dst_expected_counts = HashMap::new();
-        dst_expected_counts.insert(r#""test_db_*.*"."one_pk_no_uk_1_*.*""#, 0);
-        dst_expected_counts.insert(r#""test_db_*.*"."one_pk_no_uk_2_*.*""#, 0);
-        dst_expected_counts.insert(r#""test_db_&.&"."one_pk_no_uk_1_&.&""#, 0);
-        dst_expected_counts.insert(r#""test_db_&.&"."one_pk_no_uk_2_&.&""#, 0);
-        dst_expected_counts.insert(r#""test_db_^.^"."one_pk_no_uk_1_^.^""#, 0);
-        dst_expected_counts.insert(r#""test_db_^.^"."one_pk_no_uk_2_^.^""#, 2);
-        dst_expected_counts.insert(r#""test_db_@.@"."one_pk_no_uk_1_@.@""#, 0);
-        dst_expected_counts.insert(r#""test_db_@.@"."one_pk_no_uk_2_@.@""#, 2);
-        dst_expected_counts.insert(r#""*.*_test_db"."one_pk_no_uk_1_*.*""#, 0);
-        dst_expected_counts.insert(r#""*.*_test_db"."one_pk_no_uk_2_*.*""#, 2);
-        dst_expected_counts.insert(r#""&.&_test_db"."one_pk_no_uk_1_&.&""#, 0);
-        dst_expected_counts.insert(r#""&.&_test_db"."one_pk_no_uk_2_&.&""#, 2);
-        dst_expected_counts.insert(r#""^.^_test_db"."one_pk_no_uk_1_^.^""#, 0);
-        dst_expected_counts.insert(r#""^.^_test_db"."one_pk_no_uk_2_^.^""#, 0);
-        dst_expected_counts.insert(r#""@.@_test_db"."one_pk_no_uk_1_@.@""#, 0);
-        dst_expected_counts.insert(r#""@.@_test_db"."one_pk_no_uk_2_@.@""#, 0);
-
-        TestBase::run_snapshot_test_and_check_dst_count(
-            "pg_to_pg/snapshot/special_character_in_name_test",
-            &DbType::Pg,
-            dst_expected_counts,
-        )
-        .await;
+        TestBase::run_snapshot_test("pg_to_pg/snapshot/special_character_in_name_test").await;
     }
 
     #[tokio::test]
