@@ -6,13 +6,14 @@ use std::{
     time::Instant,
 };
 
+use async_rwlock::RwLock;
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
     config::sinker_config::SinkerBasicConfig,
     error::Error,
-    log_info, log_monitor, log_position,
-    monitor::{counter::Counter, statistic_counter::StatisticCounter},
+    log_info, log_position,
+    monitor::monitor::{CounterType, Monitor},
     utils::time_util::TimeUtil,
 };
 use dt_connector::Sinker;
@@ -36,6 +37,7 @@ pub struct BasePipeline {
     pub checkpoint_interval_secs: u64,
     pub batch_sink_interval_secs: u64,
     pub syncer: Arc<Mutex<Syncer>>,
+    pub monitor: Arc<RwLock<Monitor>>,
 }
 
 enum SinkMethod {
@@ -63,12 +65,15 @@ impl Pipeline for BasePipeline {
 
         let mut last_sink_time = Instant::now();
         let mut last_checkpoint_time = Instant::now();
-        let mut count_counter = Counter::new();
-        let mut tps_counter = StatisticCounter::new(self.checkpoint_interval_secs);
         let mut last_received_position = Option::None;
         let mut last_commit_position = Option::None;
 
         while !self.shut_down.load(Ordering::Acquire) || !self.buffer.is_empty() {
+            self.monitor
+                .write()
+                .await
+                .add_counter(CounterType::BufferSize, self.buffer.len());
+
             // some sinkers (foxlake) need to accumulate data to a big batch and sink
             let data = if last_sink_time.elapsed().as_secs() < self.batch_sink_interval_secs
                 && !self.buffer.is_full()
@@ -80,7 +85,7 @@ impl Pipeline for BasePipeline {
             };
 
             // process all row_datas in buffer at a time
-            let mut sink_count = 0;
+            let mut sinked_count = 0;
             if !data.is_empty() {
                 let (count, last_received, last_commit) = match Self::get_sink_method(&data) {
                     SinkMethod::Ddl => self.sink_ddl(data).await.unwrap(),
@@ -88,7 +93,7 @@ impl Pipeline for BasePipeline {
                     SinkMethod::Raw => self.sink_raw(data).await.unwrap(),
                 };
 
-                sink_count = count;
+                sinked_count = count;
                 last_received_position = last_received;
                 if last_commit.is_some() {
                     last_commit_position = last_commit;
@@ -99,16 +104,22 @@ impl Pipeline for BasePipeline {
                 last_checkpoint_time,
                 &last_received_position,
                 &last_commit_position,
-                &mut tps_counter,
-                &mut count_counter,
-                sink_count as u64,
             );
+
+            self.monitor
+                .write()
+                .await
+                .add_counter(CounterType::SinkedCount, sinked_count);
 
             // sleep 1 millis for data preparing
             TimeUtil::sleep_millis(1).await;
         }
 
         Ok(())
+    }
+
+    fn get_monitor(&self) -> Option<Arc<RwLock<Monitor>>> {
+        Some(self.monitor.clone())
     }
 }
 
@@ -267,13 +278,7 @@ impl BasePipeline {
         last_checkpoint_time: Instant,
         last_received_position: &Option<Position>,
         last_commit_position: &Option<Position>,
-        tps_counter: &mut StatisticCounter,
-        count_counter: &mut Counter,
-        count: u64,
     ) -> Instant {
-        tps_counter.add(count);
-        count_counter.add(count);
-
         if last_checkpoint_time.elapsed().as_secs() < self.checkpoint_interval_secs {
             return last_checkpoint_time;
         }
@@ -286,10 +291,6 @@ impl BasePipeline {
             log_position!("checkpoint_position | {}", position.to_string());
             self.syncer.lock().unwrap().checkpoint_position = position.clone();
         }
-
-        log_monitor!("avg tps: {}", tps_counter.avg(),);
-        log_monitor!("sinked count: {}", count_counter.value);
-
         Instant::now()
     }
 }

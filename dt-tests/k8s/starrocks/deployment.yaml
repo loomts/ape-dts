@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-starrocks-5-1-dst
+  namespace: dts 
+  labels:
+    app: starrocks
+    version: "5.1"
+    use: dst
+spec:
+  containers:
+  - name: starrocks-container
+    image: starrocks.docker.scarf.sh/starrocks/allin1-ubuntu
+    ports:
+      - containerPort: 9030
+      - containerPort: 8030
+      - containerPort: 8040

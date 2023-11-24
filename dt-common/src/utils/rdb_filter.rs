@@ -146,7 +146,7 @@ impl RdbFilter {
     }
 
     fn match_token(pattern: &str, item: &str, escape_pairs: &[(char, char)]) -> bool {
-        // if pattern is quoted by escapes, it is considered as exactly match
+        // if pattern is enclosed by escapes, it is considered as exactly match
         // example: mysql table name : `aaa*`, it can only match the table `aaa*`, it won't match `aaa_bbb`
         for escape_pair in escape_pairs.iter() {
             if SqlUtil::is_escaped(pattern, escape_pair) {
@@ -210,7 +210,7 @@ impl RdbFilter {
         for token in tokens.iter() {
             if !SqlUtil::is_valid_token(token, db_type, escape_pairs) {
                 return Err(Error::ConfigError(format!(
-                    "invalid filter config, check error near: {}",
+                    "invalid filter config, check error near: {}, try enclose database/table/column with escapes if there are special characters other than letters and numbers",
                     token
                 )));
             }

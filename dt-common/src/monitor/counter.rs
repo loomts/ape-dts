@@ -1,26 +1,23 @@
 use std::time::Instant;
 
+#[derive(Clone)]
 pub struct Counter {
     pub timestamp: Instant,
-    pub value: u64,
+    pub value: usize,
+    pub description: String,
 }
 
 impl Counter {
-    pub fn new() -> Self {
+    pub fn new(value: usize) -> Self {
         Self {
             timestamp: Instant::now(),
-            value: 0,
+            value,
+            description: String::new(),
         }
     }
 
     #[inline(always)]
-    pub fn add(&mut self, value: u64) {
+    pub fn add(&mut self, value: usize) {
         self.value += value;
-    }
-}
-
-impl Default for Counter {
-    fn default() -> Self {
-        Self::new()
     }
 }

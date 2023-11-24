@@ -1,5 +1,6 @@
 use std::sync::{atomic::AtomicBool, Arc};
 
+use async_rwlock::RwLock;
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 use dt_meta::{
@@ -17,7 +18,7 @@ use futures::TryStreamExt;
 
 use sqlx::{MySql, Pool};
 
-use dt_common::{config::config_enums::DbType, error::Error, log_info};
+use dt_common::{config::config_enums::DbType, error::Error, log_info, monitor::monitor::Monitor};
 
 use crate::{
     extractor::{base_extractor::BaseExtractor, snapshot_resumer::SnapshotResumer},
@@ -33,6 +34,7 @@ pub struct MysqlSnapshotExtractor {
     pub db: String,
     pub tb: String,
     pub shut_down: Arc<AtomicBool>,
+    pub monitor: Arc<RwLock<Monitor>>,
 }
 
 #[async_trait]
@@ -53,6 +55,10 @@ impl Extractor for MysqlSnapshotExtractor {
         }
         self.conn_pool.close().await;
         Ok(())
+    }
+
+    fn get_monitor(&self) -> Option<Arc<RwLock<Monitor>>> {
+        Some(self.monitor.clone())
     }
 }
 
