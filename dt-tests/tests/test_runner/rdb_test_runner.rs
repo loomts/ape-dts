@@ -208,21 +208,21 @@ impl RdbTestRunner {
         let db_tbs = self.get_compare_db_tbs().await?;
         let src_db_tbs = db_tbs.clone();
         let dst_db_tbs = db_tbs.clone();
-        assert!(self.compare_data_for_tbs(&src_db_tbs, &dst_db_tbs).await?);
+        self.compare_data_for_tbs(&src_db_tbs, &dst_db_tbs).await?;
 
         // update src data
         self.execute_src_sqls(&src_update_sqls).await?;
         if !src_update_sqls.is_empty() {
             TimeUtil::sleep_millis(parse_millis).await;
         }
-        assert!(self.compare_data_for_tbs(&src_db_tbs, &dst_db_tbs).await?);
+        self.compare_data_for_tbs(&src_db_tbs, &dst_db_tbs).await?;
 
         // delete src data
         self.execute_src_sqls(&src_delete_sqls).await?;
         if !src_delete_sqls.is_empty() {
             TimeUtil::sleep_millis(parse_millis).await;
         }
-        assert!(self.compare_data_for_tbs(&src_db_tbs, &dst_db_tbs).await?);
+        self.compare_data_for_tbs(&src_db_tbs, &dst_db_tbs).await?;
         Ok(())
     }
 
@@ -314,16 +314,36 @@ impl RdbTestRunner {
             Vec::new()
         };
 
+        let db_type = &self.get_db_type(SRC);
+        let get_full_tb_names = |db: &str, tb: &str| -> Vec<String> {
+            let escape_db = SqlUtil::escape_by_db_type(db, db_type);
+            let escape_tb = SqlUtil::escape_by_db_type(tb, db_type);
+            vec![
+                format!("{}.{}", db, tb),
+                format!("{}.{}", escape_db, tb),
+                format!("{}.{}", db, escape_tb),
+                format!("{}.{}", escape_db, escape_tb),
+            ]
+        };
+
         for i in 0..src_db_tbs.len() {
-            if filtered_tbs.contains(&format!("{}.{}", &src_db_tbs[i].0, &src_db_tbs[i].1)) {
+            let possible_full_tb_names = get_full_tb_names(&src_db_tbs[i].0, &src_db_tbs[i].1);
+            let mut filtered = false;
+            for full_tb_name in possible_full_tb_names.iter() {
+                if filtered_tbs.contains(full_tb_name) {
+                    filtered = true;
+                    break;
+                }
+            }
+
+            if filtered {
                 let dst_data = self.fetch_data(&dst_db_tbs[i], DST).await?;
-                if dst_data.len() > 0 {
-                    return Ok(false);
+                if !dst_data.is_empty() {
+                    println!("tb: {:?} is filtered but dst is not emtpy", dst_db_tbs[i]);
+                    assert!(false)
                 }
             } else {
-                if !self.compare_tb_data(&src_db_tbs[i], &dst_db_tbs[i]).await? {
-                    return Ok(false);
-                }
+                assert!(self.compare_tb_data(&src_db_tbs[i], &dst_db_tbs[i]).await?)
             }
         }
         Ok(true)
