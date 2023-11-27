@@ -19,6 +19,7 @@ ARG MODULE_NAME="dt-main"
 
 
 ENV RUSTUP_DIST_SERVER=${RUSTUP_DIST_SERVER}
+ENV STARTUP_APP="ape-dts"
 
 RUN --mount=type=cache,target=$CARGO_HOME/git,rw \
     --mount=type=cache,target=$CARGO_HOME/registry,rw \
@@ -82,5 +83,6 @@ ARG APT_MIRROR=mirrors.ustc.edu.cn
 COPY ${LOCAL_CONFIG_PATH} /config_example
 COPY log4rs.yaml /log4rs.yaml
 COPY --from=builder /app/bin/${MODULE_NAME} /ape-dts
+COPY entrypoint.sh /entrypoint.sh
 
-ENTRYPOINT [ "/ape-dts" ]
+ENTRYPOINT ["sh", "/entrypoint.sh"]
