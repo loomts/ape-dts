@@ -44,6 +44,24 @@ impl Sinker for MysqlStructSinker {
 impl MysqlStructSinker {
     async fn sink_internal(&self, model: &mut StructModel) -> Result<(), Error> {
         match model {
+            StructModel::DatabaseModel { name } => {
+                // Todo: CHARACTER SET, COLLATE, ENCRYPTION
+                let sql = format!("create database if not exists `{}`", name);
+                match query(&sql).execute(&self.conn_pool).await {
+                    Ok(_) => {
+                        return {
+                            println!("create database sql:[{}],execute success", sql);
+                            Ok(())
+                        }
+                    }
+                    Err(e) => {
+                        return {
+                            println!("create database sql:[{}],execute failed:{}", sql, e);
+                            Err(Error::from(e))
+                        }
+                    }
+                }
+            }
             StructModel::TableModel {
                 database_name,
                 table_name,
