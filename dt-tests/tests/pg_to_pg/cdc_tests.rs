@@ -52,4 +52,10 @@ mod test {
     async fn cdc_wildchar_filter_test() {
         TestBase::run_cdc_test("pg_to_pg/cdc/wildchar_filter_test", 3000, 2000).await;
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn cdc_route_test() {
+        TestBase::run_cdc_test("pg_to_pg/cdc/route_test", 3000, 2000).await;
+    }
 }

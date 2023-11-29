@@ -41,6 +41,7 @@ use dt_connector::{
         },
         snapshot_resumer::SnapshotResumer,
     },
+    rdb_router::RdbRouter,
 };
 use dt_meta::{
     avro::avro_converter::AvroConverter, dt_data::DtItem, mongo::mongo_cdc_source::MongoCdcSource,
@@ -177,6 +178,7 @@ impl ExtractorUtil {
         log_level: &str,
         shut_down: Arc<AtomicBool>,
         datamarker_filter: Option<Box<dyn DataMarkerFilter + Send>>,
+        router: RdbRouter,
     ) -> Result<MysqlCdcExtractor, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool = TaskUtil::create_mysql_conn_pool(url, 2, enable_sqlx_log).await?;
@@ -192,6 +194,7 @@ impl ExtractorUtil {
             server_id,
             shut_down,
             datamarker_filter,
+            router,
         })
     }
 
@@ -206,6 +209,7 @@ impl ExtractorUtil {
         log_level: &str,
         shut_down: Arc<AtomicBool>,
         syncer: Arc<Mutex<Syncer>>,
+        router: RdbRouter,
     ) -> Result<PgCdcExtractor, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool = TaskUtil::create_pg_conn_pool(url, 2, enable_sqlx_log).await?;
@@ -221,6 +225,7 @@ impl ExtractorUtil {
             shut_down,
             syncer,
             heartbeat_interval_secs,
+            router,
         })
     }
 
@@ -234,6 +239,7 @@ impl ExtractorUtil {
         buffer: Arc<ConcurrentQueue<DtItem>>,
         log_level: &str,
         shut_down: Arc<AtomicBool>,
+        router: RdbRouter,
     ) -> Result<MysqlSnapshotExtractor, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         // max_connections: 1 for extracting data from table, 1 for db-meta-manager
@@ -250,6 +256,7 @@ impl ExtractorUtil {
             slice_size,
             shut_down,
             monitor: Arc::new(RwLock::new(Monitor::new_default())),
+            router,
         })
     }
 
@@ -260,6 +267,7 @@ impl ExtractorUtil {
         buffer: Arc<ConcurrentQueue<DtItem>>,
         log_level: &str,
         shut_down: Arc<AtomicBool>,
+        router: RdbRouter,
     ) -> Result<MysqlCheckExtractor, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool = TaskUtil::create_mysql_conn_pool(url, 2, enable_sqlx_log).await?;
@@ -272,6 +280,7 @@ impl ExtractorUtil {
             check_log_dir: check_log_dir.to_string(),
             batch_size,
             shut_down,
+            router,
         })
     }
 
@@ -282,6 +291,7 @@ impl ExtractorUtil {
         buffer: Arc<ConcurrentQueue<DtItem>>,
         log_level: &str,
         shut_down: Arc<AtomicBool>,
+        router: RdbRouter,
     ) -> Result<PgCheckExtractor, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool = TaskUtil::create_pg_conn_pool(url, 2, enable_sqlx_log).await?;
@@ -294,6 +304,7 @@ impl ExtractorUtil {
             buffer,
             batch_size,
             shut_down,
+            router,
         })
     }
 
@@ -307,6 +318,7 @@ impl ExtractorUtil {
         buffer: Arc<ConcurrentQueue<DtItem>>,
         log_level: &str,
         shut_down: Arc<AtomicBool>,
+        router: RdbRouter,
     ) -> Result<PgSnapshotExtractor, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool = TaskUtil::create_pg_conn_pool(url, 2, enable_sqlx_log).await?;
@@ -321,6 +333,7 @@ impl ExtractorUtil {
             schema: db.to_string(),
             tb: tb.to_string(),
             shut_down,
+            router,
         })
     }
 
@@ -331,6 +344,7 @@ impl ExtractorUtil {
         resumer: SnapshotResumer,
         buffer: Arc<ConcurrentQueue<DtItem>>,
         shut_down: Arc<AtomicBool>,
+        router: RdbRouter,
     ) -> Result<MongoSnapshotExtractor, Error> {
         let mongo_client = TaskUtil::create_mongo_client(url).await.unwrap();
         Ok(MongoSnapshotExtractor {
@@ -340,6 +354,7 @@ impl ExtractorUtil {
             tb: tb.to_string(),
             shut_down,
             mongo_client,
+            router,
         })
     }
 
@@ -351,6 +366,7 @@ impl ExtractorUtil {
         buffer: Arc<ConcurrentQueue<DtItem>>,
         filter: RdbFilter,
         shut_down: Arc<AtomicBool>,
+        router: RdbRouter,
     ) -> Result<MongoCdcExtractor, Error> {
         let mongo_client = TaskUtil::create_mongo_client(url).await.unwrap();
         Ok(MongoCdcExtractor {
@@ -361,6 +377,7 @@ impl ExtractorUtil {
             source: MongoCdcSource::from_str(source)?,
             shut_down,
             mongo_client,
+            router,
         })
     }
 

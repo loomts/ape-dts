@@ -30,7 +30,8 @@ use mysql_binlog_connector_rust::{
 use dt_common::{error::Error, log_error, log_info, utils::rdb_filter::RdbFilter};
 
 use crate::{
-    datamarker::traits::DataMarkerFilter, extractor::base_extractor::BaseExtractor, Extractor,
+    datamarker::traits::DataMarkerFilter, extractor::base_extractor::BaseExtractor,
+    rdb_router::RdbRouter, Extractor,
 };
 
 pub struct MysqlCdcExtractor {
@@ -42,7 +43,7 @@ pub struct MysqlCdcExtractor {
     pub binlog_position: u32,
     pub server_id: u64,
     pub shut_down: Arc<AtomicBool>,
-
+    pub router: RdbRouter,
     pub datamarker_filter: Option<Box<dyn DataMarkerFilter + Send>>,
 }
 
@@ -221,7 +222,7 @@ impl MysqlCdcExtractor {
             return Ok(());
         }
 
-        BaseExtractor::push_row(self.buffer.as_ref(), row_data, position).await
+        BaseExtractor::push_row(self.buffer.as_ref(), row_data, position, Some(&self.router)).await
     }
 
     async fn parse_row_data(

@@ -12,7 +12,7 @@ use dt_meta::{
     row_type::RowType,
 };
 
-use crate::{call_batch_fn, sinker::rdb_router::RdbRouter, Sinker};
+use crate::{call_batch_fn, rdb_router::RdbRouter, Sinker};
 
 #[derive(Clone)]
 pub struct MongoSinker {
@@ -48,8 +48,10 @@ impl Sinker for MongoSinker {
 impl MongoSinker {
     async fn serial_sink(&mut self, mut data: Vec<RowData>) -> Result<(), Error> {
         for row_data in data.iter_mut() {
-            let (db, tb) = self.router.get_route(&row_data.schema, &row_data.tb);
-            let collection = self.mongo_client.database(&db).collection::<Document>(&tb);
+            let collection = self
+                .mongo_client
+                .database(&row_data.schema)
+                .collection::<Document>(&row_data.tb);
 
             match row_data.row_type {
                 RowType::Insert => {
@@ -110,8 +112,10 @@ impl MongoSinker {
         start_index: usize,
         batch_size: usize,
     ) -> Result<(), Error> {
-        let (db, tb) = self.router.get_route(&data[0].schema, &data[0].tb);
-        let collection = self.mongo_client.database(&db).collection::<Document>(&tb);
+        let collection = self
+            .mongo_client
+            .database(&data[0].schema)
+            .collection::<Document>(&data[0].tb);
 
         let mut ids = Vec::new();
         for rd in data.iter().skip(start_index).take(batch_size) {

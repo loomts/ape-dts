@@ -81,4 +81,10 @@ mod test {
     async fn snapshot_timezone_test() {
         println!("snapshot_timezone_test can be covered by test: snapshot_basic_test, table: timezone_table, the default_time_zone for source db is +08:00, the default_time_zone for target db is +07:00")
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn snapshot_route_test() {
+        TestBase::run_snapshot_test("pg_to_pg/snapshot/route_test").await;
+    }
 }

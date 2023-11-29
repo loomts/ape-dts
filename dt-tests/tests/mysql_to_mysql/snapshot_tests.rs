@@ -67,6 +67,12 @@ mod test {
 
     #[tokio::test]
     #[serial]
+    async fn snapshot_route_test() {
+        TestBase::run_snapshot_test("mysql_to_mysql/snapshot/route_test").await;
+    }
+
+    #[tokio::test]
+    #[serial]
     async fn snapshot_timezone_test() {
         println!("snapshot_timezone_test can be covered by test: cdc_basic_test, table: one_pk_no_uk, field: f_13 timestamp(6), the default_time_zone for source db is +08:00, the default_time_zone for target db is +07:00 ")
     }

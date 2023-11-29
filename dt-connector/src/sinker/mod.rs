@@ -6,6 +6,5 @@ pub mod mongo;
 pub mod mysql;
 pub mod open_faas_sinker;
 pub mod pg;
-pub mod rdb_router;
 pub mod redis;
 pub mod starrocks;

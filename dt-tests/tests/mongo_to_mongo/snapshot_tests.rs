@@ -12,6 +12,12 @@ mod test {
         TestBase::run_mongo_snapshot_test("mongo_to_mongo/snapshot/basic_test").await;
     }
 
+    #[tokio::test]
+    #[serial]
+    async fn snapshot_route_test() {
+        TestBase::run_mongo_snapshot_test("mongo_to_mongo/snapshot/route_test").await;
+    }
+
     // #[tokio::test]
     #[serial]
     async fn snapshot_resume_test() {

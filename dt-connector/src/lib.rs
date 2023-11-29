@@ -3,6 +3,7 @@ pub mod datamarker;
 pub mod extractor;
 pub mod meta_fetcher;
 pub mod rdb_query_builder;
+pub mod rdb_router;
 pub mod sinker;
 
 use std::sync::Arc;

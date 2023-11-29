@@ -23,7 +23,7 @@ use mongodb::{
 };
 use serde_json::json;
 
-use crate::{extractor::base_extractor::BaseExtractor, Extractor};
+use crate::{extractor::base_extractor::BaseExtractor, rdb_router::RdbRouter, Extractor};
 
 const SYSTEM_DBS: [&str; 3] = ["admin", "config", "local"];
 
@@ -35,6 +35,7 @@ pub struct MongoCdcExtractor {
     pub start_timestamp: u32,
     pub source: MongoCdcSource,
     pub mongo_client: Client,
+    pub router: RdbRouter,
 }
 
 #[async_trait]
@@ -377,7 +378,7 @@ impl MongoCdcExtractor {
         {
             return Ok(());
         }
-        BaseExtractor::push_row(self.buffer.as_ref(), row_data, position).await
+        BaseExtractor::push_row(self.buffer.as_ref(), row_data, position, Some(&self.router)).await
     }
 
     fn parse_start_timestamp(&mut self) -> Timestamp {

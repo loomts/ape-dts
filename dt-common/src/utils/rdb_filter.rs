@@ -36,20 +36,17 @@ impl RdbFilter {
                 do_tbs,
                 ignore_tbs,
                 do_events,
-            } => {
-                let escape_pairs = SqlUtil::get_escape_pairs(&db_type);
-                Ok(Self {
-                    db_type: db_type.clone(),
-                    do_dbs: Self::parse_individual_tokens(do_dbs, &db_type, &escape_pairs)?,
-                    ignore_dbs: Self::parse_individual_tokens(ignore_dbs, &db_type, &escape_pairs)?,
-                    do_tbs: Self::parse_pair_tokens(do_tbs, &db_type, &escape_pairs)?,
-                    ignore_tbs: Self::parse_pair_tokens(ignore_tbs, &db_type, &escape_pairs)?,
-                    do_events: Self::parse_individual_tokens(do_events, &db_type, &escape_pairs)?,
-                    cache: HashMap::new(),
+            } => Ok(Self {
+                db_type: db_type.clone(),
+                do_dbs: Self::parse_individual_tokens(do_dbs, &db_type)?,
+                ignore_dbs: Self::parse_individual_tokens(ignore_dbs, &db_type)?,
+                do_tbs: Self::parse_pair_tokens(do_tbs, &db_type)?,
+                ignore_tbs: Self::parse_pair_tokens(ignore_tbs, &db_type)?,
+                do_events: Self::parse_individual_tokens(do_events, &db_type)?,
+                cache: HashMap::new(),
 
-                    transaction_worker: TransactionWorker::default(),
-                })
-            }
+                transaction_worker: TransactionWorker::default(),
+            }),
         }
     }
 
@@ -177,17 +174,12 @@ impl RdbFilter {
         false
     }
 
-    fn get_delimiters() -> Vec<char> {
-        vec![',', '.']
-    }
-
     fn parse_pair_tokens(
         config_str: &str,
         db_type: &DbType,
-        escape_pairs: &[(char, char)],
     ) -> Result<HashSet<(String, String)>, Error> {
         let mut results = HashSet::new();
-        let tokens = Self::parse_config(config_str, db_type, escape_pairs)?;
+        let tokens = Self::parse_config(config_str, db_type)?;
         let mut i = 0;
         while i < tokens.len() {
             results.insert((tokens[i].to_string(), tokens[i + 1].to_string()));
@@ -199,33 +191,22 @@ impl RdbFilter {
     fn parse_individual_tokens(
         config_str: &str,
         db_type: &DbType,
-        escape_pairs: &[(char, char)],
     ) -> Result<HashSet<String>, Error> {
-        let tokens = Self::parse_config(config_str, db_type, escape_pairs)?;
+        let tokens = Self::parse_config(config_str, db_type)?;
         let results: HashSet<String> = HashSet::from_iter(tokens.into_iter());
         Ok(results)
     }
 
-    fn parse_config(
-        config_str: &str,
-        db_type: &DbType,
-        escape_pairs: &[(char, char)],
-    ) -> Result<Vec<String>, Error> {
-        if config_str.is_empty() {
-            return Ok(Vec::new());
+    fn parse_config(config_str: &str, db_type: &DbType) -> Result<Vec<String>, Error> {
+        let delimiters = vec![',', '.'];
+        match ConfigTokenParser::parse_config(config_str, db_type, &delimiters) {
+            Ok(tokens) => Ok(tokens),
+            Err(Error::ConfigError(err)) => Err(Error::ConfigError(format!(
+                "invalid filter config, {}",
+                err
+            ))),
+            _ => Err(Error::ConfigError("invalid filter config".into())),
         }
-
-        let delimiters = Self::get_delimiters();
-        let tokens = ConfigTokenParser::parse(config_str, &delimiters, escape_pairs);
-        for token in tokens.iter() {
-            if !SqlUtil::is_valid_token(token, db_type, escape_pairs) {
-                return Err(Error::ConfigError(format!(
-                    "invalid filter config, check error near: {}, try enclose database/table/column with escapes if there are special characters other than letters and numbers",
-                    token
-                )));
-            }
-        }
-        Ok(tokens)
     }
 }
 
@@ -435,6 +416,21 @@ mod tests {
         assert!(!rdb_fitler.filter_event("b", "b", "insert"));
         assert!(rdb_fitler.filter_event("a", "cbd", "insert"));
         assert!(rdb_fitler.filter_event("b", "cbd", "insert"));
+    }
+
+    #[test]
+    fn test_rdb_filter_ignore_tbs_with_escapes_2() {
+        let db_type = DbType::Mysql;
+        let config = FilterConfig::Rdb {
+            do_dbs: String::new(),
+            ignore_dbs: String::new(),
+            do_tbs: "`db_test_position.aaa`.`b.bbb,.b`,`db_test_position.aaa`.c".to_string(),
+            ignore_tbs: String::new(),
+            do_events: String::from("insert"),
+        };
+        let mut rdb_fitler = RdbFilter::from_config(&config, db_type).unwrap();
+        assert!(!rdb_fitler.filter_event("db_test_position.aaa", "b.bbb,.b", "insert"));
+        assert!(!rdb_fitler.filter_event("db_test_position.aaa", "c", "insert"));
     }
 
     #[test]

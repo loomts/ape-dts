@@ -3,18 +3,15 @@ use std::collections::HashMap;
 use async_trait::async_trait;
 use dt_common::error::Error;
 use dt_meta::{
-    ddl_data::DdlData,
-    pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
+    ddl_data::DdlData, pg::pg_meta_manager::PgMetaManager, rdb_meta_manager::RdbMetaManager,
     row_data::RowData,
 };
 use futures::TryStreamExt;
 use sqlx::{Pool, Postgres};
 
 use crate::{
-    call_batch_fn, close_conn_pool,
-    meta_fetcher::pg::pg_struct_fetcher::PgStructFetcher,
-    rdb_query_builder::RdbQueryBuilder,
-    sinker::{base_checker::BaseChecker, base_sinker::BaseSinker, rdb_router::RdbRouter},
+    call_batch_fn, close_conn_pool, meta_fetcher::pg::pg_struct_fetcher::PgStructFetcher,
+    rdb_query_builder::RdbQueryBuilder, rdb_router::RdbRouter, sinker::base_checker::BaseChecker,
     Sinker,
 };
 
@@ -22,6 +19,7 @@ use crate::{
 pub struct PgChecker {
     pub conn_pool: Pool<Postgres>,
     pub meta_manager: PgMetaManager,
+    pub extractor_meta_manager: RdbMetaManager,
     pub router: RdbRouter,
     pub batch_size: usize,
 }
@@ -57,10 +55,15 @@ impl Sinker for PgChecker {
 
 impl PgChecker {
     async fn serial_check(&mut self, data: Vec<RowData>) -> Result<(), Error> {
-        for row_data_src in data.iter() {
-            let tb_meta = self.get_tb_meta(row_data_src).await?;
-            let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
+        if data.is_empty() {
+            return Ok(());
+        }
+        let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&data[0]).await?;
 
+        let mut miss = Vec::new();
+        let mut diff = Vec::new();
+        for row_data_src in data.iter() {
+            let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
             let (sql, cols, binds) = query_builder.get_select_query(row_data_src)?;
             let query = query_builder.create_pg_query(&sql, &cols, &binds);
 
@@ -68,10 +71,10 @@ impl PgChecker {
             if let Some(row) = rows.try_next().await.unwrap() {
                 let row_data_dst = RowData::from_pg_row(&row, &tb_meta);
                 if !BaseChecker::compare_row_data(row_data_src, &row_data_dst) {
-                    BaseChecker::log_diff(row_data_src, &tb_meta.basic);
+                    diff.push(row_data_src.to_owned());
                 }
             } else {
-                BaseChecker::log_miss(row_data_src, &tb_meta.basic);
+                miss.push(row_data_src.to_owned());
             }
         }
         Ok(())
@@ -83,7 +86,7 @@ impl PgChecker {
         start_index: usize,
         batch_size: usize,
     ) -> Result<(), Error> {
-        let tb_meta = self.get_tb_meta(&data[0]).await?;
+        let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&data[0]).await?;
         let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
 
         // build fetch dst sql
@@ -100,14 +103,14 @@ impl PgChecker {
             dst_row_data_map.insert(hash_code, row_data);
         }
 
-        BaseChecker::batch_compare_row_datas(
+        let (miss, diff) = BaseChecker::batch_compare_row_datas(
             data,
             &dst_row_data_map,
             &tb_meta.basic,
             start_index,
             batch_size,
         );
-        Ok(())
+        BaseChecker::log_dml(&mut self.extractor_meta_manager, &self.router, miss, diff).await
     }
 
     async fn serial_ddl_check(&mut self, data: Vec<DdlData>) -> Result<(), Error> {
@@ -134,10 +137,5 @@ impl PgChecker {
             }
         }
         Ok(())
-    }
-
-    #[inline(always)]
-    async fn get_tb_meta(&mut self, row_data: &RowData) -> Result<PgTbMeta, Error> {
-        BaseSinker::get_pg_tb_meta(&mut self.meta_manager, &mut self.router, row_data).await
     }
 }

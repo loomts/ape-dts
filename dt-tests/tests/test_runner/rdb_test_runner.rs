@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use dt_common::{
     config::{
@@ -9,6 +9,7 @@ use dt_common::{
     utils::{sql_util::SqlUtil, time_util::TimeUtil},
 };
 
+use dt_connector::rdb_router::RdbRouter;
 use dt_meta::{
     col_value::ColValue, ddl_type::DdlType, row_data::RowData, sql_parser::ddl_parser::DdlParser,
 };
@@ -26,6 +27,7 @@ pub struct RdbTestRunner {
     pub dst_conn_pool_mysql: Option<Pool<MySql>>,
     pub src_conn_pool_pg: Option<Pool<Postgres>>,
     pub dst_conn_pool_pg: Option<Pool<Postgres>>,
+    pub router: RdbRouter,
 }
 
 pub const SRC: &str = "src";
@@ -65,11 +67,15 @@ impl RdbTestRunner {
             dst_conn_pool_pg = Some(TaskUtil::create_pg_conn_pool(&dst_url, 1, false).await?);
         }
 
+        let config = TaskConfig::new(&base.task_config_file);
+        let router = RdbRouter::from_config(&config.router, &dst_db_type).unwrap();
+
         Ok(Self {
             src_conn_pool_mysql,
             dst_conn_pool_mysql,
             src_conn_pool_pg,
             dst_conn_pool_pg,
+            router,
             base,
         })
     }
@@ -146,12 +152,9 @@ impl RdbTestRunner {
         self.base.start_task().await?;
 
         // compare data
-        let db_tbs = self.get_compare_db_tbs().await?;
+        let (src_db_tbs, dst_db_tbs) = self.get_compare_db_tbs().await?;
         if compare_data {
-            assert!(
-                self.compare_data_for_tbs(&db_tbs.clone(), &db_tbs.clone())
-                    .await?
-            )
+            assert!(self.compare_data_for_tbs(&src_db_tbs, &dst_db_tbs).await?)
         }
         Ok(())
     }
@@ -164,11 +167,8 @@ impl RdbTestRunner {
         self.execute_src_sqls(&self.base.src_dml_sqls).await?;
         TimeUtil::sleep_millis(parse_millis).await;
 
-        let db_tbs = self.get_compare_db_tbs().await?;
-        assert!(
-            self.compare_data_for_tbs(&db_tbs.clone(), &db_tbs.clone())
-                .await?
-        );
+        let (src_db_tbs, dst_db_tbs) = self.get_compare_db_tbs().await?;
+        assert!(self.compare_data_for_tbs(&src_db_tbs, &dst_db_tbs).await?);
         self.base.wait_task_finish(&task).await
     }
 
@@ -205,9 +205,7 @@ impl RdbTestRunner {
         self.execute_src_sqls(&src_insert_sqls).await?;
         TimeUtil::sleep_millis(parse_millis).await;
 
-        let db_tbs = self.get_compare_db_tbs().await?;
-        let src_db_tbs = db_tbs.clone();
-        let dst_db_tbs = db_tbs.clone();
+        let (src_db_tbs, dst_db_tbs) = self.get_compare_db_tbs().await?;
         self.compare_data_for_tbs(&src_db_tbs, &dst_db_tbs).await?;
 
         // update src data
@@ -362,7 +360,8 @@ impl RdbTestRunner {
             src_data.len()
         );
 
-        if !self.compare_row_data(&src_data, &dst_data) {
+        let col_map = self.router.get_col_map(&src_db_tb.0, &src_db_tb.1);
+        if !self.compare_row_data(&src_data, &dst_data, col_map) {
             println!(
                 "compare tb data failed, src_tb: {:?}, dst_tb: {:?}",
                 src_db_tb, dst_db_tb,
@@ -372,23 +371,39 @@ impl RdbTestRunner {
         Ok(true)
     }
 
-    fn compare_row_data(&self, src_data: &Vec<RowData>, dst_data: &Vec<RowData>) -> bool {
+    fn compare_row_data(
+        &self,
+        src_data: &Vec<RowData>,
+        dst_data: &Vec<RowData>,
+        col_map: Option<&HashMap<String, String>>,
+    ) -> bool {
         assert_eq!(src_data.len(), dst_data.len());
         let src_db_type = self.get_db_type(SRC);
         let dst_db_type = self.get_db_type(DST);
+
         for i in 0..src_data.len() {
             let src_col_values = src_data[i].after.as_ref().unwrap();
             let dst_col_values = dst_data[i].after.as_ref().unwrap();
 
-            for (col, src_col_value) in src_col_values {
-                let dst_col_value = dst_col_values.get(col).unwrap();
+            for (src_col, src_col_value) in src_col_values {
+                let dst_col = if let Some(col_map) = col_map {
+                    if let Some(dst_col) = col_map.get(src_col) {
+                        dst_col
+                    } else {
+                        src_col
+                    }
+                } else {
+                    src_col
+                };
+
+                let dst_col_value = dst_col_values.get(dst_col).unwrap();
                 if Self::compare_col_value(src_col_value, dst_col_value, &src_db_type, &dst_db_type)
                 {
                     continue;
                 }
                 println!(
                     "row index: {}, col: {}, src_col_value: {:?}, dst_col_value: {:?}",
-                    i, col, src_col_value, dst_col_value
+                    i, src_col, src_col_value, dst_col_value
                 );
                 return false;
             }
@@ -470,8 +485,10 @@ impl RdbTestRunner {
     }
 
     /// get compare tbs
-    pub async fn get_compare_db_tbs(&self) -> Result<Vec<(String, String)>, Error> {
-        let mut db_tbs = vec![];
+    pub async fn get_compare_db_tbs(
+        &self,
+    ) -> Result<(Vec<(String, String)>, Vec<(String, String)>), Error> {
+        let mut src_db_tbs = vec![];
 
         let (src_db_type, src_url, _, _) = Self::parse_conn_info(&self.base);
 
@@ -480,14 +497,20 @@ impl RdbTestRunner {
             for db in dbs.iter() {
                 let tbs = ExtractorUtil::list_tbs(&src_url, db, &src_db_type).await?;
                 for tb in tbs.iter() {
-                    db_tbs.push((db.to_string(), tb.to_string()));
+                    src_db_tbs.push((db.to_string(), tb.to_string()));
                 }
             }
         } else {
-            db_tbs = Self::get_compare_db_tbs_from_sqls(&self.base.src_ddl_sqls)?
+            src_db_tbs = Self::get_compare_db_tbs_from_sqls(&self.base.src_ddl_sqls)?
         }
 
-        Ok(db_tbs)
+        let mut dst_db_tbs = vec![];
+        for (db, tb) in src_db_tbs.iter() {
+            let (dst_db, dst_tb) = self.router.get_tb_map(db, tb);
+            dst_db_tbs.push((dst_db.into(), dst_tb.into()));
+        }
+
+        Ok((src_db_tbs, dst_db_tbs))
     }
 
     pub fn get_compare_db_tbs_from_sqls(
@@ -519,6 +542,9 @@ impl RdbTestRunner {
         db_tb: &(String, String),
         from: &str,
     ) -> Result<Vec<String>, Error> {
+        let db_tb = self.router.get_tb_map(&db_tb.0, &db_tb.1);
+        let db_tb = &(db_tb.0.into(), db_tb.1.into());
+
         let (conn_pool_mysql, conn_pool_pg) = self.get_conn_pool(from);
         let cols = if let Some(conn_pool) = conn_pool_mysql {
             let tb_meta = RdbUtil::get_tb_meta_mysql(conn_pool, db_tb).await?;
