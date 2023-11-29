@@ -167,61 +167,64 @@ impl Prechecker for MySqlPrechecker {
         all_db_names.extend(&dbs);
         all_db_names.extend(&tb_dbs);
 
-        if (self.is_source || !self.precheck_config.do_struct_init) && !tbs.is_empty() {
+        if self.is_source || !self.precheck_config.do_struct_init {
             // When a specific table to be migrated is specified and the following conditions are met, check the existence of the table
             // 1. this check is for the source database
             // 2. this check is for the sink database, and specified no structure initialization
-            let mut not_existed_tbs: HashSet<String> = HashSet::new();
+            if !tbs.is_empty() {
+                let mut not_existed_tbs: HashSet<String> = HashSet::new();
 
-            let tables_result = self.fetcher.fetch_tables().await;
-            let current_tbs: HashSet<String> = match tables_result {
-                Ok(tables) => tables
-                    .iter()
-                    .map(|t| format!("{}.{}", t.database_name, t.table_name))
-                    .collect(),
-                Err(e) => return Err(e),
-            };
-            for tb in tbs {
-                if !current_tbs.contains(&tb) {
-                    not_existed_tbs.insert(tb);
+                let tables_result = self.fetcher.fetch_tables().await;
+                let current_tbs: HashSet<String> = match tables_result {
+                    Ok(tables) => tables
+                        .iter()
+                        .map(|t| format!("{}.{}", t.database_name, t.table_name))
+                        .collect(),
+                    Err(e) => return Err(e),
+                };
+                for tb in tbs {
+                    if !current_tbs.contains(&tb) {
+                        not_existed_tbs.insert(tb);
+                    }
+                }
+                if !not_existed_tbs.is_empty() {
+                    err_msgs.push(format!(
+                        "tables not existed: [{}]",
+                        not_existed_tbs
+                            .iter()
+                            .map(|e| e.to_string())
+                            .collect::<Vec<String>>()
+                            .join(";")
+                    ));
                 }
             }
-            if !not_existed_tbs.is_empty() {
-                err_msgs.push(format!(
-                    "tables not existed: [{}]",
-                    not_existed_tbs
-                        .iter()
-                        .map(|e| e.to_string())
-                        .collect::<Vec<String>>()
-                        .join(";")
-                ));
+
+            if !all_db_names.is_empty() {
+                let mut not_existed_dbs: HashSet<String> = HashSet::new();
+
+                let dbs_result = self.fetcher.fetch_databases().await;
+                let current_dbs: HashSet<String> = match dbs_result {
+                    Ok(dbs) => dbs.iter().map(|d| d.database_name.clone()).collect(),
+                    Err(e) => return Err(e),
+                };
+                for db_name in all_db_names {
+                    if !current_dbs.contains(db_name) {
+                        not_existed_dbs.insert(db_name.clone());
+                    }
+                }
+                if !not_existed_dbs.is_empty() {
+                    err_msgs.push(format!(
+                        "databases not existed: [{}]",
+                        not_existed_dbs
+                            .iter()
+                            .map(|e| e.to_string())
+                            .collect::<Vec<String>>()
+                            .join(";")
+                    ));
+                }
             }
         }
 
-        if !all_db_names.is_empty() {
-            let mut not_existed_dbs: HashSet<String> = HashSet::new();
-
-            let dbs_result = self.fetcher.fetch_databases().await;
-            let current_dbs: HashSet<String> = match dbs_result {
-                Ok(dbs) => dbs.iter().map(|d| d.database_name.clone()).collect(),
-                Err(e) => return Err(e),
-            };
-            for db_name in all_db_names {
-                if !current_dbs.contains(db_name) {
-                    not_existed_dbs.insert(db_name.clone());
-                }
-            }
-            if !not_existed_dbs.is_empty() {
-                err_msgs.push(format!(
-                    "databases not existed: [{}]",
-                    not_existed_dbs
-                        .iter()
-                        .map(|e| e.to_string())
-                        .collect::<Vec<String>>()
-                        .join(";")
-                ));
-            }
-        }
         if !err_msgs.is_empty() {
             check_error = Some(Error::PreCheckError(err_msgs.join(".").into()))
         }

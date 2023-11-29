@@ -12,6 +12,28 @@ pub struct MysqlStructFetcher {
 }
 
 impl MysqlStructFetcher {
+    // Create Database: https://dev.mysql.com/doc/refman/8.0/en/create-database.html
+    pub async fn get_database(&mut self) -> Result<HashMap<String, StructModel>, Error> {
+        let sql = self.sql_builder(&StructModel::DatabaseModel {
+            name: String::from(""),
+        });
+        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+
+        let mut results = HashMap::new();
+        while let Some(row) = rows.try_next().await.unwrap() {
+            let db = Self::get_str_with_null(&row, "SCHEMA_NAME").unwrap();
+
+            if let Some(filter) = &mut self.filter {
+                if filter.filter_db(&db) {
+                    continue;
+                }
+
+                results.insert(db.clone(), StructModel::DatabaseModel { name: db.clone() });
+            }
+        }
+        return Ok(results);
+    }
+
     // Create Table: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
     pub async fn get_table(
         &mut self,
@@ -242,6 +264,7 @@ impl MysqlStructFetcher {
 
     fn sql_builder(&self, struct_model: &StructModel) -> String {
         let sql: String = match struct_model {
+            StructModel::DatabaseModel { name: _ } => String::from("select schema_name, default_character_set_name, default_collation_name from information_schema.schemata"),
             StructModel::TableModel {
                 database_name,
                 schema_name: _,

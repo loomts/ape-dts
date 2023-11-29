@@ -70,7 +70,16 @@ impl RdbFilter {
         let escape_pairs = SqlUtil::get_escape_pairs(&self.db_type);
         let filter = Self::contain_tb(&self.ignore_tbs, db, tb, &escape_pairs)
             || Self::contain_db(&self.ignore_dbs, db, &escape_pairs);
-        filter
+
+        if filter {
+            return filter;
+        }
+
+        let do_tb_db: HashSet<String> = self.do_tbs.iter().map(|(d, _)| d.clone()).collect();
+        let keep_with_white = Self::contain_db(&self.do_dbs, db, &escape_pairs)
+            || Self::contain_db(&do_tb_db, db, &escape_pairs);
+
+        !keep_with_white
     }
 
     pub fn filter_tb(&mut self, db: &str, tb: &str) -> bool {
@@ -86,6 +95,7 @@ impl RdbFilter {
 
         let filter = filter || !keep;
         self.cache.insert((db.to_string(), tb.to_string()), filter);
+
         filter
     }
 
@@ -774,7 +784,7 @@ mod tests {
             do_events: String::from("insert"),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
-        assert!(!rdb_fitler.filter_db("test_db_*"));
+        assert!(rdb_fitler.filter_db("test_db_*"));
     }
 
     #[test]
