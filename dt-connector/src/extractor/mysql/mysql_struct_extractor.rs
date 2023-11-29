@@ -42,6 +42,10 @@ impl MysqlStructExtractor {
             filter: Some(self.filter.to_owned()),
         };
 
+        for (_, meta) in mysql_fetcher.get_database().await.unwrap() {
+            self.push_dt_data(&meta).await;
+        }
+
         for (_, meta) in mysql_fetcher.get_table(&None).await.unwrap() {
             self.push_dt_data(&meta).await;
         }
