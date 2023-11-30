@@ -22,6 +22,7 @@ use dt_common::error::Error;
 use crate::{
     extractor::{base_extractor::BaseExtractor, snapshot_resumer::SnapshotResumer},
     rdb_query_builder::RdbQueryBuilder,
+    rdb_router::RdbRouter,
     Extractor,
 };
 
@@ -34,6 +35,7 @@ pub struct PgSnapshotExtractor {
     pub schema: String,
     pub tb: String,
     pub shut_down: Arc<AtomicBool>,
+    pub router: RdbRouter,
 }
 
 #[async_trait]
@@ -98,9 +100,14 @@ impl PgSnapshotExtractor {
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let row_data = RowData::from_pg_row(&row, tb_meta);
-            BaseExtractor::push_row(self.buffer.as_ref(), row_data, Position::None)
-                .await
-                .unwrap();
+            BaseExtractor::push_row(
+                self.buffer.as_ref(),
+                row_data,
+                Position::None,
+                Some(&self.router),
+            )
+            .await
+            .unwrap();
             all_count += 1;
         }
 
@@ -155,9 +162,14 @@ impl PgSnapshotExtractor {
                 } else {
                     Position::None
                 };
-                BaseExtractor::push_row(self.buffer.as_ref(), row_data, position)
-                    .await
-                    .unwrap();
+                BaseExtractor::push_row(
+                    self.buffer.as_ref(),
+                    row_data,
+                    position,
+                    Some(&self.router),
+                )
+                .await
+                .unwrap();
                 slice_count += 1;
                 all_count += 1;
             }

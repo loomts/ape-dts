@@ -8,6 +8,12 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn revise_basic_test() {
-        TestBase::run_revise_test("pg_to_pg/revise_basic_test").await;
+        TestBase::run_revise_test("pg_to_pg/revise/basic_test").await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn revise_route_test() {
+        TestBase::run_revise_test("pg_to_pg/revise/route_test").await;
     }
 }

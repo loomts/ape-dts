@@ -4,7 +4,7 @@ use dt_common::error::Error;
 use futures::TryStreamExt;
 use sqlx::{Pool, Postgres, Row};
 
-use crate::{rdb_meta_manager::RdbMetaManager, rdb_tb_meta::RdbTbMeta};
+use crate::{rdb_meta_manager::RdbMetaManager, rdb_tb_meta::RdbTbMeta, row_data::RowData};
 
 use super::{pg_col_type::PgColType, pg_tb_meta::PgTbMeta, type_registry::TypeRegistry};
 
@@ -45,6 +45,10 @@ impl PgMetaManager {
 
     pub fn get_tb_meta_by_oid(&mut self, oid: i32) -> Result<PgTbMeta, Error> {
         Ok(self.oid_to_tb_meta.get(&oid).unwrap().clone())
+    }
+
+    pub async fn get_tb_meta_by_row_data(&mut self, row_data: &RowData) -> Result<PgTbMeta, Error> {
+        self.get_tb_meta(&row_data.schema, &row_data.tb).await
     }
 
     pub async fn get_tb_meta(&mut self, schema: &str, tb: &str) -> Result<PgTbMeta, Error> {

@@ -49,7 +49,7 @@ impl KafkaExtractor {
                     partition: self.partition,
                     offset: msg.offset(),
                 };
-                BaseExtractor::push_row(&self.buffer, row_data, position).await?;
+                BaseExtractor::push_row(&self.buffer, row_data, position, None).await?;
             }
         }
     }

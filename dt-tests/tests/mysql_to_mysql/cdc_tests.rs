@@ -113,4 +113,10 @@ mod test {
         )
         .await;
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn cdc_route_test() {
+        TestBase::run_cdc_test("mysql_to_mysql/cdc/route_test", 3000, 2000).await;
+    }
 }

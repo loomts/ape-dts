@@ -1,7 +1,5 @@
 use crate::{
-    call_batch_fn, close_conn_pool,
-    rdb_query_builder::RdbQueryBuilder,
-    sinker::{base_sinker::BaseSinker, rdb_router::RdbRouter},
+    call_batch_fn, close_conn_pool, rdb_query_builder::RdbQueryBuilder, rdb_router::RdbRouter,
     Sinker,
 };
 
@@ -56,7 +54,7 @@ impl Sinker for PgSinker {
 impl PgSinker {
     async fn serial_sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
         for row_data in data.iter() {
-            let tb_meta = self.get_tb_meta(row_data).await?;
+            let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&row_data).await?;
             let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
 
             let (sql, cols, binds) = if row_data.row_type == RowType::Insert {
@@ -76,7 +74,7 @@ impl PgSinker {
         start_index: usize,
         batch_size: usize,
     ) -> Result<(), Error> {
-        let tb_meta = self.get_tb_meta(&data[0]).await?;
+        let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&data[0]).await?;
         let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
 
         let (sql, cols, binds) =
@@ -93,7 +91,7 @@ impl PgSinker {
         start_index: usize,
         batch_size: usize,
     ) -> Result<(), Error> {
-        let tb_meta = self.get_tb_meta(&data[0]).await?;
+        let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&data[0]).await?;
         let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
 
         let (sql, cols, binds) =
@@ -145,10 +143,5 @@ impl PgSinker {
             set_pairs.join(",")
         );
         Ok((sql, cols, binds))
-    }
-
-    #[inline(always)]
-    async fn get_tb_meta(&mut self, row_data: &RowData) -> Result<PgTbMeta, Error> {
-        BaseSinker::get_pg_tb_meta(&mut self.meta_manager, &mut self.router, row_data).await
     }
 }

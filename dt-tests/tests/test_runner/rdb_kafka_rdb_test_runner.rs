@@ -59,10 +59,10 @@ impl RdbKafkaRdbTestRunner {
         TimeUtil::sleep_millis(parse_millis).await;
 
         // compare data
-        let db_tbs = self.src_to_dst_runner.get_compare_db_tbs().await?;
+        let (src_db_tbs, dst_db_tbs) = self.src_to_dst_runner.get_compare_db_tbs().await?;
         assert!(
             self.src_to_dst_runner
-                .compare_data_for_tbs(&db_tbs.clone(), &db_tbs.clone())
+                .compare_data_for_tbs(&src_db_tbs, &dst_db_tbs)
                 .await?
         );
 

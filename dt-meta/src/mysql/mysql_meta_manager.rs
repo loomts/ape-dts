@@ -5,7 +5,7 @@ use futures::TryStreamExt;
 
 use sqlx::{mysql::MySqlRow, MySql, Pool, Row};
 
-use crate::{rdb_meta_manager::RdbMetaManager, rdb_tb_meta::RdbTbMeta};
+use crate::{rdb_meta_manager::RdbMetaManager, rdb_tb_meta::RdbTbMeta, row_data::RowData};
 
 use super::{mysql_col_type::MysqlColType, mysql_tb_meta::MysqlTbMeta};
 
@@ -50,6 +50,13 @@ impl<'a> MysqlMetaManager {
             // clear all cache is always safe
             self.cache.clear();
         }
+    }
+
+    pub async fn get_tb_meta_by_row_data(
+        &mut self,
+        row_data: &RowData,
+    ) -> Result<MysqlTbMeta, Error> {
+        self.get_tb_meta(&row_data.schema, &row_data.tb).await
     }
 
     pub async fn get_tb_meta(&mut self, schema: &str, tb: &str) -> Result<MysqlTbMeta, Error> {

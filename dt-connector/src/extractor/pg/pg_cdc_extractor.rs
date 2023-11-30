@@ -30,7 +30,11 @@ use dt_common::{
     utils::{rdb_filter::RdbFilter, time_util::TimeUtil},
 };
 
-use crate::{extractor::pg::pg_cdc_client::PgCdcClient, Extractor};
+use crate::{
+    extractor::{base_extractor::BaseExtractor, pg::pg_cdc_client::PgCdcClient},
+    rdb_router::RdbRouter,
+    Extractor,
+};
 use dt_meta::{
     adaptor::pg_col_value_convertor::PgColValueConvertor,
     col_value::ColValue,
@@ -53,6 +57,7 @@ pub struct PgCdcExtractor {
     pub heartbeat_interval_secs: u64,
     pub shut_down: Arc<AtomicBool>,
     pub syncer: Arc<Mutex<Syncer>>,
+    pub router: RdbRouter,
 }
 
 const SECS_FROM_1970_TO_2000: i64 = 946_684_800;
@@ -373,12 +378,7 @@ impl PgCdcExtractor {
         row_data: RowData,
         position: Position,
     ) -> Result<(), Error> {
-        let item = DtItem {
-            dt_data: DtData::Dml { row_data },
-            position,
-        };
-        self.buffer.push(item).unwrap();
-        Ok(())
+        BaseExtractor::push_row(self.buffer.as_ref(), row_data, position, Some(&self.router)).await
     }
 
     fn filter_event(&mut self, tb_meta: &PgTbMeta, row_type: RowType) -> bool {

@@ -22,6 +22,7 @@ use crate::{
     check_log::{check_log::CheckLog, log_type::LogType},
     extractor::{base_check_extractor::BaseCheckExtractor, base_extractor::BaseExtractor},
     rdb_query_builder::RdbQueryBuilder,
+    rdb_router::RdbRouter,
     BatchCheckExtractor, Extractor,
 };
 
@@ -32,6 +33,7 @@ pub struct MysqlCheckExtractor {
     pub buffer: Arc<ConcurrentQueue<DtItem>>,
     pub batch_size: usize,
     pub shut_down: Arc<AtomicBool>,
+    pub router: RdbRouter,
 }
 
 #[async_trait]
@@ -84,9 +86,14 @@ impl BatchCheckExtractor for MysqlCheckExtractor {
                 row_data.before = row_data.after.clone();
             }
 
-            BaseExtractor::push_row(self.buffer.as_ref(), row_data, Position::None)
-                .await
-                .unwrap();
+            BaseExtractor::push_row(
+                self.buffer.as_ref(),
+                row_data,
+                Position::None,
+                Some(&self.router),
+            )
+            .await
+            .unwrap();
         }
         Ok(())
     }

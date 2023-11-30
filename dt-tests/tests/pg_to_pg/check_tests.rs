@@ -13,6 +13,12 @@ mod test {
 
     #[tokio::test]
     #[serial]
+    async fn check_route_test() {
+        TestBase::run_check_test("pg_to_pg/check/route_test").await;
+    }
+
+    #[tokio::test]
+    #[serial]
     async fn check_struct_basic_test() {
         TestBase::run_check_test("pg_to_pg/check/basic_struct_test").await;
     }

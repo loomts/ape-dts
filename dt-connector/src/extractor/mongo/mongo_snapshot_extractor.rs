@@ -21,6 +21,7 @@ use mongodb::{
 
 use crate::{
     extractor::{base_extractor::BaseExtractor, snapshot_resumer::SnapshotResumer},
+    rdb_router::RdbRouter,
     Extractor,
 };
 
@@ -31,6 +32,7 @@ pub struct MongoSnapshotExtractor {
     pub tb: String,
     pub shut_down: Arc<AtomicBool>,
     pub mongo_client: Client,
+    pub router: RdbRouter,
 }
 
 #[async_trait]
@@ -90,7 +92,7 @@ impl MongoSnapshotExtractor {
                 order_col: MongoConstants::ID.into(),
                 value: id,
             };
-            BaseExtractor::push_row(self.buffer.as_ref(), row_data, position)
+            BaseExtractor::push_row(self.buffer.as_ref(), row_data, position, Some(&self.router))
                 .await
                 .unwrap();
             all_count += 1;

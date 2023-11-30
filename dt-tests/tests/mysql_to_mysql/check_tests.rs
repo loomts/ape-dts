@@ -30,4 +30,10 @@ mod test {
     // async fn check_set_check_log_dir_test() {
     //     TestBase::run_check_test("mysql_to_mysql/check_set_check_log_dir_test").await;
     // }
+
+    #[tokio::test]
+    #[serial]
+    async fn check_route_test() {
+        TestBase::run_check_test("mysql_to_mysql/check/route_test").await;
+    }
 }

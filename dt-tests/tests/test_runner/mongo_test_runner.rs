@@ -2,11 +2,13 @@ use std::collections::HashMap;
 
 use dt_common::{
     config::{
-        extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
+        config_enums::DbType, extractor_config::ExtractorConfig, sinker_config::SinkerConfig,
+        task_config::TaskConfig,
     },
     error::Error,
     utils::time_util::TimeUtil,
 };
+use dt_connector::rdb_router::RdbRouter;
 use dt_meta::mongo::{mongo_constant::MongoConstants, mongo_key::MongoKey};
 use dt_task::task_util::TaskUtil;
 use mongodb::{
@@ -25,6 +27,7 @@ pub struct MongoTestRunner {
     pub base: BaseTestRunner,
     src_mongo_client: Option<Client>,
     dst_mongo_client: Option<Client>,
+    router: RdbRouter,
 }
 
 pub const SRC: &str = "src";
@@ -53,10 +56,12 @@ impl MongoTestRunner {
             _ => {}
         }
 
+        let router = RdbRouter::from_config(&config.router, &DbType::Mongo).unwrap();
         Ok(Self {
             base,
             src_mongo_client,
             dst_mongo_client,
+            router,
         })
     }
 
@@ -328,7 +333,9 @@ impl MongoTestRunner {
     async fn compare_tb_data(&self, db: &str, tb: &str) {
         println!("compare tb data, db: {}, tb: {}", db, tb);
         let src_data = self.fetch_data(db, tb, SRC).await;
-        let dst_data = self.fetch_data(db, tb, DST).await;
+
+        let (dst_db, dst_tb) = self.router.get_tb_map(db, tb);
+        let dst_data = self.fetch_data(dst_db, dst_tb, DST).await;
 
         assert_eq!(src_data.len(), dst_data.len());
         for id in src_data.keys() {

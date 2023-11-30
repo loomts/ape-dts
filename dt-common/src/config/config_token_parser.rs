@@ -1,6 +1,32 @@
+use crate::{error::Error, utils::sql_util::SqlUtil};
+
+use super::config_enums::DbType;
+
 pub struct ConfigTokenParser {}
 
 impl ConfigTokenParser {
+    pub fn parse_config(
+        config_str: &str,
+        db_type: &DbType,
+        delimiters: &[char],
+    ) -> Result<Vec<String>, Error> {
+        if config_str.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let escape_pairs = SqlUtil::get_escape_pairs(db_type);
+        let tokens = Self::parse(config_str, &delimiters, &escape_pairs);
+        for token in tokens.iter() {
+            if !SqlUtil::is_valid_token(token, db_type, &escape_pairs) {
+                return Err(Error::ConfigError(format!(
+                    "config error near: {}, try enclose database/table/column with escapes if there are special characters other than letters and numbers",
+                    token
+                )));
+            }
+        }
+        Ok(tokens)
+    }
+
     pub fn parse(config: &str, delimiters: &[char], escape_pairs: &[(char, char)]) -> Vec<String> {
         let chars: Vec<char> = config.chars().collect();
         let mut start_index = 0;

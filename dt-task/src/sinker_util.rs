@@ -11,6 +11,7 @@ use dt_common::{
     monitor::monitor::Monitor,
 };
 use dt_connector::{
+    rdb_router::RdbRouter,
     sinker::{
         foxlake_sinker::FoxlakeSinker,
         kafka::{kafka_router::KafkaRouter, kafka_sinker::KafkaSinker},
@@ -21,7 +22,6 @@ use dt_connector::{
         },
         open_faas_sinker::OpenFaasSinker,
         pg::{pg_checker::PgChecker, pg_sinker::PgSinker, pg_struct_sinker::PgStructSinker},
-        rdb_router::RdbRouter,
         redis::redis_sinker::RedisSinker,
         starrocks::starrocks_sinker::StarRocksSinker,
     },
@@ -48,7 +48,7 @@ impl SinkerUtil {
     ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
         let sinkers = match &task_config.sinker {
             SinkerConfig::Mysql { url, batch_size } => {
-                let router = RdbRouter::from_config(&task_config.router)?;
+                let router = RdbRouter::from_config(&task_config.router, &DbType::Mysql)?;
                 SinkerUtil::create_mysql_sinker(
                     url,
                     &router,
@@ -63,10 +63,13 @@ impl SinkerUtil {
             SinkerConfig::MysqlCheck {
                 url, batch_size, ..
             } => {
-                let router = RdbRouter::from_config(&task_config.router)?;
+                // checker needs the reverse router
+                let router = RdbRouter::from_config(&task_config.router, &DbType::Mysql)?.reverse();
+                let extractor_meta_manager = Self::get_extractor_meta_manager(&task_config).await?;
                 SinkerUtil::create_mysql_checker(
                     url,
                     &router,
+                    extractor_meta_manager.unwrap(),
                     &task_config.runtime.log_level,
                     task_config.parallelizer.parallel_size,
                     *batch_size,
@@ -75,7 +78,7 @@ impl SinkerUtil {
             }
 
             SinkerConfig::Pg { url, batch_size } => {
-                let router = RdbRouter::from_config(&task_config.router)?;
+                let router = RdbRouter::from_config(&task_config.router, &DbType::Pg)?;
                 SinkerUtil::create_pg_sinker(
                     url,
                     &router,
@@ -89,10 +92,13 @@ impl SinkerUtil {
             SinkerConfig::PgCheck {
                 url, batch_size, ..
             } => {
-                let router = RdbRouter::from_config(&task_config.router)?;
+                // checker needs the reverse router
+                let router = RdbRouter::from_config(&task_config.router, &DbType::Pg)?.reverse();
+                let extractor_meta_manager = Self::get_extractor_meta_manager(&task_config).await?;
                 SinkerUtil::create_pg_checker(
                     url,
                     &router,
+                    extractor_meta_manager.unwrap(),
                     &task_config.runtime.log_level,
                     task_config.parallelizer.parallel_size,
                     *batch_size,
@@ -101,7 +107,7 @@ impl SinkerUtil {
             }
 
             SinkerConfig::Mongo { url, batch_size } => {
-                let router = RdbRouter::from_config(&task_config.router)?;
+                let router = RdbRouter::from_config(&task_config.router, &DbType::Mongo)?;
                 SinkerUtil::create_mongo_sinker(
                     url,
                     &router,
@@ -263,6 +269,7 @@ impl SinkerUtil {
     async fn create_mysql_checker<'a>(
         url: &str,
         router: &RdbRouter,
+        extractor_meta_manager: RdbMetaManager,
         log_level: &str,
         parallel_size: usize,
         batch_size: usize,
@@ -278,6 +285,7 @@ impl SinkerUtil {
             let sinker = MysqlChecker {
                 conn_pool: conn_pool.clone(),
                 meta_manager: meta_manager.clone(),
+                extractor_meta_manager: extractor_meta_manager.clone(),
                 router: router.clone(),
                 batch_size,
             };
@@ -314,6 +322,7 @@ impl SinkerUtil {
     async fn create_pg_checker<'a>(
         url: &str,
         router: &RdbRouter,
+        extractor_meta_manager: RdbMetaManager,
         log_level: &str,
         parallel_size: usize,
         batch_size: usize,
@@ -328,6 +337,7 @@ impl SinkerUtil {
             let sinker = PgChecker {
                 conn_pool: conn_pool.clone(),
                 meta_manager: meta_manager.clone(),
+                extractor_meta_manager: extractor_meta_manager.clone(),
                 router: router.clone(),
                 batch_size,
             };

@@ -20,7 +20,9 @@ use dt_common::{
     monitor::monitor::{CounterType, Monitor},
     utils::{rdb_filter::RdbFilter, time_util::TimeUtil},
 };
-use dt_connector::{extractor::snapshot_resumer::SnapshotResumer, Extractor, Sinker};
+use dt_connector::{
+    extractor::snapshot_resumer::SnapshotResumer, rdb_router::RdbRouter, Extractor, Sinker,
+};
 use dt_meta::{dt_data::DtItem, position::Position, row_type::RowType, syncer::Syncer};
 use dt_pipeline::{base_pipeline::BasePipeline, Pipeline};
 
@@ -222,6 +224,8 @@ impl TaskRunner {
     ) -> Result<Box<dyn Extractor + Send>, Error> {
         let resumer =
             SnapshotResumer::new(&self.config.extractor_basic.db_type, &self.config.resumer)?;
+        let router =
+            RdbRouter::from_config(&self.config.router, &self.config.extractor_basic.db_type)?;
 
         let extractor: Box<dyn Extractor + Send> = match extractor_config {
             ExtractorConfig::MysqlSnapshot { url, db, tb } => {
@@ -234,6 +238,7 @@ impl TaskRunner {
                     buffer,
                     &self.config.runtime.log_level,
                     shut_down,
+                    router.clone(),
                 )
                 .await?;
                 Box::new(extractor)
@@ -251,6 +256,7 @@ impl TaskRunner {
                     buffer,
                     &self.config.runtime.log_level,
                     shut_down,
+                    router.clone(),
                 )
                 .await?;
                 Box::new(extractor)
@@ -283,6 +289,7 @@ impl TaskRunner {
                     &self.config.runtime.log_level,
                     shut_down,
                     datamarker_filter,
+                    router.clone(),
                 )
                 .await?;
                 Box::new(extractor)
@@ -298,6 +305,7 @@ impl TaskRunner {
                     buffer,
                     &self.config.runtime.log_level,
                     shut_down,
+                    router,
                 )
                 .await?;
                 Box::new(extractor)
@@ -315,6 +323,7 @@ impl TaskRunner {
                     buffer,
                     &self.config.runtime.log_level,
                     shut_down,
+                    router,
                 )
                 .await?;
                 Box::new(extractor)
@@ -337,6 +346,7 @@ impl TaskRunner {
                     &self.config.runtime.log_level,
                     shut_down,
                     syncer,
+                    router,
                 )
                 .await?;
                 Box::new(extractor)
@@ -350,6 +360,7 @@ impl TaskRunner {
                     resumer.clone(),
                     buffer,
                     shut_down,
+                    router.clone(),
                 )
                 .await?;
                 Box::new(extractor)
@@ -370,6 +381,7 @@ impl TaskRunner {
                     buffer,
                     filter,
                     shut_down,
+                    router.clone(),
                 )
                 .await?;
                 Box::new(extractor)
