@@ -32,6 +32,7 @@ pub struct PgSnapshotExtractor {
     pub resumer: SnapshotResumer,
     pub buffer: Arc<ConcurrentQueue<DtItem>>,
     pub slice_size: usize,
+    pub sample_interval: usize,
     pub schema: String,
     pub tb: String,
     pub shut_down: Arc<AtomicBool>,
@@ -148,9 +149,16 @@ impl PgSnapshotExtractor {
             let mut rows = query.fetch(&self.conn_pool);
             let mut slice_count = 0usize;
             while let Some(row) = rows.try_next().await.unwrap() {
-                let row_data = RowData::from_pg_row(&row, tb_meta);
                 start_value =
                     PgColValueConvertor::from_query(&row, order_col, order_col_type).unwrap();
+                slice_count += 1;
+                all_count += 1;
+                // sampling may be used in check scenario
+                if all_count % self.sample_interval != 0 {
+                    continue;
+                }
+
+                let row_data = RowData::from_pg_row(&row, tb_meta);
                 let position = if let Some(value) = start_value.to_option_string() {
                     Position::RdbSnapshot {
                         db_type: DbType::Pg.to_string(),
@@ -170,8 +178,6 @@ impl PgSnapshotExtractor {
                 )
                 .await
                 .unwrap();
-                slice_count += 1;
-                all_count += 1;
             }
 
             // all data extracted

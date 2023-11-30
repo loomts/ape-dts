@@ -104,16 +104,26 @@ impl TaskRunner {
                 }
 
                 let tb_extractor_config = match &self.config.extractor {
-                    ExtractorConfig::MysqlSnapshot { url, .. } => ExtractorConfig::MysqlSnapshot {
+                    ExtractorConfig::MysqlSnapshot {
+                        url,
+                        sample_interval,
+                        ..
+                    } => ExtractorConfig::MysqlSnapshot {
                         url: url.clone(),
                         db: db.clone(),
                         tb: tb.clone(),
+                        sample_interval: *sample_interval,
                     },
 
-                    ExtractorConfig::PgSnapshot { url, .. } => ExtractorConfig::PgSnapshot {
+                    ExtractorConfig::PgSnapshot {
+                        url,
+                        sample_interval,
+                        ..
+                    } => ExtractorConfig::PgSnapshot {
                         url: url.clone(),
                         db: db.clone(),
                         tb: tb.clone(),
+                        sample_interval: *sample_interval,
                     },
 
                     ExtractorConfig::MongoSnapshot { url, .. } => ExtractorConfig::MongoSnapshot {
@@ -228,12 +238,18 @@ impl TaskRunner {
             RdbRouter::from_config(&self.config.router, &self.config.extractor_basic.db_type)?;
 
         let extractor: Box<dyn Extractor + Send> = match extractor_config {
-            ExtractorConfig::MysqlSnapshot { url, db, tb } => {
+            ExtractorConfig::MysqlSnapshot {
+                url,
+                db,
+                tb,
+                sample_interval,
+            } => {
                 let extractor = ExtractorUtil::create_mysql_snapshot_extractor(
                     url,
                     db,
                     tb,
                     self.config.pipeline.buffer_size,
+                    *sample_interval,
                     resumer.clone(),
                     buffer,
                     &self.config.runtime.log_level,
@@ -295,12 +311,18 @@ impl TaskRunner {
                 Box::new(extractor)
             }
 
-            ExtractorConfig::PgSnapshot { url, db, tb } => {
+            ExtractorConfig::PgSnapshot {
+                url,
+                db,
+                tb,
+                sample_interval,
+            } => {
                 let extractor = ExtractorUtil::create_pg_snapshot_extractor(
                     url,
                     db,
                     tb,
                     self.config.pipeline.buffer_size,
+                    *sample_interval,
                     resumer.clone(),
                     buffer,
                     &self.config.runtime.log_level,
