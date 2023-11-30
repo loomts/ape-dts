@@ -36,4 +36,10 @@ mod test {
     async fn check_route_test() {
         TestBase::run_check_test("mysql_to_mysql/check/route_test").await;
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn check_sample_test() {
+        TestBase::run_check_test("mysql_to_mysql/check/sample_test").await;
+    }
 }

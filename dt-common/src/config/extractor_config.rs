@@ -16,6 +16,7 @@ pub enum ExtractorConfig {
         url: String,
         db: String,
         tb: String,
+        sample_interval: usize,
     },
 
     MysqlCdc {
@@ -35,6 +36,7 @@ pub enum ExtractorConfig {
         url: String,
         db: String,
         tb: String,
+        sample_interval: usize,
     },
 
     PgCdc {

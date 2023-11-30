@@ -32,6 +32,7 @@ pub struct MysqlSnapshotExtractor {
     pub resumer: SnapshotResumer,
     pub buffer: Arc<ConcurrentQueue<DtItem>>,
     pub slice_size: usize,
+    pub sample_interval: usize,
     pub db: String,
     pub tb: String,
     pub shut_down: Arc<AtomicBool>,
@@ -154,9 +155,16 @@ impl MysqlSnapshotExtractor {
             let mut rows = query.fetch(&self.conn_pool);
             let mut slice_count = 0usize;
             while let Some(row) = rows.try_next().await.unwrap() {
-                let row_data = RowData::from_mysql_row(&row, tb_meta);
                 start_value =
                     MysqlColValueConvertor::from_query(&row, order_col, order_col_type).unwrap();
+                all_count += 1;
+                slice_count += 1;
+                // sampling may be used in check scenario
+                if all_count % self.sample_interval != 0 {
+                    continue;
+                }
+
+                let row_data = RowData::from_mysql_row(&row, tb_meta);
                 let position = if let Some(value) = start_value.to_option_string() {
                     Position::RdbSnapshot {
                         db_type: DbType::Mysql.to_string(),
@@ -176,8 +184,6 @@ impl MysqlSnapshotExtractor {
                 )
                 .await
                 .unwrap();
-                slice_count += 1;
-                all_count += 1;
             }
 
             // all data extracted

@@ -45,6 +45,7 @@ const ROUTER: &str = "router";
 const RESUMER: &str = "resumer";
 const DATAMARKER_SECTION: &str = "datamarker";
 const BATCH_SIZE: &str = "batch_size";
+const SAMPLE_INTERVAL: &str = "sample_interval";
 
 impl TaskConfig {
     pub fn new(task_config_file: &str) -> Self {
@@ -90,6 +91,12 @@ impl TaskConfig {
                     url,
                     db: String::new(),
                     tb: String::new(),
+                    sample_interval: Self::get_value_with_default(
+                        ini,
+                        EXTRACTOR,
+                        SAMPLE_INTERVAL,
+                        1,
+                    ),
                 },
 
                 ExtractType::Cdc => ExtractorConfig::MysqlCdc {
@@ -117,6 +124,12 @@ impl TaskConfig {
                     url,
                     db: String::new(),
                     tb: String::new(),
+                    sample_interval: Self::get_value_with_default(
+                        ini,
+                        EXTRACTOR,
+                        SAMPLE_INTERVAL,
+                        1,
+                    ),
                 },
 
                 ExtractType::Cdc => ExtractorConfig::PgCdc {
