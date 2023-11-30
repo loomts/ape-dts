@@ -14,7 +14,7 @@ use dt_connector::{
     rdb_router::RdbRouter,
     sinker::{
         foxlake_sinker::FoxlakeSinker,
-        kafka::{kafka_router::KafkaRouter, kafka_sinker::KafkaSinker},
+        kafka::kafka_sinker::KafkaSinker,
         mongo::mongo_sinker::MongoSinker,
         mysql::{
             mysql_checker::MysqlChecker, mysql_sinker::MysqlSinker,
@@ -123,7 +123,11 @@ impl SinkerUtil {
                 ack_timeout_secs,
                 required_acks,
             } => {
-                let router = KafkaRouter::from_config(&task_config.router)?;
+                let router = RdbRouter::from_config(
+                    &task_config.router,
+                    // use the db_type of extractor
+                    &task_config.extractor_basic.db_type,
+                )?;
                 // kafka sinker may need meta data from RDB extractor
                 let meta_manager = Self::get_extractor_meta_manager(&task_config).await?;
                 let avro_converter = AvroConverter::new(meta_manager);
@@ -348,7 +352,7 @@ impl SinkerUtil {
 
     async fn create_kafka_sinker<'a>(
         url: &str,
-        router: &KafkaRouter,
+        router: &RdbRouter,
         parallel_size: usize,
         batch_size: usize,
         ack_timeout_secs: u64,
@@ -374,7 +378,7 @@ impl SinkerUtil {
 
             let sinker = KafkaSinker {
                 batch_size,
-                kafka_router: router.clone(),
+                router: router.clone(),
                 producer,
                 avro_converter: avro_converter.clone(),
             };

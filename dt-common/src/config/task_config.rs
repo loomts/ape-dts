@@ -387,6 +387,7 @@ impl TaskConfig {
             db_map: ini.get(ROUTER, "db_map").unwrap(),
             tb_map: ini.get(ROUTER, "tb_map").unwrap(),
             field_map: ini.get(ROUTER, "field_map").unwrap(),
+            topic_map: Self::get_value_with_default(ini, ROUTER, "topic_map", String::new()),
         })
     }
 
