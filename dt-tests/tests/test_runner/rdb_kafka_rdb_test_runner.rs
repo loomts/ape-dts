@@ -1,3 +1,5 @@
+use crate::test_config_util::TestConfigUtil;
+
 use super::base_test_runner::BaseTestRunner;
 use super::rdb_test_runner::RdbTestRunner;
 use dt_common::config::sinker_config::SinkerConfig;
@@ -18,7 +20,7 @@ use regex::Regex;
 pub struct RdbKafkaRdbTestRunner {
     src_to_dst_runner: RdbTestRunner,
     src_to_kafka_runner: BaseTestRunner,
-    kafka_to_dst_runner: BaseTestRunner,
+    kafka_to_dst_runners: Vec<BaseTestRunner>,
 }
 
 #[allow(dead_code)]
@@ -28,12 +30,23 @@ impl RdbKafkaRdbTestRunner {
             RdbTestRunner::new(&format!("{}/src_to_dst", relative_test_dir)).await?;
         let src_to_kafka_runner =
             BaseTestRunner::new(&format!("{}/src_to_kafka", relative_test_dir)).await?;
-        let kafka_to_dst_runner =
-            BaseTestRunner::new(&format!("{}/kafka_to_dst", relative_test_dir)).await?;
+
+        let mut kafka_to_dst_runners = Vec::new();
+        let sub_paths =
+            TestConfigUtil::get_absolute_sub_dir(&format!("{}/kafka_to_dst", relative_test_dir));
+        for sub_path in &sub_paths {
+            let runner = BaseTestRunner::new(&format!(
+                "{}/kafka_to_dst/{}",
+                relative_test_dir, sub_path.1
+            ))
+            .await?;
+            kafka_to_dst_runners.push(runner);
+        }
+
         Ok(Self {
             src_to_dst_runner,
             src_to_kafka_runner,
-            kafka_to_dst_runner,
+            kafka_to_dst_runners,
         })
     }
 
@@ -51,7 +64,10 @@ impl RdbKafkaRdbTestRunner {
         self.src_to_dst_runner.execute_test_dml_sqls().await?;
 
         // kafka -> dst
-        let kafka_to_dst_task = self.kafka_to_dst_runner.spawn_task().await?;
+        let mut kafka_to_dst_tasks = Vec::new();
+        for runner in self.kafka_to_dst_runners.iter() {
+            kafka_to_dst_tasks.push(runner.spawn_task().await?);
+        }
         TimeUtil::sleep_millis(start_millis).await;
 
         // src -> kafka
@@ -67,9 +83,11 @@ impl RdbKafkaRdbTestRunner {
         );
 
         // stop
-        self.kafka_to_dst_runner
-            .wait_task_finish(&kafka_to_dst_task)
-            .await?;
+        for i in 0..self.kafka_to_dst_runners.len() {
+            self.kafka_to_dst_runners[i]
+                .wait_task_finish(&kafka_to_dst_tasks[i])
+                .await?;
+        }
 
         Ok(())
     }
@@ -79,8 +97,13 @@ impl RdbKafkaRdbTestRunner {
         self.prepare_kafka().await?;
         TimeUtil::sleep_millis(start_millis).await;
 
-        // kafka -> dst & src -> kafka
-        let kafka_to_dst_task = self.kafka_to_dst_runner.spawn_task().await?;
+        // kafka -> dst
+        let mut kafka_to_dst_tasks = Vec::new();
+        for runner in self.kafka_to_dst_runners.iter() {
+            kafka_to_dst_tasks.push(runner.spawn_task().await?);
+        }
+
+        // src -> kafka
         let src_to_kafka_task = self.src_to_kafka_runner.spawn_task().await?;
         TimeUtil::sleep_millis(start_millis).await;
 
@@ -90,9 +113,12 @@ impl RdbKafkaRdbTestRunner {
             .await?;
 
         // stop
-        self.kafka_to_dst_runner
-            .wait_task_finish(&kafka_to_dst_task)
-            .await?;
+        for i in 0..self.kafka_to_dst_runners.len() {
+            self.kafka_to_dst_runners[i]
+                .wait_task_finish(&kafka_to_dst_tasks[i])
+                .await?;
+        }
+
         self.src_to_kafka_runner
             .wait_task_finish(&src_to_kafka_task)
             .await?;

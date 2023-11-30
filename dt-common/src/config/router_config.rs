@@ -4,5 +4,6 @@ pub enum RouterConfig {
         db_map: String,
         tb_map: String,
         field_map: String,
+        topic_map: String,
     },
 }

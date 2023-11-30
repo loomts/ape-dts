@@ -14,12 +14,6 @@ use serde::{Deserialize, Serialize};
 type TbMap = HashMap<(String, String), (String, String)>;
 type TbColMap = HashMap<(String, String), HashMap<String, String>>;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub struct Pair {
-    pub db: String,
-    pub tb: String,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RdbRouter {
     // HashMap<src_db, dst_db>
@@ -28,6 +22,8 @@ pub struct RdbRouter {
     pub tb_map: TbMap,
     // HashMap<(src_db, src_tb), HashMap<src_col, dst_col>>
     pub tb_col_map: TbColMap,
+    // HashMap<(src_db, src_tb), String>
+    pub topic_map: HashMap<(String, String), String>,
 }
 
 impl RdbRouter {
@@ -37,6 +33,7 @@ impl RdbRouter {
                 db_map,
                 tb_map,
                 field_map,
+                topic_map,
             } => {
                 let db_map = Self::parse_db_map(db_map, &db_type).unwrap();
                 let mut tb_map = Self::parse_tb_map(tb_map, &db_type).unwrap();
@@ -44,10 +41,12 @@ impl RdbRouter {
                 for (k, v) in tb_map_2 {
                     tb_map.insert(k, v);
                 }
+                let topic_map = Self::parse_topic_map(topic_map, &db_type).unwrap();
                 return Ok(Self {
                     db_map,
                     tb_map,
                     tb_col_map,
+                    topic_map,
                 });
             }
         }
@@ -65,6 +64,18 @@ impl RdbRouter {
 
     pub fn get_col_map(&self, db: &str, tb: &str) -> Option<&HashMap<String, String>> {
         self.tb_col_map.get(&(db.into(), tb.into()))
+    }
+
+    pub fn get_topic<'a>(&'a self, db: &str, tb: &str) -> &'a str {
+        // *.*:test,test_db_1.*:test2,test_db_1.no_pk_one_uk:test3
+        if let Some(topic) = self.topic_map.get(&(db.into(), tb.into())) {
+            return topic;
+        }
+        if let Some(topic) = self.topic_map.get(&(db.into(), "*".into())) {
+            return topic;
+        }
+        // shoud always has a default topic map
+        return self.topic_map.get(&("*".into(), "*".into())).unwrap();
     }
 
     pub fn reverse(&self) -> Self {
@@ -93,6 +104,8 @@ impl RdbRouter {
             db_map: reverse_db_map,
             tb_map: reverse_tb_map,
             tb_col_map: reverse_tb_col_map,
+            // topic_map should not be reversed
+            topic_map: self.topic_map.clone(),
         }
     }
 
@@ -135,7 +148,7 @@ impl RdbRouter {
     }
 
     fn parse_db_map(config_str: &str, db_type: &DbType) -> Result<HashMap<String, String>, Error> {
-        // example: src_db_1:dst_db_1,src_db_2:dst_db_2
+        // db_map=src_db_1:dst_db_1,src_db_2:dst_db_2
         let mut db_map = HashMap::new();
         let tokens = Self::parse_config(config_str, db_type)?;
         let mut i = 0;
@@ -150,7 +163,7 @@ impl RdbRouter {
         config_str: &str,
         db_type: &DbType,
     ) -> Result<HashMap<(String, String), (String, String)>, Error> {
-        // example: src_db_1.src_tb_1:dst_db_1.dst_tb_1,src_db_2.src_tb_2:dst_db_2.dst_tb_2
+        // tb_map=src_db_1.src_tb_1:dst_db_1.dst_tb_1,src_db_2.src_tb_2:dst_db_2.dst_tb_2
         let mut tb_map = HashMap::new();
         let tokens = Self::parse_config(config_str, db_type)?;
         let mut i = 0;
@@ -165,7 +178,7 @@ impl RdbRouter {
     }
 
     fn parse_tb_col_map(config_str: &str, db_type: &DbType) -> Result<(TbMap, TbColMap), Error> {
-        // example: src_db_1.src_tb_1.col_1:dst_db_1.dst_tb_1.dst_col_1,src_db_2.src_tb_2.dst_col_2:dst_db_2.dst_tb_2.dst_col_2
+        // field_map=src_db_1.src_tb_1.col_1:dst_db_1.dst_tb_1.dst_col_1,src_db_2.src_tb_2.dst_col_2:dst_db_2.dst_tb_2.dst_col_2
         let mut tb_map = TbMap::new();
         let mut tb_col_map = TbColMap::new();
 
@@ -189,6 +202,24 @@ impl RdbRouter {
         }
 
         Ok((tb_map, tb_col_map))
+    }
+
+    fn parse_topic_map(
+        config_str: &str,
+        db_type: &DbType,
+    ) -> Result<HashMap<(String, String), String>, Error> {
+        // topic_map=*.*:test,test_db_1.*:test2,test_db_1.no_pk_one_uk:test3
+        let mut topic_map = HashMap::new();
+        let tokens = Self::parse_config(config_str, db_type)?;
+        let mut i = 0;
+        while i < tokens.len() {
+            topic_map.insert(
+                (tokens[i].to_string(), tokens[i + 1].to_string()),
+                tokens[i + 2].to_string(),
+            );
+            i += 3;
+        }
+        Ok(topic_map)
     }
 
     fn parse_config(config_str: &str, db_type: &DbType) -> Result<Vec<String>, Error> {
@@ -352,11 +383,13 @@ mod tests {
             "`src_db:3,`.`src_tb:3,`.`src_col:1,`:`dst_db:3,`.`dst_tb:3,`.`dst_col:1,`,"
                 .to_string()
                 + "`src_db:3,`.`src_tb:3,`.`src_col:2,`:`dst_db:3,`.`dst_tb:3,`.`dst_col:2,`";
+        let topic_map = "*.*:test,`db:1`.*:test2,`db:1`.`tb:1`:test3";
 
         let config = RouterConfig::Rdb {
             db_map: db_map_str.into(),
             tb_map: tb_map_str.into(),
             field_map: field_map_str.into(),
+            topic_map: topic_map.into(),
         };
         let router = RdbRouter::from_config(&config, &DbType::Mysql).unwrap();
 
@@ -378,5 +411,9 @@ mod tests {
         col_map.insert("src_col:1,".to_string(), "dst_col:1,".to_string());
         col_map.insert("src_col:2,".to_string(), "dst_col:2,".to_string());
         assert_col_map("src_db:3,", "src_tb:3,", &col_map);
+        // topic_map
+        assert_eq!(router.get_topic("db:1", "tb:1"), "test3");
+        assert_eq!(router.get_topic("db:1", "tb:2"), "test2");
+        assert_eq!(router.get_topic("db:2", "tb:1"), "test");
     }
 }

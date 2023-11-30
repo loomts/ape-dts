@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use crate::{call_batch_fn, Sinker};
+use crate::{call_batch_fn, rdb_router::RdbRouter, Sinker};
 
 use dt_common::error::Error;
 
@@ -8,11 +8,9 @@ use dt_meta::{avro::avro_converter::AvroConverter, row_data::RowData};
 
 use kafka::producer::{Producer, Record};
 
-use super::kafka_router::KafkaRouter;
-
 pub struct KafkaSinker {
     pub batch_size: usize,
-    pub kafka_router: KafkaRouter,
+    pub router: RdbRouter,
     pub producer: Producer,
     pub avro_converter: AvroConverter,
 }
@@ -32,17 +30,14 @@ impl KafkaSinker {
         sinked_count: usize,
         batch_size: usize,
     ) -> Result<(), Error> {
-        // TODO, support route by db & tb
-        // TODO, create topic if NOT exists
-        let topic = self.kafka_router.get_route("", "");
         let mut messages = Vec::new();
-
         for (_, row_data) in data
             .iter_mut()
             .skip(sinked_count)
             .take(batch_size)
             .enumerate()
         {
+            let topic = self.router.get_topic(&row_data.schema, &row_data.tb);
             let key = self.avro_converter.row_data_to_avro_key(row_data).await?;
             let payload = self
                 .avro_converter
@@ -51,7 +46,7 @@ impl KafkaSinker {
             messages.push(Record {
                 key,
                 value: payload,
-                topic: &topic,
+                topic,
                 partition: -1,
             });
         }
