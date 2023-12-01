@@ -2,7 +2,7 @@ use crate::{call_batch_fn, Sinker};
 use async_trait::async_trait;
 use dt_common::{error::Error, log_error};
 use dt_meta::{row_data::RowData, row_type::RowType};
-use reqwest::{header, Client, Method, StatusCode};
+use reqwest::{header, Client, Method, Response, StatusCode};
 use serde_json::{json, Value};
 
 #[derive(Clone)]
@@ -97,44 +97,9 @@ impl StarRocksSinker {
             let location = location.unwrap().to_str().unwrap();
             let request = self.build_request(location, op, &body).unwrap();
             let response = self.client.execute(request).await.unwrap();
-            let status_code = response.status();
-            if status_code != StatusCode::OK {
-                return Err(Error::HttpError(format!(
-                    "stream load request failed, status_code: {}",
-                    status_code
-                )));
-            }
-
-            // response example:
-            // {
-            //     "TxnId": 2039,
-            //     "Label": "54afc14e-9088-46df-b532-4deaf4437b42",
-            //     "Status": "Success",
-            //     "Message": "OK",
-            //     "NumberTotalRows": 3,
-            //     "NumberLoadedRows": 3,
-            //     "NumberFilteredRows": 0,
-            //     "NumberUnselectedRows": 0,
-            //     "LoadBytes": 221,
-            //     "LoadTimeMs": 228,
-            //     "BeginTxnTimeMs": 34,
-            //     "StreamLoadPlanTimeMs": 48,
-            //     "ReadDataTimeMs": 0,
-            //     "WriteDataTimeMs": 107,
-            //     "CommitAndPublishTimeMs": 36
-            // }
-            let load_result = &response.text().await.unwrap();
-            let json_value: Value = serde_json::from_str(load_result).unwrap();
-            if json_value["Status"] != "Success" {
-                let err = format!(
-                    "stream load request failed, status_code: {}, load_result: {}",
-                    status_code, load_result,
-                );
-                log_error!("{}", err);
-                return Err(Error::HttpError(err));
-            }
+            return Self::check_response(response).await;
         }
-        Ok(())
+        Self::check_response(response).await
     }
 
     fn build_request(
@@ -164,5 +129,45 @@ impl StarRocksSinker {
             put = put.header("columns", op);
         }
         put.build()
+    }
+
+    async fn check_response(response: Response) -> Result<(), Error> {
+        let status_code = response.status();
+        if status_code != StatusCode::OK {
+            return Err(Error::HttpError(format!(
+                "stream load request failed, status_code: {}",
+                status_code
+            )));
+        }
+
+        // response example:
+        // {
+        //     "TxnId": 2039,
+        //     "Label": "54afc14e-9088-46df-b532-4deaf4437b42",
+        //     "Status": "Success",
+        //     "Message": "OK",
+        //     "NumberTotalRows": 3,
+        //     "NumberLoadedRows": 3,
+        //     "NumberFilteredRows": 0,
+        //     "NumberUnselectedRows": 0,
+        //     "LoadBytes": 221,
+        //     "LoadTimeMs": 228,
+        //     "BeginTxnTimeMs": 34,
+        //     "StreamLoadPlanTimeMs": 48,
+        //     "ReadDataTimeMs": 0,
+        //     "WriteDataTimeMs": 107,
+        //     "CommitAndPublishTimeMs": 36
+        // }
+        let load_result = &response.text().await.unwrap();
+        let json_value: Value = serde_json::from_str(load_result).unwrap();
+        if json_value["Status"] != "Success" {
+            let err = format!(
+                "stream load request failed, status_code: {}, load_result: {}",
+                status_code, load_result,
+            );
+            log_error!("{}", err);
+            return Err(Error::HttpError(err));
+        }
+        Ok(())
     }
 }
