@@ -70,7 +70,7 @@ pub enum SinkerConfig {
     Starrocks {
         url: String,
         batch_size: usize,
-        stream_load_port: String,
+        stream_load_url: String,
     },
 }
 

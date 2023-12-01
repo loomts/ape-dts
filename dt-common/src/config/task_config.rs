@@ -315,7 +315,7 @@ impl TaskConfig {
             DbType::StarRocks => SinkerConfig::Starrocks {
                 url,
                 batch_size,
-                stream_load_port: Self::get_value(ini, SINKER, "stream_load_port"),
+                stream_load_url: Self::get_value(ini, SINKER, "stream_load_url"),
             },
         };
         Ok((basic, sinker))
