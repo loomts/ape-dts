@@ -86,19 +86,6 @@ impl StarRocksSinker {
         );
         let request = self.build_request(&url, op, &body).unwrap();
         let response = self.client.execute(request).await.unwrap();
-        if response.status() == StatusCode::TEMPORARY_REDIRECT {
-            let location = response.headers().get("location");
-            if location.is_none() {
-                return Err(Error::HttpError(
-                    "stream load request redirected but no location provided".into(),
-                ));
-            }
-
-            let location = location.unwrap().to_str().unwrap();
-            let request = self.build_request(location, op, &body).unwrap();
-            let response = self.client.execute(request).await.unwrap();
-            return Self::check_response(response).await;
-        }
         Self::check_response(response).await
     }
 

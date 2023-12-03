@@ -221,13 +221,12 @@ impl SinkerUtil {
             }
 
             SinkerConfig::Starrocks {
-                url,
                 batch_size,
-                stream_load_port,
+                stream_load_url,
+                ..
             } => {
                 SinkerUtil::create_starrocks_sinker(
-                    url,
-                    stream_load_port,
+                    stream_load_url,
                     task_config.parallelizer.parallel_size,
                     *batch_size,
                 )
@@ -527,15 +526,15 @@ impl SinkerUtil {
     }
 
     async fn create_starrocks_sinker<'a>(
-        url: &str,
-        stream_load_port: &str,
+        stream_load_url: &str,
         parallel_size: usize,
         batch_size: usize,
     ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
         let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
         for _ in 0..parallel_size {
-            let url_info = Url::parse(url).unwrap();
+            let url_info = Url::parse(stream_load_url).unwrap();
             let host = url_info.host_str().unwrap().to_string();
+            let port = format!("{}", url_info.port().unwrap());
             let username = url_info.username().to_string();
             let password = if let Some(password) = url_info.password() {
                 password.to_string()
@@ -543,7 +542,7 @@ impl SinkerUtil {
                 String::new()
             };
 
-            let custom = Policy::custom(|attempt| attempt.stop());
+            let custom = Policy::custom(|attempt| attempt.follow());
             let client = reqwest::Client::builder()
                 .http1_title_case_headers()
                 .redirect(custom)
@@ -553,7 +552,7 @@ impl SinkerUtil {
             let sinker = StarRocksSinker {
                 client,
                 host,
-                port: stream_load_port.into(),
+                port,
                 username,
                 password,
                 batch_size,
