@@ -19,8 +19,8 @@ impl TimeWindowCounter {
     }
 
     #[inline(always)]
-    pub fn add(&mut self, value: usize) {
-        self.counters.push_back(Counter::new(value));
+    pub fn add(&mut self, value: usize, count: usize) {
+        self.counters.push_back(Counter::new(value, count));
     }
 
     #[inline(always)]
@@ -34,7 +34,11 @@ impl TimeWindowCounter {
 
     #[inline(always)]
     pub fn count(&mut self) -> usize {
-        self.counters.len()
+        let mut count = 0;
+        for counter in self.counters.iter() {
+            count += counter.count;
+        }
+        count
     }
 
     #[inline(always)]
@@ -45,7 +49,7 @@ impl TimeWindowCounter {
     #[inline(always)]
     pub fn avg_by_count(&mut self) -> usize {
         if self.counters.len() > 0 {
-            self.sum() / self.counters.len()
+            self.sum() / self.count()
         } else {
             0
         }

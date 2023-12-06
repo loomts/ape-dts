@@ -1,3 +1,6 @@
+use std::{sync::Arc, time::Instant};
+
+use async_rwlock::RwLock;
 use async_trait::async_trait;
 use mongodb::{
     bson::{doc, Document},
@@ -5,20 +8,21 @@ use mongodb::{
     Client, Collection,
 };
 
-use dt_common::{error::Error, log_error};
+use dt_common::{error::Error, log_error, monitor::monitor::Monitor};
 
 use dt_meta::{
     col_value::ColValue, mongo::mongo_constant::MongoConstants, row_data::RowData,
     row_type::RowType,
 };
 
-use crate::{call_batch_fn, rdb_router::RdbRouter, Sinker};
+use crate::{call_batch_fn, rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker};
 
 #[derive(Clone)]
 pub struct MongoSinker {
     pub router: RdbRouter,
     pub batch_size: usize,
     pub mongo_client: Client,
+    pub monitor: Arc<RwLock<Monitor>>,
 }
 
 #[async_trait]
@@ -43,10 +47,16 @@ impl Sinker for MongoSinker {
         }
         Ok(())
     }
+
+    fn get_monitor(&self) -> Option<Arc<RwLock<Monitor>>> {
+        Some(self.monitor.clone())
+    }
 }
 
 impl MongoSinker {
     async fn serial_sink(&mut self, mut data: Vec<RowData>) -> Result<(), Error> {
+        let start_time = Instant::now();
+
         for row_data in data.iter_mut() {
             let collection = self
                 .mongo_client
@@ -103,7 +113,8 @@ impl MongoSinker {
                 }
             }
         }
-        Ok(())
+
+        BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), start_time).await
     }
 
     async fn batch_delete(
@@ -112,6 +123,8 @@ impl MongoSinker {
         start_index: usize,
         batch_size: usize,
     ) -> Result<(), Error> {
+        let start_time = Instant::now();
+
         let collection = self
             .mongo_client
             .database(&data[0].schema)
@@ -131,7 +144,8 @@ impl MongoSinker {
             }
         };
         collection.delete_many(query, None).await.unwrap();
-        Ok(())
+
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, start_time).await
     }
 
     async fn batch_insert(
@@ -140,6 +154,8 @@ impl MongoSinker {
         start_index: usize,
         batch_size: usize,
     ) -> Result<(), Error> {
+        let start_time = Instant::now();
+
         let db = &data[0].schema;
         let tb = &data[0].tb;
         let collection = self.mongo_client.database(db).collection::<Document>(tb);
@@ -162,7 +178,8 @@ impl MongoSinker {
             let sub_data = &data[start_index..start_index + batch_size];
             self.serial_sink(sub_data.to_vec()).await.unwrap();
         }
-        Ok(())
+
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, start_time).await
     }
 
     async fn upsert(

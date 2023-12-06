@@ -1,9 +1,15 @@
+use std::{sync::Arc, time::Instant};
+
 use crate::{
     call_batch_fn, close_conn_pool, rdb_query_builder::RdbQueryBuilder, rdb_router::RdbRouter,
-    Sinker,
+    sinker::base_sinker::BaseSinker, Sinker,
 };
 
-use dt_common::{config::config_enums::DbType, error::Error, log_error, utils::sql_util::SqlUtil};
+use async_rwlock::RwLock;
+use dt_common::{
+    config::config_enums::DbType, error::Error, log_error, monitor::monitor::Monitor,
+    utils::sql_util::SqlUtil,
+};
 use sqlx::{Pool, Postgres};
 
 use dt_meta::{
@@ -21,6 +27,7 @@ pub struct PgSinker {
     pub meta_manager: PgMetaManager,
     pub router: RdbRouter,
     pub batch_size: usize,
+    pub monitor: Arc<RwLock<Monitor>>,
 }
 
 #[async_trait]
@@ -49,10 +56,16 @@ impl Sinker for PgSinker {
     async fn close(&mut self) -> Result<(), Error> {
         return close_conn_pool!(self);
     }
+
+    fn get_monitor(&self) -> Option<Arc<RwLock<Monitor>>> {
+        Some(self.monitor.clone())
+    }
 }
 
 impl PgSinker {
     async fn serial_sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
+        let start_time = Instant::now();
+
         for row_data in data.iter() {
             let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&row_data).await?;
             let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
@@ -65,7 +78,8 @@ impl PgSinker {
             let query = query_builder.create_pg_query(&sql, &cols, &binds);
             query.execute(&self.conn_pool).await.unwrap();
         }
-        Ok(())
+
+        BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), start_time).await
     }
 
     async fn batch_delete(
@@ -74,15 +88,17 @@ impl PgSinker {
         start_index: usize,
         batch_size: usize,
     ) -> Result<(), Error> {
+        let start_time = Instant::now();
+
         let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&data[0]).await?;
         let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
 
         let (sql, cols, binds) =
             query_builder.get_batch_delete_query(data, start_index, batch_size)?;
         let query = query_builder.create_pg_query(&sql, &cols, &binds);
-
         query.execute(&self.conn_pool).await.unwrap();
-        Ok(())
+
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, start_time).await
     }
 
     async fn batch_insert(
@@ -91,6 +107,8 @@ impl PgSinker {
         start_index: usize,
         batch_size: usize,
     ) -> Result<(), Error> {
+        let start_time = Instant::now();
+
         let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&data[0]).await?;
         let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
 
@@ -109,7 +127,8 @@ impl PgSinker {
             let sub_data = &data[start_index..start_index + batch_size];
             self.serial_sink(sub_data.to_vec()).await.unwrap();
         }
-        Ok(())
+
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, start_time).await
     }
 
     #[allow(clippy::type_complexity)]

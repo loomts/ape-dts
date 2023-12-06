@@ -1,8 +1,10 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, sync::Arc};
 
+use async_rwlock::RwLock;
 use dt_common::{
     config::{config_enums::ParallelType, task_config::TaskConfig},
     error::Error,
+    monitor::monitor::Monitor,
 };
 use dt_parallelizer::{
     base_parallelizer::BaseParallelizer, check_parallelizer::CheckParallelizer,
@@ -20,11 +22,13 @@ pub struct ParallelizerUtil {}
 impl ParallelizerUtil {
     pub async fn create_parallelizer(
         config: &TaskConfig,
+        monitor: Arc<RwLock<Monitor>>,
     ) -> Result<Box<dyn Parallelizer + Send>, Error> {
         let parallel_size = config.parallelizer.parallel_size;
         let parallel_type = &config.parallelizer.parallel_type;
         let base_parallelizer = BaseParallelizer {
             poped_data: VecDeque::new(),
+            monitor: monitor.clone(),
         };
 
         let parallelizer: Box<dyn Parallelizer + Send> = match parallel_type {

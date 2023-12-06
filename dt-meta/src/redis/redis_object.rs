@@ -215,3 +215,50 @@ impl RedisCmd {
         str_args.join(" ")
     }
 }
+
+impl RedisObject {
+    pub fn get_malloc_size(&self) -> usize {
+        match self {
+            RedisObject::String(v) => v.key.bytes.len() + v.value.bytes.len(),
+            RedisObject::List(v) => {
+                let mut size = 0;
+                for i in v.elements.iter() {
+                    size += i.bytes.len();
+                }
+                size + v.key.bytes.len()
+            }
+            RedisObject::Hash(v) => {
+                let mut size = 0;
+                for (key, value) in v.value.iter() {
+                    size += key.bytes.len() + value.bytes.len();
+                }
+                size + v.key.bytes.len()
+            }
+            RedisObject::Set(v) => {
+                let mut size = 0;
+                for i in v.elements.iter() {
+                    size += i.bytes.len();
+                }
+                size + v.key.bytes.len()
+            }
+            RedisObject::Zset(v) => {
+                let mut size = 0;
+                for i in v.elements.iter() {
+                    size += i.member.bytes.len() + i.score.bytes.len()
+                }
+                size + v.key.bytes.len()
+            }
+            RedisObject::Stream(v) => {
+                let mut size = 0;
+                for cmd in v.cmds.iter() {
+                    for arg in cmd.args.iter() {
+                        size += arg.len();
+                    }
+                }
+                size + v.key.bytes.len()
+            }
+            RedisObject::Module(_) => 0,
+            RedisObject::Unknown => 0,
+        }
+    }
+}

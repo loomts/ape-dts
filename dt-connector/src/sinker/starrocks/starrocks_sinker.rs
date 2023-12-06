@@ -1,6 +1,9 @@
-use crate::{call_batch_fn, Sinker};
+use std::{sync::Arc, time::Instant};
+
+use crate::{call_batch_fn, sinker::base_sinker::BaseSinker, Sinker};
+use async_rwlock::RwLock;
 use async_trait::async_trait;
-use dt_common::{error::Error, log_error};
+use dt_common::{error::Error, log_error, monitor::monitor::Monitor};
 use dt_meta::{row_data::RowData, row_type::RowType};
 use reqwest::{header, Client, Method, Response, StatusCode};
 use serde_json::{json, Value};
@@ -13,6 +16,7 @@ pub struct StarRocksSinker {
     pub port: String,
     pub username: String,
     pub password: String,
+    pub monitor: Arc<RwLock<Monitor>>,
 }
 
 #[async_trait]
@@ -34,15 +38,22 @@ impl Sinker for StarRocksSinker {
         }
         Ok(())
     }
+
+    fn get_monitor(&self) -> Option<Arc<RwLock<Monitor>>> {
+        Some(self.monitor.clone())
+    }
 }
 
 impl StarRocksSinker {
     async fn serial_sink(&mut self, mut data: Vec<RowData>) -> Result<(), Error> {
+        let start_time = Instant::now();
+
         let data = data.as_mut_slice();
         for i in 0..data.len() {
             self.send_data(data, i, 1).await.unwrap();
         }
-        Ok(())
+
+        BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), start_time).await
     }
 
     async fn batch_sink(
@@ -51,8 +62,11 @@ impl StarRocksSinker {
         start_index: usize,
         batch_size: usize,
     ) -> Result<(), Error> {
+        let start_time = Instant::now();
+
         self.send_data(data, start_index, batch_size).await.unwrap();
-        Ok(())
+
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, start_time).await
     }
 
     async fn send_data(
