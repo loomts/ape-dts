@@ -98,6 +98,34 @@ impl ColValue {
             _ => false,
         }
     }
+
+    pub fn get_malloc_size(&self) -> usize {
+        match self {
+            ColValue::Tiny(_) | ColValue::UnsignedTiny(_) | ColValue::Bool(_) => 1,
+            ColValue::Short(_) | ColValue::UnsignedShort(_) | ColValue::Year(_) => 2,
+            ColValue::Long(_)
+            | ColValue::UnsignedLong(_)
+            | ColValue::Float(_)
+            | ColValue::Enum(_) => 4,
+            ColValue::LongLong(_)
+            | ColValue::UnsignedLongLong(_)
+            | ColValue::Double(_)
+            | ColValue::Bit(_)
+            | ColValue::Set(_) => 8,
+            ColValue::Decimal(v)
+            | ColValue::Time(v)
+            | ColValue::Date(v)
+            | ColValue::DateTime(v)
+            | ColValue::Timestamp(v)
+            | ColValue::String(v)
+            | ColValue::Set2(v)
+            | ColValue::Enum2(v)
+            | ColValue::Json2(v) => v.len(),
+            ColValue::Json(v) | ColValue::Blob(v) => v.len(),
+            ColValue::MongoDoc(v) => v.to_string().len(),
+            ColValue::None => 0,
+        }
+    }
 }
 
 impl Serialize for ColValue {

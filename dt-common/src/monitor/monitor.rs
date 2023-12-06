@@ -33,6 +33,8 @@ pub enum CounterType {
     RtPerQuery,
     #[strum(serialize = "buffer_size")]
     BufferSize,
+    #[strum(serialize = "record_size")]
+    RecordSize,
 
     // accumulate counter
     #[strum(serialize = "sinked_count")]
@@ -54,23 +56,44 @@ impl Monitor {
         }
     }
 
+    pub fn add_batch_counter(
+        &mut self,
+        counter_type: CounterType,
+        value: usize,
+        count: usize,
+    ) -> &mut Self {
+        if count == 0 {
+            return self;
+        }
+        self.add_counter_internal(counter_type, value, count)
+    }
+
     pub fn add_counter(&mut self, counter_type: CounterType, value: usize) -> &mut Self {
+        self.add_counter_internal(counter_type, value, 1)
+    }
+
+    fn add_counter_internal(
+        &mut self,
+        counter_type: CounterType,
+        value: usize,
+        count: usize,
+    ) -> &mut Self {
         match counter_type {
             CounterType::SinkedCount => {
                 if let Some(counter) = self.accumulate_counters.get_mut(&counter_type) {
-                    counter.add(value)
+                    counter.add(value, count);
                 } else {
                     self.accumulate_counters
-                        .insert(counter_type, Counter::new(value));
+                        .insert(counter_type, Counter::new(value, count));
                 }
             }
 
             _ => {
                 if let Some(counter) = self.time_window_counters.get_mut(&counter_type) {
-                    counter.add(value)
+                    counter.add(value, count)
                 } else {
                     let mut counter = TimeWindowCounter::new(self.time_window_secs);
-                    counter.add(value);
+                    counter.add(value, count);
                     self.time_window_counters.insert(counter_type, counter);
                 }
             }

@@ -21,7 +21,7 @@ impl Parallelizer for TableParallelizer {
     }
 
     async fn drain(&mut self, buffer: &ConcurrentQueue<DtItem>) -> Result<Vec<DtItem>, Error> {
-        self.base_parallelizer.drain(buffer)
+        self.base_parallelizer.drain(buffer).await
     }
 
     async fn sink_dml(

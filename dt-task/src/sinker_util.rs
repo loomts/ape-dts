@@ -291,6 +291,7 @@ impl SinkerUtil {
                 extractor_meta_manager: extractor_meta_manager.clone(),
                 router: router.clone(),
                 batch_size,
+                monitor: Arc::new(RwLock::new(Monitor::new_default())),
             };
             sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
         }
@@ -316,6 +317,7 @@ impl SinkerUtil {
                 meta_manager: meta_manager.clone(),
                 router: router.clone(),
                 batch_size,
+                monitor: Arc::new(RwLock::new(Monitor::new_default())),
             };
             sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
         }
@@ -343,6 +345,7 @@ impl SinkerUtil {
                 extractor_meta_manager: extractor_meta_manager.clone(),
                 router: router.clone(),
                 batch_size,
+                monitor: Arc::new(RwLock::new(Monitor::new_default())),
             };
             sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
         }
@@ -380,6 +383,7 @@ impl SinkerUtil {
                 router: router.clone(),
                 producer,
                 avro_converter: avro_converter.clone(),
+                monitor: Arc::new(RwLock::new(Monitor::new_default())),
             };
             sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
         }
@@ -451,6 +455,7 @@ impl SinkerUtil {
                 batch_size,
                 router: router.clone(),
                 mongo_client,
+                monitor: Arc::new(RwLock::new(Monitor::new_default())),
             };
             sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
         }
@@ -519,6 +524,7 @@ impl SinkerUtil {
                 version,
                 method,
                 meta_manager: meta_manager.clone(),
+                monitor: Arc::new(RwLock::new(Monitor::new_default())),
             };
             sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
         }
@@ -556,6 +562,7 @@ impl SinkerUtil {
                 username,
                 password,
                 batch_size,
+                monitor: Arc::new(RwLock::new(Monitor::new_default())),
             };
             sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
         }

@@ -38,4 +38,12 @@ impl RedisEntry {
     pub fn is_raw(&self) -> bool {
         self.is_base && !self.raw_bytes.is_empty()
     }
+
+    pub fn get_data_malloc_size(&self) -> usize {
+        if self.is_raw() {
+            self.raw_bytes.len()
+        } else {
+            self.key.bytes.len() + self.value.get_malloc_size()
+        }
+    }
 }

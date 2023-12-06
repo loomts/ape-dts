@@ -91,4 +91,23 @@ impl RowData {
         }
         hash_code
     }
+
+    pub fn get_data_malloc_size(&self) -> usize {
+        let mut size = 0;
+        // do not use mem::size_of_val() since:
+        // for Pointer: it returns the size of pointer without the pointed data
+        // for HashMap and Vector: it returns the size of the structure without the stored items
+        if let Some(col_values) = &self.before {
+            for (_, v) in col_values.iter() {
+                size += v.get_malloc_size();
+            }
+        }
+        if let Some(col_values) = &self.after {
+            for (_, v) in col_values.iter() {
+                size += v.get_malloc_size();
+            }
+        }
+        // ignore other fields
+        size
+    }
 }

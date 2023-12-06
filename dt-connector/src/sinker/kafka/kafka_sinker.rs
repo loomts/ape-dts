@@ -1,8 +1,11 @@
+use std::{sync::Arc, time::Instant};
+
+use async_rwlock::RwLock;
 use async_trait::async_trait;
 
-use crate::{call_batch_fn, rdb_router::RdbRouter, Sinker};
+use crate::{call_batch_fn, rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker};
 
-use dt_common::error::Error;
+use dt_common::{error::Error, monitor::monitor::Monitor};
 
 use dt_meta::{avro::avro_converter::AvroConverter, row_data::RowData};
 
@@ -13,13 +16,21 @@ pub struct KafkaSinker {
     pub router: RdbRouter,
     pub producer: Producer,
     pub avro_converter: AvroConverter,
+    pub monitor: Arc<RwLock<Monitor>>,
 }
 
 #[async_trait]
 impl Sinker for KafkaSinker {
     async fn sink_dml(&mut self, mut data: Vec<RowData>, _batch: bool) -> Result<(), Error> {
+        let start_time = Instant::now();
+
         call_batch_fn!(self, data, Self::send_avro);
-        Ok(())
+
+        BaseSinker::update_batch_monitor(&mut self.monitor, data.len(), start_time).await
+    }
+
+    fn get_monitor(&self) -> Option<Arc<RwLock<Monitor>>> {
+        Some(self.monitor.clone())
     }
 }
 

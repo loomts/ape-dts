@@ -1,7 +1,8 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc, time::Instant};
 
+use async_rwlock::RwLock;
 use async_trait::async_trait;
-use dt_common::error::Error;
+use dt_common::{error::Error, monitor::monitor::Monitor};
 use dt_meta::{
     ddl_data::DdlData, pg::pg_meta_manager::PgMetaManager, rdb_meta_manager::RdbMetaManager,
     row_data::RowData,
@@ -10,8 +11,11 @@ use futures::TryStreamExt;
 use sqlx::{Pool, Postgres};
 
 use crate::{
-    call_batch_fn, close_conn_pool, meta_fetcher::pg::pg_struct_fetcher::PgStructFetcher,
-    rdb_query_builder::RdbQueryBuilder, rdb_router::RdbRouter, sinker::base_checker::BaseChecker,
+    call_batch_fn, close_conn_pool,
+    meta_fetcher::pg::pg_struct_fetcher::PgStructFetcher,
+    rdb_query_builder::RdbQueryBuilder,
+    rdb_router::RdbRouter,
+    sinker::{base_checker::BaseChecker, base_sinker::BaseSinker},
     Sinker,
 };
 
@@ -22,6 +26,7 @@ pub struct PgChecker {
     pub extractor_meta_manager: RdbMetaManager,
     pub router: RdbRouter,
     pub batch_size: usize,
+    pub monitor: Arc<RwLock<Monitor>>,
 }
 
 #[async_trait]
@@ -51,10 +56,16 @@ impl Sinker for PgChecker {
         self.serial_ddl_check(data).await.unwrap();
         Ok(())
     }
+
+    fn get_monitor(&self) -> Option<Arc<RwLock<Monitor>>> {
+        Some(self.monitor.clone())
+    }
 }
 
 impl PgChecker {
     async fn serial_check(&mut self, data: Vec<RowData>) -> Result<(), Error> {
+        let start_time = Instant::now();
+
         if data.is_empty() {
             return Ok(());
         }
@@ -77,7 +88,11 @@ impl PgChecker {
                 miss.push(row_data_src.to_owned());
             }
         }
-        Ok(())
+        BaseChecker::log_dml(&mut self.extractor_meta_manager, &self.router, miss, diff)
+            .await
+            .unwrap();
+
+        BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), start_time).await
     }
 
     async fn batch_check(
@@ -86,6 +101,8 @@ impl PgChecker {
         start_index: usize,
         batch_size: usize,
     ) -> Result<(), Error> {
+        let start_time = Instant::now();
+
         let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&data[0]).await?;
         let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
 
@@ -110,7 +127,11 @@ impl PgChecker {
             start_index,
             batch_size,
         );
-        BaseChecker::log_dml(&mut self.extractor_meta_manager, &self.router, miss, diff).await
+        BaseChecker::log_dml(&mut self.extractor_meta_manager, &self.router, miss, diff)
+            .await
+            .unwrap();
+
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, start_time).await
     }
 
     async fn serial_ddl_check(&mut self, data: Vec<DdlData>) -> Result<(), Error> {

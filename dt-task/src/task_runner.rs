@@ -209,7 +209,9 @@ impl TaskRunner {
         syncer: Arc<Mutex<Syncer>>,
         sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
     ) -> Result<Box<dyn Pipeline + Send>, Error> {
-        let parallelizer = ParallelizerUtil::create_parallelizer(&self.config).await?;
+        let monitor = Arc::new(RwLock::new(Monitor::new_default()));
+        let parallelizer =
+            ParallelizerUtil::create_parallelizer(&self.config, monitor.clone()).await?;
         let pipeline = BasePipeline {
             buffer,
             parallelizer,
@@ -219,7 +221,7 @@ impl TaskRunner {
             checkpoint_interval_secs: self.config.pipeline.checkpoint_interval_secs,
             batch_sink_interval_secs: self.config.pipeline.batch_sink_interval_secs,
             syncer,
-            monitor: Arc::new(RwLock::new(Monitor::new_default())),
+            monitor,
         };
 
         Ok(Box::new(pipeline))
@@ -596,7 +598,7 @@ impl TaskRunner {
                 {
                     counter.refresh_window();
                     let agrregate = match counter_type {
-                        CounterType::BufferSize => counter.avg_by_count(),
+                        CounterType::BufferSize | CounterType::RecordSize => counter.avg_by_count(),
                         _ => 0,
                     };
                     log_monitor!("pipeline | {} | {}", counter_type.to_string(), agrregate)
