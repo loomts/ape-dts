@@ -8,6 +8,7 @@ use dt_meta::{
     ddl_data::DdlData,
     ddl_type::DdlType,
     dt_data::{DtData, DtItem},
+    mysql::mysql_meta_manager::MysqlMetaManager,
     position::Position,
     struct_meta::database_model::StructModel,
 };
@@ -36,13 +37,9 @@ impl Extractor for MysqlStructExtractor {
 
 impl MysqlStructExtractor {
     pub async fn extract_internal(&mut self) -> Result<(), Error> {
-        let mut mysql_fetcher = MysqlStructFetcher {
-            conn_pool: self.conn_pool.to_owned(),
-            db: self.db.clone(),
-            filter: Some(self.filter.to_owned()),
-        };
+        let mut mysql_fetcher = self.build_fetcher().await?;
 
-        for (_, meta) in mysql_fetcher.get_database().await.unwrap() {
+        for (_, meta) in mysql_fetcher.get_database(&None).await.unwrap() {
             self.push_dt_data(&meta).await;
         }
 
@@ -54,9 +51,9 @@ impl MysqlStructExtractor {
             self.push_dt_data(&meta).await;
         }
 
-        for (_, meta) in mysql_fetcher.get_constraint(&None).await.unwrap() {
-            self.push_dt_data(&meta).await;
-        }
+        // for (_, meta) in mysql_fetcher.get_constraint(&None).await.unwrap() {
+        //     self.push_dt_data(&meta).await;
+        // }
 
         BaseExtractor::wait_task_finish(self.buffer.as_ref(), self.shut_down.as_ref()).await
     }
@@ -78,11 +75,13 @@ impl MysqlStructExtractor {
         .unwrap()
     }
 
-    pub fn build_fetcher(&self) -> MysqlStructFetcher {
-        MysqlStructFetcher {
+    pub async fn build_fetcher(&self) -> Result<MysqlStructFetcher, Error> {
+        let meta_manager = MysqlMetaManager::new(self.conn_pool.clone()).init().await?;
+        Ok(MysqlStructFetcher {
             conn_pool: self.conn_pool.to_owned(),
             db: self.db.clone(),
             filter: Some(self.filter.to_owned()),
-        }
+            meta_manager,
+        })
     }
 }

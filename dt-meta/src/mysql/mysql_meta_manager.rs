@@ -228,7 +228,8 @@ impl<'a> MysqlMetaManager {
     async fn get_col_length(&mut self, row: &MySqlRow) -> Result<u64, Error> {
         // with A expression, error will throw for mysql 8.0: ColumnDecode { index: "\"CHARACTER_MAXIMUM_LENGTH\"", source: "mismatched types; Rust type `u64` (as SQL type `BIGINT UNSIGNED`) is not compatible with SQL type `BIGINT`" }'
         // with B expression, error will throw for mysql 5.7: ColumnDecode { index: "\"CHARACTER_MAXIMUM_LENGTH\"", source: "mismatched types; Rust type `i64` (as SQL type `BIGINT`) is not compatible with SQL type `BIGINT UNSIGNED`" }'
-        if self.version.contains("5.7") {
+        // no need to consider versions before 5.*
+        if self.version.starts_with("5.") {
             let length: u64 = row.try_get(CHARACTER_MAXIMUM_LENGTH).unwrap();
             Ok(length)
         } else {
@@ -268,7 +269,8 @@ impl<'a> MysqlMetaManager {
         let sql = "SELECT VERSION()";
         let mut rows = sqlx::query(sql).disable_arguments().fetch(&self.conn_pool);
         if let Some(row) = rows.try_next().await.unwrap() {
-            self.version = row.try_get(0)?;
+            let version: String = row.try_get(0)?;
+            self.version = version.trim().into();
             return Ok(());
         }
         Err(Error::MetadataError("failed to init mysql version".into()))

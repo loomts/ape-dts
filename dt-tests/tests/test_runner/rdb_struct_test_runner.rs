@@ -50,7 +50,8 @@ impl RdbStructTestRunner {
                 shut_down.clone(),
             )
             .await?
-            .build_fetcher();
+            .build_fetcher()
+            .await?;
 
             let mut dst_fetcher = ExtractorUtil::create_mysql_struct_extractor(
                 &dst_url,
@@ -61,7 +62,8 @@ impl RdbStructTestRunner {
                 shut_down.clone(),
             )
             .await?
-            .build_fetcher();
+            .build_fetcher()
+            .await?;
 
             let src_models = src_fetcher.get_table(&None).await.unwrap();
             let dst_models = dst_fetcher.get_table(&None).await.unwrap();
