@@ -143,6 +143,7 @@ impl MysqlChecker {
                     conn_pool: self.conn_pool.to_owned(),
                     db: String::from(""),
                     filter: None,
+                    meta_manager: self.meta_manager.clone(),
                 };
                 let model_dst_option = mysql_struct_fetcher
                     .fetch_with_model(&data_model_src)

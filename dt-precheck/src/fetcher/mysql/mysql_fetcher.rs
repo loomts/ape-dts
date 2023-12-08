@@ -26,14 +26,14 @@ impl Fetcher for MysqlFetcher {
     }
 
     async fn fetch_version(&mut self) -> Result<String, Error> {
-        let sql = "select version()".to_string();
+        let sql = "SELECT version() AS VERSION".to_string();
         let mut version: String = String::from("");
 
         let result = self.fetch_all(sql, "mysql query database version").await;
         match result {
             Ok(rows) => {
                 if !rows.is_empty() {
-                    let version_str: String = rows.get(0).unwrap().get("version()");
+                    let version_str: String = rows.get(0).unwrap().get("VERSION");
                     version = version_str;
                 }
             }
@@ -51,7 +51,7 @@ impl Fetcher for MysqlFetcher {
             return Ok(HashMap::new());
         }
         let sql = format!(
-            "show variables where variable_name in ({})",
+            "SHOW variables WHERE variable_name IN ({})",
             config_keys
                 .iter()
                 .map(|c| format!("'{}'", c))
@@ -81,7 +81,7 @@ impl Fetcher for MysqlFetcher {
 
     async fn fetch_databases(&mut self) -> Result<Vec<Database>, Error> {
         let mut results: Vec<Database> = vec![];
-        let query_db = "select schema_name from information_schema.SCHEMATA";
+        let query_db = "SELECT SCHEMA_NAME FROM information_schema.schemata";
 
         let rows_result = self.fetch_row(query_db, "mysql query dbs sql:");
         match rows_result {
@@ -107,7 +107,7 @@ impl Fetcher for MysqlFetcher {
 
     async fn fetch_tables(&mut self) -> Result<Vec<Table>, Error> {
         let mut results: Vec<Table> = vec![];
-        let query_tb = "select t.table_schema,t.table_name from information_schema.tables t";
+        let query_tb = "SELECT TABLE_SCHEMA, TABLE_NAME FROM information_schema.tables";
 
         let rows_result = self.fetch_row(query_tb, "mysql query tables sql:");
         match rows_result {
@@ -132,7 +132,12 @@ impl Fetcher for MysqlFetcher {
 
     async fn fetch_constraints(&mut self) -> Result<Vec<Constraint>, Error> {
         let mut results: Vec<Constraint> = vec![];
-        let query_constaint = "select table_schema,table_name,constraint_name, constraint_type from information_schema.table_constraints";
+        let query_constaint = "SELECT 
+            TABLE_SCHEMA,
+            TABLE_NAME,
+            CONSTRAINT_NAME, 
+            CONSTRAINT_TYPE 
+            from information_schema.table_constraints";
 
         let rows_result = self.fetch_row(query_constaint, "mysql query constraints sql:");
         match rows_result {

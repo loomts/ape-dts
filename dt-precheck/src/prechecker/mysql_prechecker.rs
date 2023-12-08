@@ -16,7 +16,7 @@ use crate::{
 
 use super::traits::Prechecker;
 
-const MYSQL_SUPPORT_DB_VERSION_REGEX: &str = r"8\..*";
+const MYSQL_SUPPORT_DB_VERSION_REGEX: &str = r"5\..*|8\..*";
 
 pub struct MySqlPrechecker {
     pub fetcher: MysqlFetcher,
