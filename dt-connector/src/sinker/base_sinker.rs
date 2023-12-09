@@ -58,14 +58,15 @@ macro_rules! call_batch_fn {
                 batch_size = all_count - sinked_count;
             }
 
+            if batch_size == 0 {
+                break;
+            }
+
             $batch_fn($self, &mut $data, sinked_count, batch_size)
                 .await
                 .unwrap();
 
             sinked_count += batch_size;
-            if sinked_count == all_count {
-                break;
-            }
         }
     };
 }

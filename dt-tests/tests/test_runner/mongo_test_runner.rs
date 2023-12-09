@@ -50,7 +50,7 @@ impl MongoTestRunner {
         }
 
         match config.sinker {
-            SinkerConfig::Mongo { url, .. } => {
+            SinkerConfig::Mongo { url, .. } | SinkerConfig::MongoCheck { url, .. } => {
                 dst_mongo_client = Some(TaskUtil::create_mongo_client(&url).await.unwrap());
             }
             _ => {}
@@ -70,7 +70,7 @@ impl MongoTestRunner {
         start_millis: u64,
         parse_millis: u64,
     ) -> Result<(), Error> {
-        self.execute_test_prepare_sqls().await?;
+        self.execute_prepare_sqls().await?;
 
         // update start_timestamp to make sure the subsequent cdc task can get old events
         let start_timestamp = Utc::now().timestamp().to_string();
@@ -128,7 +128,7 @@ impl MongoTestRunner {
     }
 
     pub async fn run_cdc_test(&self, start_millis: u64, parse_millis: u64) -> Result<(), Error> {
-        self.execute_test_prepare_sqls().await?;
+        self.execute_prepare_sqls().await?;
 
         let task = self.base.spawn_task().await?;
         TimeUtil::sleep_millis(start_millis).await;
@@ -164,17 +164,12 @@ impl MongoTestRunner {
     }
 
     pub async fn run_snapshot_test(&self, compare_data: bool) -> Result<(), Error> {
-        self.execute_test_prepare_sqls().await?;
-
-        let src_mongo_client = self.src_mongo_client.as_ref().unwrap();
-
-        let src_sqls = Self::slice_sqls_by_db(&self.base.src_dml_sqls);
-        for (db, sqls) in src_sqls.iter() {
-            self.execute_dmls(src_mongo_client, db, sqls).await?;
-        }
+        self.execute_prepare_sqls().await?;
+        self.execute_test_sqls().await?;
 
         self.base.start_task().await?;
 
+        let src_sqls = Self::slice_sqls_by_db(&self.base.src_dml_sqls);
         if compare_data {
             for (db, _) in src_sqls.iter() {
                 self.compare_db_data(db).await;
@@ -183,7 +178,7 @@ impl MongoTestRunner {
         Ok(())
     }
 
-    pub async fn execute_test_prepare_sqls(&self) -> Result<(), Error> {
+    pub async fn execute_prepare_sqls(&self) -> Result<(), Error> {
         let src_mongo_client = self.src_mongo_client.as_ref().unwrap();
         let dst_mongo_client = self.dst_mongo_client.as_ref().unwrap();
 
@@ -197,6 +192,23 @@ impl MongoTestRunner {
         for (db, sqls) in dst_sqls.iter() {
             self.execute_ddls(dst_mongo_client, db, sqls).await?;
             self.execute_dmls(dst_mongo_client, db, sqls).await?;
+        }
+        Ok(())
+    }
+
+    pub async fn execute_test_sqls(&self) -> Result<(), Error> {
+        let sqls = MongoTestRunner::slice_sqls_by_db(&self.base.src_dml_sqls);
+        for (db, sqls) in sqls.iter() {
+            self.execute_dmls(&self.src_mongo_client.as_ref().unwrap(), db, sqls)
+                .await
+                .unwrap();
+        }
+
+        let sqls = MongoTestRunner::slice_sqls_by_db(&self.base.dst_dml_sqls);
+        for (db, sqls) in sqls.iter() {
+            self.execute_dmls(&self.dst_mongo_client.as_ref().unwrap(), db, sqls)
+                .await
+                .unwrap();
         }
         Ok(())
     }

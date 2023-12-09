@@ -84,6 +84,26 @@ impl BaseChecker {
         Ok(())
     }
 
+    pub async fn log_mongo_dml(
+        tb_meta: &RdbTbMeta,
+        router: &RdbRouter,
+        miss: Vec<RowData>,
+        diff: Vec<RowData>,
+    ) -> Result<(), Error> {
+        for row_data in miss {
+            let src_row_data = router.route_row(row_data);
+            let check_log = CheckLog::from_row_data(&src_row_data, &tb_meta, LogType::Miss);
+            log_miss!("{}", check_log.to_string());
+        }
+
+        for row_data in diff {
+            let src_row_data = router.route_row(row_data);
+            let check_log = CheckLog::from_row_data(&src_row_data, &tb_meta, LogType::Miss);
+            log_diff!("{}", check_log.to_string());
+        }
+        Ok(())
+    }
+
     #[inline(always)]
     pub fn log_miss_struct(struct_model: &StructModel) {
         log_miss!("{}", struct_model.to_log_string());

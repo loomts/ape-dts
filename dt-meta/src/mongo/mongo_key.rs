@@ -1,5 +1,6 @@
 use mongodb::bson::{oid::ObjectId, Bson, DateTime, Document, Timestamp};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 
 use super::mongo_constant::MongoConstants;
 
@@ -33,5 +34,9 @@ impl MongoKey {
             return value;
         }
         None
+    }
+
+    pub fn to_string(&self) -> String {
+        json!(self).to_string()
     }
 }

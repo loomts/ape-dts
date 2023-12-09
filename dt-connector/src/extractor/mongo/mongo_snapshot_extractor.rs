@@ -10,8 +10,12 @@ use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{config::config_enums::DbType, error::Error, log_info, utils::time_util::TimeUtil};
 use dt_meta::{
-    col_value::ColValue, dt_data::DtItem, mongo::mongo_constant::MongoConstants,
-    position::Position, row_data::RowData, row_type::RowType,
+    col_value::ColValue,
+    dt_data::DtItem,
+    mongo::{mongo_constant::MongoConstants, mongo_key::MongoKey},
+    position::Position,
+    row_data::RowData,
+    row_type::RowType,
 };
 use mongodb::{
     bson::{doc, oid::ObjectId, Bson, Document},
@@ -74,9 +78,15 @@ impl MongoSnapshotExtractor {
         let mut cursor = collection.find(filter, find_options).await.unwrap();
         while cursor.advance().await.unwrap() {
             let doc = cursor.deserialize_current().unwrap();
-            let id = Self::get_object_id(&doc);
+            let object_id = Self::get_object_id(&doc);
 
             let mut after = HashMap::new();
+            let id: String = if let Some(key) = MongoKey::from_doc(&doc) {
+                key.to_string()
+            } else {
+                String::new()
+            };
+            after.insert(MongoConstants::ID.to_string(), ColValue::String(id));
             after.insert(MongoConstants::DOC.to_string(), ColValue::MongoDoc(doc));
             let row_data = RowData {
                 schema: self.db.clone(),
@@ -90,7 +100,7 @@ impl MongoSnapshotExtractor {
                 schema: self.db.clone(),
                 tb: self.tb.clone(),
                 order_col: MongoConstants::ID.into(),
-                value: id,
+                value: object_id,
             };
             BaseExtractor::push_row(self.buffer.as_ref(), row_data, position, Some(&self.router))
                 .await

@@ -29,6 +29,12 @@ pub enum SinkerConfig {
         check_log_dir: Option<String>,
     },
 
+    MongoCheck {
+        url: String,
+        batch_size: usize,
+        check_log_dir: Option<String>,
+    },
+
     MysqlStruct {
         url: String,
         conflict_policy: ConflictPolicyEnum,
