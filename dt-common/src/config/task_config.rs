@@ -279,7 +279,13 @@ impl TaskConfig {
             DbType::Mongo => match sink_type {
                 SinkType::Write => SinkerConfig::Mongo { url, batch_size },
 
-                db_type => {
+                SinkType::Check => SinkerConfig::MongoCheck {
+                    url,
+                    batch_size,
+                    check_log_dir: ini.get(SINKER, CHECK_LOG_DIR),
+                },
+
+                _ => {
                     return Err(Error::ConfigError(format!(
                         "sinker db type: {} not supported",
                         db_type

@@ -7,10 +7,11 @@ use futures::executor::block_on;
 use crate::test_runner::rdb_test_runner::DST;
 
 use super::{
-    mongo_test_runner::MongoTestRunner, precheck_test_runner::PrecheckTestRunner,
-    rdb_check_test_runner::RdbCheckTestRunner, rdb_kafka_rdb_test_runner::RdbKafkaRdbTestRunner,
-    rdb_redis_test_runner::RdbRedisTestRunner, rdb_struct_test_runner::RdbStructTestRunner,
-    rdb_test_runner::RdbTestRunner, redis_test_runner::RedisTestRunner,
+    mongo_check_test_runner::MongoCheckTestRunner, mongo_test_runner::MongoTestRunner,
+    precheck_test_runner::PrecheckTestRunner, rdb_check_test_runner::RdbCheckTestRunner,
+    rdb_kafka_rdb_test_runner::RdbKafkaRdbTestRunner, rdb_redis_test_runner::RdbRedisTestRunner,
+    rdb_struct_test_runner::RdbStructTestRunner, rdb_test_runner::RdbTestRunner,
+    redis_test_runner::RedisTestRunner,
 };
 
 pub struct TestBase {}
@@ -118,6 +119,11 @@ impl TestBase {
             .run_cdc_resume_test(start_millis, parse_millis)
             .await
             .unwrap();
+    }
+
+    pub async fn run_mongo_check_test(test_dir: &str) {
+        let runner = MongoCheckTestRunner::new(test_dir).await.unwrap();
+        runner.run_check_test().await.unwrap();
     }
 
     pub async fn run_redis_snapshot_test(test_dir: &str) {
