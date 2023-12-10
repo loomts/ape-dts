@@ -39,4 +39,17 @@ impl MongoKey {
     pub fn to_string(&self) -> String {
         json!(self).to_string()
     }
+
+    pub fn to_mongo_id(&self) -> Bson {
+        match self {
+            MongoKey::ObjectId(v) => Bson::ObjectId(v.clone()),
+            MongoKey::String(v) => Bson::String(v.clone()),
+            MongoKey::Int32(v) => Bson::Int32(v.clone()),
+            MongoKey::Int64(v) => Bson::Int64(v.clone()),
+            MongoKey::JavaScriptCode(v) => Bson::JavaScriptCode(v.clone()),
+            MongoKey::Timestamp(v) => Bson::Timestamp(v.clone()),
+            MongoKey::DateTime(v) => Bson::DateTime(v.clone()),
+            MongoKey::Symbol(v) => Bson::Symbol(v.clone()),
+        }
+    }
 }

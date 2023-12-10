@@ -189,7 +189,6 @@ impl MongoSinker {
         update_doc: Document,
     ) -> Result<(), Error> {
         let update = doc! {MongoConstants::SET: update_doc};
-        println!("query_doc: {:?}, update: {:?}", query_doc, update);
         let options = UpdateOptions::builder().upsert(true).build();
         collection
             .update_one(query_doc, update, Some(options))

@@ -43,7 +43,9 @@ impl MongoTestRunner {
 
         let config = TaskConfig::new(&base.task_config_file);
         match config.extractor {
-            ExtractorConfig::MongoSnapshot { url, .. } | ExtractorConfig::MongoCdc { url, .. } => {
+            ExtractorConfig::MongoSnapshot { url, .. }
+            | ExtractorConfig::MongoCdc { url, .. }
+            | ExtractorConfig::MongoCheck { url, .. } => {
                 src_mongo_client = Some(TaskUtil::create_mongo_client(&url).await.unwrap());
             }
             _ => {}

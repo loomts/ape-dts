@@ -411,6 +411,23 @@ impl TaskRunner {
                 Box::new(extractor)
             }
 
+            ExtractorConfig::MongoCheck {
+                url,
+                check_log_dir,
+                batch_size,
+            } => {
+                let extractor = ExtractorUtil::create_mongo_check_extractor(
+                    url,
+                    check_log_dir,
+                    *batch_size,
+                    buffer,
+                    shut_down,
+                    router,
+                )
+                .await?;
+                Box::new(extractor)
+            }
+
             ExtractorConfig::MysqlStruct { url, db } => {
                 let filter = RdbFilter::from_config(&self.config.filter, DbType::Mysql)?;
                 let extractor = ExtractorUtil::create_mysql_struct_extractor(

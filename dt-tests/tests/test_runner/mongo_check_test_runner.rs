@@ -31,4 +31,14 @@ impl MongoCheckTestRunner {
         self.base.base.start_task().await?;
         CheckUtil::validate_check_log(&self.expect_check_log_dir, &self.dst_check_log_dir)
     }
+
+    pub async fn run_revise_test(&self) -> Result<(), Error> {
+        CheckUtil::clear_check_log(&self.dst_check_log_dir);
+        self.base.run_snapshot_test(true).await
+    }
+
+    pub async fn run_review_test(&self) -> Result<(), Error> {
+        CheckUtil::clear_check_log(&self.dst_check_log_dir);
+        self.run_check_test().await
+    }
 }

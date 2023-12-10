@@ -239,7 +239,8 @@ impl TestConfigUtil {
         let mut extractor_check_log_dir = String::new();
         match config.extractor {
             ExtractorConfig::MysqlCheck { check_log_dir, .. }
-            | ExtractorConfig::PgCheck { check_log_dir, .. } => {
+            | ExtractorConfig::PgCheck { check_log_dir, .. }
+            | ExtractorConfig::MongoCheck { check_log_dir, .. } => {
                 extractor_check_log_dir = format!("{}/{}", project_root, check_log_dir);
                 update_configs.push((
                     EXTRACTOR.to_string(),
@@ -254,7 +255,8 @@ impl TestConfigUtil {
         let mut sinker_check_log_dir = String::new();
         match config.sinker {
             SinkerConfig::MysqlCheck { check_log_dir, .. }
-            | SinkerConfig::PgCheck { check_log_dir, .. } => {
+            | SinkerConfig::PgCheck { check_log_dir, .. }
+            | SinkerConfig::MongoCheck { check_log_dir, .. } => {
                 if let Some(dir) = check_log_dir {
                     if !dir.is_empty() {
                         sinker_check_log_dir = format!("{}/{}", project_root, dir);

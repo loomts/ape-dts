@@ -170,6 +170,12 @@ impl TaskConfig {
                     source: Self::get_value(ini, EXTRACTOR, "source").unwrap(),
                 },
 
+                ExtractType::CheckLog => ExtractorConfig::MongoCheck {
+                    url,
+                    check_log_dir: ini.get(EXTRACTOR, CHECK_LOG_DIR).unwrap(),
+                    batch_size: ini.getuint(EXTRACTOR, BATCH_SIZE).unwrap().unwrap() as usize,
+                },
+
                 extract_type => {
                     return Err(Error::ConfigError(format!(
                         "extract type: {} not supported",
