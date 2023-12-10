@@ -23,7 +23,7 @@ use dt_connector::{
     extractor::{
         kafka::kafka_extractor::KafkaExtractor,
         mongo::{
-            mongo_cdc_extractor::MongoCdcExtractor,
+            mongo_cdc_extractor::MongoCdcExtractor, mongo_check_extractor::MongoCheckExtractor,
             mongo_snapshot_extractor::MongoSnapshotExtractor,
         },
         mysql::{
@@ -381,6 +381,25 @@ impl ExtractorUtil {
             source: MongoCdcSource::from_str(source)?,
             shut_down,
             mongo_client,
+            router,
+        })
+    }
+
+    pub async fn create_mongo_check_extractor(
+        url: &str,
+        check_log_dir: &str,
+        batch_size: usize,
+        buffer: Arc<ConcurrentQueue<DtItem>>,
+        shut_down: Arc<AtomicBool>,
+        router: RdbRouter,
+    ) -> Result<MongoCheckExtractor, Error> {
+        let mongo_client = TaskUtil::create_mongo_client(url).await.unwrap();
+        Ok(MongoCheckExtractor {
+            mongo_client,
+            buffer,
+            check_log_dir: check_log_dir.to_string(),
+            batch_size,
+            shut_down,
             router,
         })
     }

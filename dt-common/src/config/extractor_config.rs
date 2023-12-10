@@ -66,6 +66,12 @@ pub enum ExtractorConfig {
         source: String,
     },
 
+    MongoCheck {
+        url: String,
+        check_log_dir: String,
+        batch_size: usize,
+    },
+
     RedisSnapshot {
         url: String,
         repl_port: u64,

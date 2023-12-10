@@ -126,6 +126,16 @@ impl TestBase {
         runner.run_check_test().await.unwrap();
     }
 
+    pub async fn run_mongo_revise_test(test_dir: &str) {
+        let runner = MongoCheckTestRunner::new(test_dir).await.unwrap();
+        runner.run_revise_test().await.unwrap();
+    }
+
+    pub async fn run_mongo_review_test(test_dir: &str) {
+        let runner = MongoCheckTestRunner::new(test_dir).await.unwrap();
+        runner.run_review_test().await.unwrap();
+    }
+
     pub async fn run_redis_snapshot_test(test_dir: &str) {
         let mut runner = RedisTestRunner::new_default(test_dir).await.unwrap();
         runner.run_snapshot_test().await.unwrap();

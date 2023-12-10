@@ -2,7 +2,10 @@ use std::{collections::VecDeque, sync::Arc};
 
 use async_rwlock::RwLock;
 use dt_common::{
-    config::{config_enums::ParallelType, task_config::TaskConfig},
+    config::{
+        config_enums::{DbType, ParallelType},
+        task_config::TaskConfig,
+    },
     error::Error,
     monitor::monitor::Monitor,
 };
@@ -57,7 +60,10 @@ impl ParallelizerUtil {
             }
 
             ParallelType::RdbCheck => {
-                let merger = Self::create_rdb_merger(config).await?;
+                let merger = match config.sinker_basic.db_type {
+                    DbType::Mongo => Self::create_mongo_merger().await?,
+                    _ => Self::create_rdb_merger(config).await?,
+                };
                 Box::new(CheckParallelizer {
                     base_parallelizer,
                     merger,
