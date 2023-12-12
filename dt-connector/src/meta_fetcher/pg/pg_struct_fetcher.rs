@@ -15,6 +15,27 @@ pub struct PgStructFetcher {
 }
 
 impl PgStructFetcher {
+    pub async fn get_database(&mut self) -> Result<HashMap<String, StructModel>, Error> {
+        let sql = self.sql_builder(&StructModel::DatabaseModel {
+            name: String::from(""),
+        });
+        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+
+        let mut results = HashMap::new();
+        while let Some(row) = rows.try_next().await.unwrap() {
+            let db = Self::get_str_with_null(&row, "schema_name").unwrap();
+
+            if let Some(filter) = &mut self.filter {
+                if filter.filter_db(&db) {
+                    continue;
+                }
+
+                results.insert(db.clone(), StructModel::DatabaseModel { name: db.clone() });
+            }
+        }
+        return Ok(results);
+    }
+
     pub async fn get_sequence(
         &mut self,
         struct_model: &Option<StructModel>,
@@ -532,6 +553,9 @@ impl PgStructFetcher {
 
     fn sql_builder(&self, struct_model: &StructModel) -> String {
         let sql: String = match struct_model {
+            StructModel::DatabaseModel { name: _ } => {
+                String::from("select schema_name from information_schema.schemata")
+            }
             StructModel::TableModel {
                 database_name: _,
                 schema_name,
