@@ -53,6 +53,7 @@ pub struct PgCdcExtractor {
     pub filter: RdbFilter,
     pub url: String,
     pub slot_name: String,
+    pub pub_name: String,
     pub start_lsn: String,
     pub heartbeat_interval_secs: u64,
     pub shut_down: Arc<AtomicBool>,
@@ -80,6 +81,7 @@ impl PgCdcExtractor {
     async fn extract_internal(&mut self) -> Result<(), Error> {
         let mut cdc_client = PgCdcClient {
             url: self.url.clone(),
+            pub_name: self.pub_name.clone(),
             slot_name: self.slot_name.clone(),
             start_lsn: self.start_lsn.clone(),
         };

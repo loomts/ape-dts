@@ -202,6 +202,7 @@ impl ExtractorUtil {
     pub async fn create_pg_cdc_extractor(
         url: &str,
         slot_name: &str,
+        pub_name: &str,
         start_lsn: &str,
         heartbeat_interval_secs: u64,
         buffer: Arc<ConcurrentQueue<DtItem>>,
@@ -221,6 +222,7 @@ impl ExtractorUtil {
             filter,
             url: url.to_string(),
             slot_name: slot_name.to_string(),
+            pub_name: pub_name.to_string(),
             start_lsn: start_lsn.to_string(),
             shut_down,
             syncer,
