@@ -356,6 +356,7 @@ impl TaskRunner {
             ExtractorConfig::PgCdc {
                 url,
                 slot_name,
+                pub_name,
                 start_lsn,
                 heartbeat_interval_secs,
             } => {
@@ -363,6 +364,7 @@ impl TaskRunner {
                 let extractor = ExtractorUtil::create_pg_cdc_extractor(
                     url,
                     slot_name,
+                    pub_name,
                     start_lsn,
                     *heartbeat_interval_secs,
                     buffer,

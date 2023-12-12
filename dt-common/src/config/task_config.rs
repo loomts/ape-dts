@@ -137,6 +137,7 @@ impl TaskConfig {
                 ExtractType::Cdc => ExtractorConfig::PgCdc {
                     url,
                     slot_name: ini.get(EXTRACTOR, "slot_name").unwrap(),
+                    pub_name: Self::get_value(ini, EXTRACTOR, "pub_name").unwrap(),
                     start_lsn: ini.get(EXTRACTOR, "start_lsn").unwrap(),
                     heartbeat_interval_secs: ini
                         .getuint(EXTRACTOR, "heartbeat_interval_secs")

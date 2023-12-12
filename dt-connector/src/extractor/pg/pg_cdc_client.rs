@@ -8,6 +8,7 @@ use url::Url;
 pub struct PgCdcClient {
     pub url: String,
     pub slot_name: String,
+    pub pub_name: String,
     pub start_lsn: String,
 }
 
@@ -41,7 +42,11 @@ impl PgCdcClient {
         let mut start_lsn = self.start_lsn.clone();
 
         // create publication for all tables if not exists
-        let pub_name = format!("{}_publication_for_all_tables", self.slot_name);
+        let pub_name = if self.pub_name.is_empty() {
+            format!("{}_publication_for_all_tables", self.slot_name)
+        } else {
+            self.pub_name.clone()
+        };
         let query = format!(
             "SELECT * FROM {} WHERE pubname = '{}'",
             "pg_catalog.pg_publication", pub_name
