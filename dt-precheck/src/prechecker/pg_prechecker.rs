@@ -16,7 +16,7 @@ use crate::{
 
 use super::traits::Prechecker;
 
-const PG_SUPPORT_DB_VERSION_NUM_MIN: i32 = 140000;
+const PG_SUPPORT_DB_VERSION_NUM_MIN: i32 = 120000;
 const PG_SUPPORT_DB_VERSION_NUM_MAX: i32 = 149999;
 
 pub struct PostgresqlPrechecker {
