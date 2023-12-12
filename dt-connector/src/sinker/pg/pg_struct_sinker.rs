@@ -46,6 +46,23 @@ impl Sinker for PgStructSinker {
 impl PgStructSinker {
     async fn sink_internal(&self, model: &mut StructModel) -> Result<(), Error> {
         match model {
+            StructModel::DatabaseModel { name } => {
+                let sql = format!("CREATE SCHEMA IF NOT EXISTS \"{}\"", name);
+                match query(&sql).execute(&self.conn_pool).await {
+                    Ok(_) => {
+                        return {
+                            println!("create schema sql:[{}],execute success", sql);
+                            Ok(())
+                        }
+                    }
+                    Err(e) => {
+                        return {
+                            println!("create schema sql:[{}],execute failed:{}", sql, e);
+                            Err(Error::from(e))
+                        }
+                    }
+                }
+            }
             StructModel::TableModel {
                 schema_name,
                 table_name,

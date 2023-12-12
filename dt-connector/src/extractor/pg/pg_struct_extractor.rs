@@ -43,6 +43,10 @@ impl PgStructExtractor {
             filter: Some(self.filter.to_owned()),
         };
 
+        for (_, schema) in pg_fetcher.get_database().await.unwrap() {
+            self.push_dt_data(&schema).await;
+        }
+
         for (_, seq) in pg_fetcher.get_sequence(&None).await.unwrap() {
             self.push_dt_data(&seq).await;
         }
