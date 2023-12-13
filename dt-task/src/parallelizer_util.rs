@@ -17,6 +17,7 @@ use dt_parallelizer::{
     serial_parallelizer::SerialParallelizer, snapshot_parallelizer::SnapshotParallelizer,
     table_parallelizer::TableParallelizer, Merger, Parallelizer,
 };
+use ratelimit::Ratelimiter;
 
 use super::task_util::TaskUtil;
 
@@ -26,12 +27,14 @@ impl ParallelizerUtil {
     pub async fn create_parallelizer(
         config: &TaskConfig,
         monitor: Arc<RwLock<Monitor>>,
+        rps_limiter: Option<Ratelimiter>,
     ) -> Result<Box<dyn Parallelizer + Send>, Error> {
         let parallel_size = config.parallelizer.parallel_size;
         let parallel_type = &config.parallelizer.parallel_type;
         let base_parallelizer = BaseParallelizer {
             poped_data: VecDeque::new(),
             monitor: monitor.clone(),
+            rps_limiter,
         };
 
         let parallelizer: Box<dyn Parallelizer + Send> = match parallel_type {

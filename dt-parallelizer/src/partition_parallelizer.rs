@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
-use dt_common::{error::Error, monitor::monitor::CounterType};
+use dt_common::{error::Error, monitor::counter::Counter};
 use dt_connector::Sinker;
 use dt_meta::{
     ddl_data::DdlData,
@@ -28,12 +28,8 @@ impl Parallelizer for PartitionParallelizer {
 
     async fn drain(&mut self, buffer: &ConcurrentQueue<DtItem>) -> Result<Vec<DtItem>, Error> {
         let mut data = Vec::new();
-        let mut record_count = 0;
-        let mut record_size = 0;
-
-        while let Ok(item) = buffer.pop() {
-            record_size += item.get_data_malloc_size();
-            record_count += 1;
+        let mut record_size_counter = Counter::new(0, 0);
+        while let Ok(item) = self.base_parallelizer.pop(buffer, &mut record_size_counter) {
             match &item.dt_data {
                 DtData::Dml { row_data } => {
                     if self.parallel_size > 1
@@ -55,10 +51,8 @@ impl Parallelizer for PartitionParallelizer {
         }
 
         self.base_parallelizer
-            .monitor
-            .write()
-            .await
-            .add_batch_counter(CounterType::RecordSize, record_size, record_count);
+            .update_monitor(&record_size_counter)
+            .await;
         Ok(data)
     }
 

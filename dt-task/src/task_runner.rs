@@ -6,6 +6,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex,
     },
+    time::Duration,
 };
 
 use async_rwlock::RwLock;
@@ -27,6 +28,7 @@ use dt_meta::{dt_data::DtItem, position::Position, row_type::RowType, syncer::Sy
 use dt_pipeline::{base_pipeline::BasePipeline, Pipeline};
 
 use log4rs::config::RawConfig;
+use ratelimit::Ratelimiter;
 use tokio::try_join;
 
 use super::{
@@ -210,8 +212,20 @@ impl TaskRunner {
         sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
     ) -> Result<Box<dyn Pipeline + Send>, Error> {
         let monitor = Arc::new(RwLock::new(Monitor::new_default()));
+        let rps_limiter = if self.config.pipeline.max_rps > 0 {
+            Some(
+                Ratelimiter::builder(self.config.pipeline.max_rps, Duration::from_secs(1))
+                    .max_tokens(self.config.pipeline.max_rps)
+                    .initial_available(self.config.pipeline.max_rps)
+                    .build()
+                    .unwrap(),
+            )
+        } else {
+            None
+        };
         let parallelizer =
-            ParallelizerUtil::create_parallelizer(&self.config, monitor.clone()).await?;
+            ParallelizerUtil::create_parallelizer(&self.config, monitor.clone(), rps_limiter)
+                .await?;
         let pipeline = BasePipeline {
             buffer,
             parallelizer,

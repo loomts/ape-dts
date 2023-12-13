@@ -8,6 +8,9 @@ pub enum Error {
     #[error("extractor error: {0}")]
     ExtractorError(String),
 
+    #[error("pipeline error: {0}")]
+    PipelineError(String),
+
     #[error("sinker error: {0}")]
     SinkerError(String),
 

@@ -59,7 +59,7 @@ impl TimeWindowCounter {
     pub fn refresh_window(&mut self) {
         let mut outdate_count = 0;
         for counter in self.counters.iter() {
-            if counter.timestamp.elapsed().as_secs() > self.time_window_secs as u64 {
+            if counter.timestamp.elapsed().as_secs() >= self.time_window_secs as u64 {
                 outdate_count += 1;
             } else {
                 break;

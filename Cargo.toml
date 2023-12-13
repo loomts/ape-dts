@@ -58,3 +58,4 @@ thiserror = "1.0.44"
 async-std = "1.12.0"
 apache-avro =  { version = "0.16.0", features = ["derive"]}
 async-rwlock = "1.3.0"
+ratelimit = "0.7.1"
