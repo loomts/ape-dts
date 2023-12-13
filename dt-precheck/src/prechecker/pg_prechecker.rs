@@ -187,68 +187,65 @@ impl Prechecker for PostgresqlPrechecker {
         let mut all_schemas = Vec::new();
         all_schemas.extend(&schemas);
         all_schemas.extend(&tb_schemas);
-        if all_schemas.is_empty() {
-            println!("found no schema need to do migrate, very strange");
-            return Err(Error::PreCheckError(
-                "found no schema need to do migrate".into(),
-            ));
-        }
 
-        if (self.is_source || !self.precheck_config.do_struct_init) && !tbs.is_empty() {
+        if self.is_source || !self.precheck_config.do_struct_init {
             // When a specific table to be migrated is specified and the following conditions are met, check the existence of the table
             // 1. this check is for the source database
             // 2. this check is for the sink database, and specified no structure initialization
-            let mut not_existed_tbs: HashSet<String> = HashSet::new();
+            if !tbs.is_empty() {
+                let mut not_existed_tbs: HashSet<String> = HashSet::new();
 
-            let table_result = self.fetcher.fetch_tables().await;
-            let current_tbs: HashSet<String> = match table_result {
-                Ok(tables) => tables
-                    .iter()
-                    .map(|t| format!("{}.{}", t.schema_name, t.table_name))
-                    .collect(),
-                Err(e) => return Err(e),
-            };
-            for tb_key in tbs {
-                if !current_tbs.contains(&tb_key) {
-                    not_existed_tbs.insert(tb_key);
+                let table_result = self.fetcher.fetch_tables().await;
+                let current_tbs: HashSet<String> = match table_result {
+                    Ok(tables) => tables
+                        .iter()
+                        .map(|t| format!("{}.{}", t.schema_name, t.table_name))
+                        .collect(),
+                    Err(e) => return Err(e),
+                };
+                for tb_key in tbs {
+                    if !current_tbs.contains(&tb_key) {
+                        not_existed_tbs.insert(tb_key);
+                    }
+                }
+                if !not_existed_tbs.is_empty() {
+                    err_msgs.push(format!(
+                        "tables not existed: [{}]",
+                        not_existed_tbs
+                            .iter()
+                            .map(|e| e.to_string())
+                            .collect::<Vec<String>>()
+                            .join(";")
+                    ));
                 }
             }
-            if !not_existed_tbs.is_empty() {
-                err_msgs.push(format!(
-                    "tables not existed: [{}]",
-                    not_existed_tbs
-                        .iter()
-                        .map(|e| e.to_string())
-                        .collect::<Vec<String>>()
-                        .join(";")
-                ));
+
+            if !all_schemas.is_empty() {
+                let mut not_existed_schema: HashSet<String> = HashSet::new();
+                let schema_result = self.fetcher.fetch_schemas().await;
+                let current_schemas: HashSet<String> = match schema_result {
+                    Ok(schemas) => schemas.iter().map(|s| s.schema_name.clone()).collect(),
+                    Err(e) => return Err(e),
+                };
+
+                for schema in all_schemas {
+                    if !current_schemas.contains(schema) {
+                        not_existed_schema.insert(schema.clone());
+                    }
+                }
+                if !not_existed_schema.is_empty() {
+                    err_msgs.push(format!(
+                        "schemas not existed: [{}]",
+                        not_existed_schema
+                            .iter()
+                            .map(|e| e.to_string())
+                            .collect::<Vec<String>>()
+                            .join(";")
+                    ));
+                }
             }
         }
 
-        if !all_schemas.is_empty() {
-            let mut not_existed_schema: HashSet<String> = HashSet::new();
-            let schema_result = self.fetcher.fetch_schemas().await;
-            let current_schemas: HashSet<String> = match schema_result {
-                Ok(schemas) => schemas.iter().map(|s| s.schema_name.clone()).collect(),
-                Err(e) => return Err(e),
-            };
-
-            for schema in all_schemas {
-                if !current_schemas.contains(schema) {
-                    not_existed_schema.insert(schema.clone());
-                }
-            }
-            if !not_existed_schema.is_empty() {
-                err_msgs.push(format!(
-                    "schemas not existed: [{}]",
-                    not_existed_schema
-                        .iter()
-                        .map(|e| e.to_string())
-                        .collect::<Vec<String>>()
-                        .join(";")
-                ));
-            }
-        }
         if !err_msgs.is_empty() {
             check_error = Some(Error::PreCheckError(err_msgs.join(".").into()))
         }
