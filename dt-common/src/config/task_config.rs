@@ -372,11 +372,13 @@ impl TaskConfig {
             .getuint(PIPELINE, "checkpoint_interval_secs")
             .unwrap()
             .unwrap_or(1);
+        let max_rps = Self::get_value(ini, PIPELINE, "max_rps").unwrap();
 
         PipelineConfig {
             buffer_size,
             checkpoint_interval_secs,
             batch_sink_interval_secs,
+            max_rps,
         }
     }
 
