@@ -1,21 +1,12 @@
-use std::{
-    collections::HashMap,
-    sync::{atomic::AtomicBool, Arc},
+use std::collections::{HashMap, HashSet};
+
+use dt_common::error::Error;
+use dt_connector::meta_fetcher::{
+    mysql::mysql_struct_check_fetcher::MysqlStructCheckFetcher,
+    pg::pg_struct_check_fetcher::PgStructCheckFetcher,
 };
 
-use concurrent_queue::ConcurrentQueue;
-use dt_common::{
-    config::{
-        config_enums::DbType, extractor_config::ExtractorConfig, sinker_config::SinkerConfig,
-        task_config::TaskConfig,
-    },
-    error::Error,
-    utils::rdb_filter::RdbFilter,
-};
-use dt_meta::{dt_data::DtItem, struct_meta::database_model::StructModel};
-use dt_task::extractor_util::ExtractorUtil;
-
-use super::rdb_test_runner::RdbTestRunner;
+use super::{base_test_runner::BaseTestRunner, rdb_test_runner::RdbTestRunner};
 
 pub struct RdbStructTestRunner {
     pub base: RdbTestRunner,
@@ -31,49 +22,45 @@ impl RdbStructTestRunner {
         self.base.execute_test_ddl_sqls().await?;
         self.base.base.start_task().await?;
 
-        let (src_url, dst_url, log_level, dbs, mut filter, buffer, shut_down) =
-            self.build_extractor_parameters().await;
+        let expect_ddl_sqls = self.load_expect_ddl_sqls();
+        let src_check_fetcher = MysqlStructCheckFetcher {
+            conn_pool: self.base.src_conn_pool_mysql.as_mut().unwrap().clone(),
+        };
+        let dst_check_fetcher = MysqlStructCheckFetcher {
+            conn_pool: self.base.dst_conn_pool_mysql.as_mut().unwrap().clone(),
+        };
 
-        let buffer = Arc::new(buffer);
-        let shut_down = Arc::new(shut_down);
-        for db in dbs.iter() {
-            if filter.filter_db(db) {
-                continue;
+        let get_sql_lines = |sql: &str| -> HashSet<String> {
+            let mut line_set = HashSet::new();
+            let lines: Vec<&str> = sql.split("\n").collect();
+            for line in lines {
+                line_set.insert(line.trim_end_matches(",").to_owned());
             }
+            line_set
+        };
 
-            let mut src_fetcher = ExtractorUtil::create_mysql_struct_extractor(
-                &src_url,
-                db,
-                buffer.clone(),
-                filter.clone(),
-                &log_level,
-                shut_down.clone(),
-            )
-            .await?
-            .build_fetcher()
-            .await?;
+        let (src_db_tbs, dst_db_tbs) = self.base.get_compare_db_tbs().await.unwrap();
+        for i in 0..src_db_tbs.len() {
+            let src_ddl_sql = src_check_fetcher
+                .fetch_table(&src_db_tbs[i].0, &src_db_tbs[i].1)
+                .await;
+            let dst_ddl_sql = dst_check_fetcher
+                .fetch_table(&dst_db_tbs[i].0, &dst_db_tbs[i].1)
+                .await;
+            let key = format!("{}.{}", &dst_db_tbs[i].0, &dst_db_tbs[i].1);
+            let expect_ddl_sql = expect_ddl_sqls.get(&key).unwrap().to_owned();
 
-            let mut dst_fetcher = ExtractorUtil::create_mysql_struct_extractor(
-                &dst_url,
-                db,
-                buffer.clone(),
-                filter.clone(),
-                &log_level,
-                shut_down.clone(),
-            )
-            .await?
-            .build_fetcher()
-            .await?;
-
-            let src_models = src_fetcher.get_table(&None).await.unwrap();
-            let dst_models = dst_fetcher.get_table(&None).await.unwrap();
-            self.compare_models(&src_models, &dst_models);
-
-            let src_models = src_fetcher.get_index(&None).await.unwrap();
-            let dst_models = dst_fetcher.get_index(&None).await.unwrap();
-            self.compare_models(&src_models, &dst_models);
+            println!("src_ddl_sql: {}", src_ddl_sql);
+            println!("dst_ddl_sql: {}", dst_ddl_sql);
+            println!("expect_ddl_sql: {}", expect_ddl_sql);
+            // show create table may return sqls with indexes in different orders during tests,
+            // so here we just compare all lines of the sqls.
+            let dst_ddl_sql_lines = get_sql_lines(&dst_ddl_sql);
+            let expect_ddl_sql_lines = get_sql_lines(&expect_ddl_sql);
+            println!("dst_ddl_sql_lines: {:?}", dst_ddl_sql_lines);
+            println!("expect_ddl_sql_lines: {:?}", expect_ddl_sql_lines);
+            assert_eq!(dst_ddl_sql_lines, expect_ddl_sql_lines);
         }
-
         Ok(())
     }
 
@@ -81,126 +68,50 @@ impl RdbStructTestRunner {
         self.base.execute_test_ddl_sqls().await?;
         self.base.base.start_task().await?;
 
-        let (src_url, dst_url, log_level, dbs, mut filter, buffer, shut_down) =
-            self.build_extractor_parameters().await;
+        let src_check_fetcher = PgStructCheckFetcher {
+            conn_pool: self.base.src_conn_pool_pg.as_mut().unwrap().clone(),
+        };
+        let dst_check_fetcher = PgStructCheckFetcher {
+            conn_pool: self.base.dst_conn_pool_pg.as_mut().unwrap().clone(),
+        };
 
-        let buffer = Arc::new(buffer);
-        let shut_down = Arc::new(shut_down);
-        for db in dbs.iter() {
-            if filter.filter_db(db) {
-                continue;
-            }
-
-            let mut src_fetcher = ExtractorUtil::create_pg_struct_extractor(
-                &src_url,
-                db,
-                buffer.clone(),
-                filter.clone(),
-                &log_level,
-                shut_down.clone(),
-            )
-            .await?
-            .build_fetcher();
-
-            let mut dst_fetcher = ExtractorUtil::create_pg_struct_extractor(
-                &dst_url,
-                db,
-                buffer.clone(),
-                filter.clone(),
-                &log_level,
-                shut_down.clone(),
-            )
-            .await?
-            .build_fetcher();
-
-            let src_models = src_fetcher.get_table(&None).await.unwrap();
-            let dst_models = dst_fetcher.get_table(&None).await.unwrap();
-            self.compare_models(&src_models, &dst_models);
-
-            let src_models = src_fetcher.get_index(&None).await.unwrap();
-            let dst_models = dst_fetcher.get_index(&None).await.unwrap();
-            self.compare_models(&src_models, &dst_models);
-
-            let src_models = src_fetcher.get_sequence(&None).await.unwrap();
-            let dst_models = dst_fetcher.get_sequence(&None).await.unwrap();
-            self.compare_models(&src_models, &dst_models);
-
-            let src_models = src_fetcher.get_sequence_owner(&None).await.unwrap();
-            let dst_models = dst_fetcher.get_sequence_owner(&None).await.unwrap();
-            self.compare_models(&src_models, &dst_models);
-
-            let src_models = src_fetcher.get_constraint(&None).await.unwrap();
-            let dst_models = dst_fetcher.get_constraint(&None).await.unwrap();
-            self.compare_models(&src_models, &dst_models);
-
-            let src_models = src_fetcher.get_table_comment(&None).await.unwrap();
-            let dst_models = dst_fetcher.get_table_comment(&None).await.unwrap();
-            self.compare_models(&src_models, &dst_models);
-
-            let src_models = src_fetcher.get_column_comment(&None).await.unwrap();
-            let dst_models = dst_fetcher.get_column_comment(&None).await.unwrap();
-            self.compare_models(&src_models, &dst_models);
+        let (src_db_tbs, dst_db_tbs) = self.base.get_compare_db_tbs().await.unwrap();
+        for i in 0..src_db_tbs.len() {
+            let src_table = src_check_fetcher
+                .fetch_table(&src_db_tbs[i].0, &src_db_tbs[i].1)
+                .await;
+            let dst_table = dst_check_fetcher
+                .fetch_table(&dst_db_tbs[i].0, &dst_db_tbs[i].1)
+                .await;
+            println!("src_table: {:?}", src_table);
+            println!("dst_table: {:?}", dst_table);
+            assert_eq!(src_table, dst_table);
         }
-
         Ok(())
     }
 
-    async fn build_extractor_parameters(
-        &self,
-    ) -> (
-        String,
-        String,
-        String,
-        Vec<String>,
-        RdbFilter,
-        ConcurrentQueue<DtItem>,
-        AtomicBool,
-    ) {
-        let config = TaskConfig::new(&self.base.base.task_config_file);
-        let filter =
-            RdbFilter::from_config(&config.filter, config.extractor_basic.db_type).unwrap();
-        let buffer: ConcurrentQueue<DtItem> = ConcurrentQueue::bounded(10000);
-        let shut_down = AtomicBool::new(false);
-        let log_level = "info".to_string();
+    fn load_expect_ddl_sqls(&self) -> HashMap<String, String> {
+        let mut ddl_sqls = HashMap::new();
+        let ddl_file = format!("{}/expect_ddl.sql", self.base.base.test_dir);
+        let lines = BaseTestRunner::load_file(&ddl_file);
+        let mut lines = lines.iter().peekable();
 
-        let (src_url, dbs) = match &config.extractor {
-            ExtractorConfig::MysqlStruct { url, .. } => (
-                url.to_string(),
-                ExtractorUtil::list_dbs(url, &DbType::Mysql).await.unwrap(),
-            ),
+        while let Some(line) = lines.next() {
+            if line.trim().is_empty() {
+                continue;
+            }
 
-            ExtractorConfig::PgStruct { url, .. } => (
-                url.to_string(),
-                ExtractorUtil::list_dbs(url, &DbType::Pg).await.unwrap(),
-            ),
-
-            _ => (String::new(), vec![]),
-        };
-
-        let dst_url = match &config.sinker {
-            SinkerConfig::MysqlStruct { url, .. } => url.to_string(),
-            SinkerConfig::PgStruct { url, .. } => url.to_string(),
-            _ => String::new(),
-        };
-
-        (src_url, dst_url, log_level, dbs, filter, buffer, shut_down)
-    }
-
-    fn compare_models(
-        &self,
-        src_models: &HashMap<String, StructModel>,
-        dst_models: &HashMap<String, StructModel>,
-    ) {
-        assert_eq!(src_models.len(), dst_models.len());
-
-        for (key, src_model) in src_models.iter() {
-            let dst_model = dst_models.get(key).unwrap();
-
-            println!(
-                "comparing models, src_model: {:?}, dst_model: {:?}",
-                src_model, dst_model
-            );
-            assert_eq!(src_model, dst_model);
+            let table = line.trim().to_owned();
+            let mut sql = String::new();
+            while let Some(line) = lines.next() {
+                if line.trim().is_empty() {
+                    break;
+                }
+                sql.push_str(line);
+                sql.push('\n');
+            }
+            ddl_sqls.insert(table, sql.trim().to_owned());
         }
+        ddl_sqls
     }
 }

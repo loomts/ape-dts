@@ -35,7 +35,7 @@ CREATE INDEX composite_index ON struct_check_test_1.full_index_type (composite_i
 -- not match: index
 CREATE TABLE struct_check_test_1.not_match_index (id SERIAL PRIMARY KEY,unique_col VARCHAR(255) NOT NULL,index_col VARCHAR(255),fulltext_col TSVECTOR,spatial_col POINT NOT NULL,simple_index_col VARCHAR(255),composite_index_col1 VARCHAR(255),composite_index_col2 VARCHAR(255),composite_index_col3 VARCHAR(255));
 
-CREATE UNIQUE INDEX index_not_match_name2 ON struct_check_test_1.full_index_type (unique_col);
+CREATE UNIQUE INDEX index_not_match_name_dst ON struct_check_test_1.full_index_type (unique_col);
 
 -- CREATE INDEX index_not_match_missing ON struct_check_test_1.full_index_type (index_col);
 

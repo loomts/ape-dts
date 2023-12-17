@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-use dt_common::{error::Error, log_diff, log_miss};
+use dt_common::{error::Error, log_diff, log_extra, log_miss};
 use dt_meta::{
     rdb_meta_manager::RdbMetaManager, rdb_tb_meta::RdbTbMeta, row_data::RowData,
-    struct_meta::database_model::StructModel,
+    struct_meta::statement::struct_statement::StructStatement,
 };
 
 use crate::{
@@ -53,11 +53,6 @@ impl BaseChecker {
         true
     }
 
-    #[inline(always)]
-    pub fn compare_ddl_data(ddl_data_src: &StructModel, ddl_data_dst: &StructModel) -> bool {
-        ddl_data_src == ddl_data_dst
-    }
-
     pub async fn log_dml(
         extractor_meta_manager: &mut RdbMetaManager,
         router: &RdbRouter,
@@ -105,16 +100,42 @@ impl BaseChecker {
     }
 
     #[inline(always)]
-    pub fn log_miss_struct(struct_model: &StructModel) {
-        log_miss!("{}", struct_model.to_log_string());
-    }
+    pub fn compare_struct(
+        src_statement: &mut StructStatement,
+        dst_statement: &mut Option<StructStatement>,
+    ) -> Result<(), Error> {
+        if dst_statement.is_none() {
+            log_miss!("{:?}", src_statement.to_sqls());
+            return Ok(());
+        }
 
-    #[inline(always)]
-    pub fn log_diff_struct(src_struct_model: &StructModel, dst_struct_model: &StructModel) {
-        log_diff!(
-            "[CompareFrom]{}; [CompareTo]{}",
-            src_struct_model.to_log_string(),
-            dst_struct_model.to_log_string()
-        );
+        let mut src_sqls = HashMap::new();
+        for (key, sql) in src_statement.to_sqls() {
+            src_sqls.insert(key, sql);
+        }
+
+        let mut dst_sqls = HashMap::new();
+        for (key, sql) in dst_statement.as_mut().unwrap().to_sqls() {
+            dst_sqls.insert(key, sql);
+        }
+
+        for (key, src_sql) in src_sqls.iter() {
+            if let Some(dst_sql) = dst_sqls.get(key) {
+                if src_sql != dst_sql {
+                    log_diff!("key: {}, src_sql: {}", key, src_sql);
+                    log_diff!("key: {}, dst_sql: {}", key, dst_sql);
+                }
+            } else {
+                log_miss!("key: {}, src_sql: {}", key, src_sql);
+            }
+        }
+
+        for (key, dst_sql) in dst_sqls.iter() {
+            if !src_sqls.contains_key(key) {
+                log_extra!("key: {}, dst_sql: {}", key, dst_sql);
+            }
+        }
+
+        Ok(())
     }
 }

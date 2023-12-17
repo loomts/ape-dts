@@ -2,184 +2,244 @@ use std::collections::HashMap;
 
 use dt_common::{error::Error, utils::rdb_filter::RdbFilter};
 use dt_meta::struct_meta::{
-    col_model::ColType,
-    database_model::{Column, CommentType, IndexKind, StructModel},
+    statement::{
+        pg_create_schema_statement::PgCreateSchemaStatement,
+        pg_create_table_statement::PgCreateTableStatement,
+    },
+    structure::{
+        column::Column,
+        comment::{Comment, CommentType},
+        constraint::Constraint,
+        database::Database,
+        index::{Index, IndexKind},
+        sequence::Sequence,
+        sequence_owner::SequenceOwner,
+        table::Table,
+    },
 };
 use futures::TryStreamExt;
 use sqlx::{postgres::PgRow, Pool, Postgres, Row};
 
 pub struct PgStructFetcher {
     pub conn_pool: Pool<Postgres>,
-    pub db: String,
+    pub schema: String,
     pub filter: Option<RdbFilter>,
 }
 
+enum ColType {
+    Text,
+    Char,
+}
+
 impl PgStructFetcher {
-    pub async fn get_database(&mut self) -> Result<HashMap<String, StructModel>, Error> {
-        let sql = self.sql_builder(&StructModel::DatabaseModel {
-            name: String::from(""),
-        });
-        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-
-        let mut results = HashMap::new();
-        while let Some(row) = rows.try_next().await.unwrap() {
-            let db = Self::get_str_with_null(&row, "schema_name").unwrap();
-
-            if let Some(filter) = &mut self.filter {
-                if filter.filter_db(&db) {
-                    continue;
-                }
-
-                results.insert(db.clone(), StructModel::DatabaseModel { name: db.clone() });
-            }
-        }
-        return Ok(results);
+    pub async fn get_create_database_statement(
+        &mut self,
+    ) -> Result<PgCreateSchemaStatement, Error> {
+        let database = self.get_database().await.unwrap();
+        Ok(PgCreateSchemaStatement { database })
     }
 
-    pub async fn get_sequence(
+    pub async fn get_create_table_statements(
         &mut self,
-        struct_model: &Option<StructModel>,
-    ) -> Result<HashMap<String, StructModel>, Error> {
-        let mut models = HashMap::new();
+        tb: &str,
+    ) -> Result<Vec<PgCreateTableStatement>, Error> {
+        let mut results = Vec::new();
 
-        // query target seq
-        let struct_model = match struct_model {
-            Some(model) => model.clone(),
-            None => StructModel::SequenceModel {
-                sequence_name: String::from(""),
-                database_name: String::from(""),
-                schema_name: self.db.clone(),
-                data_type: String::from(""),
-                start_value: String::from(""),
-                increment: String::from(""),
-                min_value: String::from(""),
-                max_value: String::from(""),
-                is_circle: String::from(""),
-            },
+        let tables = self.get_tables(tb).await.unwrap();
+        let mut sequences = self.get_sequences(tb).await.unwrap();
+        let mut sequence_owners = self.get_sequence_owners(tb).await.unwrap();
+        let mut constraints = self.get_constraints(tb).await.unwrap();
+        let mut indexes = self.get_indexes(tb).await.unwrap();
+        let mut column_comments = self.get_column_comments(tb).await.unwrap();
+        let mut table_comments = self.get_table_comments(tb).await.unwrap();
+
+        for (table_name, table) in tables {
+            let statement = PgCreateTableStatement {
+                table,
+                sequences: self.get_result(&mut sequences, &table_name),
+                sequence_owners: self.get_result(&mut sequence_owners, &table_name),
+                constraints: self.get_result(&mut constraints, &table_name),
+                indexes: self.get_result(&mut indexes, &table_name),
+                column_comments: self.get_result(&mut column_comments, &table_name),
+                table_comments: self.get_result(&mut table_comments, &table_name),
+            };
+            results.push(statement);
+        }
+        Ok(results)
+    }
+
+    async fn get_database(&mut self) -> Result<Database, Error> {
+        let sql = format!(
+            "SELECT schema_name 
+            FROM information_schema.schemata
+            WHERE schema_name='{}'",
+            self.schema
+        );
+
+        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+        if let Some(row) = rows.try_next().await.unwrap() {
+            let schema_name = Self::get_str_with_null(&row, "schema_name").unwrap();
+            let database = Database { name: schema_name };
+            return Ok(database);
+        }
+
+        return Err(Error::StructError(format!(
+            "schema: {} not found",
+            self.schema
+        )));
+    }
+
+    async fn get_sequences(&mut self, tb: &str) -> Result<HashMap<String, Vec<Sequence>>, Error> {
+        let mut results: HashMap<String, Vec<Sequence>> = HashMap::new();
+
+        let tb_filter = if !tb.is_empty() {
+            format!("AND tab.relname = '{}'", tb)
+        } else {
+            String::new()
         };
-        let sql = self.sql_builder(&struct_model);
+
+        let sql = format!(
+            "SELECT obj.sequence_catalog,
+                obj.sequence_schema,
+                tab.relname AS table_name,
+                obj.sequence_name,
+                obj.data_type,
+                obj.start_value,
+                obj.minimum_value,
+                obj.maximum_value,
+                obj.increment,
+                obj.cycle_option
+            FROM information_schema.sequences obj
+            JOIN pg_class AS seq
+                ON (seq.relname = obj.sequence_name)
+            JOIN pg_namespace ns
+                ON (seq.relnamespace = ns.oid)
+            JOIN pg_depend AS dep
+                ON (seq.relfilenode = dep.objid)
+            JOIN pg_class AS tab
+                ON (dep.refobjid = tab.relfilenode)
+            WHERE ns.nspname='{}' 
+            AND obj.sequence_schema='{}' {} 
+            AND dep.deptype='a'",
+            &self.schema, &self.schema, tb_filter
+        );
+
+        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+        while let Some(row) = rows.try_next().await.unwrap() {
+            let (sequence_schema, table_name, sequence_name): (String, String, String) = (
+                Self::get_str_with_null(&row, "sequence_schema").unwrap(),
+                Self::get_str_with_null(&row, "table_name").unwrap(),
+                Self::get_str_with_null(&row, "sequence_name").unwrap(),
+            );
+
+            let sequence = Sequence {
+                sequence_name,
+                database_name: Self::get_str_with_null(&row, "sequence_catalog").unwrap(),
+                schema_name: sequence_schema,
+                data_type: Self::get_str_with_null(&row, "data_type").unwrap(),
+                start_value: row.get("start_value"),
+                increment: row.get("increment"),
+                min_value: row.get("minimum_value"),
+                max_value: row.get("maximum_value"),
+                is_circle: Self::get_str_with_null(&row, "cycle_option").unwrap(),
+            };
+            self.push_to_results(&mut results, &table_name, sequence);
+        }
+
+        Ok(results)
+    }
+
+    async fn get_sequence_owners(
+        &mut self,
+        tb: &str,
+    ) -> Result<HashMap<String, Vec<SequenceOwner>>, Error> {
+        let mut results = HashMap::new();
+
+        let tb_filter = if !tb.is_empty() {
+            format!("AND tab.relname = '{}'", tb)
+        } else {
+            String::new()
+        };
+
+        let sql = format!(
+            "SELECT seq.relname,
+                tab.relname AS table_name,
+                attr.attname AS column_name,
+                ns.nspname
+            FROM pg_class AS seq
+            JOIN pg_namespace ns
+                ON (seq.relnamespace = ns.oid)
+            JOIN pg_depend AS dep
+                ON (seq.relfilenode = dep.objid)
+            JOIN pg_class AS tab
+                ON (dep.refobjid = tab.relfilenode)
+            JOIN pg_attribute AS attr
+                ON (attr.attnum = dep.refobjsubid AND attr.attrelid = dep.refobjid)
+            WHERE dep.deptype='a'
+                AND seq.relkind='S'
+                AND ns.nspname = '{}' {}",
+            &self.schema, tb_filter
+        );
+
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
 
         while let Some(row) = rows.try_next().await.unwrap() {
             let (schema_name, table_name, seq_name): (String, String, String) = (
-                PgStructFetcher::get_str_with_null(&row, "sequence_schema").unwrap(),
-                PgStructFetcher::get_str_with_null(&row, "table_name").unwrap(),
-                PgStructFetcher::get_str_with_null(&row, "sequence_name").unwrap(),
+                Self::get_str_with_null(&row, "nspname").unwrap(),
+                Self::get_str_with_null(&row, "table_name").unwrap(),
+                Self::get_str_with_null(&row, "relname").unwrap(),
             );
 
-            if schema_name.is_empty() || table_name.is_empty() || seq_name.is_empty() {
-                continue;
-            }
-            if let Some(filter) = &mut self.filter {
-                if filter.filter_tb(&schema_name, &table_name) {
-                    continue;
-                }
-            }
-
-            let schema_seq_name = format!("{}.{}", schema_name, seq_name);
-            models.insert(
-                schema_seq_name,
-                StructModel::SequenceModel {
-                    sequence_name: seq_name,
-                    database_name: Self::get_str_with_null(&row, "sequence_catalog").unwrap(),
-                    schema_name,
-                    data_type: Self::get_str_with_null(&row, "data_type").unwrap(),
-                    start_value: row.get("start_value"),
-                    increment: row.get("increment"),
-                    min_value: row.get("minimum_value"),
-                    max_value: row.get("maximum_value"),
-                    is_circle: Self::get_str_with_null(&row, "cycle_option").unwrap(),
-                },
-            );
+            let sequence_owner = SequenceOwner {
+                sequence_name: seq_name,
+                database_name: String::new(),
+                schema_name,
+                owner_table_name: table_name.clone(),
+                owner_table_column_name: Self::get_str_with_null(&row, "column_name").unwrap(),
+            };
+            self.push_to_results(&mut results, &table_name, sequence_owner);
         }
 
-        Ok(models)
+        Ok(results)
     }
 
-    pub async fn get_sequence_owner(
-        &mut self,
-        struct_model: &Option<StructModel>,
-    ) -> Result<HashMap<String, StructModel>, Error> {
-        let mut seq_owners = HashMap::new();
+    async fn get_tables(&mut self, tb: &str) -> Result<HashMap<String, Table>, Error> {
+        let mut results: HashMap<String, Table> = HashMap::new();
 
-        // query seq ownership, and put the StructModel into memory, will push to queue after get_tables
-        let seq_owner_model = match struct_model {
-            Some(model) => model.clone(),
-            None => StructModel::SequenceOwnerModel {
-                sequence_name: String::from(""),
-                database_name: String::from(""),
-                schema_name: self.db.clone(),
-                owner_table_name: String::from(""),
-                owner_table_column_name: String::from(""),
-            },
+        let tb_filter = if !tb.is_empty() {
+            format!("AND table_name = '{}'", tb)
+        } else {
+            String::new()
         };
-        let sql = self.sql_builder(&seq_owner_model);
-        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
 
+        let sql = format!(
+            "SELECT table_schema,
+                table_name,
+                column_name,
+                data_type,
+                udt_name,
+                character_maximum_length,
+                is_nullable,
+                column_default,
+                numeric_precision,
+                numeric_scale,
+                is_identity,
+                identity_generation,
+                ordinal_position
+            FROM information_schema.columns c
+            WHERE table_schema ='{}' {}",
+            &self.schema, tb_filter
+        );
+
+        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
-            let (schema_name, table_name, seq_name): (String, String, String) = (
-                PgStructFetcher::get_str_with_null(&row, "nspname").unwrap(),
-                PgStructFetcher::get_str_with_null(&row, "table_name").unwrap(),
-                PgStructFetcher::get_str_with_null(&row, "relname").unwrap(),
+            let (table_schema, table_name) = (
+                Self::get_str_with_null(&row, "table_schema").unwrap(),
+                Self::get_str_with_null(&row, "table_name").unwrap(),
             );
 
-            if schema_name.is_empty() || table_name.is_empty() || seq_name.is_empty() {
+            if self.filter_tb(&table_name) {
                 continue;
-            }
-            if let Some(filter) = &mut self.filter {
-                if filter.filter_tb(&schema_name, &table_name) {
-                    continue;
-                }
-            }
-
-            let schema_seq_name = format!("{}.{}", schema_name, seq_name);
-
-            seq_owners
-                .entry(schema_seq_name)
-                .or_insert(StructModel::SequenceOwnerModel {
-                    sequence_name: seq_name,
-                    database_name: String::new(),
-                    schema_name,
-                    owner_table_name: Self::get_str_with_null(&row, "table_name").unwrap(),
-                    owner_table_column_name: Self::get_str_with_null(&row, "column_name").unwrap(),
-                });
-        }
-
-        Ok(seq_owners)
-    }
-
-    pub async fn get_table(
-        &mut self,
-        struct_model: &Option<StructModel>,
-    ) -> Result<HashMap<String, StructModel>, Error> {
-        let struct_model = match struct_model {
-            Some(model) => model.clone(),
-            None => StructModel::TableModel {
-                database_name: String::from(""),
-                schema_name: self.db.clone(),
-                table_name: String::from(""),
-                engine_name: String::from(""),
-                table_comment: String::from(""),
-                columns: vec![],
-            },
-        };
-        let sql = self.sql_builder(&struct_model);
-        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-
-        let mut results = HashMap::new();
-        while let Some(row) = rows.try_next().await.unwrap() {
-            let (schema_name, table_name) = (
-                PgStructFetcher::get_str_with_null(&row, "table_schema").unwrap(),
-                PgStructFetcher::get_str_with_null(&row, "table_name").unwrap(),
-            );
-
-            if schema_name.is_empty() && table_name.is_empty() {
-                continue;
-            }
-            if let Some(filter) = &mut self.filter {
-                if filter.filter_tb(&schema_name, &table_name) {
-                    continue;
-                }
             }
 
             let order: i32 = row.try_get("ordinal_position").unwrap();
@@ -191,7 +251,7 @@ impl PgStructFetcher {
                 column_type: Self::get_col_data_type(
                     Self::get_str_with_null(&row, "udt_name").unwrap(),
                     Self::get_str_with_null(&row, "data_type").unwrap(),
-                    schema_name.clone(),
+                    table_schema.clone(),
                     row.get("character_maximum_length"),
                     row.get("numeric_precision"),
                     row.get("numeric_scale"),
@@ -208,17 +268,14 @@ impl PgStructFetcher {
                 collation: String::new(),
             };
 
-            let schema_table_name = format!("{}.{}", schema_name, table_name);
-            if let Some(model) = results.get_mut(&schema_table_name) {
-                if let StructModel::TableModel { columns, .. } = model {
-                    columns.push(column);
-                }
+            if let Some(table) = results.get_mut(&table_name) {
+                table.columns.push(column);
             } else {
                 results.insert(
-                    schema_table_name,
-                    StructModel::TableModel {
-                        database_name: schema_name.clone(),
-                        schema_name,
+                    table_name.clone(),
+                    Table {
+                        database_name: table_schema.clone(),
+                        schema_name: table_schema,
                         table_name,
                         engine_name: String::new(),
                         table_comment: String::new(),
@@ -231,250 +288,199 @@ impl PgStructFetcher {
         Ok(results)
     }
 
-    pub async fn get_constraint(
+    async fn get_constraints(
         &mut self,
-        struct_model: &Option<StructModel>,
-    ) -> Result<HashMap<String, StructModel>, Error> {
-        let struct_model = match struct_model {
-            Some(model) => model.clone(),
-            None => StructModel::ConstraintModel {
-                database_name: String::from(""),
-                schema_name: self.db.clone(),
-                table_name: String::from(""),
-                constraint_name: String::from(""),
-                constraint_type: String::from(""),
-                definition: String::from(""),
-            },
+        tb: &str,
+    ) -> Result<HashMap<String, Vec<Constraint>>, Error> {
+        let mut results = HashMap::new();
+
+        let tb_filter = if !tb.is_empty() {
+            format!("AND rel.relname = '{}'", tb)
+        } else {
+            String::new()
         };
-        let sql = self.sql_builder(&struct_model);
+
+        let sql = format!(
+            "SELECT nsp.nspname,
+                rel.relname,
+                con.conname AS constraint_name,
+                con.contype AS constraint_type,
+                pg_get_constraintdef(con.oid) AS constraint_definition
+            FROM pg_catalog.pg_constraint con
+            JOIN pg_catalog.pg_class rel
+                ON rel.oid = con.conrelid
+            JOIN pg_catalog.pg_namespace nsp
+                ON nsp.oid = connamespace
+            WHERE nsp.nspname ='{}' {}
+            ORDER BY nsp.nspname,rel.relname",
+            &self.schema, tb_filter
+        );
+
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-
-        let mut result = HashMap::new();
         while let Some(row) = rows.try_next().await.unwrap() {
-            let (schema_name, table_name): (String, String) = (
-                PgStructFetcher::get_str_with_null(&row, "nspname").unwrap(),
-                PgStructFetcher::get_str_with_null(&row, "relname").unwrap(),
+            let (schema_name, table_name, constraint_name) = (
+                Self::get_str_with_null(&row, "nspname").unwrap(),
+                Self::get_str_with_null(&row, "relname").unwrap(),
+                Self::get_str_with_null(&row, "constraint_name").unwrap(),
             );
 
-            if schema_name.is_empty() && table_name.is_empty() {
-                continue;
-            }
-            if let Some(filter) = &mut self.filter {
-                if filter.filter_tb(&schema_name, &table_name) {
-                    continue;
-                }
-            }
-
-            let constraint_name = Self::get_str_with_null(&row, "constraint_name").unwrap();
-            let full_constraint_name =
-                format!("{}.{}.{}", schema_name, table_name, constraint_name);
-
-            result.insert(
-                full_constraint_name,
-                StructModel::ConstraintModel {
-                    database_name: String::new(),
-                    schema_name,
-                    table_name,
-                    constraint_name,
-                    constraint_type: Self::get_with_null(&row, "constraint_type", ColType::Char)
-                        .unwrap(),
-                    definition: Self::get_str_with_null(&row, "constraint_definition").unwrap(),
-                },
-            );
+            let constraint = Constraint {
+                database_name: String::new(),
+                schema_name,
+                table_name: table_name.clone(),
+                constraint_name,
+                constraint_type: Self::get_with_null(&row, "constraint_type", ColType::Char)
+                    .unwrap(),
+                definition: Self::get_str_with_null(&row, "constraint_definition").unwrap(),
+            };
+            self.push_to_results(&mut results, &table_name, constraint);
         }
-        Ok(result)
+
+        Ok(results)
     }
 
-    pub async fn get_index(
-        &mut self,
-        struct_model: &Option<StructModel>,
-    ) -> Result<HashMap<String, StructModel>, Error> {
-        let struct_model = match struct_model {
-            Some(model) => model.clone(),
-            None => StructModel::IndexModel {
-                database_name: String::from(""),
-                schema_name: self.db.clone(),
-                table_name: String::from(""),
-                index_name: String::from(""),
-                index_kind: IndexKind::Unkown,
-                index_type: String::from(""),
-                comment: String::from(""),
-                tablespace: String::from(""),
-                definition: String::from(""),
-                columns: vec![],
-            },
+    async fn get_indexes(&mut self, tb: &str) -> Result<HashMap<String, Vec<Index>>, Error> {
+        let mut results = HashMap::new();
+
+        let tb_filter = if !tb.is_empty() {
+            format!("AND tablename = '{}'", tb)
+        } else {
+            String::new()
         };
-        let sql = self.sql_builder(&struct_model);
+
+        let sql = format!(
+            "SELECT schemaname,
+                tablename,
+                indexdef,
+                COALESCE(tablespace, 'pg_default') AS tablespace, indexname
+            FROM pg_indexes
+            WHERE schemaname = '{}' {}",
+            &self.schema, tb_filter
+        );
+
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-
-        let mut result = HashMap::new();
         while let Some(row) = rows.try_next().await.unwrap() {
-            let (schema_name, table_name): (String, String) = (
-                PgStructFetcher::get_str_with_null(&row, "schemaname").unwrap(),
-                PgStructFetcher::get_str_with_null(&row, "tablename").unwrap(),
+            let (schema_name, table_name, index_name) = (
+                Self::get_str_with_null(&row, "schemaname").unwrap(),
+                Self::get_str_with_null(&row, "tablename").unwrap(),
+                Self::get_str_with_null(&row, "indexname").unwrap(),
             );
 
-            if schema_name.is_empty() && table_name.is_empty() {
-                continue;
-            }
-            if let Some(filter) = &mut self.filter {
-                if filter.filter_tb(&schema_name, &table_name) {
-                    continue;
-                }
-            }
-
-            let index_name = Self::get_str_with_null(&row, "indexname").unwrap();
-            let full_index_name = format!("{}.{}.{}", schema_name, table_name, index_name);
-            result.insert(
-                full_index_name,
-                StructModel::IndexModel {
-                    database_name: String::new(),
-                    schema_name,
-                    table_name,
-                    index_name,
-                    index_kind: IndexKind::Index,
-                    index_type: String::new(),
-                    comment: String::new(),
-                    tablespace: Self::get_str_with_null(&row, "tablespace").unwrap(),
-                    definition: Self::get_str_with_null(&row, "indexdef").unwrap(),
-                    columns: Vec::new(),
-                },
-            );
+            let index = Index {
+                database_name: String::new(),
+                schema_name,
+                table_name: table_name.clone(),
+                index_name,
+                index_kind: IndexKind::Index,
+                index_type: String::new(),
+                comment: String::new(),
+                tablespace: Self::get_str_with_null(&row, "tablespace").unwrap(),
+                definition: Self::get_str_with_null(&row, "indexdef").unwrap(),
+                columns: Vec::new(),
+            };
+            self.push_to_results(&mut results, &table_name, index);
         }
-        Ok(result)
+
+        Ok(results)
     }
 
-    pub async fn get_table_comment(
+    async fn get_table_comments(
         &mut self,
-        struct_model: &Option<StructModel>,
-    ) -> Result<HashMap<String, StructModel>, Error> {
-        let mut result = HashMap::new();
+        tb: &str,
+    ) -> Result<HashMap<String, Vec<Comment>>, Error> {
+        let mut results = HashMap::new();
 
-        // table comment
-        let struct_model = match struct_model {
-            Some(model) => model.clone(),
-            None => StructModel::CommentModel {
+        let tb_filter = if !tb.is_empty() {
+            format!("AND c.relname = '{}'", tb)
+        } else {
+            String::new()
+        };
+
+        let sql = format!(
+            "SELECT n.nspname,
+                c.relname,
+                d.description
+            FROM pg_class c
+            LEFT JOIN pg_namespace n
+                ON n.oid = c.relnamespace
+            LEFT JOIN pg_description d
+                ON c.oid = d.objoid  AND d.objsubid = 0
+            WHERE n.nspname ='{}' {}
+            AND d.description IS NOT null",
+            &self.schema, tb_filter
+        );
+
+        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+        while let Some(row) = rows.try_next().await.unwrap() {
+            let (schema_name, table_name): (String, String) = (
+                Self::get_str_with_null(&row, "nspname").unwrap(),
+                Self::get_str_with_null(&row, "relname").unwrap(),
+            );
+
+            let comment = Comment {
                 comment_type: CommentType::Table,
-                database_name: String::from(""),
-                schema_name: self.db.clone(),
-                table_name: String::from(""),
-                column_name: String::from(""),
-                comment: String::from(""),
-            },
-        };
-        let sql = self.sql_builder(&struct_model);
-        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-
-        while let Some(row) = rows.try_next().await.unwrap() {
-            let (schema_name, table_name): (String, String) = (
-                PgStructFetcher::get_str_with_null(&row, "nspname").unwrap(),
-                PgStructFetcher::get_str_with_null(&row, "relname").unwrap(),
-            );
-
-            if schema_name.is_empty() && table_name.is_empty() {
-                continue;
-            }
-            if let Some(filter) = &mut self.filter {
-                if filter.filter_tb(&schema_name, &table_name) {
-                    continue;
-                }
-            }
-
-            let schema_table_name = format!("{}.{}", schema_name, table_name);
-            result.insert(
-                schema_table_name,
-                StructModel::CommentModel {
-                    comment_type: CommentType::Table,
-                    database_name: String::new(),
-                    schema_name,
-                    table_name,
-                    column_name: String::new(),
-                    comment: Self::get_str_with_null(&row, "description").unwrap(),
-                },
-            );
+                database_name: String::new(),
+                schema_name,
+                table_name: table_name.clone(),
+                column_name: String::new(),
+                comment: Self::get_str_with_null(&row, "description").unwrap(),
+            };
+            self.push_to_results(&mut results, &table_name, comment);
         }
 
-        Ok(result)
+        Ok(results)
     }
 
-    pub async fn get_column_comment(
+    async fn get_column_comments(
         &mut self,
-        struct_model: &Option<StructModel>,
-    ) -> Result<HashMap<String, StructModel>, Error> {
-        let mut result = HashMap::new();
+        tb: &str,
+    ) -> Result<HashMap<String, Vec<Comment>>, Error> {
+        let mut results = HashMap::new();
 
-        // column comment
-        let struct_model = match struct_model {
-            Some(model) => model.clone(),
-            None => StructModel::CommentModel {
-                comment_type: CommentType::Column,
-                database_name: String::from(""),
-                schema_name: self.db.clone(),
-                table_name: String::from(""),
-                column_name: String::from(""),
-                comment: String::from(""),
-            },
+        let tb_filter = if !tb.is_empty() {
+            format!("AND c.relname = '{}'", tb)
+        } else {
+            String::new()
         };
-        let sql = self.sql_builder(&struct_model);
+
+        let sql = format!(
+            "SELECT n.nspname,
+                c.relname,
+                col_description(a.attrelid, a.attnum) as comment,
+                format_type(a.atttypid, a.atttypmod)as type,
+                a.attname AS name,
+                a.attnotnull AS notnull
+            FROM pg_class c
+            LEFT JOIN pg_attribute a
+                ON a.attrelid =c.oid
+            LEFT JOIN pg_namespace n
+                ON n.oid = c.relnamespace
+            WHERE n.nspname ='{}' {}
+                AND a.attnum >0
+                AND col_description(a.attrelid, a.attnum) is NOT null",
+            &self.schema, tb_filter
+        );
+
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-
         while let Some(row) = rows.try_next().await.unwrap() {
-            let (schema_name, table_name): (String, String) = (
-                PgStructFetcher::get_str_with_null(&row, "nspname").unwrap(),
-                PgStructFetcher::get_str_with_null(&row, "relname").unwrap(),
+            let (schema_name, table_name, column_name) = (
+                Self::get_str_with_null(&row, "nspname").unwrap(),
+                Self::get_str_with_null(&row, "relname").unwrap(),
+                Self::get_str_with_null(&row, "name").unwrap(),
             );
 
-            if let Some(filter) = &mut self.filter {
-                if filter.filter_tb(&schema_name, &table_name) {
-                    continue;
-                }
-            }
-
-            let column_name = Self::get_str_with_null(&row, "name").unwrap();
-            let full_comment_name = format!("{}.{}.{}", schema_name, table_name, column_name);
-            result.insert(
-                full_comment_name,
-                StructModel::CommentModel {
-                    comment_type: CommentType::Column,
-                    database_name: String::new(),
-                    schema_name,
-                    table_name,
-                    column_name,
-                    comment: Self::get_str_with_null(&row, "comment").unwrap(),
-                },
-            );
+            let comment = Comment {
+                comment_type: CommentType::Column,
+                database_name: String::new(),
+                schema_name,
+                table_name: table_name.clone(),
+                column_name,
+                comment: Self::get_str_with_null(&row, "comment").unwrap(),
+            };
+            self.push_to_results(&mut results, &table_name, comment);
         }
 
-        Ok(result)
-    }
-
-    pub async fn fetch_with_model(
-        mut self,
-        struct_model: &StructModel,
-    ) -> Result<Option<StructModel>, Error> {
-        let model_option = Some(struct_model.to_owned());
-        let result = match struct_model {
-            StructModel::TableModel { .. } => self.get_table(&model_option).await,
-            StructModel::ConstraintModel { .. } => self.get_constraint(&model_option).await,
-            StructModel::IndexModel { .. } => self.get_index(&model_option).await,
-            StructModel::CommentModel { comment_type, .. } => match comment_type {
-                CommentType::Table => self.get_table_comment(&model_option).await,
-                CommentType::Column => self.get_column_comment(&model_option).await,
-            },
-            StructModel::SequenceModel { .. } => self.get_sequence(&model_option).await,
-            StructModel::SequenceOwnerModel { .. } => self.get_sequence_owner(&model_option).await,
-            _ => {
-                let result: HashMap<String, StructModel> = HashMap::new();
-                Ok(result)
-            }
-        };
-        match result {
-            Ok(r) => {
-                let result_option = r.values().next().map(|f| f.to_owned());
-                Ok(result_option)
-            }
-            Err(e) => Err(e),
-        }
+        Ok(results)
     }
 
     fn get_str_with_null(row: &PgRow, col_name: &str) -> Result<String, Error> {
@@ -551,215 +557,35 @@ impl PgStructFetcher {
         None
     }
 
-    fn sql_builder(&self, struct_model: &StructModel) -> String {
-        let sql: String = match struct_model {
-            StructModel::DatabaseModel { name: _ } => {
-                String::from("select schema_name from information_schema.schemata")
-            }
-            StructModel::TableModel {
-                database_name: _,
-                schema_name,
-                table_name,
-                engine_name: _,
-                table_comment: _,
-                columns: _,
-            } => {
-                let mut s = format!("SELECT c.table_schema,c.table_name,c.column_name, c.data_type, c.udt_name, c.character_maximum_length, c.is_nullable, c.column_default, c.numeric_precision, c.numeric_scale, c.is_identity, c.identity_generation,c.ordinal_position 
-FROM information_schema.columns c WHERE table_schema ='{}' ", schema_name);
-                if !table_name.is_empty() {
-                    s = format!("{} and table_name = '{}' ", s, table_name);
-                }
-                format!(
-                    "{} ORDER BY table_schema, table_name, c.ordinal_position ",
-                    s
-                )
-            }
-            StructModel::ConstraintModel {
-                database_name: _,
-                schema_name,
-                table_name: _,
-                constraint_name,
-                constraint_type: _,
-                definition: _,
-            } => {
-                let mut s = format!("SELECT nsp.nspname, rel.relname, con.conname as constraint_name, con.contype as constraint_type,pg_get_constraintdef(con.oid) as constraint_definition
-FROM pg_catalog.pg_constraint con JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace WHERE nsp.nspname ='{}' ", schema_name);
-                if !constraint_name.is_empty() {
-                    s = format!("{} and con.conname = '{}' ", s, constraint_name);
-                }
-                format!("{} ORDER BY nsp.nspname,rel.relname ", s)
-            }
-            StructModel::IndexModel {
-                database_name: _,
-                schema_name,
-                table_name: _,
-                index_name,
-                index_kind: _,
-                index_type: _,
-                comment: _,
-                tablespace: _,
-                definition: _,
-                columns: _,
-            } => {
-                let mut s = format!("SELECT schemaname,tablename,indexdef, COALESCE(tablespace, 'pg_default') as tablespace, indexname 
-FROM pg_indexes WHERE schemaname = '{}'", schema_name);
-                if !index_name.is_empty() {
-                    s = format!("{} and indexname= '{}' ", s, index_name);
-                }
-                format!(" {} order by schemaname, tablename, indexname ", s)
-            }
-            StructModel::CommentModel {
-                comment_type,
-                database_name: _,
-                schema_name,
-                table_name,
-                column_name,
-                comment: _,
-            } => match comment_type {
-                CommentType::Table => {
-                    let mut s = format!("SELECT n.nspname, c.relname, d.description FROM pg_class c LEFT JOIN pg_namespace n on n.oid = c.relnamespace
-LEFT JOIN pg_description d ON c.oid = d.objoid AND d.objsubid = 0 WHERE n.nspname ='{}' AND d.description IS NOT null", schema_name);
-                    if !table_name.is_empty() {
-                        s = format!("{} and c.relname = '{}' ", s, table_name);
-                    }
-                    s
-                }
-                CommentType::Column => {
-                    let mut s = format!("SELECT n.nspname,c.relname, col_description(a.attrelid, a.attnum)as comment,format_type(a.atttypid, a.atttypmod)as type,a.attname as name,a.attnotnull as notnull
-FROM pg_class c LEFT JOIN pg_attribute a on a.attrelid =c.oid LEFT JOIN pg_namespace n on n.oid = c.relnamespace WHERE n.nspname ='{}' 
-AND a.attnum >0 and col_description(a.attrelid, a.attnum) is not null", schema_name);
-                    if !table_name.is_empty() && !column_name.is_empty() {
-                        s = format!(
-                            "{} and c.relname = '{}' and a.attname = '{}' ",
-                            s, table_name, column_name
-                        );
-                    }
-                    s
-                }
-            },
-            StructModel::SequenceModel {
-                sequence_name,
-                database_name: _,
-                schema_name,
-                data_type: _,
-                start_value: _,
-                increment: _,
-                min_value: _,
-                max_value: _,
-                is_circle: _,
-            } => {
-                let mut s = format!(" SELECT obj.sequence_catalog,obj.sequence_schema,tab.relname as table_name, obj.sequence_name,obj.data_type,obj.start_value,obj.minimum_value,obj.maximum_value,obj.increment,obj.cycle_option 
-FROM information_schema.sequences obj      
-join pg_class as seq on (seq.relname = obj.sequence_name)
-join pg_namespace ns on (seq.relnamespace = ns.oid) 
-join pg_depend as dep on (seq.relfilenode = dep.objid) 
-join pg_class as tab on (dep.refobjid = tab.relfilenode) 
- where ns.nspname='{}' and dep.deptype='a' ", schema_name);
-                if !sequence_name.is_empty() {
-                    s = format!("{} and obj.sequence_name = '{}' ", s, sequence_name);
-                }
-                s
-            }
-            StructModel::SequenceOwnerModel {
-                sequence_name,
-                database_name: _,
-                schema_name,
-                owner_table_name,
-                owner_table_column_name,
-            } => {
-                let mut s = format!("select seq.relname,tab.relname as table_name, attr.attname as column_name, ns.nspname 
-                from pg_class as seq 
-                join pg_namespace ns on (seq.relnamespace = ns.oid) 
-                join pg_depend as dep on (seq.relfilenode = dep.objid) 
-                join pg_class as tab on (dep.refobjid = tab.relfilenode) 
-                join pg_attribute as attr on (attr.attnum = dep.refobjsubid and attr.attrelid = dep.refobjid) 
-                where dep.deptype='a' and seq.relkind='S' and ns.nspname = '{}' ", schema_name);
-                if !sequence_name.is_empty() {
-                    s = format!("{} and seq.relname = '{}' ", s, sequence_name);
-                }
-                if !owner_table_name.is_empty() {
-                    s = format!("{} and tab.relname = '{}' ", s, owner_table_name);
-                }
-                if !owner_table_column_name.is_empty() {
-                    s = format!("{} and attr.attname = '{}' ", s, owner_table_column_name);
-                }
-                s
-            }
-            _ => String::from(""),
-        };
-        sql
+    fn filter_tb(&mut self, tb: &str) -> bool {
+        if let Some(filter) = &mut self.filter {
+            return filter.filter_tb(&self.schema, &tb);
+        }
+        false
     }
 
-    #[allow(dead_code)]
-    #[deprecated]
-    fn get_seq_name_by_default_value(default_value: String) -> Option<String> {
-        // default_value such as:
-        //   nextval('table_test_name_seq'::regclass)
-        //   nextval('"table_test_name_seq"')
-        //   nextval('struct_it.full_column_type_id_seq'::regclass)
-        if default_value.is_empty() || !default_value.starts_with("nextval(") {
-            return None;
+    fn push_to_results<T>(
+        &mut self,
+        results: &mut HashMap<String, Vec<T>>,
+        table_name: &str,
+        item: T,
+    ) {
+        if self.filter_tb(&table_name) {
+            return;
         }
-        let arr_tmp: Vec<&str> = default_value.split('\'').collect();
-        if arr_tmp.len() != 3 {
-            println!(
-                "default_value:[{}] is like a sequence used, but not valid in process.",
-                default_value
-            );
-            return None;
+
+        if let Some(exists) = results.get_mut(table_name) {
+            exists.push(item);
+        } else {
+            results.insert(table_name.into(), vec![item]);
         }
-        let mut seq_name = arr_tmp[1];
-        if seq_name.contains('.') {
-            let real_name_start_index = seq_name.find('.').unwrap() + 1;
-            seq_name = &seq_name[real_name_start_index..seq_name.len()];
-        }
-        if seq_name.starts_with('\"') && seq_name.ends_with('\"') {
-            let (start_index, end_index) = (
-                seq_name.find('\"').unwrap() + 1,
-                seq_name.rfind('\"').unwrap(),
-            );
-            seq_name = &seq_name[start_index..end_index];
-        }
-        Some(seq_name.to_string())
     }
-}
 
-#[cfg(test)]
-#[allow(deprecated)]
-mod tests {
-    use crate::meta_fetcher::pg::pg_struct_fetcher::PgStructFetcher;
-
-    #[test]
-    fn get_seq_name_by_default_value_test() {
-        let mut opt: Option<String>;
-        opt = PgStructFetcher::get_seq_name_by_default_value(String::from(
-            "nextval('table_test_name_seq'::regclass)",
-        ));
-        assert_eq!(opt.unwrap(), String::from("table_test_name_seq"));
-
-        opt = PgStructFetcher::get_seq_name_by_default_value(String::from(
-            "nextval('table_test_name_seq')",
-        ));
-        assert_eq!(opt.unwrap(), String::from("table_test_name_seq"));
-
-        opt = PgStructFetcher::get_seq_name_by_default_value(String::from(
-            "nextval('\"table::123&^%@-_test_name_seq\"'::regclass)",
-        ));
-        assert_eq!(opt.unwrap(), String::from("table::123&^%@-_test_name_seq"));
-
-        opt = PgStructFetcher::get_seq_name_by_default_value(String::from(
-            "nextval('\"has_special_'\"'::regclass)",
-        ));
-        assert!(opt.is_none());
-
-        opt = PgStructFetcher::get_seq_name_by_default_value(String::from(
-            "nextval('schema.table_test_name_seq'::regclass)",
-        ));
-        assert_eq!(opt.unwrap(), String::from("table_test_name_seq"));
-
-        opt = PgStructFetcher::get_seq_name_by_default_value(String::from(
-            "nextval('\"has_special_schema_^&@\".\"table::123&^%@-_test_name_seq\"'::regclass)",
-        ));
-        assert_eq!(opt.unwrap(), String::from("table::123&^%@-_test_name_seq"));
+    fn get_result<T>(&self, results: &mut HashMap<String, Vec<T>>, table_name: &str) -> Vec<T> {
+        if let Some(result) = results.remove(table_name) {
+            result
+        } else {
+            Vec::new()
+        }
     }
 }

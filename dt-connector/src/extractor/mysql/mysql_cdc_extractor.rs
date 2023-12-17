@@ -263,7 +263,7 @@ impl MysqlCdcExtractor {
         query: QueryEvent,
         position: Position,
     ) -> Result<(), Error> {
-        // TODO, currently we do not parse ddl if filtered, 
+        // TODO, currently we do not parse ddl if filtered,
         // but we should always try to parse ddl in the future
         if self.filter.filter_ddl() {
             return Ok(());
@@ -279,7 +279,7 @@ impl MysqlCdcExtractor {
             tb: String::new(),
             query: query.query.clone(),
             ddl_type: DdlType::Unknown,
-            meta: None,
+            statement: None,
         };
 
         let parse_result = DdlParser::parse(&query.query);

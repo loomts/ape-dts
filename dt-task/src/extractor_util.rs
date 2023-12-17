@@ -442,7 +442,7 @@ impl ExtractorUtil {
         Ok(PgStructExtractor {
             conn_pool,
             buffer,
-            db: db.to_string(),
+            schema: db.to_string(),
             filter,
             shut_down,
         })
