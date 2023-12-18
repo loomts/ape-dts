@@ -1,1 +1,1 @@
-drop schema if exists precheck_it_pg2pg_1 cascade;
+drop schema if exists precheck_it_pg2pg_2 cascade;

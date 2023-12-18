@@ -1,3 +1,3 @@
-DROP DATABASE IF EXISTS precheck_it_mysql2mysql_2;
+DROP DATABASE IF EXISTS precheck_it_mysql2mysql_4;
 
-CREATE DATABASE precheck_it_mysql2mysql_2;
+CREATE DATABASE precheck_it_mysql2mysql_4;

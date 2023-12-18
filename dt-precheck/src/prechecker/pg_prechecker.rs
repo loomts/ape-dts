@@ -299,7 +299,7 @@ impl Prechecker for PostgresqlPrechecker {
             ));
         }
 
-        let (mut has_pk_tables, mut has_fk_tables): (HashSet<String>, HashSet<String>) =
+        let (mut has_pkuk_tables, mut has_fk_tables): (HashSet<String>, HashSet<String>) =
             (HashSet::new(), HashSet::new());
 
         let table_result = self.fetcher.fetch_tables().await;
@@ -316,8 +316,10 @@ impl Prechecker for PostgresqlPrechecker {
             Ok(constraints) => {
                 for c in constraints {
                     let schema_table_name = format!("{}.{}", c.schema_name, c.table_name);
-                    if c.constraint_type == ConstraintTypeEnum::Primary.to_str().unwrap() {
-                        has_pk_tables.insert(schema_table_name);
+                    if c.constraint_type == ConstraintTypeEnum::Primary.to_str().unwrap()
+                        || c.constraint_type == ConstraintTypeEnum::Unique.to_str().unwrap()
+                    {
+                        has_pkuk_tables.insert(schema_table_name);
                     } else if c.constraint_type == ConstraintTypeEnum::Foregin.to_str().unwrap() {
                         has_fk_tables.insert(schema_table_name);
                     }
@@ -336,16 +338,16 @@ impl Prechecker for PostgresqlPrechecker {
                     .join(";")
             ));
         }
-        let mut no_pk_tables: HashSet<String> = HashSet::new();
+        let mut no_pkuk_tables: HashSet<String> = HashSet::new();
         for current_table in current_tables {
-            if !has_pk_tables.contains(&current_table) {
-                no_pk_tables.insert(current_table);
+            if !has_pkuk_tables.contains(&current_table) {
+                no_pkuk_tables.insert(current_table);
             }
         }
-        if !no_pk_tables.is_empty() {
+        if !no_pkuk_tables.is_empty() {
             err_msgs.push(format!(
                 "primary key are needed, but these tables don't have a primary key:[{}]",
-                no_pk_tables
+                no_pkuk_tables
                     .iter()
                     .map(|e| e.to_string())
                     .collect::<Vec<String>>()
