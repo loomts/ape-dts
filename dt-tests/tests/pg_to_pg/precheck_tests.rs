@@ -51,11 +51,25 @@ mod test {
 
     #[tokio::test]
     #[serial]
-    async fn struct_supported_no_pk_test() {
-        let test_dir = "pg_to_pg/precheck/struct_supported_no_pk_test";
+    async fn struct_supported_no_pkuk_test() {
+        let test_dir = "pg_to_pg/precheck/struct_supported_no_pkuk_test";
 
         let mut src_expected_results = HashMap::new();
         src_expected_results.insert(CheckItem::CheckIfTableStructSupported.to_string(), false);
+
+        let mut dst_expected_results = HashMap::new();
+        dst_expected_results.insert(CheckItem::CheckIfTableStructSupported.to_string(), false);
+
+        run_precheck_test(test_dir, &src_expected_results, &dst_expected_results).await
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn struct_supported_have_uk_no_pk_test() {
+        let test_dir = "pg_to_pg/precheck/struct_supported_have_uk_no_pk_test";
+
+        let mut src_expected_results = HashMap::new();
+        src_expected_results.insert(CheckItem::CheckIfTableStructSupported.to_string(), true);
 
         let mut dst_expected_results = HashMap::new();
         dst_expected_results.insert(CheckItem::CheckIfTableStructSupported.to_string(), false);

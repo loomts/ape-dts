@@ -271,7 +271,7 @@ impl Prechecker for MySqlPrechecker {
         all_db_names.extend(&dbs);
         all_db_names.extend(&tb_dbs);
 
-        let (mut has_pk_tables, mut has_fk_tables, mut no_pk_tables, mut err_msgs): (
+        let (mut has_pkuk_tables, mut has_fk_tables, mut no_pkuk_tables, mut err_msgs): (
             HashSet<String>,
             HashSet<String>,
             HashSet<String>,
@@ -285,7 +285,8 @@ impl Prechecker for MySqlPrechecker {
                     let db_tb_name =
                         format!("{}.{}", constraint.database_name, constraint.table_name);
                     match constraint.constraint_type.as_str() {
-                        "PRIMARY KEY" => has_pk_tables.insert(db_tb_name),
+                        "PRIMARY KEY" => has_pkuk_tables.insert(db_tb_name),
+                        "UNIQUE" => has_pkuk_tables.insert(db_tb_name),
                         "FOREIGN KEY" => has_fk_tables.insert(db_tb_name),
                         _ => true,
                     };
@@ -299,8 +300,8 @@ impl Prechecker for MySqlPrechecker {
             Ok(tables) => {
                 for table in tables {
                     let db_tb_name = format!("{}.{}", table.database_name, table.table_name);
-                    if !has_pk_tables.contains(&db_tb_name) {
-                        no_pk_tables.insert(db_tb_name);
+                    if !has_pkuk_tables.contains(&db_tb_name) {
+                        no_pkuk_tables.insert(db_tb_name);
                     }
                 }
             }
@@ -317,10 +318,10 @@ impl Prechecker for MySqlPrechecker {
                     .join(";")
             ))
         }
-        if !no_pk_tables.is_empty() {
+        if !no_pkuk_tables.is_empty() {
             err_msgs.push(format!(
                 "primary key are needed, but these tables don't have a primary key:[{}]",
-                no_pk_tables
+                no_pkuk_tables
                     .iter()
                     .map(|e| e.to_string())
                     .collect::<Vec<String>>()
