@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use super::{ddl_type::DdlType, struct_meta::database_model::StructModel};
+use crate::struct_meta::statement::struct_statement::StructStatement;
+
+use super::ddl_type::DdlType;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DdlData {
@@ -9,7 +11,7 @@ pub struct DdlData {
     pub tb: String,
     pub query: String,
     #[serde(skip)]
-    pub meta: Option<StructModel>,
+    pub statement: Option<StructStatement>,
     #[serde(skip)]
     pub ddl_type: DdlType,
 }

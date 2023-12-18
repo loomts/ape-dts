@@ -19,6 +19,7 @@ use dt_common::{error::Error, monitor::monitor::Monitor};
 use dt_meta::{
     ddl_data::DdlData, mysql::mysql_meta_manager::MysqlMetaManager,
     rdb_meta_manager::RdbMetaManager, row_data::RowData,
+    struct_meta::statement::struct_statement::StructStatement,
 };
 
 #[derive(Clone)]
@@ -136,29 +137,59 @@ impl MysqlChecker {
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, start_time).await
     }
 
-    async fn serial_ddl_check(&mut self, data: Vec<DdlData>) -> Result<(), Error> {
-        for data_src in data {
-            if let Some(data_model_src) = data_src.meta {
-                let mysql_struct_fetcher = MysqlStructFetcher {
-                    conn_pool: self.conn_pool.to_owned(),
-                    db: String::from(""),
-                    filter: None,
-                    meta_manager: self.meta_manager.clone(),
-                };
-                let model_dst_option = mysql_struct_fetcher
-                    .fetch_with_model(&data_model_src)
-                    .await
-                    .ok()
-                    .flatten();
-
-                if let Some(data_model_dst) = model_dst_option {
-                    if !BaseChecker::compare_ddl_data(&data_model_src, &data_model_dst) {
-                        BaseChecker::log_diff_struct(&data_model_src, &data_model_dst);
-                    }
-                } else {
-                    BaseChecker::log_miss_struct(&data_model_src);
-                }
+    async fn serial_ddl_check(&mut self, mut data: Vec<DdlData>) -> Result<(), Error> {
+        for data_src in data.iter_mut() {
+            if data_src.statement.is_none() {
+                continue;
             }
+
+            let mut src_statement = data_src.statement.as_mut().unwrap();
+            let db = match src_statement {
+                StructStatement::MysqlCreateDatabase { statement } => {
+                    statement.database.name.clone()
+                }
+                StructStatement::MysqlCreateTable { statement } => {
+                    statement.table.database_name.clone()
+                }
+                _ => String::new(),
+            };
+
+            let mut struct_fetcher = MysqlStructFetcher {
+                conn_pool: self.conn_pool.to_owned(),
+                db: db.into(),
+                filter: None,
+                meta_manager: self.meta_manager.clone(),
+            };
+
+            let mut dst_statement = match &src_statement {
+                StructStatement::MysqlCreateDatabase { statement: _ } => {
+                    let dst_statement = struct_fetcher
+                        .get_create_database_statement()
+                        .await
+                        .unwrap();
+                    Some(StructStatement::MysqlCreateDatabase {
+                        statement: dst_statement,
+                    })
+                }
+
+                StructStatement::MysqlCreateTable { statement } => {
+                    let mut dst_statement = struct_fetcher
+                        .get_create_table_statements(&statement.table.table_name)
+                        .await
+                        .unwrap();
+                    if dst_statement.len() == 0 {
+                        None
+                    } else {
+                        Some(StructStatement::MysqlCreateTable {
+                            statement: dst_statement.remove(0),
+                        })
+                    }
+                }
+
+                _ => None,
+            };
+
+            BaseChecker::compare_struct(&mut src_statement, &mut dst_statement).unwrap();
         }
         Ok(())
     }

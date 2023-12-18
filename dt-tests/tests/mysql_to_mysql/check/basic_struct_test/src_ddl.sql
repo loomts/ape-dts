@@ -28,6 +28,6 @@ CREATE TABLE struct_check_test_1.not_match_column (id INT UNSIGNED AUTO_INCREMEN
 -- not match: index
 CREATE TABLE struct_check_test_1.not_match_index (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,unique_col VARCHAR(255) NOT NULL,index_col VARCHAR(255),fulltext_col TEXT,spatial_col POINT NOT NULL,simple_index_col VARCHAR(255),composite_index_col1 VARCHAR(255),composite_index_col2 VARCHAR(255),composite_index_col3 VARCHAR(255));
 
-CREATE INDEX i4_order ON struct_check_test_1.not_match_index (composite_index_col2, composite_index_col1 , composite_index_col3);
-CREATE INDEX i5_name ON struct_check_test_1.not_match_index (index_col);
+CREATE INDEX i4_diff_order ON struct_check_test_1.not_match_index (composite_index_col2, composite_index_col1 , composite_index_col3);
+CREATE INDEX i5_diff_name_src ON struct_check_test_1.not_match_index (index_col);
 CREATE INDEX i6_miss ON struct_check_test_1.not_match_index (index_col);

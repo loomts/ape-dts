@@ -493,6 +493,8 @@ impl RdbTestRunner {
         let (src_db_type, src_url, _, _) = Self::parse_conn_info(&self.base);
 
         if src_db_type == DbType::Mysql {
+            // for mysql, since tables may be created in src_dml.sql for ddl tests,
+            // we don't use Self::get_compare_db_tbs_from_sqls to get src_db_tbs by parsing src_ddl.sql
             let dbs = self.get_compare_dbs(&src_url, &src_db_type).await?;
             for db in dbs.iter() {
                 let tbs = ExtractorUtil::list_tbs(&src_url, db, &src_db_type).await?;
@@ -519,7 +521,7 @@ impl RdbTestRunner {
         let mut db_tbs = vec![];
 
         for sql in ddl_sqls.iter() {
-            if !sql.to_lowercase().contains("table") {
+            if !sql.to_lowercase().contains("create") || !sql.to_lowercase().contains("table") {
                 continue;
             }
             let ddl = DdlParser::parse(sql).unwrap();

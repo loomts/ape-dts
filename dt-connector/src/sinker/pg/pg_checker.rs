@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use dt_common::{error::Error, monitor::monitor::Monitor};
 use dt_meta::{
     ddl_data::DdlData, pg::pg_meta_manager::PgMetaManager, rdb_meta_manager::RdbMetaManager,
-    row_data::RowData,
+    row_data::RowData, struct_meta::statement::struct_statement::StructStatement,
 };
 use futures::TryStreamExt;
 use sqlx::{Pool, Postgres};
@@ -134,28 +134,54 @@ impl PgChecker {
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, start_time).await
     }
 
-    async fn serial_ddl_check(&mut self, data: Vec<DdlData>) -> Result<(), Error> {
-        for data_src in data {
-            if let Some(data_model_src) = data_src.meta {
-                let pg_struct_fetcher = PgStructFetcher {
-                    conn_pool: self.conn_pool.to_owned(),
-                    db: String::from(""),
-                    filter: None,
-                };
-                let model_dst_option = pg_struct_fetcher
-                    .fetch_with_model(&data_model_src)
-                    .await
-                    .ok()
-                    .flatten();
-
-                if let Some(data_model_dst) = model_dst_option {
-                    if !BaseChecker::compare_ddl_data(&data_model_src, &data_model_dst) {
-                        BaseChecker::log_diff_struct(&data_model_src, &data_model_dst);
-                    }
-                } else {
-                    BaseChecker::log_miss_struct(&data_model_src);
-                }
+    async fn serial_ddl_check(&mut self, mut data: Vec<DdlData>) -> Result<(), Error> {
+        for data_src in data.iter_mut() {
+            if data_src.statement.is_none() {
+                continue;
             }
+
+            let mut src_statement = data_src.statement.as_mut().unwrap();
+            let schema = match src_statement {
+                StructStatement::PgCreateDatabase { statement } => statement.database.name.clone(),
+                StructStatement::PgCreateTable { statement } => statement.table.schema_name.clone(),
+                _ => String::new(),
+            };
+
+            let mut struct_fetcher = PgStructFetcher {
+                conn_pool: self.conn_pool.to_owned(),
+                schema,
+                filter: None,
+            };
+
+            let mut dst_statement = match &src_statement {
+                StructStatement::PgCreateDatabase { statement: _ } => {
+                    let dst_statement = struct_fetcher
+                        .get_create_database_statement()
+                        .await
+                        .unwrap();
+                    Some(StructStatement::PgCreateDatabase {
+                        statement: dst_statement,
+                    })
+                }
+
+                StructStatement::PgCreateTable { statement } => {
+                    let mut dst_statement = struct_fetcher
+                        .get_create_table_statements(&statement.table.table_name)
+                        .await
+                        .unwrap();
+                    if dst_statement.len() == 0 {
+                        None
+                    } else {
+                        Some(StructStatement::PgCreateTable {
+                            statement: dst_statement.remove(0),
+                        })
+                    }
+                }
+
+                _ => None,
+            };
+
+            BaseChecker::compare_struct(&mut src_statement, &mut dst_statement).unwrap();
         }
         Ok(())
     }

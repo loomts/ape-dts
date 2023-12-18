@@ -10,7 +10,7 @@ use dt_meta::{
     dt_data::{DtData, DtItem},
     mysql::mysql_meta_manager::MysqlMetaManager,
     position::Position,
-    struct_meta::database_model::StructModel,
+    struct_meta::statement::struct_statement::StructStatement,
 };
 use sqlx::{MySql, Pool};
 
@@ -37,35 +37,39 @@ impl Extractor for MysqlStructExtractor {
 
 impl MysqlStructExtractor {
     pub async fn extract_internal(&mut self) -> Result<(), Error> {
-        let mut mysql_fetcher = self.build_fetcher().await?;
+        let meta_manager = MysqlMetaManager::new(self.conn_pool.clone()).init().await?;
+        let mut pg_fetcher = MysqlStructFetcher {
+            conn_pool: self.conn_pool.to_owned(),
+            db: self.db.clone(),
+            filter: Some(self.filter.to_owned()),
+            meta_manager,
+        };
 
-        for (_, meta) in mysql_fetcher.get_database(&None).await.unwrap() {
-            self.push_dt_data(&meta).await;
+        // database
+        let database = pg_fetcher.get_create_database_statement().await.unwrap();
+        let statement = StructStatement::MysqlCreateDatabase {
+            statement: database,
+        };
+        self.push_dt_data(statement).await;
+
+        // tables
+        for statement in pg_fetcher.get_create_table_statements("").await.unwrap() {
+            self.push_dt_data(StructStatement::MysqlCreateTable { statement })
+                .await;
         }
-
-        for (_, meta) in mysql_fetcher.get_table(&None).await.unwrap() {
-            self.push_dt_data(&meta).await;
-        }
-
-        for (_, meta) in mysql_fetcher.get_index(&None).await.unwrap() {
-            self.push_dt_data(&meta).await;
-        }
-
-        // for (_, meta) in mysql_fetcher.get_constraint(&None).await.unwrap() {
-        //     self.push_dt_data(&meta).await;
-        // }
 
         BaseExtractor::wait_task_finish(self.buffer.as_ref(), self.shut_down.as_ref()).await
     }
 
-    pub async fn push_dt_data(&mut self, meta: &StructModel) {
+    pub async fn push_dt_data(&mut self, statement: StructStatement) {
         let ddl_data = DdlData {
             schema: self.db.clone(),
             tb: String::new(),
             query: String::new(),
-            meta: Some(meta.to_owned()),
+            statement: Some(statement),
             ddl_type: DdlType::Unknown,
         };
+
         BaseExtractor::push_dt_data(
             self.buffer.as_ref(),
             DtData::Ddl { ddl_data },
@@ -73,15 +77,5 @@ impl MysqlStructExtractor {
         )
         .await
         .unwrap()
-    }
-
-    pub async fn build_fetcher(&self) -> Result<MysqlStructFetcher, Error> {
-        let meta_manager = MysqlMetaManager::new(self.conn_pool.clone()).init().await?;
-        Ok(MysqlStructFetcher {
-            conn_pool: self.conn_pool.to_owned(),
-            db: self.db.clone(),
-            filter: Some(self.filter.to_owned()),
-            meta_manager,
-        })
     }
 }

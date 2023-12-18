@@ -3,7 +3,19 @@ use std::collections::HashMap;
 use dt_common::{error::Error, utils::rdb_filter::RdbFilter};
 use dt_meta::{
     mysql::mysql_meta_manager::MysqlMetaManager,
-    struct_meta::database_model::{Column, IndexColumn, IndexKind, StructModel},
+    struct_meta::{
+        statement::{
+            mysql_create_database_statement::MysqlCreateDatabaseStatement,
+            mysql_create_table_statement::MysqlCreateTableStatement,
+        },
+        structure::{
+            column::Column,
+            constraint::Constraint,
+            database::Database,
+            index::{Index, IndexColumn, IndexKind},
+            table::Table,
+        },
+    },
 };
 use futures::TryStreamExt;
 use sqlx::{mysql::MySqlRow, MySql, Pool, Row};
@@ -49,55 +61,90 @@ const CONSTRAINT_NAME: &str = "CONSTRAINT_NAME";
 const CHECK_CLAUSE: &str = "CHECK_CLAUSE";
 
 impl MysqlStructFetcher {
-    // Create Database: https://dev.mysql.com/doc/refman/8.0/en/create-database.html
-    pub async fn get_database(
+    pub async fn get_create_database_statement(
         &mut self,
-        struct_model: &Option<StructModel>,
-    ) -> Result<HashMap<String, StructModel>, Error> {
-        let struct_model = match struct_model {
-            Some(model) => model.clone(),
-            None => StructModel::DatabaseModel {
-                name: String::new(),
-            },
-        };
-
-        let sql = self.sql_builder(&struct_model);
-        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-
-        let mut results = HashMap::new();
-        while let Some(row) = rows.try_next().await.unwrap() {
-            let db = Self::get_str_with_null(&row, SCHEMA_NAME).unwrap();
-
-            if let Some(filter) = &mut self.filter {
-                if filter.filter_db(&db) {
-                    continue;
-                }
-            }
-            results.insert(db.clone(), StructModel::DatabaseModel { name: db.clone() });
-        }
-        return Ok(results);
+    ) -> Result<MysqlCreateDatabaseStatement, Error> {
+        let database = self.get_database().await?;
+        Ok(MysqlCreateDatabaseStatement { database })
     }
 
-    // Create Table: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
-    pub async fn get_table(
+    pub async fn get_create_table_statements(
         &mut self,
-        struct_model: &Option<StructModel>,
-    ) -> Result<HashMap<String, StructModel>, Error> {
-        let struct_model = match struct_model {
-            Some(model) => model.clone(),
-            None => StructModel::TableModel {
-                database_name: self.db.clone(),
-                schema_name: String::new(),
-                table_name: String::new(),
-                engine_name: String::new(),
-                table_comment: String::new(),
-                columns: vec![],
-            },
-        };
-        let sql = self.sql_builder(&struct_model);
-        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+        tb: &str,
+    ) -> Result<Vec<MysqlCreateTableStatement>, Error> {
+        let mut results = Vec::new();
 
-        let mut results = HashMap::new();
+        let tables = self.get_tables(tb).await.unwrap();
+        let mut constraints = self.get_constraints(tb).await.unwrap();
+        let mut indexes = self.get_indexes(tb).await.unwrap();
+
+        for (table_name, table) in tables {
+            let statement = MysqlCreateTableStatement {
+                table,
+                constraints: self.get_result(&mut constraints, &table_name),
+                indexes: self.get_result(&mut indexes, &table_name),
+            };
+            results.push(statement);
+        }
+        Ok(results)
+    }
+
+    // Create Database: https://dev.mysql.com/doc/refman/8.0/en/create-database.html
+    async fn get_database(&mut self) -> Result<Database, Error> {
+        let sql = format!(
+            "SELECT 
+            SCHEMA_NAME, 
+            DEFAULT_CHARACTER_SET_NAME, 
+            DEFAULT_COLLATION_NAME 
+            FROM information_schema.schemata
+            WHERE SCHEMA_NAME = '{}'",
+            self.db
+        );
+
+        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+        if let Some(row) = rows.try_next().await.unwrap() {
+            let schema_name = Self::get_str_with_null(&row, SCHEMA_NAME).unwrap();
+            let database = Database { name: schema_name };
+            return Ok(database);
+        }
+
+        return Err(Error::StructError(format!("db: {} not found", self.db)));
+    }
+
+    async fn get_tables(&mut self, tb: &str) -> Result<HashMap<String, Table>, Error> {
+        let mut results: HashMap<String, Table> = HashMap::new();
+
+        // Create Table: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
+        let tb_filter = if !tb.is_empty() {
+            format!("AND t.TABLE_NAME = '{}'", tb)
+        } else {
+            String::new()
+        };
+
+        let sql = format!(
+            "SELECT t.TABLE_SCHEMA,
+                t.TABLE_NAME, 
+                t.ENGINE, 
+                t.TABLE_COMMENT, 
+                c.COLUMN_NAME, 
+                c.ORDINAL_POSITION, 
+                c.COLUMN_DEFAULT, 
+                c.IS_NULLABLE, 
+                c.COLUMN_TYPE, 
+                c.COLUMN_KEY, 
+                c.EXTRA, 
+                c.COLUMN_COMMENT, 
+                c.CHARACTER_SET_NAME, 
+                c.COLLATION_NAME 
+            FROM information_schema.tables t
+            LEFT JOIN information_schema.columns c
+            ON t.TABLE_SCHEMA = c.TABLE_SCHEMA AND t.TABLE_NAME = c.TABLE_NAME
+            WHERE t.TABLE_SCHEMA ='{}' {}
+            ORDER BY t.TABLE_SCHEMA, t.TABLE_NAME, c.ORDINAL_POSITION",
+            self.db, tb_filter
+        );
+
+        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let (db, tb) = (
                 Self::get_str_with_null(&row, TABLE_SCHEMA).unwrap(),
@@ -110,7 +157,6 @@ impl MysqlStructFetcher {
                 }
             }
 
-            let full_tb_name = format!("{}.{}", db, tb);
             let engine_name = Self::get_str_with_null(&row, ENGINE).unwrap();
             let table_comment = Self::get_str_with_null(&row, TABLE_COMMENT).unwrap();
             let column = Column {
@@ -127,14 +173,12 @@ impl MysqlStructFetcher {
                 generated: None,
             };
 
-            if let Some(model) = results.get_mut(&full_tb_name) {
-                if let StructModel::TableModel { columns, .. } = model {
-                    columns.push(column);
-                }
+            if let Some(table) = results.get_mut(&tb) {
+                table.columns.push(column);
             } else {
                 results.insert(
-                    full_tb_name,
-                    StructModel::TableModel {
+                    tb.clone(),
+                    Table {
                         database_name: db.clone(),
                         schema_name: String::new(),
                         table_name: tb,
@@ -145,48 +189,42 @@ impl MysqlStructFetcher {
                 );
             }
         }
+
         Ok(results)
     }
 
-    // Create Index: https://dev.mysql.com/doc/refman/8.0/en/create-index.html
-    pub async fn get_index(
-        &mut self,
-        struct_model: &Option<StructModel>,
-    ) -> Result<HashMap<String, StructModel>, Error> {
-        let struct_model = match struct_model {
-            Some(model) => model.clone(),
-            None => StructModel::IndexModel {
-                database_name: self.db.clone(),
-                schema_name: String::new(),
-                table_name: String::new(),
-                index_name: String::new(),
-                index_kind: IndexKind::Unkown,
-                index_type: String::new(),
-                comment: String::new(),
-                tablespace: String::new(),
-                definition: String::new(),
-                columns: vec![],
-            },
+    async fn get_indexes(&mut self, tb: &str) -> Result<HashMap<String, Vec<Index>>, Error> {
+        let mut index_map: HashMap<(String, String), Index> = HashMap::new();
+
+        // Create Index: https://dev.mysql.com/doc/refman/8.0/en/create-index.html
+        let tb_filter = if !tb.is_empty() {
+            format!("AND TABLE_NAME = '{}'", tb)
+        } else {
+            String::new()
         };
-        let sql = self.sql_builder(&struct_model);
+
+        let sql = format!(
+            "SELECT TABLE_SCHEMA,
+                TABLE_NAME,
+                NON_UNIQUE,
+                INDEX_NAME,
+                SEQ_IN_INDEX,
+                COLUMN_NAME,
+                INDEX_TYPE,
+                COMMENT
+            FROM information_schema.statistics
+            WHERE INDEX_NAME != '{}' AND TABLE_SCHEMA ='{}' {}
+            ORDER BY TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX",
+            PRIMARY, self.db, tb_filter
+        );
+
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-
-        let mut results: HashMap<String, StructModel> = HashMap::new();
-
         while let Some(row) = rows.try_next().await.unwrap() {
-            let (db, tb, index_name) = (
-                Self::get_str_with_null(&row, TABLE_SCHEMA).unwrap(),
+            let (tb, index_name) = (
                 Self::get_str_with_null(&row, TABLE_NAME).unwrap(),
                 Self::get_str_with_null(&row, INDEX_NAME).unwrap(),
             );
 
-            if let Some(filter) = &mut self.filter {
-                if filter.filter_tb(&db, &tb) {
-                    continue;
-                }
-            }
-
-            let full_index_name = format!("{}.{}.{}", db, tb, index_name);
             let column = IndexColumn {
                 column_name: Self::get_str_with_null(&row, COLUMN_NAME).unwrap(),
                 seq_in_index: {
@@ -199,57 +237,68 @@ impl MysqlStructFetcher {
                 },
             };
 
-            if let Some(model) = results.get_mut(&full_index_name) {
-                if let StructModel::IndexModel { columns, .. } = model {
-                    columns.push(column);
-                }
+            let key = (tb.clone(), index_name.clone());
+            if let Some(index) = index_map.get_mut(&key) {
+                index.columns.push(column);
             } else {
-                results.insert(
-                    full_index_name,
-                    StructModel::IndexModel {
-                        database_name: Self::get_str_with_null(&row, TABLE_SCHEMA).unwrap(),
-                        schema_name: String::new(),
-                        table_name: Self::get_str_with_null(&row, TABLE_NAME).unwrap(),
-                        index_name: Self::get_str_with_null(&row, INDEX_NAME).unwrap(),
-                        index_kind: self
-                            .build_index_kind(
-                                row.try_get(NON_UNIQUE)?,
-                                Self::get_str_with_null(&row, INDEX_NAME).unwrap().as_str(),
-                            )
-                            .unwrap(),
-                        index_type: Self::get_str_with_null(&row, INDEX_TYPE).unwrap(),
-                        comment: Self::get_str_with_null(&row, COMMENT).unwrap(),
-                        tablespace: String::new(),
-                        definition: String::new(),
-                        columns: vec![column],
-                    },
-                );
+                let index = Index {
+                    database_name: Self::get_str_with_null(&row, TABLE_SCHEMA).unwrap(),
+                    schema_name: String::new(),
+                    table_name: tb,
+                    index_name,
+                    index_kind: self
+                        .get_index_kind(
+                            row.try_get(NON_UNIQUE)?,
+                            Self::get_str_with_null(&row, INDEX_NAME).unwrap().as_str(),
+                        )
+                        .unwrap(),
+                    index_type: Self::get_str_with_null(&row, INDEX_TYPE).unwrap(),
+                    comment: Self::get_str_with_null(&row, COMMENT).unwrap(),
+                    tablespace: String::new(),
+                    definition: String::new(),
+                    columns: vec![column],
+                };
+                index_map.insert(key, index);
             }
         }
+
+        let mut results: HashMap<String, Vec<Index>> = HashMap::new();
+        for ((tb, _index_name), index) in index_map {
+            self.push_to_results(&mut results, &tb, index);
+        }
+
         Ok(results)
     }
 
-    // Check Constraint: https://dev.mysql.com/doc/refman/8.0/en/create-table-check-constraints.html
-    pub async fn get_constraint(
+    async fn get_constraints(
         &mut self,
-        struct_model: &Option<StructModel>,
-    ) -> Result<HashMap<String, StructModel>, Error> {
-        let struct_model = match struct_model {
-            Some(model) => model.clone(),
-            None => StructModel::ConstraintModel {
-                database_name: self.db.clone(),
-                schema_name: String::new(),
-                table_name: String::new(),
-                constraint_name: String::new(),
-                constraint_type: String::new(),
-                definition: String::new(),
-            },
+        tb: &str,
+    ) -> Result<HashMap<String, Vec<Constraint>>, Error> {
+        let mut results: HashMap<String, Vec<Constraint>> = HashMap::new();
+
+        // Check Constraint: https://dev.mysql.com/doc/refman/8.0/en/create-table-check-constraints.html
+        let tb_filter = if !tb.is_empty() {
+            format!("AND tc.TABLE_NAME = '{}'", tb)
+        } else {
+            String::new()
         };
-        let sql = self.sql_builder(&struct_model);
+
+        let sql = format!(
+            "SELECT 
+            tc.CONSTRAINT_SCHEMA, 
+            tc.TABLE_NAME, 
+            tc.CONSTRAINT_NAME, 
+            tc.CONSTRAINT_TYPE,
+            cc.CHECK_CLAUSE 
+            FROM information_schema.table_constraints tc 
+            LEFT JOIN information_schema.check_constraints cc 
+            ON tc.CONSTRAINT_SCHEMA = cc.CONSTRAINT_SCHEMA AND tc.CONSTRAINT_NAME = cc.CONSTRAINT_NAME 
+            WHERE tc.CONSTRAINT_SCHEMA = '{}' {} 
+            AND tc.CONSTRAINT_TYPE='{}' ",
+            self.db, tb_filter, CHECK
+        );
+
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-
-        let mut results: HashMap<String, StructModel> = HashMap::new();
-
         while let Some(row) = rows.try_next().await.unwrap() {
             let (database_name, table_name, constraint_name, check_clause) = (
                 Self::get_str_with_null(&row, CONSTRAINT_SCHEMA).unwrap(),
@@ -269,168 +318,18 @@ impl MysqlStructFetcher {
                 }
             }
 
-            results.insert(
-                format!("{}.{}", database_name, table_name),
-                StructModel::ConstraintModel {
-                    database_name,
-                    schema_name: String::new(),
-                    table_name,
-                    constraint_name,
-                    constraint_type: "check".into(),
-                    definition: check_clause,
-                },
-            );
+            let definition = self.unescape(check_clause).await.unwrap();
+            let constraint = Constraint {
+                database_name,
+                schema_name: String::new(),
+                table_name: table_name.clone(),
+                constraint_name,
+                constraint_type: "check".into(),
+                definition,
+            };
+            self.push_to_results(&mut results, &table_name, constraint);
         }
         Ok(results)
-    }
-
-    pub async fn fetch_with_model(
-        mut self,
-        struct_model: &StructModel,
-    ) -> Result<Option<StructModel>, Error> {
-        let model_option = Some(struct_model.to_owned());
-        let result = match struct_model {
-            StructModel::DatabaseModel { .. } => self.get_database(&model_option).await,
-            StructModel::TableModel { .. } => self.get_table(&model_option).await,
-            StructModel::IndexModel { .. } => self.get_index(&model_option).await,
-            StructModel::ConstraintModel { .. } => self.get_constraint(&model_option).await,
-            _ => {
-                let result: HashMap<String, StructModel> = HashMap::new();
-                Ok(result)
-            }
-        };
-        match result {
-            Ok(r) => {
-                let result_option = r.values().next().map(|f| f.to_owned());
-                Ok(result_option)
-            }
-            Err(e) => Err(e),
-        }
-    }
-
-    fn sql_builder(&self, struct_model: &StructModel) -> String {
-        let sql: String = match struct_model {
-            StructModel::DatabaseModel { name } => {
-                let mut s = "SELECT 
-                SCHEMA_NAME, 
-                DEFAULT_CHARACTER_SET_NAME, 
-                DEFAULT_COLLATION_NAME 
-                FROM information_schema.schemata"
-                    .into();
-                if !name.is_empty() {
-                    s = format!("{} WHERE SCHEMA_NAME = '{}'", s, name);
-                }
-                s
-            }
-
-            StructModel::TableModel {
-                database_name,
-                table_name,
-                ..
-            } => {
-                let mut s = format!(
-                    "SELECT t.TABLE_SCHEMA,
-                        t.TABLE_NAME, 
-                        t.ENGINE, 
-                        t.TABLE_COMMENT, 
-                        c.COLUMN_NAME, 
-                        c.ORDINAL_POSITION, 
-                        c.COLUMN_DEFAULT, 
-                        c.IS_NULLABLE, 
-                        c.COLUMN_TYPE, 
-                        c.COLUMN_KEY, 
-                        c.EXTRA, 
-                        c.COLUMN_COMMENT, 
-                        c.CHARACTER_SET_NAME, 
-                        c.COLLATION_NAME 
-                    FROM information_schema.tables t
-                    LEFT JOIN information_schema.columns c
-                    ON t.TABLE_SCHEMA = c.TABLE_SCHEMA AND t.TABLE_NAME = c.TABLE_NAME
-                    WHERE t.TABLE_SCHEMA ='{}'",
-                    database_name
-                );
-                if !table_name.is_empty() {
-                    s = format!("{} AND t.TABLE_NAME = '{}'", s, table_name);
-                }
-                format!(
-                    "{} ORDER BY t.TABLE_SCHEMA, t.TABLE_NAME, c.ORDINAL_POSITION",
-                    s
-                )
-            }
-
-            StructModel::IndexModel {
-                database_name,
-                table_name,
-                index_name,
-                ..
-            } => {
-                let mut s = format!(
-                    "SELECT TABLE_SCHEMA,
-                    TABLE_NAME,
-                    NON_UNIQUE,
-                    INDEX_NAME,
-                    SEQ_IN_INDEX,
-                    COLUMN_NAME,
-                    INDEX_TYPE,
-                    COMMENT
-                FROM information_schema.statistics
-                WHERE INDEX_NAME != '{}' AND TABLE_SCHEMA ='{}'",
-                    PRIMARY, database_name
-                );
-                if !table_name.is_empty() {
-                    s = format!("{} and TABLE_NAME = '{}' ", s, table_name);
-                }
-                if !index_name.is_empty() {
-                    s = format!("{} and INDEX_NAME = '{}' ", s, index_name);
-                }
-                format!(
-                    "{} ORDER BY TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX",
-                    s
-                )
-            }
-
-            StructModel::ConstraintModel {
-                database_name,
-                table_name,
-                constraint_name,
-                ..
-            } => {
-                let mut s = format!(
-                    "SELECT 
-                tc.CONSTRAINT_SCHEMA, 
-                tc.TABLE_NAME, 
-                tc.CONSTRAINT_NAME, 
-                tc.CONSTRAINT_TYPE,
-                cc.CHECK_CLAUSE 
-                FROM information_schema.table_constraints tc 
-                LEFT JOIN information_schema.check_constraints cc 
-                ON tc.CONSTRAINT_SCHEMA = cc.CONSTRAINT_SCHEMA AND tc.CONSTRAINT_NAME = cc.CONSTRAINT_NAME 
-                WHERE tc.CONSTRAINT_SCHEMA = '{}' and tc.CONSTRAINT_TYPE='{}' ",
-                    database_name, CHECK
-                );
-                if !table_name.is_empty() && !constraint_name.is_empty() {
-                    s = format!(
-                        "{} and tc.CONSTRAINT_NAME = '{}' and tc.TABLE_NAME = '{}' ",
-                        s, constraint_name, table_name
-                    );
-                }
-                s
-            }
-
-            _ => String::new(),
-        };
-
-        sql
-    }
-
-    fn build_index_kind(&self, non_unique: i32, index_name: &str) -> Result<IndexKind, Error> {
-        if index_name == PRIMARY && non_unique == 0 {
-            Ok(IndexKind::PrimaryKey)
-        } else if non_unique == 0 {
-            Ok(IndexKind::Unique)
-        } else {
-            Ok(IndexKind::Index)
-        }
     }
 
     fn get_str_with_null(row: &MySqlRow, col_name: &str) -> Result<String, Error> {
@@ -440,5 +339,68 @@ impl MysqlStructFetcher {
             str_val = s;
         }
         Ok(str_val)
+    }
+
+    fn filter_tb(&mut self, tb: &str) -> bool {
+        if let Some(filter) = &mut self.filter {
+            return filter.filter_tb(&self.db, &tb);
+        }
+        false
+    }
+
+    fn get_index_kind(&self, non_unique: i32, index_name: &str) -> Result<IndexKind, Error> {
+        if index_name == PRIMARY && non_unique == 0 {
+            Ok(IndexKind::PrimaryKey)
+        } else if non_unique == 0 {
+            Ok(IndexKind::Unique)
+        } else {
+            Ok(IndexKind::Index)
+        }
+    }
+
+    async fn unescape(&self, text: String) -> Result<String, Error> {
+        // use mysql's native select 'xx' to remove the escape characters stored in the string by mysql
+        if text.is_empty() {
+            return Ok(text);
+        }
+
+        let sql = format!("select '{}' as result", text);
+        match sqlx::query(&sql).fetch_all(&self.conn_pool).await {
+            Ok(rows) => {
+                if !rows.is_empty() {
+                    let result: String = rows.get(0).unwrap().get("result");
+                    return Ok(result);
+                }
+            }
+            Err(error) => {
+                return Err(Error::SqlxError(error));
+            }
+        }
+        Ok(text)
+    }
+
+    fn push_to_results<T>(
+        &mut self,
+        results: &mut HashMap<String, Vec<T>>,
+        table_name: &str,
+        item: T,
+    ) {
+        if self.filter_tb(&table_name) {
+            return;
+        }
+
+        if let Some(exists) = results.get_mut(table_name) {
+            exists.push(item);
+        } else {
+            results.insert(table_name.into(), vec![item]);
+        }
+    }
+
+    fn get_result<T>(&self, results: &mut HashMap<String, Vec<T>>, table_name: &str) -> Vec<T> {
+        if let Some(result) = results.remove(table_name) {
+            result
+        } else {
+            Vec::new()
+        }
     }
 }

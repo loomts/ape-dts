@@ -104,6 +104,23 @@ appenders:
         count: 10
         pattern: "CHECK_LOG_DIR_PLACEHODLER/diff{}.log"
 
+  extra_appender:
+    kind: rolling_file
+    append: true
+    path: "CHECK_LOG_DIR_PLACEHODLER/extra.log"
+    encoder:
+      pattern: "{m}{n}"
+    policy:
+      kind: compound
+      trigger:
+        kind: size
+        limit: 100mb
+      roller:
+        kind: fixed_window
+        base: 1
+        count: 10
+        pattern: "CHECK_LOG_DIR_PLACEHODLER/extra{}.log"
+
 loggers:
   default_logger:
     level: LOG_LEVEL_PLACEHODLER
@@ -134,6 +151,11 @@ loggers:
     level: LOG_LEVEL_PLACEHODLER
     appenders: 
       - diff_appender
+
+  extra_logger: 
+    level: LOG_LEVEL_PLACEHODLER
+    appenders: 
+      - extra_appender
 
 root:
   level: LOG_LEVEL_PLACEHODLER
