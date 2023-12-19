@@ -46,6 +46,7 @@ const RESUMER: &str = "resumer";
 const DATAMARKER_SECTION: &str = "datamarker";
 const BATCH_SIZE: &str = "batch_size";
 const SAMPLE_INTERVAL: &str = "sample_interval";
+const ASTRISK: &str = "*";
 
 impl TaskConfig {
     pub fn new(task_config_file: &str) -> Self {
@@ -397,6 +398,13 @@ impl TaskConfig {
             do_tbs: ini.get(FILTER, "do_tbs").unwrap(),
             ignore_tbs: ini.get(FILTER, "ignore_tbs").unwrap(),
             do_events: ini.get(FILTER, "do_events").unwrap(),
+            do_structures: Self::get_value_with_default(
+                ini,
+                FILTER,
+                "do_structures",
+                ASTRISK.to_string(),
+            )
+            .unwrap(),
         })
     }
 
@@ -405,8 +413,7 @@ impl TaskConfig {
             db_map: ini.get(ROUTER, "db_map").unwrap(),
             tb_map: ini.get(ROUTER, "tb_map").unwrap(),
             field_map: ini.get(ROUTER, "field_map").unwrap(),
-            topic_map: Self::get_value_with_default(ini, ROUTER, "topic_map", String::new())
-                .unwrap(),
+            topic_map: Self::get_value(ini, ROUTER, "topic_map").unwrap(),
         })
     }
 

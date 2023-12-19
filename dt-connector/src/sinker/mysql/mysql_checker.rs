@@ -14,7 +14,7 @@ use crate::{
     Sinker,
 };
 
-use dt_common::{error::Error, monitor::monitor::Monitor};
+use dt_common::{error::Error, monitor::monitor::Monitor, utils::rdb_filter::RdbFilter};
 
 use dt_meta::{
     ddl_data::DdlData, mysql::mysql_meta_manager::MysqlMetaManager,
@@ -30,6 +30,7 @@ pub struct MysqlChecker {
     pub router: RdbRouter,
     pub batch_size: usize,
     pub monitor: Arc<RwLock<Monitor>>,
+    pub filter: RdbFilter,
 }
 
 #[async_trait]
@@ -189,7 +190,8 @@ impl MysqlChecker {
                 _ => None,
             };
 
-            BaseChecker::compare_struct(&mut src_statement, &mut dst_statement).unwrap();
+            BaseChecker::compare_struct(&mut src_statement, &mut dst_statement, &self.filter)
+                .unwrap();
         }
         Ok(())
     }

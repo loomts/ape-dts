@@ -36,7 +36,7 @@ impl PgStructCheckFetcher {
         }
     }
 
-    async fn get_oid(&self, schema: &str, tb: &str) -> String {
+    pub async fn get_oid(&self, schema: &str, tb: &str) -> String {
         let sql = format!(
             r#"SELECT c.oid::int8,
                 n.nspname,
@@ -194,7 +194,7 @@ impl PgStructCheckFetcher {
     ) -> Vec<HashMap<String, String>> {
         let mut results = Vec::new();
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-        if let Some(row) = rows.try_next().await.unwrap() {
+        while let Some(row) = rows.try_next().await.unwrap() {
             let res = Self::parse_row(&row, col_names, col_types);
             results.push(res);
         }

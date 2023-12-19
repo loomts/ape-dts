@@ -1,3 +1,5 @@
+use dt_common::utils::rdb_filter::RdbFilter;
+
 use super::{
     mysql_create_database_statement::MysqlCreateDatabaseStatement,
     mysql_create_table_statement::MysqlCreateTableStatement,
@@ -22,12 +24,12 @@ pub enum StructStatement {
 }
 
 impl StructStatement {
-    pub fn to_sqls(&mut self) -> Vec<(String, String)> {
+    pub fn to_sqls(&mut self, filter: &RdbFilter) -> Vec<(String, String)> {
         match self {
-            Self::MysqlCreateDatabase { statement } => statement.to_sqls(),
-            Self::PgCreateDatabase { statement } => statement.to_sqls(),
-            Self::MysqlCreateTable { statement } => statement.to_sqls(),
-            Self::PgCreateTable { statement } => statement.to_sqls(),
+            Self::MysqlCreateDatabase { statement } => statement.to_sqls(filter),
+            Self::PgCreateDatabase { statement } => statement.to_sqls(filter),
+            Self::MysqlCreateTable { statement } => statement.to_sqls(filter),
+            Self::PgCreateTable { statement } => statement.to_sqls(filter),
         }
     }
 }

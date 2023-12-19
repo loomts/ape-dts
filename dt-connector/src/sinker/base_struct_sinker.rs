@@ -1,4 +1,6 @@
-use dt_common::{config::config_enums::ConflictPolicyEnum, error::Error, log_info};
+use dt_common::{
+    config::config_enums::ConflictPolicyEnum, error::Error, log_info, utils::rdb_filter::RdbFilter,
+};
 use dt_meta::ddl_data::DdlData;
 use sqlx::{query, MySql, Pool, Postgres};
 
@@ -14,10 +16,11 @@ impl BaseStructSinker {
         conn_pool: &DBConnPool,
         conflict_policy: &ConflictPolicyEnum,
         data: Vec<DdlData>,
+        filter: &RdbFilter,
     ) -> Result<(), Error> {
         for ddl_data in data {
             let mut statement = ddl_data.statement.unwrap();
-            for (_, sql) in statement.to_sqls().iter() {
+            for (_, sql) in statement.to_sqls(filter).iter() {
                 log_info!("ddl begin: {}", sql);
                 match Self::execute(conn_pool, sql).await {
                     Ok(()) => {

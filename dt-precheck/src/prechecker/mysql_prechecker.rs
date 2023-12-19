@@ -148,13 +148,7 @@ impl Prechecker for MySqlPrechecker {
 
         let (mut models, mut err_msgs): (Vec<DbTable>, Vec<String>) = (Vec::new(), Vec::new());
         match &self.filter_config {
-            FilterConfig::Rdb {
-                do_dbs,
-                ignore_dbs: _,
-                do_tbs,
-                ignore_tbs: _,
-                do_events: _,
-            } => {
+            FilterConfig::Rdb { do_dbs, do_tbs, .. } => {
                 if !do_tbs.is_empty() {
                     DbTable::from_str(do_tbs, &mut models)
                 } else if !do_dbs.is_empty() {
@@ -252,13 +246,7 @@ impl Prechecker for MySqlPrechecker {
 
         let mut models: Vec<DbTable> = Vec::new();
         match &self.filter_config {
-            FilterConfig::Rdb {
-                do_dbs,
-                ignore_dbs: _,
-                do_tbs,
-                ignore_tbs: _,
-                do_events: _,
-            } => {
+            FilterConfig::Rdb { do_dbs, do_tbs, .. } => {
                 if !do_tbs.is_empty() {
                     DbTable::from_str(do_tbs, &mut models)
                 } else if !do_dbs.is_empty() {

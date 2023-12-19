@@ -6,5 +6,6 @@ pub enum FilterConfig {
         do_tbs: String,
         ignore_tbs: String,
         do_events: String,
+        do_structures: String,
     },
 }

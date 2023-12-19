@@ -9,6 +9,7 @@ use dt_common::{
     },
     error::Error,
     monitor::monitor::Monitor,
+    utils::rdb_filter::RdbFilter,
 };
 use dt_connector::{
     rdb_router::RdbRouter,
@@ -65,10 +66,12 @@ impl SinkerUtil {
             } => {
                 // checker needs the reverse router
                 let router = RdbRouter::from_config(&task_config.router, &DbType::Mysql)?.reverse();
+                let filter = RdbFilter::from_config(&task_config.filter, DbType::Mysql)?;
                 let extractor_meta_manager = Self::get_extractor_meta_manager(&task_config).await?;
                 SinkerUtil::create_mysql_checker(
                     url,
                     &router,
+                    &filter,
                     extractor_meta_manager.unwrap(),
                     &task_config.runtime.log_level,
                     task_config.parallelizer.parallel_size,
@@ -94,10 +97,12 @@ impl SinkerUtil {
             } => {
                 // checker needs the reverse router
                 let router = RdbRouter::from_config(&task_config.router, &DbType::Pg)?.reverse();
+                let filter = RdbFilter::from_config(&task_config.filter, DbType::Pg)?;
                 let extractor_meta_manager = Self::get_extractor_meta_manager(&task_config).await?;
                 SinkerUtil::create_pg_checker(
                     url,
                     &router,
+                    &filter,
                     extractor_meta_manager.unwrap(),
                     &task_config.runtime.log_level,
                     task_config.parallelizer.parallel_size,
@@ -194,11 +199,13 @@ impl SinkerUtil {
                 url,
                 conflict_policy,
             } => {
+                let filter = RdbFilter::from_config(&task_config.filter, DbType::Mysql)?;
                 SinkerUtil::create_mysql_struct_sinker(
                     url,
                     &task_config.runtime.log_level,
                     task_config.parallelizer.parallel_size,
                     conflict_policy,
+                    &filter,
                 )
                 .await?
             }
@@ -207,11 +214,13 @@ impl SinkerUtil {
                 url,
                 conflict_policy,
             } => {
+                let filter = RdbFilter::from_config(&task_config.filter, DbType::Pg)?;
                 SinkerUtil::create_pg_struct_sinker(
                     url,
                     &task_config.runtime.log_level,
                     task_config.parallelizer.parallel_size,
                     conflict_policy,
+                    &filter,
                 )
                 .await?
             }
@@ -285,6 +294,7 @@ impl SinkerUtil {
     async fn create_mysql_checker<'a>(
         url: &str,
         router: &RdbRouter,
+        filter: &RdbFilter,
         extractor_meta_manager: RdbMetaManager,
         log_level: &str,
         parallel_size: usize,
@@ -303,6 +313,7 @@ impl SinkerUtil {
                 meta_manager: meta_manager.clone(),
                 extractor_meta_manager: extractor_meta_manager.clone(),
                 router: router.clone(),
+                filter: filter.clone(),
                 batch_size,
                 monitor: Arc::new(RwLock::new(Monitor::new_default())),
             };
@@ -340,6 +351,7 @@ impl SinkerUtil {
     async fn create_pg_checker<'a>(
         url: &str,
         router: &RdbRouter,
+        filter: &RdbFilter,
         extractor_meta_manager: RdbMetaManager,
         log_level: &str,
         parallel_size: usize,
@@ -357,6 +369,7 @@ impl SinkerUtil {
                 meta_manager: meta_manager.clone(),
                 extractor_meta_manager: extractor_meta_manager.clone(),
                 router: router.clone(),
+                filter: filter.clone(),
                 batch_size,
                 monitor: Arc::new(RwLock::new(Monitor::new_default())),
             };
@@ -500,6 +513,7 @@ impl SinkerUtil {
         log_level: &str,
         parallel_size: usize,
         conflict_policy: &ConflictPolicyEnum,
+        filter: &RdbFilter,
     ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool =
@@ -511,6 +525,7 @@ impl SinkerUtil {
             let sinker = MysqlStructSinker {
                 conn_pool: conn_pool.clone(),
                 conflict_policy: conflict_policy.clone(),
+                filter: filter.clone(),
             };
             sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
         }
@@ -522,6 +537,7 @@ impl SinkerUtil {
         log_level: &str,
         parallel_size: usize,
         conflict_policy: &ConflictPolicyEnum,
+        filter: &RdbFilter,
     ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool =
@@ -532,6 +548,7 @@ impl SinkerUtil {
             let sinker = PgStructSinker {
                 conn_pool: conn_pool.clone(),
                 conflict_policy: conflict_policy.clone(),
+                filter: filter.clone(),
             };
             sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
         }

@@ -10,7 +10,7 @@ use dt_meta::{
         },
         structure::{
             column::Column,
-            constraint::Constraint,
+            constraint::{Constraint, ConstraintType},
             database::Database,
             index::{Index, IndexColumn, IndexKind},
             table::Table,
@@ -324,7 +324,7 @@ impl MysqlStructFetcher {
                 schema_name: String::new(),
                 table_name: table_name.clone(),
                 constraint_name,
-                constraint_type: "check".into(),
+                constraint_type: ConstraintType::Check,
                 definition,
             };
             self.push_to_results(&mut results, &table_name, constraint);

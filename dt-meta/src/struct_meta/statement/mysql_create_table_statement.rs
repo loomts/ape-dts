@@ -1,9 +1,10 @@
-use dt_common::error::Error;
+use dt_common::{error::Error, utils::rdb_filter::RdbFilter};
 
 use crate::struct_meta::structure::{
     column::Column,
     constraint::Constraint,
     index::{Index, IndexKind},
+    structure_type::StructureType,
     table::Table,
 };
 
@@ -15,16 +16,31 @@ pub struct MysqlCreateTableStatement {
 }
 
 impl MysqlCreateTableStatement {
-    pub fn to_sqls(&mut self) -> Vec<(String, String)> {
+    pub fn to_sqls(&mut self, filter: &RdbFilter) -> Vec<(String, String)> {
         let mut sqls = Vec::new();
 
-        let key = format!(
-            "table.{}.{}",
-            self.table.database_name, self.table.table_name
-        );
-        sqls.push((key, Self::table_to_sql(&mut self.table)));
+        if !filter.filter_structure(StructureType::Table.into()) {
+            let key = format!(
+                "table.{}.{}",
+                self.table.database_name, self.table.table_name
+            );
+            sqls.push((key, Self::table_to_sql(&mut self.table)));
+        }
 
         for i in self.indexes.iter_mut() {
+            match i.index_kind {
+                IndexKind::PrimaryKey | IndexKind::Unique => {
+                    if filter.filter_structure(StructureType::Table.into()) {
+                        continue;
+                    }
+                }
+                _ => {
+                    if filter.filter_structure(StructureType::Index.into()) {
+                        continue;
+                    }
+                }
+            }
+
             let key = format!(
                 "index.{}.{}.{}",
                 i.database_name, i.table_name, i.index_name
@@ -32,12 +48,14 @@ impl MysqlCreateTableStatement {
             sqls.push((key, Self::index_to_sql(i)));
         }
 
-        for i in self.constraints.iter() {
-            let key = format!(
-                "constraint.{}.{}.{}",
-                i.database_name, i.table_name, i.constraint_name
-            );
-            sqls.push((key, Self::constraint_to_sql(i)));
+        if !filter.filter_structure(StructureType::Constraint.into()) {
+            for i in self.constraints.iter() {
+                let key = format!(
+                    "constraint.{}.{}.{}",
+                    i.database_name, i.table_name, i.constraint_name
+                );
+                sqls.push((key, Self::constraint_to_sql(i)));
+            }
         }
 
         sqls

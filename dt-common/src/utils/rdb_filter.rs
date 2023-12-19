@@ -20,6 +20,7 @@ pub struct RdbFilter {
     pub do_tbs: HashSet<(String, String)>,
     pub ignore_tbs: HashSet<(String, String)>,
     pub do_events: HashSet<String>,
+    pub do_structures: HashSet<String>,
     pub cache: HashMap<(String, String), bool>,
 
     pub transaction_worker: TransactionWorker,
@@ -36,6 +37,7 @@ impl RdbFilter {
                 do_tbs,
                 ignore_tbs,
                 do_events,
+                do_structures,
             } => Ok(Self {
                 db_type: db_type.clone(),
                 do_dbs: Self::parse_individual_tokens(do_dbs, &db_type)?,
@@ -43,6 +45,7 @@ impl RdbFilter {
                 do_tbs: Self::parse_pair_tokens(do_tbs, &db_type)?,
                 ignore_tbs: Self::parse_pair_tokens(ignore_tbs, &db_type)?,
                 do_events: Self::parse_individual_tokens(do_events, &db_type)?,
+                do_structures: Self::parse_individual_tokens(do_structures, &db_type)?,
                 cache: HashMap::new(),
 
                 transaction_worker: TransactionWorker::default(),
@@ -113,18 +116,22 @@ impl RdbFilter {
     }
 
     pub fn filter_event(&mut self, db: &str, tb: &str, row_type: &str) -> bool {
-        if !self.do_events.is_empty() && !self.do_events.contains(row_type) {
+        if !Self::match_all(&self.do_events) && !self.do_events.contains(row_type) {
             return true;
         }
         self.filter_transaction_tb(db, tb)
     }
 
     pub fn filter_ddl(&mut self) -> bool {
-        // filter ddl by default
-        if self.do_events.is_empty() {
-            return true;
-        }
-        !self.do_events.contains(DDL)
+        !Self::match_all(&self.do_events) && !self.do_events.contains(DDL)
+    }
+
+    pub fn filter_structure(&self, structure_type: &str) -> bool {
+        !Self::match_all(&self.do_structures) && !self.do_structures.contains(structure_type)
+    }
+
+    fn match_all(set: &HashSet<String>) -> bool {
+        return set.len() == 1 && set.contains("*");
     }
 
     fn contain_tb(
@@ -391,6 +398,7 @@ mod tests {
             do_tbs: "*.*".to_string(),
             ignore_tbs: "*.b*".to_string(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type).unwrap();
         assert!(rdb_fitler.filter_event("a", "bcd", "insert"));
@@ -408,6 +416,7 @@ mod tests {
             do_tbs: "*.*".to_string(),
             ignore_tbs: "*.`b*`,*.c*".to_string(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type).unwrap();
         assert!(rdb_fitler.filter_event("a", "b*", "insert"));
@@ -427,6 +436,7 @@ mod tests {
             do_tbs: "`db_test_position.aaa`.`b.bbb,.b`,`db_test_position.aaa`.c".to_string(),
             ignore_tbs: String::new(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type).unwrap();
         assert!(!rdb_fitler.filter_event("db_test_position.aaa", "b.bbb,.b", "insert"));
@@ -442,6 +452,7 @@ mod tests {
             do_tbs: "*.*".to_string(),
             ignore_tbs: String::new(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type).unwrap();
         assert!(rdb_fitler.filter_event("abc", "bcd", "insert"));
@@ -459,6 +470,7 @@ mod tests {
             do_tbs: "*.*".to_string(),
             ignore_tbs: String::new(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type).unwrap();
         assert!(!rdb_fitler.filter_event("abc", "bcd", "insert"));
@@ -476,6 +488,7 @@ mod tests {
             do_tbs: "aaaaaaa.*".to_string(),
             ignore_tbs: String::new(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type).unwrap();
         assert!(rdb_fitler.filter_event("a", "bcd", "insert"));
@@ -493,6 +506,7 @@ mod tests {
             do_tbs: "aaaaaaa.*".to_string(),
             ignore_tbs: String::new(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type).unwrap();
         assert!(rdb_fitler.filter_event("a", "bcd", "insert"));
@@ -515,6 +529,7 @@ mod tests {
             do_tbs: "a*.*".to_string(),
             ignore_tbs: String::new(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type).unwrap();
         assert!(rdb_fitler.filter_event("bcd", "bcd", "insert"));
@@ -532,6 +547,7 @@ mod tests {
             do_tbs: "a*.*,`c*`.`*`".to_string(),
             ignore_tbs: String::new(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type).unwrap();
         assert!(rdb_fitler.filter_event("bcd", "bcd", "insert"));
@@ -554,6 +570,7 @@ mod tests {
             do_tbs: String::new(),
             ignore_tbs: String::new(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
         assert!(!rdb_fitler.filter_db("test_db_1"));
@@ -565,6 +582,7 @@ mod tests {
             do_tbs: String::new(),
             ignore_tbs: String::new(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
         assert!(rdb_fitler.filter_db("test_db_1"));
@@ -576,6 +594,7 @@ mod tests {
             do_tbs: String::new(),
             ignore_tbs: String::new(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
         assert!(rdb_fitler.filter_db("test_db_1"));
@@ -587,6 +606,7 @@ mod tests {
             do_tbs: String::new(),
             ignore_tbs: "test_db_1.a*".to_string(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
         assert!(!rdb_fitler.filter_db("test_db_1"));
@@ -598,6 +618,7 @@ mod tests {
             do_tbs: String::new(),
             ignore_tbs: "test_db_1.*".to_string(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
         assert!(rdb_fitler.filter_db("test_db_1"));
@@ -609,6 +630,7 @@ mod tests {
             do_tbs: "test_db_1.one_pk_multi_uk".to_string(),
             ignore_tbs: "test_db_*.a*".to_string(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
         assert!(!rdb_fitler.filter_db("test_db_1"));
@@ -620,6 +642,7 @@ mod tests {
             do_tbs: "test_db_1.one_pk_multi_uk".to_string(),
             ignore_tbs: "test_db_*.*".to_string(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
         assert!(rdb_fitler.filter_db("test_db_1"));
@@ -631,6 +654,7 @@ mod tests {
             do_tbs: "test_db_1.one_pk_multi_uk".to_string(),
             ignore_tbs: String::new(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
         assert!(!rdb_fitler.filter_db("test_db_1"));
@@ -642,6 +666,7 @@ mod tests {
             do_tbs: "test_db_1.one_pk_multi_uk".to_string(),
             ignore_tbs: String::new(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
         assert!(rdb_fitler.filter_db("test_db_1"));
@@ -653,6 +678,7 @@ mod tests {
             do_tbs: "test_db_1.one_pk_multi_uk".to_string(),
             ignore_tbs: String::new(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
         assert!(rdb_fitler.filter_db("test_db_1"));
@@ -668,6 +694,7 @@ mod tests {
             do_tbs: String::new(),
             ignore_tbs: String::new(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
         assert!(!rdb_fitler.filter_db("test_db_*"));
@@ -679,6 +706,7 @@ mod tests {
             do_tbs: String::new(),
             ignore_tbs: String::new(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
         assert!(rdb_fitler.filter_db("test_db_*"));
@@ -690,6 +718,7 @@ mod tests {
             do_tbs: String::new(),
             ignore_tbs: String::new(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
         assert!(rdb_fitler.filter_db("test_db_*"));
@@ -701,6 +730,7 @@ mod tests {
             do_tbs: String::new(),
             ignore_tbs: "`test_db_*`.a*".to_string(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
         assert!(!rdb_fitler.filter_db("test_db_*"));
@@ -712,6 +742,7 @@ mod tests {
             do_tbs: String::new(),
             ignore_tbs: "`test_db_*`.*".to_string(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
         assert!(rdb_fitler.filter_db("test_db_*"));
@@ -723,6 +754,7 @@ mod tests {
             do_tbs: "`test_db_*`.one_pk_multi_uk".to_string(),
             ignore_tbs: "`test_db_*`.a*".to_string(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
         assert!(!rdb_fitler.filter_db("test_db_*"));
@@ -734,6 +766,7 @@ mod tests {
             do_tbs: "`test_db_*`.one_pk_multi_uk".to_string(),
             ignore_tbs: "`test_db_*`.*".to_string(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
         assert!(rdb_fitler.filter_db("test_db_*"));
@@ -745,6 +778,7 @@ mod tests {
             do_tbs: "`test_db_*`.one_pk_multi_uk".to_string(),
             ignore_tbs: String::new(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
         assert!(!rdb_fitler.filter_db("test_db_*"));
@@ -756,6 +790,7 @@ mod tests {
             do_tbs: "test_db_*.one_pk_multi_uk".to_string(),
             ignore_tbs: String::new(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
         assert!(rdb_fitler.filter_db("test_db_*"));
@@ -767,6 +802,7 @@ mod tests {
             do_tbs: "`test_db_*`.one_pk_multi_uk".to_string(),
             ignore_tbs: String::new(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
         assert!(rdb_fitler.filter_db("test_db_*"));
@@ -778,6 +814,7 @@ mod tests {
             do_tbs: String::new(),
             ignore_tbs: "test_db_*.test_tb_*".to_string(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
         assert!(rdb_fitler.filter_db("test_db_*"));
@@ -794,6 +831,7 @@ mod tests {
             do_tbs: String::new(),
             ignore_tbs: String::new(),
             do_events: String::new(),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
         assert!(!rdb_fitler.filter_event("test_db_1", "aaaa", "insert"));
@@ -807,6 +845,7 @@ mod tests {
             do_tbs: String::new(),
             ignore_tbs: String::new(),
             do_events: String::from("insert"),
+            do_structures: String::new(),
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
         assert!(!rdb_fitler.filter_event("test_db_1", "aaaa", "insert"));

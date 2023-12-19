@@ -1,6 +1,11 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use dt_common::{error::Error, utils::rdb_filter::RdbFilter};
+use dt_common::{
+    config::{config_enums::DbType, config_token_parser::ConfigTokenParser},
+    error::Error,
+    log_error, log_info,
+    utils::{rdb_filter::RdbFilter, sql_util::SqlUtil},
+};
 use dt_meta::struct_meta::{
     statement::{
         pg_create_schema_statement::PgCreateSchemaStatement,
@@ -9,7 +14,7 @@ use dt_meta::struct_meta::{
     structure::{
         column::Column,
         comment::{Comment, CommentType},
-        constraint::Constraint,
+        constraint::{Constraint, ConstraintType},
         database::Database,
         index::{Index, IndexKind},
         sequence::Sequence,
@@ -19,6 +24,8 @@ use dt_meta::struct_meta::{
 };
 use futures::TryStreamExt;
 use sqlx::{postgres::PgRow, Pool, Postgres, Row};
+
+use super::pg_struct_check_fetcher::PgStructCheckFetcher;
 
 pub struct PgStructFetcher {
     pub conn_pool: Pool<Postgres>,
@@ -54,9 +61,13 @@ impl PgStructFetcher {
         let mut table_comments = self.get_table_comments(tb).await.unwrap();
 
         for (table_name, table) in tables {
+            let table_sequences = self
+                .get_table_sequences(&table, &mut sequences)
+                .await
+                .unwrap();
             let statement = PgCreateTableStatement {
                 table,
-                sequences: self.get_result(&mut sequences, &table_name),
+                sequences: table_sequences,
                 sequence_owners: self.get_result(&mut sequence_owners, &table_name),
                 constraints: self.get_result(&mut constraints, &table_name),
                 indexes: self.get_result(&mut indexes, &table_name),
@@ -147,6 +158,94 @@ impl PgStructFetcher {
         }
 
         Ok(results)
+    }
+
+    async fn get_independent_sequences(
+        &mut self,
+        sequence_names: &Vec<String>,
+    ) -> Result<Vec<Sequence>, Error> {
+        let filter_names: Vec<String> = sequence_names.iter().map(|i| format!("'{}'", i)).collect();
+        let filter = format!("AND sequence_name IN ({})", filter_names.join(","));
+        let sql = format!(
+            "SELECT *
+            FROM information_schema.sequences
+            WHERE sequence_schema='{}' {}",
+            self.schema, filter
+        );
+
+        let mut results = Vec::new();
+        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+        while let Some(row) = rows.try_next().await.unwrap() {
+            let sequence = Sequence {
+                sequence_name: Self::get_str_with_null(&row, "sequence_name").unwrap(),
+                database_name: Self::get_str_with_null(&row, "sequence_catalog").unwrap(),
+                schema_name: Self::get_str_with_null(&row, "sequence_schema").unwrap(),
+                data_type: Self::get_str_with_null(&row, "data_type").unwrap(),
+                start_value: row.get("start_value"),
+                increment: row.get("increment"),
+                min_value: row.get("minimum_value"),
+                max_value: row.get("maximum_value"),
+                is_circle: Self::get_str_with_null(&row, "cycle_option").unwrap(),
+            };
+            results.push(sequence)
+        }
+
+        Ok(results)
+    }
+
+    async fn get_table_sequences(
+        &mut self,
+        table: &Table,
+        sequences: &mut HashMap<String, Vec<Sequence>>,
+    ) -> Result<Vec<Sequence>, Error> {
+        let mut table_sequences = self.get_result(sequences, &table.table_name);
+
+        let mut owned_sequence_names = HashSet::new();
+        for sequence in table_sequences.iter() {
+            owned_sequence_names.insert(sequence.sequence_name.clone());
+        }
+
+        let mut independent_squence_names = Vec::new();
+        for column in table.columns.iter() {
+            if let Some(default_value) = &column.default_value {
+                let (schema, sequence_name) =
+                    Self::get_sequence_name_by_default_value(&default_value);
+                // sequence and table should be in the same schema, otherwise we don't support
+                if schema != self.schema {
+                    log_error!(
+                        "table: {}.{} is using sequence: {}.{} from a different schema",
+                        table.schema_name,
+                        table.table_name,
+                        schema,
+                        sequence_name
+                    );
+                    continue;
+                }
+
+                if owned_sequence_names.contains(&sequence_name) {
+                    continue;
+                }
+
+                log_info!(
+                    "table: {}.{} is using independent sequence: {}.{}",
+                    table.schema_name,
+                    table.table_name,
+                    schema,
+                    sequence_name
+                );
+                independent_squence_names.push(sequence_name);
+            }
+        }
+
+        if !independent_squence_names.is_empty() {
+            let independent_squences = self
+                .get_independent_sequences(&independent_squence_names)
+                .await
+                .unwrap();
+            table_sequences.extend_from_slice(&independent_squences);
+        }
+
+        Ok(table_sequences)
     }
 
     async fn get_sequence_owners(
@@ -243,24 +342,17 @@ impl PgStructFetcher {
             }
 
             let order: i32 = row.try_get("ordinal_position").unwrap();
+            let is_identity = row.get("is_identity");
+            let identity_generation = row.get("identity_generation");
+            let generated = Self::get_col_generated_rule(is_identity, identity_generation);
+
             let column = Column {
                 column_name: Self::get_str_with_null(&row, "column_name").unwrap(),
                 order_position: order as u32,
                 default_value: row.get("column_default"),
                 is_nullable: Self::get_str_with_null(&row, "is_nullable").unwrap(),
-                column_type: Self::get_col_data_type(
-                    Self::get_str_with_null(&row, "udt_name").unwrap(),
-                    Self::get_str_with_null(&row, "data_type").unwrap(),
-                    table_schema.clone(),
-                    row.get("character_maximum_length"),
-                    row.get("numeric_precision"),
-                    row.get("numeric_scale"),
-                )
-                .unwrap(),
-                generated: Self::get_col_generated_rule(
-                    row.get("is_identity"),
-                    row.get("identity_generation"),
-                ),
+                column_type: String::new(),
+                generated,
                 column_key: String::new(),
                 extra: String::new(),
                 column_comment: String::new(),
@@ -276,13 +368,46 @@ impl PgStructFetcher {
                     Table {
                         database_name: table_schema.clone(),
                         schema_name: table_schema,
-                        table_name,
+                        table_name: table_name.clone(),
                         engine_name: String::new(),
                         table_comment: String::new(),
                         columns: vec![column],
                     },
                 );
             }
+        }
+
+        // get column types
+        for (table_name, table) in results.iter_mut() {
+            let column_types = self.get_column_types(table_name).await.unwrap();
+            for column in table.columns.iter_mut() {
+                column.column_type = column_types.get(&column.column_name).unwrap().to_owned();
+            }
+        }
+
+        Ok(results)
+    }
+
+    async fn get_column_types(&mut self, tb: &str) -> Result<HashMap<String, String>, Error> {
+        let fetcher = PgStructCheckFetcher {
+            conn_pool: self.conn_pool.clone(),
+        };
+
+        let oid = fetcher.get_oid(&self.schema, tb).await;
+        let sql = format!(
+            "SELECT a.attname AS column_name, 
+                pg_catalog.format_type(a.atttypid, a.atttypmod) AS column_type
+            FROM pg_catalog.pg_attribute a
+            WHERE a.attrelid = '{}' AND a.attnum > 0;",
+            oid
+        );
+
+        let mut results = HashMap::new();
+        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+        while let Some(row) = rows.try_next().await.unwrap() {
+            let column_name: String = Self::get_str_with_null(&row, "column_name").unwrap();
+            let column_type: String = Self::get_str_with_null(&row, "column_type").unwrap();
+            results.insert(column_name, column_type);
         }
 
         Ok(results)
@@ -311,26 +436,23 @@ impl PgStructFetcher {
                 ON rel.oid = con.conrelid
             JOIN pg_catalog.pg_namespace nsp
                 ON nsp.oid = connamespace
-            WHERE nsp.nspname ='{}' {}
+            WHERE nsp.nspname ='{}' {} 
             ORDER BY nsp.nspname,rel.relname",
             &self.schema, tb_filter
         );
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
-            let (schema_name, table_name, constraint_name) = (
-                Self::get_str_with_null(&row, "nspname").unwrap(),
-                Self::get_str_with_null(&row, "relname").unwrap(),
-                Self::get_str_with_null(&row, "constraint_name").unwrap(),
-            );
+            let table_name = Self::get_str_with_null(&row, "relname").unwrap();
+            let constraint_type =
+                Self::get_with_null(&row, "constraint_type", ColType::Char).unwrap();
 
             let constraint = Constraint {
                 database_name: String::new(),
-                schema_name,
+                schema_name: Self::get_str_with_null(&row, "nspname").unwrap(),
                 table_name: table_name.clone(),
-                constraint_name,
-                constraint_type: Self::get_with_null(&row, "constraint_type", ColType::Char)
-                    .unwrap(),
+                constraint_name: Self::get_str_with_null(&row, "constraint_name").unwrap(),
+                constraint_type: ConstraintType::from_str(&constraint_type, DbType::Pg),
                 definition: Self::get_str_with_null(&row, "constraint_definition").unwrap(),
             };
             self.push_to_results(&mut results, &table_name, constraint);
@@ -360,22 +482,19 @@ impl PgStructFetcher {
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
-            let (schema_name, table_name, index_name) = (
-                Self::get_str_with_null(&row, "schemaname").unwrap(),
-                Self::get_str_with_null(&row, "tablename").unwrap(),
-                Self::get_str_with_null(&row, "indexname").unwrap(),
-            );
+            let table_name = Self::get_str_with_null(&row, "tablename").unwrap();
+            let definition = Self::get_str_with_null(&row, "indexdef").unwrap();
 
             let index = Index {
                 database_name: String::new(),
-                schema_name,
+                schema_name: Self::get_str_with_null(&row, "schemaname").unwrap(),
                 table_name: table_name.clone(),
-                index_name,
-                index_kind: IndexKind::Index,
+                index_name: Self::get_str_with_null(&row, "indexname").unwrap(),
+                index_kind: self.get_index_kind(&definition),
                 index_type: String::new(),
                 comment: String::new(),
                 tablespace: Self::get_str_with_null(&row, "tablespace").unwrap(),
-                definition: Self::get_str_with_null(&row, "indexdef").unwrap(),
+                definition,
                 columns: Vec::new(),
             };
             self.push_to_results(&mut results, &table_name, index);
@@ -483,6 +602,14 @@ impl PgStructFetcher {
         Ok(results)
     }
 
+    fn get_index_kind(&self, definition: &str) -> IndexKind {
+        if definition.starts_with("CREATE UNIQUE INDEX") {
+            IndexKind::Unique
+        } else {
+            IndexKind::Index
+        }
+    }
+
     fn get_str_with_null(row: &PgRow, col_name: &str) -> Result<String, Error> {
         Self::get_with_null(row, col_name, ColType::Text)
     }
@@ -504,47 +631,6 @@ impl PgStructFetcher {
         Ok(str_val)
     }
 
-    fn get_col_data_type(
-        udt_name: String,
-        data_type: String,
-        schema_name: String,
-        char_max_length: Option<i32>,
-        num_percision: Option<i32>,
-        num_scale: Option<i32>,
-    ) -> Option<String> {
-        let mut result_type = String::new();
-        let type_vec = vec![
-            "geometry",
-            "box2d",
-            "box2df",
-            "box3d",
-            "geography",
-            "geometry_dump",
-            "gidx",
-            "spheroid",
-            "valid_detail",
-            "_text",
-        ];
-        if type_vec.contains(&udt_name.as_str()) {
-            result_type.push_str(udt_name.as_str());
-        } else if data_type == "USER-DEFINED" {
-            result_type.push_str(format!("{}.{}", schema_name, udt_name).as_str());
-        } else {
-            result_type.push_str(data_type.as_str());
-        }
-        if char_max_length.is_some() {
-            result_type.push_str(format!("({})", char_max_length.unwrap()).as_str());
-        } else if num_percision.is_some()
-            && num_percision.unwrap() > 0
-            && num_scale.is_some()
-            && num_scale.unwrap() > 0
-        {
-            result_type
-                .push_str(format!("({},{})", num_percision.unwrap(), num_scale.unwrap()).as_str())
-        }
-        Some(result_type)
-    }
-
     fn get_col_generated_rule(
         is_identity: Option<String>,
         identity_generation: Option<String>,
@@ -555,6 +641,48 @@ impl PgStructFetcher {
             }
         }
         None
+    }
+
+    fn get_sequence_name_by_default_value(default_value: &str) -> (String, String) {
+        // SELECT table_schema,
+        //     table_name,
+        //     column_name,
+        //     column_default
+        // FROM information_schema.columns
+        // WHERE table_schema ='public' and table_name='sequence_test_4';
+
+        // case 1: when search_path is the same with sequence schema, column_default be like:
+        // nextval('"aaaaaaadefdfd.dsds::er3\ddd"'::regclass)
+
+        // case 2: when search_path is not the same with sequence schema, column_default be like:
+        // nextval('public."aaaaaaadefdfd.dsds::er3\ddd"'::regclass)
+        // nextval('"ddddd.ddddddds**"."aaaaaaadefdfd.dsds::er3\ddd"'::regclass)
+
+        let mut value = default_value.trim();
+        if !value.starts_with("nextval(") {
+            return (String::new(), String::new());
+        }
+
+        value = value
+            .trim_start_matches("nextval(")
+            .trim_start_matches("'")
+            .trim_end_matches(")")
+            // ::regclass may not exists
+            .trim_end_matches("::regclass")
+            .trim_end_matches("'");
+
+        let escape_pair = SqlUtil::get_escape_pairs(&DbType::Pg)[0];
+        if let Ok(tokens) = ConfigTokenParser::parse_config(value, &DbType::Pg, &['.']) {
+            if tokens.len() == 1 {
+                return (String::new(), SqlUtil::unescape(&tokens[0], &escape_pair));
+            } else if tokens.len() == 2 {
+                return (
+                    SqlUtil::unescape(&tokens[0], &escape_pair),
+                    SqlUtil::unescape(&tokens[1], &escape_pair),
+                );
+            }
+        }
+        (String::new(), String::new())
     }
 
     fn filter_tb(&mut self, tb: &str) -> bool {
@@ -586,6 +714,44 @@ impl PgStructFetcher {
             result
         } else {
             Vec::new()
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::meta_fetcher::pg::pg_struct_fetcher::PgStructFetcher;
+
+    #[test]
+    fn get_sequence_name_by_default_value_test() {
+        let default_values = vec![
+            r#"('"aaaaaaadefdfd.dsds::er3\ddd"'::regclass)"#,
+            r#"nextval('aaaaaaaaaa'::regclass)"#,
+            r#"nextval('public.aaaaaaaaaa'::regclass)"#,
+            r#"nextval('"aaaaaaadefdfd.dsds::er3\ddd"'::regclass)"#,
+            r#"nextval('public."aaaaaaadefdfd.dsds::er3\ddd"'::regclass)"#,
+            r#"nextval('"ddddd.ddddddds**"."aaaaaaadefdfd.dsds::er3\ddd"'::regclass)"#,
+            r#"nextval('"aaaaaaadefdfd.dsds::er3\ddd"')"#,
+            r#"nextval('public."aaaaaaadefdfd.dsds::er3\ddd"')"#,
+            r#"nextval('"ddddd.ddddddds**"."aaaaaaadefdfd.dsds::er3\ddd"')"#,
+        ];
+
+        let expect_sequences = vec![
+            ("", ""),
+            ("", "aaaaaaaaaa"),
+            ("public", "aaaaaaaaaa"),
+            ("", r#"aaaaaaadefdfd.dsds::er3\ddd"#),
+            ("public", r#"aaaaaaadefdfd.dsds::er3\ddd"#),
+            ("ddddd.ddddddds**", r#"aaaaaaadefdfd.dsds::er3\ddd"#),
+            ("", r#"aaaaaaadefdfd.dsds::er3\ddd"#),
+            ("public", r#"aaaaaaadefdfd.dsds::er3\ddd"#),
+            ("ddddd.ddddddds**", r#"aaaaaaadefdfd.dsds::er3\ddd"#),
+        ];
+
+        for i in 0..default_values.len() {
+            let (schema, sequence) =
+                PgStructFetcher::get_sequence_name_by_default_value(default_values[i]);
+            assert_eq!((schema.as_str(), sequence.as_str()), expect_sequences[i]);
         }
     }
 }
