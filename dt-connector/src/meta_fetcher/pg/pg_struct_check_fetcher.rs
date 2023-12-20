@@ -27,7 +27,9 @@ impl PgStructCheckFetcher {
         let summary = self.get_table_summary(&oid).await;
         let columns = self.get_table_columns(&oid).await;
         let indexes = self.get_table_indexes(&oid).await;
-        let constraints = self.get_table_constraints(&oid).await;
+        let mut constraints = self.get_table_check_constraints(&oid).await;
+        let foreign_key_constraints = self.get_table_foreign_key_constraints(&oid).await;
+        constraints.extend_from_slice(&foreign_key_constraints);
         PgCheckTableInfo {
             summary,
             columns,
@@ -172,7 +174,7 @@ impl PgStructCheckFetcher {
         self.execute_sql(&sql, &col_names, &col_types).await
     }
 
-    async fn get_table_constraints(&self, oid: &str) -> Vec<HashMap<String, String>> {
+    async fn get_table_check_constraints(&self, oid: &str) -> Vec<HashMap<String, String>> {
         let sql = format!(
             r#"SELECT r.conname, pg_catalog.pg_get_constraintdef(r.oid, true)
             FROM pg_catalog.pg_constraint r
@@ -181,6 +183,23 @@ impl PgStructCheckFetcher {
             oid
         );
         let col_names = ["conname", "pg_get_constraintdef"];
+        let col_types = HashMap::new();
+
+        self.execute_sql(&sql, &col_names, &col_types).await
+    }
+
+    async fn get_table_foreign_key_constraints(&self, oid: &str) -> Vec<HashMap<String, String>> {
+        let sql = format!(
+            r#"SELECT conname, conrelid::pg_catalog.regclass::text AS ontable,
+            pg_catalog.pg_get_constraintdef(oid, true) AS condef
+            FROM pg_catalog.pg_constraint c
+            WHERE confrelid IN (SELECT pg_catalog.pg_partition_ancestors('{}')
+                                UNION ALL VALUES ('{}'::pg_catalog.regclass))
+                    AND contype = 'f' AND conparentid = 0
+            ORDER BY conname;"#,
+            oid, oid
+        );
+        let col_names = ["conname", "ontable", "condef"];
         let col_types = HashMap::new();
 
         self.execute_sql(&sql, &col_names, &col_types).await
