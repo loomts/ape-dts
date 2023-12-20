@@ -4,7 +4,9 @@ use crate::{
     Sinker,
 };
 
-use dt_common::{config::config_enums::ConflictPolicyEnum, error::Error};
+use dt_common::{
+    config::config_enums::ConflictPolicyEnum, error::Error, utils::rdb_filter::RdbFilter,
+};
 
 use dt_meta::ddl_data::DdlData;
 
@@ -16,6 +18,7 @@ use async_trait::async_trait;
 pub struct MysqlStructSinker {
     pub conn_pool: Pool<MySql>,
     pub conflict_policy: ConflictPolicyEnum,
+    pub filter: RdbFilter,
 }
 
 #[async_trait]
@@ -25,6 +28,7 @@ impl Sinker for MysqlStructSinker {
             &DBConnPool::MySQL(self.conn_pool.clone()),
             &self.conflict_policy,
             data,
+            &self.filter,
         )
         .await
     }

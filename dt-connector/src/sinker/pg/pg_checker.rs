@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use async_rwlock::RwLock;
 use async_trait::async_trait;
-use dt_common::{error::Error, monitor::monitor::Monitor};
+use dt_common::{error::Error, monitor::monitor::Monitor, utils::rdb_filter::RdbFilter};
 use dt_meta::{
     ddl_data::DdlData, pg::pg_meta_manager::PgMetaManager, rdb_meta_manager::RdbMetaManager,
     row_data::RowData, struct_meta::statement::struct_statement::StructStatement,
@@ -27,6 +27,7 @@ pub struct PgChecker {
     pub router: RdbRouter,
     pub batch_size: usize,
     pub monitor: Arc<RwLock<Monitor>>,
+    pub filter: RdbFilter,
 }
 
 #[async_trait]
@@ -181,7 +182,8 @@ impl PgChecker {
                 _ => None,
             };
 
-            BaseChecker::compare_struct(&mut src_statement, &mut dst_statement).unwrap();
+            BaseChecker::compare_struct(&mut src_statement, &mut dst_statement, &self.filter)
+                .unwrap();
         }
         Ok(())
     }

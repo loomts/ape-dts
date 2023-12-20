@@ -1,6 +1,14 @@
+use dt_common::utils::rdb_filter::RdbFilter;
+
 use crate::struct_meta::structure::{
-    column::Column, comment::Comment, constraint::Constraint, index::Index, sequence::Sequence,
-    sequence_owner::SequenceOwner, table::Table,
+    column::Column,
+    comment::Comment,
+    constraint::{Constraint, ConstraintType},
+    index::{Index, IndexKind},
+    sequence::Sequence,
+    sequence_owner::SequenceOwner,
+    structure_type::StructureType,
+    table::Table,
 };
 
 #[derive(Debug, Clone)]
@@ -15,26 +23,54 @@ pub struct PgCreateTableStatement {
 }
 
 impl PgCreateTableStatement {
-    pub fn to_sqls(&mut self) -> Vec<(String, String)> {
+    pub fn to_sqls(&mut self, filter: &RdbFilter) -> Vec<(String, String)> {
         let mut sqls = Vec::new();
 
-        for i in self.sequences.iter() {
-            let key = format!("sequence.{}.{}", i.schema_name, i.sequence_name);
-            sqls.push((key, Self::sequence_to_sql(i)));
-        }
+        if !filter.filter_structure(StructureType::Table.into()) {
+            for i in self.sequences.iter() {
+                let key = format!("sequence.{}.{}", i.schema_name, i.sequence_name);
+                sqls.push((key, Self::sequence_to_sql(i)));
+            }
 
-        let key = format!("table.{}.{}", self.table.schema_name, self.table.table_name);
-        sqls.push((key, Self::table_to_sql(&mut self.table)));
+            let key = format!("table.{}.{}", self.table.schema_name, self.table.table_name);
+            sqls.push((key, Self::table_to_sql(&mut self.table)));
 
-        for i in self.sequence_owners.iter() {
-            let key = format!(
-                "sequence_owner.{}.{}.{}",
-                i.schema_name, i.owner_table_name, i.sequence_name
-            );
-            sqls.push((key, Self::sequence_owner_to_sql(i)));
+            for i in self.sequence_owners.iter() {
+                let key = format!(
+                    "sequence_owner.{}.{}.{}",
+                    i.schema_name, i.owner_table_name, i.sequence_name
+                );
+                sqls.push((key, Self::sequence_owner_to_sql(i)));
+            }
+
+            for i in self.column_comments.iter() {
+                let key = format!(
+                    "column_comment.{}.{}.{}",
+                    i.schema_name, i.table_name, i.column_name
+                );
+                sqls.push((key, Self::comment_to_sql(i)));
+            }
+
+            for i in self.table_comments.iter() {
+                let key = format!("table_comment.{}.{}", i.schema_name, i.table_name);
+                sqls.push((key, Self::comment_to_sql(i)));
+            }
         }
 
         for i in self.constraints.iter() {
+            match i.constraint_type {
+                ConstraintType::Primary | ConstraintType::Unique => {
+                    if filter.filter_structure(StructureType::Table.into()) {
+                        continue;
+                    }
+                }
+                _ => {
+                    if filter.filter_structure(StructureType::Constraint.into()) {
+                        continue;
+                    }
+                }
+            }
+
             let key = format!(
                 "constraint.{}.{}.{}",
                 i.schema_name, i.table_name, i.constraint_name
@@ -43,21 +79,21 @@ impl PgCreateTableStatement {
         }
 
         for i in self.indexes.iter() {
+            match i.index_kind {
+                IndexKind::PrimaryKey | IndexKind::Unique => {
+                    if filter.filter_structure(StructureType::Table.into()) {
+                        continue;
+                    }
+                }
+                _ => {
+                    if filter.filter_structure(StructureType::Index.into()) {
+                        continue;
+                    }
+                }
+            }
+
             let key = format!("index.{}.{}.{}", i.schema_name, i.table_name, i.index_name);
             sqls.push((key, Self::index_to_sql(i)));
-        }
-
-        for i in self.column_comments.iter() {
-            let key = format!(
-                "column_comment.{}.{}.{}",
-                i.schema_name, i.table_name, i.column_name
-            );
-            sqls.push((key, Self::comment_to_sql(i)));
-        }
-
-        for i in self.table_comments.iter() {
-            let key = format!("table_comment.{}.{}", i.schema_name, i.table_name);
-            sqls.push((key, Self::comment_to_sql(i)));
         }
 
         sqls
@@ -66,7 +102,7 @@ impl PgCreateTableStatement {
     fn table_to_sql(table: &mut Table) -> String {
         let columns_sql = Self::columns_to_sql(&mut table.columns);
         format!(
-            r#"CREATE TABLE "{}"."{}" ({})"#,
+            r#"CREATE TABLE IF NOT EXISTS "{}"."{}" ({})"#,
             table.schema_name, table.table_name, columns_sql
         )
     }
@@ -137,7 +173,7 @@ impl PgCreateTableStatement {
         };
 
         format!(
-            r#"CREATE SEQUENCE "{}"."{}" AS {} START {} INCREMENT by {} MINVALUE {} MAXVALUE {} {}"#,
+            r#"CREATE SEQUENCE IF NOT EXISTS "{}"."{}" AS {} START {} INCREMENT by {} MINVALUE {} MAXVALUE {} {}"#,
             sequence.schema_name,
             sequence.sequence_name,
             sequence.data_type,

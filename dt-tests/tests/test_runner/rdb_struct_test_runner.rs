@@ -50,15 +50,23 @@ impl RdbStructTestRunner {
             let key = format!("{}.{}", &dst_db_tbs[i].0, &dst_db_tbs[i].1);
             let expect_ddl_sql = expect_ddl_sqls.get(&key).unwrap().to_owned();
 
-            println!("src_ddl_sql: {}", src_ddl_sql);
-            println!("dst_ddl_sql: {}", dst_ddl_sql);
-            println!("expect_ddl_sql: {}", expect_ddl_sql);
+            println!("src_ddl_sql: {}\n", src_ddl_sql);
+            println!("dst_ddl_sql: {}\n", dst_ddl_sql);
+            println!("expect_ddl_sql: {}\n", expect_ddl_sql);
             // show create table may return sqls with indexes in different orders during tests,
             // so here we just compare all lines of the sqls.
             let dst_ddl_sql_lines = get_sql_lines(&dst_ddl_sql);
             let expect_ddl_sql_lines = get_sql_lines(&expect_ddl_sql);
-            println!("dst_ddl_sql_lines: {:?}", dst_ddl_sql_lines);
-            println!("expect_ddl_sql_lines: {:?}", expect_ddl_sql_lines);
+
+            println!("dst_ddl_sql_lines:");
+            for line in dst_ddl_sql_lines.iter() {
+                println!("{}", line);
+            }
+            println!("\nexpect_ddl_sql_lines:");
+            for line in expect_ddl_sql_lines.iter() {
+                println!("{}", line);
+            }
+
             assert_eq!(dst_ddl_sql_lines, expect_ddl_sql_lines);
         }
         Ok(())
@@ -83,11 +91,23 @@ impl RdbStructTestRunner {
             let dst_table = dst_check_fetcher
                 .fetch_table(&dst_db_tbs[i].0, &dst_db_tbs[i].1)
                 .await;
-            println!("src_table: {:?}", src_table);
-            println!("dst_table: {:?}", dst_table);
+
+            println!(
+                "comparing src table: {:?} with dst table: {:?}\n",
+                src_db_tbs[i], dst_db_tbs[i]
+            );
+            println!("src_table: {:?}\n", src_table);
+            println!("dst_table: {:?}\n", dst_table);
             assert_eq!(src_table, dst_table);
         }
+
+        println!("summary: dst tables: {:?}", src_db_tbs);
         Ok(())
+    }
+
+    pub async fn run_struct_test_without_check(&mut self) -> Result<(), Error> {
+        self.base.execute_test_ddl_sqls().await?;
+        self.base.base.start_task().await
     }
 
     fn load_expect_ddl_sqls(&self) -> HashMap<String, String> {

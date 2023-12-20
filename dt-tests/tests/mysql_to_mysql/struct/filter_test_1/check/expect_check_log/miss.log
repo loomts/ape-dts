@@ -1,0 +1,5 @@
+key: constraint.struct_it_mysql2mysql_1.constraint_table.chk_email, src_sql: ALTER TABLE `struct_it_mysql2mysql_1`.`constraint_table` ADD CONSTRAINT `chk_email` CHECK (`email` like _utf8mb4'%@%.%') 
+key: constraint.struct_it_mysql2mysql_1.constraint_table.chk_age, src_sql: ALTER TABLE `struct_it_mysql2mysql_1`.`constraint_table` ADD CONSTRAINT `chk_age` CHECK (`age` >= 18) 
+key: index.struct_it_mysql2mysql_1.full_index_type.composite_index, src_sql: CREATE  INDEX `composite_index` USING BTREE ON `struct_it_mysql2mysql_1`.`full_index_type` (`composite_index_col1`,`composite_index_col2`,`composite_index_col3`) 
+key: index.struct_it_mysql2mysql_1.full_index_type.index_index, src_sql: CREATE  INDEX `index_index` USING BTREE ON `struct_it_mysql2mysql_1`.`full_index_type` (`index_col`) 
+key: index.struct_it_mysql2mysql_1.full_index_type.simple_index, src_sql: CREATE  INDEX `simple_index` USING BTREE ON `struct_it_mysql2mysql_1`.`full_index_type` (`simple_index_col`) 

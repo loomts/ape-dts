@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use dt_common::{error::Error, log_diff, log_extra, log_miss};
+use dt_common::{error::Error, log_diff, log_extra, log_miss, utils::rdb_filter::RdbFilter};
 use dt_meta::{
     rdb_meta_manager::RdbMetaManager, rdb_tb_meta::RdbTbMeta, row_data::RowData,
     struct_meta::statement::struct_statement::StructStatement,
@@ -103,19 +103,20 @@ impl BaseChecker {
     pub fn compare_struct(
         src_statement: &mut StructStatement,
         dst_statement: &mut Option<StructStatement>,
+        filter: &RdbFilter,
     ) -> Result<(), Error> {
         if dst_statement.is_none() {
-            log_miss!("{:?}", src_statement.to_sqls());
+            log_miss!("{:?}", src_statement.to_sqls(filter));
             return Ok(());
         }
 
         let mut src_sqls = HashMap::new();
-        for (key, sql) in src_statement.to_sqls() {
+        for (key, sql) in src_statement.to_sqls(filter) {
             src_sqls.insert(key, sql);
         }
 
         let mut dst_sqls = HashMap::new();
-        for (key, sql) in dst_statement.as_mut().unwrap().to_sqls() {
+        for (key, sql) in dst_statement.as_mut().unwrap().to_sqls(filter) {
             dst_sqls.insert(key, sql);
         }
 
