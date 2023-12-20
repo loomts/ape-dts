@@ -28,4 +28,10 @@ mod test {
     async fn struct_filter_test_2() {
         TestBase::run_pg_struct_test("pg_to_pg/struct/filter_test_2").await;
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn struct_postgis_test() {
+        TestBase::run_pg_struct_test("pg_to_pg/struct/postgis_test").await;
+    }
 }

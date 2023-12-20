@@ -13,3 +13,7 @@ COMMENT ON TABLE struct_it_pg2pg_1.full_index_type IS 'Comment on full_index_typ
 
 -- column comments:
 COMMENT ON COLUMN struct_it_pg2pg_1.full_index_type.id IS 'Comment on full_index_type.id.';
+
+-- foreign key constraints:
+CREATE TABLE struct_it_pg2pg_1.foreign_key_parent (pk SERIAL, parent_col_1 INTEGER UNIQUE, parent_col_2 INTEGER UNIQUE, PRIMARY KEY(pk));
+CREATE TABLE struct_it_pg2pg_1.foreign_key_child (pk SERIAL, child_col_1 INTEGER UNIQUE, child_col_2 INTEGER UNIQUE, PRIMARY KEY(pk));

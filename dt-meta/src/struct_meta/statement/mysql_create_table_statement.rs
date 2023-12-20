@@ -1,4 +1,4 @@
-use dt_common::{error::Error, utils::rdb_filter::RdbFilter};
+use dt_common::{config::config_enums::DbType, error::Error, utils::rdb_filter::RdbFilter};
 
 use crate::struct_meta::structure::{
     column::Column,
@@ -188,10 +188,11 @@ impl MysqlCreateTableStatement {
     fn constraint_to_sql(constraint: &Constraint) -> String {
         // TODO, check for escapes
         format!(
-            "ALTER TABLE `{}`.`{}` ADD CONSTRAINT `{}` CHECK {} ",
+            "ALTER TABLE `{}`.`{}` ADD CONSTRAINT `{}` {} {} ",
             constraint.database_name,
             constraint.table_name,
             constraint.constraint_name,
+            constraint.constraint_type.to_str(DbType::Mysql),
             constraint.definition
         )
     }
