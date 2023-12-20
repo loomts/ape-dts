@@ -8,3 +8,7 @@ CREATE UNIQUE INDEX unique_index ON struct_it_mysql2mysql_1.full_index_type (uni
 
 -- create table without constraints
 CREATE TABLE struct_it_mysql2mysql_1.`constraint_table` (`id` int NOT NULL AUTO_INCREMENT, `username` varchar(50) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci NOT NULL,  `password` varchar(50) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci NOT NULL,  `email` varchar(100) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci NOT NULL,  `age` int DEFAULT NULL,  `gender` enum('Male','Female','Other') CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci NOT NULL,  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, PRIMARY KEY (`id`),UNIQUE KEY `username` (`username`) USING BTREE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;
+
+-- foreign constraints
+CREATE TABLE struct_it_mysql2mysql_1.foreign_key_parent (pk int, parent_col_1 int UNIQUE, parent_col_2 int UNIQUE, PRIMARY KEY(pk));
+CREATE TABLE struct_it_mysql2mysql_1.foreign_key_child (pk int, child_col_1 int UNIQUE, child_col_2 int UNIQUE, PRIMARY KEY(pk));

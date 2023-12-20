@@ -32,3 +32,24 @@ CREATE TABLE `constraint_table` (
   CONSTRAINT `chk_email` CHECK ((`email` like _utf8mb4'%@%.%'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3
 
+struct_it_mysql2mysql_1.foreign_key_parent
+CREATE TABLE `foreign_key_parent` (
+  `pk` int NOT NULL,
+  `parent_col_1` int DEFAULT NULL,
+  `parent_col_2` int DEFAULT NULL,
+  PRIMARY KEY (`pk`),
+  UNIQUE KEY `parent_col_1` (`parent_col_1`),
+  UNIQUE KEY `parent_col_2` (`parent_col_2`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3
+
+struct_it_mysql2mysql_1.foreign_key_child
+CREATE TABLE `foreign_key_child` (
+  `pk` int NOT NULL,
+  `child_col_1` int DEFAULT NULL,
+  `child_col_2` int DEFAULT NULL,
+  PRIMARY KEY (`pk`),
+  UNIQUE KEY `child_col_1` (`child_col_1`),
+  UNIQUE KEY `child_col_2` (`child_col_2`),
+  CONSTRAINT `fk_test_1` FOREIGN KEY (`child_col_1`) REFERENCES `foreign_key_parent` (`parent_col_1`),
+  CONSTRAINT `fk_test_2` FOREIGN KEY (`child_col_2`) REFERENCES `foreign_key_parent` (`parent_col_2`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3

@@ -15,3 +15,9 @@ CREATE INDEX composite_index ON struct_it_mysql2mysql_1.full_index_type (composi
 
 -- full constraint
 CREATE TABLE struct_it_mysql2mysql_1.constraint_table (id INT PRIMARY KEY AUTO_INCREMENT,username VARCHAR(50) NOT NULL UNIQUE,password VARCHAR(50) NOT NULL,email VARCHAR(100) NOT NULL,age INT,gender ENUM('Male', 'Female', 'Other') NOT NULL,created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,CONSTRAINT chk_age CHECK (age >= 18),CONSTRAINT chk_email CHECK (email LIKE '%@%.%'));
+
+-- foreign constraints
+CREATE TABLE struct_it_mysql2mysql_1.foreign_key_parent (pk int, parent_col_1 int UNIQUE, parent_col_2 int UNIQUE, PRIMARY KEY(pk));
+CREATE TABLE struct_it_mysql2mysql_1.foreign_key_child (pk int, child_col_1 int UNIQUE, child_col_2 int UNIQUE, PRIMARY KEY(pk));
+ALTER TABLE struct_it_mysql2mysql_1.foreign_key_child ADD CONSTRAINT fk_test_1 FOREIGN KEY (child_col_1) REFERENCES struct_it_mysql2mysql_1.foreign_key_parent (parent_col_1);
+ALTER TABLE struct_it_mysql2mysql_1.foreign_key_child ADD CONSTRAINT fk_test_2 FOREIGN KEY (child_col_2) REFERENCES struct_it_mysql2mysql_1.foreign_key_parent (parent_col_2);

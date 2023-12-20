@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use dt_common::{error::Error, utils::rdb_filter::RdbFilter};
+use dt_common::{config::config_enums::DbType, error::Error, utils::rdb_filter::RdbFilter};
 use dt_meta::{
     mysql::mysql_meta_manager::MysqlMetaManager,
     struct_meta::{
@@ -35,6 +35,8 @@ const INDEX_TYPE: &str = "INDEX_TYPE";
 const TABLE_SCHEMA: &str = "TABLE_SCHEMA";
 const TABLE_NAME: &str = "TABLE_NAME";
 const TABLE_COMMENT: &str = "TABLE_COMMENT";
+const REFERENCED_TABLE_NAME: &str = "REFERENCED_TABLE_NAME";
+const REFERENCED_COLUMN_NAME: &str = "REFERENCED_COLUMN_NAME";
 
 const COLUMN_NAME: &str = "COLUMN_NAME";
 const COLUMN_TYPE: &str = "COLUMN_TYPE";
@@ -51,7 +53,6 @@ const PRIMARY: &str = "PRIMARY";
 const ENGINE: &str = "ENGINE";
 const IS_NULLABLE: &str = "IS_NULLABLE";
 const EXTRA: &str = "EXTRA";
-const CHECK: &str = "CHECK";
 
 const CHARACTER_SET_NAME: &str = "CHARACTER_SET_NAME";
 const COLLATION_NAME: &str = "COLLATION_NAME";
@@ -75,13 +76,16 @@ impl MysqlStructFetcher {
         let mut results = Vec::new();
 
         let tables = self.get_tables(tb).await.unwrap();
-        let mut constraints = self.get_constraints(tb).await.unwrap();
         let mut indexes = self.get_indexes(tb).await.unwrap();
+        let mut check_constraints = self.get_check_constraints(tb).await.unwrap();
+        let mut foreign_key_constraints = self.get_foreign_key_constraints(tb).await.unwrap();
 
         for (table_name, table) in tables {
+            let mut constraints = self.get_result(&mut check_constraints, &table_name);
+            constraints.extend_from_slice(&self.get_result(&mut foreign_key_constraints, &table_name));
             let statement = MysqlCreateTableStatement {
                 table,
-                constraints: self.get_result(&mut constraints, &table_name),
+                constraints,
                 indexes: self.get_result(&mut indexes, &table_name),
             };
             results.push(statement);
@@ -270,7 +274,7 @@ impl MysqlStructFetcher {
         Ok(results)
     }
 
-    async fn get_constraints(
+    async fn get_check_constraints(
         &mut self,
         tb: &str,
     ) -> Result<HashMap<String, Vec<Constraint>>, Error> {
@@ -285,39 +289,26 @@ impl MysqlStructFetcher {
 
         let sql = format!(
             "SELECT 
-            tc.CONSTRAINT_SCHEMA, 
-            tc.TABLE_NAME, 
-            tc.CONSTRAINT_NAME, 
-            tc.CONSTRAINT_TYPE,
-            cc.CHECK_CLAUSE 
+                tc.CONSTRAINT_SCHEMA, 
+                tc.TABLE_NAME, 
+                tc.CONSTRAINT_NAME, 
+                tc.CONSTRAINT_TYPE,
+                cc.CHECK_CLAUSE 
             FROM information_schema.table_constraints tc 
             LEFT JOIN information_schema.check_constraints cc 
             ON tc.CONSTRAINT_SCHEMA = cc.CONSTRAINT_SCHEMA AND tc.CONSTRAINT_NAME = cc.CONSTRAINT_NAME 
             WHERE tc.CONSTRAINT_SCHEMA = '{}' {} 
             AND tc.CONSTRAINT_TYPE='{}' ",
-            self.db, tb_filter, CHECK
+              self.db, tb_filter, 
+            ConstraintType::Check.to_str(DbType::Mysql),
         );
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
-            let (database_name, table_name, constraint_name, check_clause) = (
-                Self::get_str_with_null(&row, CONSTRAINT_SCHEMA).unwrap(),
-                Self::get_str_with_null(&row, TABLE_NAME).unwrap(),
-                Self::get_str_with_null(&row, CONSTRAINT_NAME).unwrap(),
-                Self::get_str_with_null(&row, CHECK_CLAUSE).unwrap(),
-            );
-
-            if let Some(filter) = &mut self.filter {
-                if database_name.is_empty()
-                    || table_name.is_empty()
-                    || constraint_name.is_empty()
-                    || check_clause.is_empty()
-                    || filter.filter_tb(&database_name, &table_name)
-                {
-                    continue;
-                }
-            }
-
+            let database_name = Self::get_str_with_null(&row, CONSTRAINT_SCHEMA).unwrap();
+            let table_name= Self::get_str_with_null(&row, TABLE_NAME).unwrap();
+            let constraint_name= Self::get_str_with_null(&row, CONSTRAINT_NAME).unwrap();
+            let check_clause= Self::get_str_with_null(&row, CHECK_CLAUSE).unwrap();
             let definition = self.unescape(check_clause).await.unwrap();
             let constraint = Constraint {
                 database_name,
@@ -325,6 +316,62 @@ impl MysqlStructFetcher {
                 table_name: table_name.clone(),
                 constraint_name,
                 constraint_type: ConstraintType::Check,
+                definition,
+            };
+            self.push_to_results(&mut results, &table_name, constraint);
+        }
+        Ok(results)
+    }
+
+    async fn get_foreign_key_constraints(
+        &mut self,
+        tb: &str,
+    ) -> Result<HashMap<String, Vec<Constraint>>, Error> {
+        let mut results: HashMap<String, Vec<Constraint>> = HashMap::new();
+
+        // Check Constraint: https://dev.mysql.com/doc/refman/8.0/en/create-table-check-constraints.html
+        let tb_filter = if !tb.is_empty() {
+            format!("AND kcu.TABLE_NAME = '{}'", tb)
+        } else {
+            String::new()
+        };
+
+        let sql = format!(
+            "SELECT
+                kcu.CONSTRAINT_NAME,
+                kcu.CONSTRAINT_SCHEMA,
+                kcu.TABLE_NAME,
+                kcu.COLUMN_NAME,
+                kcu.REFERENCED_TABLE_SCHEMA,
+                kcu.REFERENCED_TABLE_NAME,
+                kcu.REFERENCED_COLUMN_NAME
+            FROM
+                INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+            JOIN INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
+            ON kcu.CONSTRAINT_NAME = tc.CONSTRAINT_NAME AND kcu.CONSTRAINT_SCHEMA=tc.CONSTRAINT_SCHEMA
+            WHERE
+                kcu.REFERENCED_TABLE_SCHEMA = '{}'
+                AND kcu.REFERENCED_TABLE_SCHEMA = '{}' {}
+                AND tc.CONSTRAINT_TYPE = '{}'",
+            self.db, self.db, tb_filter, 
+            ConstraintType::Foregin.to_str(DbType::Mysql),
+        );
+
+        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+        while let Some(row) = rows.try_next().await.unwrap() {
+            let database_name = Self::get_str_with_null(&row, CONSTRAINT_SCHEMA).unwrap();
+            let constraint_name= Self::get_str_with_null(&row, CONSTRAINT_NAME).unwrap();
+            let table_name= Self::get_str_with_null(&row, TABLE_NAME).unwrap();
+            let column_name = Self::get_str_with_null(&row, COLUMN_NAME).unwrap();
+            let referenced_table_name = Self::get_str_with_null(&row, REFERENCED_TABLE_NAME).unwrap();
+            let referenced_column_name = Self::get_str_with_null(&row, REFERENCED_COLUMN_NAME).unwrap();
+            let definition = format!("(`{}`) REFERENCES `{}`.`{}`(`{}`)", column_name, database_name, referenced_table_name, referenced_column_name);
+            let constraint = Constraint {
+                database_name,
+                schema_name: String::new(),
+                table_name: table_name.clone(),
+                constraint_name,
+                constraint_type: ConstraintType::Foregin,
                 definition,
             };
             self.push_to_results(&mut results, &table_name, constraint);
