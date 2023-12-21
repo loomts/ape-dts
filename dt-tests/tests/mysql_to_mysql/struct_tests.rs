@@ -28,4 +28,10 @@ mod test {
     async fn struct_filter_test_2() {
         TestBase::run_mysql_struct_test("mysql_to_mysql/struct/filter_test_2").await;
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn struct_charset_test() {
+        TestBase::run_mysql_struct_test("mysql_to_mysql/struct/charset_test").await;
+    }
 }

@@ -22,7 +22,7 @@ impl RdbStructTestRunner {
         self.base.execute_test_ddl_sqls().await?;
         self.base.base.start_task().await?;
 
-        let expect_ddl_sqls = self.load_expect_ddl_sqls();
+        let expect_ddl_sqls = self.load_expect_ddl_sqls().await;
         let src_check_fetcher = MysqlStructCheckFetcher {
             conn_pool: self.base.src_conn_pool_mysql.as_mut().unwrap().clone(),
         };
@@ -69,6 +69,27 @@ impl RdbStructTestRunner {
 
             assert_eq!(dst_ddl_sql_lines, expect_ddl_sql_lines);
         }
+
+        // show create database
+        let mut tested_dbs = HashSet::new();
+        for i in 0..src_db_tbs.len() {
+            if tested_dbs.contains(&src_db_tbs[i].0) {
+                continue;
+            }
+
+            let src_ddl_sql = src_check_fetcher.fetch_database(&src_db_tbs[i].0).await;
+            let dst_ddl_sql = src_check_fetcher.fetch_database(&dst_db_tbs[i].0).await;
+            let key = format!("{}", &dst_db_tbs[i].0);
+            let expect_ddl_sql = expect_ddl_sqls.get(&key).unwrap().to_owned();
+
+            println!("src_ddl_sql: {}\n", src_ddl_sql);
+            println!("dst_ddl_sql: {}\n", dst_ddl_sql);
+            println!("expect_ddl_sql: {}\n", expect_ddl_sql);
+
+            assert_eq!(dst_ddl_sql, expect_ddl_sql);
+            tested_dbs.insert(&src_db_tbs[i].0);
+        }
+
         Ok(())
     }
 
@@ -110,9 +131,15 @@ impl RdbStructTestRunner {
         self.base.base.start_task().await
     }
 
-    fn load_expect_ddl_sqls(&self) -> HashMap<String, String> {
+    async fn load_expect_ddl_sqls(&self) -> HashMap<String, String> {
         let mut ddl_sqls = HashMap::new();
-        let ddl_file = format!("{}/expect_ddl.sql", self.base.base.test_dir);
+
+        let version = self.base.get_dst_mysql_version().await;
+        let ddl_file = if version.starts_with("5.") {
+            format!("{}/expect_ddl_5.7.sql", self.base.base.test_dir)
+        } else {
+            format!("{}/expect_ddl_8.0.sql", self.base.base.test_dir)
+        };
         let lines = BaseTestRunner::load_file(&ddl_file);
         let mut lines = lines.iter().peekable();
 
@@ -121,7 +148,7 @@ impl RdbStructTestRunner {
                 continue;
             }
 
-            let table = line.trim().to_owned();
+            let key = line.trim().to_owned();
             let mut sql = String::new();
             while let Some(line) = lines.next() {
                 if line.trim().is_empty() {
@@ -130,7 +157,7 @@ impl RdbStructTestRunner {
                 sql.push_str(line);
                 sql.push('\n');
             }
-            ddl_sqls.insert(table, sql.trim().to_owned());
+            ddl_sqls.insert(key, sql.trim().to_owned());
         }
         ddl_sqls
     }

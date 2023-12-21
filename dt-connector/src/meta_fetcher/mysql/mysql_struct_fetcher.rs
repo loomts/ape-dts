@@ -82,7 +82,8 @@ impl MysqlStructFetcher {
 
         for (table_name, table) in tables {
             let mut constraints = self.get_result(&mut check_constraints, &table_name);
-            constraints.extend_from_slice(&self.get_result(&mut foreign_key_constraints, &table_name));
+            constraints
+                .extend_from_slice(&self.get_result(&mut foreign_key_constraints, &table_name));
             let statement = MysqlCreateTableStatement {
                 table,
                 constraints,
@@ -108,7 +109,15 @@ impl MysqlStructFetcher {
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         if let Some(row) = rows.try_next().await.unwrap() {
             let schema_name = Self::get_str_with_null(&row, SCHEMA_NAME).unwrap();
-            let database = Database { name: schema_name };
+            let default_character_set_name =
+                Self::get_str_with_null(&row, "DEFAULT_CHARACTER_SET_NAME").unwrap();
+            let default_collation_name =
+                Self::get_str_with_null(&row, "DEFAULT_COLLATION_NAME").unwrap();
+            let database = Database {
+                name: schema_name,
+                default_character_set_name,
+                default_collation_name,
+            };
             return Ok(database);
         }
 
@@ -130,6 +139,7 @@ impl MysqlStructFetcher {
                 t.TABLE_NAME, 
                 t.ENGINE, 
                 t.TABLE_COMMENT, 
+                t.TABLE_COLLATION,
                 c.COLUMN_NAME, 
                 c.ORDINAL_POSITION, 
                 c.COLUMN_DEFAULT, 
@@ -180,6 +190,8 @@ impl MysqlStructFetcher {
             if let Some(table) = results.get_mut(&tb) {
                 table.columns.push(column);
             } else {
+                let table_collation = Self::get_str_with_null(&row, "TABLE_COLLATION").unwrap();
+                let charset = Self::get_charset_by_collation(&table_collation);
                 results.insert(
                     tb.clone(),
                     Table {
@@ -188,6 +200,8 @@ impl MysqlStructFetcher {
                         table_name: tb,
                         engine_name,
                         table_comment,
+                        charset,
+                        collate: table_collation,
                         columns: vec![column],
                     },
                 );
@@ -224,7 +238,7 @@ impl MysqlStructFetcher {
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
-            let (tb, index_name) = (
+            let (table_name, index_name) = (
                 Self::get_str_with_null(&row, TABLE_NAME).unwrap(),
                 Self::get_str_with_null(&row, INDEX_NAME).unwrap(),
             );
@@ -241,26 +255,21 @@ impl MysqlStructFetcher {
                 },
             };
 
-            let key = (tb.clone(), index_name.clone());
+            let key = (table_name.clone(), index_name.clone());
             if let Some(index) = index_map.get_mut(&key) {
                 index.columns.push(column);
             } else {
+                let non_unique = row.try_get(NON_UNIQUE).unwrap();
+                let index_kind = Self::get_index_kind(non_unique, &index_name);
                 let index = Index {
                     database_name: Self::get_str_with_null(&row, TABLE_SCHEMA).unwrap(),
-                    schema_name: String::new(),
-                    table_name: tb,
+                    table_name,
                     index_name,
-                    index_kind: self
-                        .get_index_kind(
-                            row.try_get(NON_UNIQUE)?,
-                            Self::get_str_with_null(&row, INDEX_NAME).unwrap().as_str(),
-                        )
-                        .unwrap(),
+                    index_kind,
                     index_type: Self::get_str_with_null(&row, INDEX_TYPE).unwrap(),
                     comment: Self::get_str_with_null(&row, COMMENT).unwrap(),
-                    tablespace: String::new(),
-                    definition: String::new(),
                     columns: vec![column],
+                    ..Default::default()
                 };
                 index_map.insert(key, index);
             }
@@ -279,6 +288,10 @@ impl MysqlStructFetcher {
         tb: &str,
     ) -> Result<HashMap<String, Vec<Constraint>>, Error> {
         let mut results: HashMap<String, Vec<Constraint>> = HashMap::new();
+        // mysql 5.7 does not support check constraints
+        if self.meta_manager.version.starts_with("5.") {
+            return Ok(results);
+        }
 
         // Check Constraint: https://dev.mysql.com/doc/refman/8.0/en/create-table-check-constraints.html
         let tb_filter = if !tb.is_empty() {
@@ -287,8 +300,9 @@ impl MysqlStructFetcher {
             String::new()
         };
 
+        let constraint_type_str = ConstraintType::Check.to_str(DbType::Mysql);
         let sql = format!(
-            "SELECT 
+            "SELECT
                 tc.CONSTRAINT_SCHEMA, 
                 tc.TABLE_NAME, 
                 tc.CONSTRAINT_NAME, 
@@ -298,17 +312,16 @@ impl MysqlStructFetcher {
             LEFT JOIN information_schema.check_constraints cc 
             ON tc.CONSTRAINT_SCHEMA = cc.CONSTRAINT_SCHEMA AND tc.CONSTRAINT_NAME = cc.CONSTRAINT_NAME 
             WHERE tc.CONSTRAINT_SCHEMA = '{}' {} 
-            AND tc.CONSTRAINT_TYPE='{}' ",
-              self.db, tb_filter, 
-            ConstraintType::Check.to_str(DbType::Mysql),
+            AND tc.CONSTRAINT_TYPE='{}' ", 
+            self.db, tb_filter, constraint_type_str
         );
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let database_name = Self::get_str_with_null(&row, CONSTRAINT_SCHEMA).unwrap();
-            let table_name= Self::get_str_with_null(&row, TABLE_NAME).unwrap();
-            let constraint_name= Self::get_str_with_null(&row, CONSTRAINT_NAME).unwrap();
-            let check_clause= Self::get_str_with_null(&row, CHECK_CLAUSE).unwrap();
+            let table_name = Self::get_str_with_null(&row, TABLE_NAME).unwrap();
+            let constraint_name = Self::get_str_with_null(&row, CONSTRAINT_NAME).unwrap();
+            let check_clause = Self::get_str_with_null(&row, CHECK_CLAUSE).unwrap();
             let definition = self.unescape(check_clause).await.unwrap();
             let constraint = Constraint {
                 database_name,
@@ -320,6 +333,7 @@ impl MysqlStructFetcher {
             };
             self.push_to_results(&mut results, &table_name, constraint);
         }
+
         Ok(results)
     }
 
@@ -336,6 +350,7 @@ impl MysqlStructFetcher {
             String::new()
         };
 
+        let constraint_type_str = ConstraintType::Foregin.to_str(DbType::Mysql);
         let sql = format!(
             "SELECT
                 kcu.CONSTRAINT_NAME,
@@ -353,19 +368,23 @@ impl MysqlStructFetcher {
                 kcu.REFERENCED_TABLE_SCHEMA = '{}'
                 AND kcu.REFERENCED_TABLE_SCHEMA = '{}' {}
                 AND tc.CONSTRAINT_TYPE = '{}'",
-            self.db, self.db, tb_filter, 
-            ConstraintType::Foregin.to_str(DbType::Mysql),
+            self.db, self.db, tb_filter, constraint_type_str,
         );
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let database_name = Self::get_str_with_null(&row, CONSTRAINT_SCHEMA).unwrap();
-            let constraint_name= Self::get_str_with_null(&row, CONSTRAINT_NAME).unwrap();
-            let table_name= Self::get_str_with_null(&row, TABLE_NAME).unwrap();
+            let constraint_name = Self::get_str_with_null(&row, CONSTRAINT_NAME).unwrap();
+            let table_name = Self::get_str_with_null(&row, TABLE_NAME).unwrap();
             let column_name = Self::get_str_with_null(&row, COLUMN_NAME).unwrap();
-            let referenced_table_name = Self::get_str_with_null(&row, REFERENCED_TABLE_NAME).unwrap();
-            let referenced_column_name = Self::get_str_with_null(&row, REFERENCED_COLUMN_NAME).unwrap();
-            let definition = format!("(`{}`) REFERENCES `{}`.`{}`(`{}`)", column_name, database_name, referenced_table_name, referenced_column_name);
+            let referenced_table_name =
+                Self::get_str_with_null(&row, REFERENCED_TABLE_NAME).unwrap();
+            let referenced_column_name =
+                Self::get_str_with_null(&row, REFERENCED_COLUMN_NAME).unwrap();
+            let definition = format!(
+                "(`{}`) REFERENCES `{}`.`{}`(`{}`)",
+                column_name, database_name, referenced_table_name, referenced_column_name
+            );
             let constraint = Constraint {
                 database_name,
                 schema_name: String::new(),
@@ -395,13 +414,25 @@ impl MysqlStructFetcher {
         false
     }
 
-    fn get_index_kind(&self, non_unique: i32, index_name: &str) -> Result<IndexKind, Error> {
+    fn get_index_kind(non_unique: i32, index_name: &str) -> IndexKind {
         if index_name == PRIMARY && non_unique == 0 {
-            Ok(IndexKind::PrimaryKey)
+            IndexKind::PrimaryKey
         } else if non_unique == 0 {
-            Ok(IndexKind::Unique)
+            IndexKind::Unique
         } else {
-            Ok(IndexKind::Index)
+            IndexKind::Index
+        }
+    }
+
+    fn get_charset_by_collation(collation: &str) -> String {
+        // show all collation names by:
+        // SELECT COLLATION_NAME FROM INFORMATION_SCHEMA.COLLATIONS;
+        // latin1_german2_ci, utf8mb4_nb_0900_as_cs
+        let tokens: Vec<&str> = collation.split("_").collect();
+        if tokens.len() > 0 {
+            tokens[0].to_string()
+        } else {
+            String::new()
         }
     }
 

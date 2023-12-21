@@ -90,7 +90,10 @@ impl PgStructFetcher {
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         if let Some(row) = rows.try_next().await.unwrap() {
             let schema_name = Self::get_str_with_null(&row, "schema_name").unwrap();
-            let database = Database { name: schema_name };
+            let database = Database {
+                name: schema_name,
+                ..Default::default()
+            };
             return Ok(database);
         }
 
@@ -126,9 +129,9 @@ impl PgStructFetcher {
             JOIN pg_namespace ns
                 ON (seq.relnamespace = ns.oid)
             JOIN pg_depend AS dep
-                ON (seq.relfilenode = dep.objid)
+                ON (seq.oid = dep.objid)
             JOIN pg_class AS tab
-                ON (dep.refobjid = tab.relfilenode)
+                ON (dep.refobjid = tab.oid)
             WHERE ns.nspname='{}' 
             AND obj.sequence_schema='{}' {} 
             AND dep.deptype='a'",
@@ -269,9 +272,9 @@ impl PgStructFetcher {
             JOIN pg_namespace ns
                 ON (seq.relnamespace = ns.oid)
             JOIN pg_depend AS dep
-                ON (seq.relfilenode = dep.objid)
+                ON (seq.oid = dep.objid)
             JOIN pg_class AS tab
-                ON (dep.refobjid = tab.relfilenode)
+                ON (dep.refobjid = tab.oid)
             JOIN pg_attribute AS attr
                 ON (attr.attnum = dep.refobjsubid AND attr.attrelid = dep.refobjid)
             WHERE dep.deptype='a'
@@ -351,13 +354,8 @@ impl PgStructFetcher {
                 order_position: order as u32,
                 default_value: row.get("column_default"),
                 is_nullable: Self::get_str_with_null(&row, "is_nullable").unwrap(),
-                column_type: String::new(),
                 generated,
-                column_key: String::new(),
-                extra: String::new(),
-                column_comment: String::new(),
-                character_set: String::new(),
-                collation: String::new(),
+                ..Default::default()
             };
 
             if let Some(table) = results.get_mut(&table_name) {
@@ -369,9 +367,8 @@ impl PgStructFetcher {
                         database_name: table_schema.clone(),
                         schema_name: table_schema,
                         table_name: table_name.clone(),
-                        engine_name: String::new(),
-                        table_comment: String::new(),
                         columns: vec![column],
+                        ..Default::default()
                     },
                 );
             }
@@ -486,16 +483,13 @@ impl PgStructFetcher {
             let definition = Self::get_str_with_null(&row, "indexdef").unwrap();
 
             let index = Index {
-                database_name: String::new(),
                 schema_name: Self::get_str_with_null(&row, "schemaname").unwrap(),
                 table_name: table_name.clone(),
                 index_name: Self::get_str_with_null(&row, "indexname").unwrap(),
                 index_kind: self.get_index_kind(&definition),
-                index_type: String::new(),
-                comment: String::new(),
                 tablespace: Self::get_str_with_null(&row, "tablespace").unwrap(),
                 definition,
-                columns: Vec::new(),
+                ..Default::default()
             };
             self.push_to_results(&mut results, &table_name, index);
         }

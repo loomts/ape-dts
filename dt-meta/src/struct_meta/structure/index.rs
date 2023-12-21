@@ -1,4 +1,4 @@
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Index {
     pub database_name: String,
     pub schema_name: String,
@@ -12,11 +12,12 @@ pub struct Index {
     pub columns: Vec<IndexColumn>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub enum IndexKind {
     PrimaryKey,
     Unique,
     Index,
+    #[default]
     Unkown,
 }
 

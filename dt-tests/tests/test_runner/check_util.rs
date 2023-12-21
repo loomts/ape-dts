@@ -38,19 +38,30 @@ impl CheckUtil {
         let miss_log_file = format!("{}/miss.log", dst_check_log_dir);
         let diff_log_file = format!("{}/diff.log", dst_check_log_dir);
         let extra_log_file = format!("{}/extra.log", dst_check_log_dir);
-        if BaseTestRunner::check_file_exists(&miss_log_file) {
+        if BaseTestRunner::check_path_exists(&miss_log_file) {
             File::create(&miss_log_file).unwrap().set_len(0).unwrap();
         }
-        if BaseTestRunner::check_file_exists(&diff_log_file) {
+        if BaseTestRunner::check_path_exists(&diff_log_file) {
             File::create(&diff_log_file).unwrap().set_len(0).unwrap();
         }
-        if BaseTestRunner::check_file_exists(&extra_log_file) {
+        if BaseTestRunner::check_path_exists(&extra_log_file) {
             File::create(&extra_log_file).unwrap().set_len(0).unwrap();
         }
     }
 
-    pub fn get_check_log_dir(base_test_runner: &BaseTestRunner) -> (String, String) {
-        let expect_check_log_dir = format!("{}/expect_check_log", base_test_runner.test_dir);
+    pub fn get_check_log_dir(base_test_runner: &BaseTestRunner, version: &str) -> (String, String) {
+        let mut expect_check_log_dir = format!("{}/expect_check_log", base_test_runner.test_dir);
+        if !BaseTestRunner::check_path_exists(&expect_check_log_dir) {
+            // mysql 5.7, 8.0
+            if version.starts_with("5.") {
+                expect_check_log_dir =
+                    format!("{}/expect_check_log_5.7", base_test_runner.test_dir);
+            } else {
+                expect_check_log_dir =
+                    format!("{}/expect_check_log_8.0", base_test_runner.test_dir);
+            }
+        }
+
         let dst_check_log_dir = base_test_runner
             .updated_config_fields
             .get(TestConfigUtil::SINKER_CHECK_LOG_DIR)

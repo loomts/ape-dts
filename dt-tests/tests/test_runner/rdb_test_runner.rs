@@ -11,7 +11,8 @@ use dt_common::{
 
 use dt_connector::rdb_router::RdbRouter;
 use dt_meta::{
-    col_value::ColValue, ddl_type::DdlType, row_data::RowData, sql_parser::ddl_parser::DdlParser,
+    col_value::ColValue, ddl_type::DdlType, mysql::mysql_meta_manager::MysqlMetaManager,
+    row_data::RowData, sql_parser::ddl_parser::DdlParser,
 };
 use dt_task::{extractor_util::ExtractorUtil, task_util::TaskUtil};
 
@@ -94,6 +95,17 @@ impl RdbTestRunner {
             pool.close().await;
         }
         Ok(())
+    }
+
+    pub async fn get_dst_mysql_version(&self) -> String {
+        if let Some(conn_pool) = &self.dst_conn_pool_mysql {
+            let meta_manager = MysqlMetaManager::new(conn_pool.clone())
+                .init()
+                .await
+                .unwrap();
+            return meta_manager.version.clone();
+        }
+        String::new()
     }
 
     fn parse_conn_info(base: &BaseTestRunner) -> (DbType, String, DbType, String) {
@@ -306,7 +318,7 @@ impl RdbTestRunner {
         dst_db_tbs: &Vec<(String, String)>,
     ) -> Result<bool, Error> {
         let filtered_tbs_file = format!("{}/filtered_tbs.txt", &self.base.test_dir);
-        let filtered_tbs = if BaseTestRunner::check_file_exists(&filtered_tbs_file) {
+        let filtered_tbs = if BaseTestRunner::check_path_exists(&filtered_tbs_file) {
             BaseTestRunner::load_file(&filtered_tbs_file)
         } else {
             Vec::new()
