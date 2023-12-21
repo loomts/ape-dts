@@ -5,7 +5,10 @@ use futures::TryStreamExt;
 
 use sqlx::{mysql::MySqlRow, MySql, Pool, Row};
 
-use crate::{rdb_meta_manager::RdbMetaManager, rdb_tb_meta::RdbTbMeta, row_data::RowData};
+use crate::{
+    foreign_key::ForeignKey, rdb_meta_manager::RdbMetaManager, rdb_tb_meta::RdbTbMeta,
+    row_data::RowData,
+};
 
 use super::{mysql_col_type::MysqlColType, mysql_tb_meta::MysqlTbMeta};
 
@@ -68,6 +71,7 @@ impl<'a> MysqlMetaManager {
         let (cols, col_type_map) = self.parse_cols(schema, tb).await?;
         let key_map = self.parse_keys(schema, tb).await?;
         let (order_col, partition_col, id_cols) = RdbMetaManager::parse_rdb_cols(&key_map, &cols)?;
+        let foreign_keys = self.get_foreign_keys(schema, tb).await?;
 
         let basic = RdbTbMeta {
             schema: schema.to_string(),
@@ -77,6 +81,7 @@ impl<'a> MysqlMetaManager {
             order_col,
             partition_col,
             id_cols,
+            foreign_keys,
         };
         let tb_meta = MysqlTbMeta {
             basic,
@@ -263,6 +268,41 @@ impl<'a> MysqlMetaManager {
             }
         }
         Ok(key_map)
+    }
+
+    async fn get_foreign_keys(&self, schema: &str, tb: &str) -> Result<Vec<ForeignKey>, Error> {
+        let mut foreign_keys = Vec::new();
+        let sql = format!(
+            "SELECT
+                kcu.COLUMN_NAME,
+                kcu.REFERENCED_TABLE_SCHEMA,
+                kcu.REFERENCED_TABLE_NAME,
+                kcu.REFERENCED_COLUMN_NAME
+            FROM
+                INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+            JOIN INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
+            ON kcu.CONSTRAINT_NAME = tc.CONSTRAINT_NAME AND kcu.CONSTRAINT_SCHEMA=tc.CONSTRAINT_SCHEMA
+            WHERE
+                kcu.CONSTRAINT_SCHEMA = '{}'
+                AND kcu.TABLE_NAME = '{}'
+                AND tc.CONSTRAINT_TYPE = 'FOREIGN KEY'",
+            schema, tb,
+        );
+
+        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+        while let Some(row) = rows.try_next().await.unwrap() {
+            let col: String = row.try_get("COLUMN_NAME")?;
+            let ref_schema: String = row.try_get("REFERENCED_TABLE_SCHEMA")?;
+            let ref_tb: String = row.try_get("REFERENCED_TABLE_NAME")?;
+            let ref_col: String = row.try_get("REFERENCED_COLUMN_NAME")?;
+            foreign_keys.push(ForeignKey {
+                col: col.to_lowercase(),
+                ref_schema: ref_schema.to_lowercase(),
+                ref_tb: ref_tb.to_lowercase(),
+                ref_col: ref_col.to_lowercase(),
+            });
+        }
+        Ok(foreign_keys)
     }
 
     async fn init_version(&mut self) -> Result<(), Error> {

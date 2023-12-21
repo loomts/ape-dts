@@ -9,13 +9,13 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn cdc_basic_test() {
-        TestBase::run_cdc_test("mysql_to_mysql/cdc/basic_test", 3000, 1000).await;
+        TestBase::run_cdc_test("mysql_to_mysql/cdc/basic_test", 3000, 2000).await;
     }
 
     #[tokio::test]
     #[serial]
     async fn cdc_uk_changed_test() {
-        TestBase::run_cdc_test("mysql_to_mysql/cdc/uk_changed_test", 3000, 1000).await;
+        TestBase::run_cdc_test("mysql_to_mysql/cdc/uk_changed_test", 3000, 2000).await;
     }
 
     #[tokio::test]
@@ -118,5 +118,11 @@ mod test {
     #[serial]
     async fn cdc_route_test() {
         TestBase::run_cdc_test("mysql_to_mysql/cdc/route_test", 3000, 2000).await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn cdc_foreign_key_test() {
+        TestBase::run_cdc_test("mysql_to_mysql/cdc/foreign_key_test", 3000, 2000).await;
     }
 }

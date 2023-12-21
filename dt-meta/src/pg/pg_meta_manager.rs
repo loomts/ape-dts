@@ -4,7 +4,10 @@ use dt_common::error::Error;
 use futures::TryStreamExt;
 use sqlx::{Pool, Postgres, Row};
 
-use crate::{rdb_meta_manager::RdbMetaManager, rdb_tb_meta::RdbTbMeta, row_data::RowData};
+use crate::{
+    foreign_key::ForeignKey, rdb_meta_manager::RdbMetaManager, rdb_tb_meta::RdbTbMeta,
+    row_data::RowData,
+};
 
 use super::{pg_col_type::PgColType, pg_tb_meta::PgTbMeta, type_registry::TypeRegistry};
 
@@ -61,6 +64,7 @@ impl PgMetaManager {
         let (cols, col_type_map) = self.parse_cols(schema, tb).await?;
         let key_map = self.parse_keys(schema, tb).await?;
         let (order_col, partition_col, id_cols) = RdbMetaManager::parse_rdb_cols(&key_map, &cols)?;
+        let foreign_keys = self.get_foreign_keys(schema, tb).await?;
 
         let basic = RdbTbMeta {
             schema: schema.to_string(),
@@ -70,6 +74,7 @@ impl PgMetaManager {
             order_col,
             partition_col,
             id_cols,
+            foreign_keys,
         };
         let tb_meta = PgTbMeta {
             oid,
@@ -193,5 +198,44 @@ impl PgMetaManager {
             "failed to get oid for: {} by query: {}",
             tb, sql
         )))
+    }
+
+    async fn get_foreign_keys(&self, schema: &str, tb: &str) -> Result<Vec<ForeignKey>, Error> {
+        let mut foreign_keys = Vec::new();
+        let sql = format!(
+            "SELECT
+            a1.attname AS column_name,
+            ns_ref.nspname AS referenced_schema_name,
+            tab_ref.relname AS referenced_table_name,
+            a2.attname AS referenced_column_name
+        FROM
+            pg_constraint c
+            INNER JOIN pg_class tab ON tab.oid = c.conrelid
+            INNER JOIN pg_namespace ns ON ns.oid = tab.relnamespace
+            INNER JOIN pg_attribute a1 ON a1.attnum = ANY(c.conkey) AND a1.attrelid = c.conrelid
+            INNER JOIN pg_class tab_ref ON tab_ref.oid = c.confrelid
+            INNER JOIN pg_namespace ns_ref ON ns_ref.oid = tab_ref.relnamespace
+            INNER JOIN pg_attribute a2 ON a2.attnum = ANY(c.confkey) AND a2.attrelid = c.confrelid
+        WHERE
+            c.contype = 'f' 
+            AND ns.nspname = '{}' 
+            AND tab.relname = '{}'",
+            schema, tb
+        );
+
+        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+        while let Some(row) = rows.try_next().await.unwrap() {
+            let col: String = row.try_get("column_name")?;
+            let ref_schema: String = row.try_get("referenced_schema_name")?;
+            let ref_tb: String = row.try_get("referenced_table_name")?;
+            let ref_col: String = row.try_get("referenced_column_name")?;
+            foreign_keys.push(ForeignKey {
+                col: col.to_lowercase(),
+                ref_schema: ref_schema.to_lowercase(),
+                ref_tb: ref_tb.to_lowercase(),
+                ref_col: ref_col.to_lowercase(),
+            });
+        }
+        Ok(foreign_keys)
     }
 }
