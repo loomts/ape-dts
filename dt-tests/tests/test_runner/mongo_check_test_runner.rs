@@ -11,7 +11,8 @@ pub struct MongoCheckTestRunner {
 impl MongoCheckTestRunner {
     pub async fn new(relative_test_dir: &str) -> Result<Self, Error> {
         let base = MongoTestRunner::new(relative_test_dir).await.unwrap();
-        let (expect_check_log_dir, dst_check_log_dir) = CheckUtil::get_check_log_dir(&base.base);
+        let (expect_check_log_dir, dst_check_log_dir) =
+            CheckUtil::get_check_log_dir(&base.base, "");
         Ok(Self {
             base,
             dst_check_log_dir,

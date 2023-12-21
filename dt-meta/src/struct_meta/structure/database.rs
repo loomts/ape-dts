@@ -1,5 +1,6 @@
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Database {
     pub name: String,
-    // character_set: CharacterSetType,
+    pub default_character_set_name: String,
+    pub default_collation_name: String,
 }

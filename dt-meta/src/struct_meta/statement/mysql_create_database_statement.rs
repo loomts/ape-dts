@@ -14,8 +14,21 @@ impl MysqlCreateDatabaseStatement {
             return sqls;
         }
 
+        let mut sql = format!(r#"CREATE DATABASE IF NOT EXISTS `{}`"#, self.database.name);
+        if !self.database.default_character_set_name.is_empty() {
+            sql = format!(
+                "{} DEFAULT CHARACTER SET {}",
+                sql, self.database.default_character_set_name
+            )
+        }
+        if !self.database.default_collation_name.is_empty() {
+            sql = format!(
+                "{} DEFAULT COLLATE {}",
+                sql, self.database.default_collation_name
+            )
+        }
+
         let key = format!("database.{}", self.database.name.clone());
-        let sql = format!(r#"CREATE DATABASE IF NOT EXISTS `{}`"#, self.database.name);
         sqls.push((key, sql));
         sqls
     }

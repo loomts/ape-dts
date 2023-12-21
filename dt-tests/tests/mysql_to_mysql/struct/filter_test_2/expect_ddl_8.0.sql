@@ -1,3 +1,6 @@
+struct_it_mysql2mysql_1
+CREATE DATABASE `struct_it_mysql2mysql_1` /*!40100 DEFAULT CHARACTER SET utf8mb3 */ /*!80016 DEFAULT ENCRYPTION='N' */
+
 struct_it_mysql2mysql_1.full_index_type
 CREATE TABLE `full_index_type` (
   `id` int unsigned NOT NULL AUTO_INCREMENT,

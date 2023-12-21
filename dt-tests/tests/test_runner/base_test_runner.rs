@@ -147,7 +147,7 @@ impl BaseTestRunner {
     ) {
         let load = |sql_file: &str| -> Vec<String> {
             let full_sql_path = format!("{}/{}", test_dir, sql_file);
-            if !Self::check_file_exists(&full_sql_path) {
+            if !Self::check_path_exists(&full_sql_path) {
                 return Vec::new();
             }
 
@@ -173,7 +173,7 @@ impl BaseTestRunner {
         )
     }
 
-    pub fn check_file_exists(file: &str) -> bool {
+    pub fn check_path_exists(file: &str) -> bool {
         fs::metadata(file).is_ok()
     }
 }

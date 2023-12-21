@@ -80,16 +80,16 @@ impl MysqlCreateTableStatement {
             table.database_name, table.table_name, columns_sql, pk_str, table.engine_name
         );
 
-        // if !global_charset.is_empty() {
-        //     sql.push_str(&format!("DEFAULT CHARSET={} ", global_charset))
-        // }
+        if !table.charset.is_empty() {
+            sql = format!("{} DEFAULT CHARSET={}", sql, table.charset);
+        }
 
-        // if !global_collation.is_empty() {
-        //     sql.push_str(&format!("COLLATE={} ", global_collation))
-        // }
+        if !table.collate.is_empty() {
+            sql = format!("{} COLLATE={}", sql, table.collate);
+        }
 
         if !table.table_comment.is_empty() {
-            sql.push_str(&format!("COMMENT='{}' ", table.table_comment));
+            sql = format!("{} COMMENT='{}'", sql, table.table_comment);
         }
 
         sql

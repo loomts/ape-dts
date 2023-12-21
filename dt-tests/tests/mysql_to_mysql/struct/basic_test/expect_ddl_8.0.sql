@@ -1,3 +1,6 @@
+struct_it_mysql2mysql_1
+CREATE DATABASE `struct_it_mysql2mysql_1` /*!40100 DEFAULT CHARACTER SET utf8mb3 */ /*!80016 DEFAULT ENCRYPTION='N' */
+
 struct_it_mysql2mysql_1.table_test
 CREATE TABLE `table_test` (
   `id` int NOT NULL,
@@ -69,3 +72,7 @@ CREATE TABLE `constraint_table` (
   CONSTRAINT `chk_email` CHECK ((`email` like _utf8mb4'%@%.%'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3
 
+-- notice:
+-- if you created a table with a field: `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP 
+-- by show create in mysql 5.7: `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- by show create in mysql 8.0: `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
