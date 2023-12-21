@@ -124,10 +124,7 @@ impl MongoChecker {
             schema: schema.into(),
             tb: tb.into(),
             id_cols: vec![MongoConstants::ID.into()],
-            cols: Vec::new(),
-            key_map: HashMap::new(),
-            order_col: None,
-            partition_col: String::new(),
+            ..Default::default()
         }
     }
 

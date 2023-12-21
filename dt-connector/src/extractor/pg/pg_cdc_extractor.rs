@@ -396,11 +396,7 @@ impl PgCdcExtractor {
             basic: RdbTbMeta {
                 schema: schema.into(),
                 tb: tb.into(),
-                cols: Vec::new(),
-                key_map: HashMap::new(),
-                order_col: None,
-                partition_col: String::new(),
-                id_cols: Vec::new(),
+                ..Default::default()
             },
             oid,
             col_type_map: HashMap::new(),

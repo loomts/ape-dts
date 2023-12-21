@@ -365,7 +365,7 @@ impl MysqlStructFetcher {
             JOIN INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
             ON kcu.CONSTRAINT_NAME = tc.CONSTRAINT_NAME AND kcu.CONSTRAINT_SCHEMA=tc.CONSTRAINT_SCHEMA
             WHERE
-                kcu.REFERENCED_TABLE_SCHEMA = '{}'
+                kcu.CONSTRAINT_SCHEMA = '{}'
                 AND kcu.REFERENCED_TABLE_SCHEMA = '{}' {}
                 AND tc.CONSTRAINT_TYPE = '{}'",
             self.db, self.db, tb_filter, constraint_type_str,

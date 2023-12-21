@@ -4,7 +4,10 @@ use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{config::sinker_config::SinkerBasicConfig, error::Error};
 use dt_connector::Sinker;
-use dt_meta::{ddl_data::DdlData, dt_data::DtItem, row_data::RowData, row_type::RowType};
+use dt_meta::{
+    ddl_data::DdlData, dt_data::DtItem, rdb_meta_manager::RdbMetaManager, row_data::RowData,
+    row_type::RowType,
+};
 
 use crate::{Merger, Parallelizer};
 
@@ -13,6 +16,7 @@ use super::base_parallelizer::BaseParallelizer;
 pub struct MergeParallelizer {
     pub base_parallelizer: BaseParallelizer,
     pub merger: Box<dyn Merger + Send + Sync>,
+    pub meta_manager: Option<RdbMetaManager>,
     pub parallel_size: usize,
     pub sinker_basic_config: SinkerBasicConfig,
 }
@@ -45,6 +49,27 @@ impl Parallelizer for MergeParallelizer {
         data: Vec<RowData>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
     ) -> Result<(), Error> {
+        let mut any_fk_tb = false;
+        if let Some(rdb_meta_manager) = self.meta_manager.as_mut() {
+            for row_data in data.iter() {
+                let tb_meta = rdb_meta_manager
+                    .get_tb_meta(&row_data.schema, &row_data.tb)
+                    .await?;
+                if !tb_meta.foreign_keys.is_empty() {
+                    any_fk_tb = true;
+                    break;
+                }
+            }
+        }
+
+        // do serial sink if any row_data comes from a table with foreign keys
+        if any_fk_tb {
+            return self
+                .base_parallelizer
+                .sink_dml(vec![data], sinkers, 1, false)
+                .await;
+        }
+
         let mut tb_merged_datas = self.merger.merge(data).await?;
         self.sink_dml_internal(&mut tb_merged_datas, sinkers, MergeType::Delete)
             .await?;

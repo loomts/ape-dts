@@ -54,11 +54,13 @@ impl ParallelizerUtil {
 
             ParallelType::RdbMerge => {
                 let merger = Self::create_rdb_merger(config).await?;
+                let meta_manager = TaskUtil::create_rdb_meta_manager(config).await?;
                 Box::new(MergeParallelizer {
                     base_parallelizer,
                     merger,
                     parallel_size,
                     sinker_basic_config: config.sinker_basic.clone(),
+                    meta_manager: Some(meta_manager),
                 })
             }
 
@@ -88,6 +90,7 @@ impl ParallelizerUtil {
                     merger,
                     parallel_size,
                     sinker_basic_config: config.sinker_basic.clone(),
+                    meta_manager: None,
                 })
             }
 

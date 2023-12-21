@@ -58,4 +58,10 @@ mod test {
     async fn cdc_route_test() {
         TestBase::run_cdc_test("pg_to_pg/cdc/route_test", 3000, 2000).await;
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn cdc_foreign_key_test() {
+        TestBase::run_cdc_test("pg_to_pg/cdc/foreign_key_test", 3000, 2000).await;
+    }
 }
