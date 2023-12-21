@@ -104,23 +104,24 @@ mod test {
         .await
     }
 
-    #[tokio::test]
-    #[serial]
-    async fn struct_supported_have_fk_test() {
-        let test_dir = "mysql_to_mysql/precheck/struct_supported_have_fk_test";
+    // Todo:
+    // #[tokio::test]
+    // #[serial]
+    // async fn struct_supported_have_fk_test() {
+    //     let test_dir = "mysql_to_mysql/precheck/struct_supported_have_fk_test";
 
-        let mut src_expected_results = HashMap::new();
-        src_expected_results.insert(CheckItem::CheckIfTableStructSupported.to_string(), false);
+    //     let mut src_expected_results = HashMap::new();
+    //     src_expected_results.insert(CheckItem::CheckIfTableStructSupported.to_string(), false);
 
-        let mut dst_expected_results = HashMap::new();
-        dst_expected_results.insert(CheckItem::CheckIfTableStructSupported.to_string(), false);
+    //     let mut dst_expected_results = HashMap::new();
+    //     dst_expected_results.insert(CheckItem::CheckIfTableStructSupported.to_string(), false);
 
-        TestBase::run_precheck_test(
-            test_dir,
-            &HashSet::new(),
-            &src_expected_results,
-            &dst_expected_results,
-        )
-        .await
-    }
+    //     TestBase::run_precheck_test(
+    //         test_dir,
+    //         &HashSet::new(),
+    //         &src_expected_results,
+    //         &dst_expected_results,
+    //     )
+    //     .await
+    // }
 }

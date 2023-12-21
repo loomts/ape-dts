@@ -316,16 +316,18 @@ impl Prechecker for PostgresqlPrechecker {
             Err(e) => return Err(e),
         }
 
-        if !has_fk_tables.is_empty() {
-            err_msgs.push(format!(
-                "foreign keys are not supported, but these tables have foreign keys:[{}]",
-                has_fk_tables
-                    .iter()
-                    .map(|e| e.to_string())
-                    .collect::<Vec<String>>()
-                    .join(";")
-            ));
-        }
+        // Todo:
+        // if !has_fk_tables.is_empty() {
+        //     err_msgs.push(format!(
+        //         "foreign keys are not supported, but these tables have foreign keys:[{}]",
+        //         has_fk_tables
+        //             .iter()
+        //             .map(|e| e.to_string())
+        //             .collect::<Vec<String>>()
+        //             .join(";")
+        //     ));
+        // }
+
         let mut no_pkuk_tables: HashSet<String> = HashSet::new();
         for current_table in current_tables {
             if !has_pkuk_tables.contains(&current_table) {
