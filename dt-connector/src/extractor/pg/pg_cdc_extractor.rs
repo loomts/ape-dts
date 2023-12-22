@@ -226,7 +226,7 @@ impl PgCdcExtractor {
         }
 
         // todo, use event.rel_id()
-        let mut tb_meta = self.meta_manager.get_tb_meta(schema, tb).await?;
+        let mut tb_meta = self.meta_manager.get_tb_meta(schema, tb).await?.to_owned();
         let mut col_names = Vec::new();
         for column in event.columns() {
             // todo: check type_id in oid_to_type

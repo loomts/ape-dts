@@ -84,7 +84,10 @@ impl RdbUtil {
             MysqlMetaManager::new_mysql_compatible(conn_pool.clone(), db_type.clone())
                 .init()
                 .await?;
-        meta_manager.get_tb_meta(&db_tb.0, &db_tb.1).await
+        Ok(meta_manager
+            .get_tb_meta(&db_tb.0, &db_tb.1)
+            .await?
+            .to_owned())
     }
 
     pub async fn get_tb_meta_pg(
@@ -92,7 +95,10 @@ impl RdbUtil {
         db_tb: &(String, String),
     ) -> Result<PgTbMeta, Error> {
         let mut meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
-        meta_manager.get_tb_meta(&db_tb.0, &db_tb.1).await
+        Ok(meta_manager
+            .get_tb_meta(&db_tb.0, &db_tb.1)
+            .await?
+            .to_owned())
     }
 
     pub async fn execute_sqls_mysql(

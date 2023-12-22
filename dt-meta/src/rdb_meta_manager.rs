@@ -28,15 +28,19 @@ impl RdbMetaManager {
         }
     }
 
-    pub async fn get_tb_meta(&mut self, schema: &str, tb: &str) -> Result<RdbTbMeta, Error> {
+    pub async fn get_tb_meta<'a>(
+        &'a mut self,
+        schema: &str,
+        tb: &str,
+    ) -> Result<&'a RdbTbMeta, Error> {
         if let Some(mysql_meta_manager) = self.mysql_meta_manager.as_mut() {
             let tb_meta = mysql_meta_manager.get_tb_meta(schema, tb).await?;
-            return Ok(tb_meta.basic);
+            return Ok(&tb_meta.basic);
         }
 
         if let Some(pg_meta_manager) = self.pg_meta_manager.as_mut() {
             let tb_meta = pg_meta_manager.get_tb_meta(schema, tb).await?;
-            return Ok(tb_meta.basic);
+            return Ok(&tb_meta.basic);
         }
 
         Err(Error::Unexpected(

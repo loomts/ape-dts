@@ -26,7 +26,7 @@ const DATA_TYPE: &str = "DATA_TYPE";
 const CHARACTER_MAXIMUM_LENGTH: &str = "CHARACTER_MAXIMUM_LENGTH";
 const CHARACTER_SET_NAME: &str = "CHARACTER_SET_NAME";
 
-impl<'a> MysqlMetaManager {
+impl MysqlMetaManager {
     pub fn new(conn_pool: Pool<MySql>) -> Self {
         Self::new_mysql_compatible(conn_pool, DbType::Mysql)
     }
@@ -55,45 +55,50 @@ impl<'a> MysqlMetaManager {
         }
     }
 
-    pub async fn get_tb_meta_by_row_data(
-        &mut self,
+    pub async fn get_tb_meta_by_row_data<'a>(
+        &'a mut self,
         row_data: &RowData,
-    ) -> Result<MysqlTbMeta, Error> {
+    ) -> Result<&'a MysqlTbMeta, Error> {
         self.get_tb_meta(&row_data.schema, &row_data.tb).await
     }
 
-    pub async fn get_tb_meta(&mut self, schema: &str, tb: &str) -> Result<MysqlTbMeta, Error> {
+    pub async fn get_tb_meta<'a>(
+        &'a mut self,
+        schema: &str,
+        tb: &str,
+    ) -> Result<&'a MysqlTbMeta, Error> {
         let full_name = format!("{}.{}", schema, tb);
-        if let Some(tb_meta) = self.cache.get(&full_name) {
-            return Ok(tb_meta.clone());
+        if !self.cache.contains_key(&full_name) {
+            let (cols, col_type_map) =
+                Self::parse_cols(&self.conn_pool, &self.db_type, &self.version, schema, tb).await?;
+            let key_map = Self::parse_keys(&self.conn_pool, schema, tb).await?;
+            let (order_col, partition_col, id_cols) =
+                RdbMetaManager::parse_rdb_cols(&key_map, &cols)?;
+            let foreign_keys = Self::get_foreign_keys(&self.conn_pool, schema, tb).await?;
+
+            let basic = RdbTbMeta {
+                schema: schema.to_string(),
+                tb: tb.to_string(),
+                cols,
+                key_map,
+                order_col,
+                partition_col,
+                id_cols,
+                foreign_keys,
+            };
+            let tb_meta = MysqlTbMeta {
+                basic,
+                col_type_map,
+            };
+            self.cache.insert(full_name.clone(), tb_meta);
         }
-
-        let (cols, col_type_map) = self.parse_cols(schema, tb).await?;
-        let key_map = self.parse_keys(schema, tb).await?;
-        let (order_col, partition_col, id_cols) = RdbMetaManager::parse_rdb_cols(&key_map, &cols)?;
-        let foreign_keys = self.get_foreign_keys(schema, tb).await?;
-
-        let basic = RdbTbMeta {
-            schema: schema.to_string(),
-            tb: tb.to_string(),
-            cols,
-            key_map,
-            order_col,
-            partition_col,
-            id_cols,
-            foreign_keys,
-        };
-        let tb_meta = MysqlTbMeta {
-            basic,
-            col_type_map,
-        };
-
-        self.cache.insert(full_name.clone(), tb_meta.clone());
-        Ok(tb_meta)
+        Ok(self.cache.get(&full_name).unwrap())
     }
 
     async fn parse_cols(
-        &mut self,
+        conn_pool: &Pool<MySql>,
+        db_type: &DbType,
+        version: &str,
         schema: &str,
         tb: &str,
     ) -> Result<(Vec<String>, HashMap<String, MysqlColType>), Error> {
@@ -101,32 +106,31 @@ impl<'a> MysqlMetaManager {
         let mut col_type_map = HashMap::new();
 
         let sql = format!("DESC `{}`.`{}`", schema, tb);
-        let mut rows = sqlx::query(&sql).disable_arguments().fetch(&self.conn_pool);
+        let mut rows = sqlx::query(&sql).disable_arguments().fetch(conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let col_name: String = row.try_get("Field")?;
             cols.push(col_name);
         }
 
-        let sql = if self.db_type == DbType::Mysql {
+        let sql = if db_type == &DbType::Mysql {
             format!("SELECT {}, {}, {}, {}, {} FROM information_schema.columns WHERE table_schema = ? AND table_name = ?", 
                 COLUMN_NAME, COLUMN_TYPE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_SET_NAME)
         } else {
+            // starrocks
             format!("SELECT {}, {}, {}, {}, {} FROM information_schema.columns WHERE table_schema = '{}' AND table_name = '{}'", 
                 COLUMN_NAME, COLUMN_TYPE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_SET_NAME, &schema, &tb)
         };
 
-        let mut rows = if self.db_type == DbType::Mysql {
-            sqlx::query(&sql)
-                .bind(schema)
-                .bind(tb)
-                .fetch(&self.conn_pool)
+        let mut rows = if db_type == &DbType::Mysql {
+            sqlx::query(&sql).bind(schema).bind(tb).fetch(conn_pool)
         } else {
-            sqlx::query(&sql).disable_arguments().fetch(&self.conn_pool)
+            // for starrocks
+            sqlx::query(&sql).disable_arguments().fetch(conn_pool)
         };
 
         while let Some(row) = rows.try_next().await.unwrap() {
             let col: String = row.try_get(COLUMN_NAME)?;
-            let col_type = self.get_col_type(&row).await?;
+            let col_type = Self::get_col_type(version, &row).await?;
             col_type_map.insert(col, col_type);
         }
 
@@ -139,7 +143,7 @@ impl<'a> MysqlMetaManager {
         Ok((cols, col_type_map))
     }
 
-    async fn get_col_type(&mut self, row: &MySqlRow) -> Result<MysqlColType, Error> {
+    async fn get_col_type(version: &str, row: &MySqlRow) -> Result<MysqlColType, Error> {
         let column_type: String = row.try_get(COLUMN_TYPE)?;
         let data_type: String = row.try_get(DATA_TYPE)?;
 
@@ -178,21 +182,21 @@ impl<'a> MysqlMetaManager {
             }
 
             "varbinary" => {
-                let length = self.get_col_length(row).await?;
+                let length = Self::get_col_length(version, row).await?;
                 MysqlColType::VarBinary {
                     length: length as u16,
                 }
             }
 
             "binary" => {
-                let length = self.get_col_length(row).await?;
+                let length = Self::get_col_length(version, row).await?;
                 MysqlColType::Binary {
                     length: length as u8,
                 }
             }
 
             "varchar" | "char" | "tinytext" | "mediumtext" | "longtext" | "text" => {
-                let length = self.get_col_length(row).await?;
+                let length = Self::get_col_length(version, row).await?;
                 let mut charset = String::new();
                 let unchecked: Option<Vec<u8>> = row.get_unchecked(CHARACTER_SET_NAME);
                 if let Some(_) = unchecked {
@@ -230,11 +234,11 @@ impl<'a> MysqlMetaManager {
         Ok(col_type)
     }
 
-    async fn get_col_length(&mut self, row: &MySqlRow) -> Result<u64, Error> {
+    async fn get_col_length(version: &str, row: &MySqlRow) -> Result<u64, Error> {
         // with A expression, error will throw for mysql 8.0: ColumnDecode { index: "\"CHARACTER_MAXIMUM_LENGTH\"", source: "mismatched types; Rust type `u64` (as SQL type `BIGINT UNSIGNED`) is not compatible with SQL type `BIGINT`" }'
         // with B expression, error will throw for mysql 5.7: ColumnDecode { index: "\"CHARACTER_MAXIMUM_LENGTH\"", source: "mismatched types; Rust type `i64` (as SQL type `BIGINT`) is not compatible with SQL type `BIGINT UNSIGNED`" }'
         // no need to consider versions before 5.*
-        if self.version.starts_with("5.") {
+        if version.starts_with("5.") {
             let length: u64 = row.try_get(CHARACTER_MAXIMUM_LENGTH).unwrap();
             Ok(length)
         } else {
@@ -244,13 +248,13 @@ impl<'a> MysqlMetaManager {
     }
 
     async fn parse_keys(
-        &self,
+        conn_pool: &Pool<MySql>,
         schema: &str,
         tb: &str,
     ) -> Result<HashMap<String, Vec<String>>, Error> {
         let mut key_map: HashMap<String, Vec<String>> = HashMap::new();
         let sql = format!("SHOW INDEXES FROM `{}`.`{}`", schema, tb);
-        let mut rows = sqlx::query(&sql).disable_arguments().fetch(&self.conn_pool);
+        let mut rows = sqlx::query(&sql).disable_arguments().fetch(conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let non_unique: i8 = row.try_get("Non_unique")?;
             if non_unique == 1 {
@@ -270,7 +274,11 @@ impl<'a> MysqlMetaManager {
         Ok(key_map)
     }
 
-    async fn get_foreign_keys(&self, schema: &str, tb: &str) -> Result<Vec<ForeignKey>, Error> {
+    async fn get_foreign_keys(
+        conn_pool: &Pool<MySql>,
+        schema: &str,
+        tb: &str,
+    ) -> Result<Vec<ForeignKey>, Error> {
         let mut foreign_keys = Vec::new();
         let sql = format!(
             "SELECT
@@ -289,7 +297,7 @@ impl<'a> MysqlMetaManager {
             schema, tb,
         );
 
-        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+        let mut rows = sqlx::query(&sql).fetch(conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let col: String = row.try_get("COLUMN_NAME")?;
             let ref_schema: String = row.try_get("REFERENCED_TABLE_SCHEMA")?;
