@@ -50,45 +50,52 @@ impl PgMetaManager {
         Ok(self.oid_to_tb_meta.get(&oid).unwrap().clone())
     }
 
-    pub async fn get_tb_meta_by_row_data(&mut self, row_data: &RowData) -> Result<PgTbMeta, Error> {
+    pub async fn get_tb_meta_by_row_data<'a>(
+        &'a mut self,
+        row_data: &RowData,
+    ) -> Result<&'a PgTbMeta, Error> {
         self.get_tb_meta(&row_data.schema, &row_data.tb).await
     }
 
-    pub async fn get_tb_meta(&mut self, schema: &str, tb: &str) -> Result<PgTbMeta, Error> {
+    pub async fn get_tb_meta<'a>(
+        &'a mut self,
+        schema: &str,
+        tb: &str,
+    ) -> Result<&'a PgTbMeta, Error> {
         let full_name = format!(r#""{}"."{}""#, schema, tb);
-        if let Some(tb_meta) = self.name_to_tb_meta.get(&full_name) {
-            return Ok(tb_meta.clone());
+        if !self.name_to_tb_meta.contains_key(&full_name) {
+            let oid = Self::get_oid(&self.conn_pool, schema, tb).await?;
+            let (cols, col_type_map) =
+                Self::parse_cols(&self.conn_pool, &mut self.type_registry, schema, tb).await?;
+            let key_map = Self::parse_keys(&self.conn_pool, schema, tb).await?;
+            let (order_col, partition_col, id_cols) =
+                RdbMetaManager::parse_rdb_cols(&key_map, &cols)?;
+            let foreign_keys = Self::get_foreign_keys(&self.conn_pool, schema, tb).await?;
+
+            let basic = RdbTbMeta {
+                schema: schema.to_string(),
+                tb: tb.to_string(),
+                cols,
+                key_map,
+                order_col,
+                partition_col,
+                id_cols,
+                foreign_keys,
+            };
+            let tb_meta = PgTbMeta {
+                oid,
+                col_type_map,
+                basic,
+            };
+            self.oid_to_tb_meta.insert(oid, tb_meta.clone());
+            self.name_to_tb_meta.insert(full_name.clone(), tb_meta);
         }
-
-        let oid = self.get_oid(schema, tb).await?;
-        let (cols, col_type_map) = self.parse_cols(schema, tb).await?;
-        let key_map = self.parse_keys(schema, tb).await?;
-        let (order_col, partition_col, id_cols) = RdbMetaManager::parse_rdb_cols(&key_map, &cols)?;
-        let foreign_keys = self.get_foreign_keys(schema, tb).await?;
-
-        let basic = RdbTbMeta {
-            schema: schema.to_string(),
-            tb: tb.to_string(),
-            cols,
-            key_map,
-            order_col,
-            partition_col,
-            id_cols,
-            foreign_keys,
-        };
-        let tb_meta = PgTbMeta {
-            oid,
-            col_type_map,
-            basic,
-        };
-
-        self.name_to_tb_meta.insert(full_name, tb_meta.clone());
-        self.oid_to_tb_meta.insert(oid, tb_meta.clone());
-        Ok(tb_meta)
+        Ok(self.name_to_tb_meta.get(&full_name).unwrap())
     }
 
     async fn parse_cols(
-        &mut self,
+        conn_pool: &Pool<Postgres>,
+        type_registry: &mut TypeRegistry,
         schema: &str,
         tb: &str,
     ) -> Result<(Vec<String>, HashMap<String, PgColType>), Error> {
@@ -102,7 +109,7 @@ impl PgMetaManager {
             ORDER BY ordinal_position;",
             schema, tb
         );
-        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+        let mut rows = sqlx::query(&sql).fetch(conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let col: String = row.try_get("column_name")?;
             cols.push(col);
@@ -118,7 +125,7 @@ impl PgMetaManager {
             tb, schema
         );
 
-        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+        let mut rows = sqlx::query(&sql).fetch(conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let col: String = row.try_get("col_name")?;
             if !cols.contains(&col) {
@@ -126,8 +133,7 @@ impl PgMetaManager {
             }
 
             let col_type_oid: i32 = row.try_get_unchecked("col_type_oid")?;
-            let col_type = self
-                .type_registry
+            let col_type = type_registry
                 .oid_to_type
                 .get(&col_type_oid)
                 .unwrap()
@@ -139,7 +145,7 @@ impl PgMetaManager {
     }
 
     async fn parse_keys(
-        &self,
+        conn_pool: &Pool<Postgres>,
         schema: &str,
         tb: &str,
     ) -> Result<HashMap<String, Vec<String>>, Error> {
@@ -163,7 +169,7 @@ impl PgMetaManager {
         );
 
         let mut key_map: HashMap<String, Vec<String>> = HashMap::new();
-        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+        let mut rows = sqlx::query(&sql).fetch(conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let mut col_name: String = row.try_get("col_name")?;
             col_name = col_name.to_lowercase();
@@ -186,9 +192,9 @@ impl PgMetaManager {
         Ok(key_map)
     }
 
-    async fn get_oid(&self, schema: &str, tb: &str) -> Result<i32, Error> {
+    async fn get_oid(conn_pool: &Pool<Postgres>, schema: &str, tb: &str) -> Result<i32, Error> {
         let sql = format!(r#"SELECT '"{}"."{}"'::regclass::oid;"#, schema, tb);
-        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+        let mut rows = sqlx::query(&sql).fetch(conn_pool);
         if let Some(row) = rows.try_next().await.unwrap() {
             let oid: i32 = row.try_get_unchecked("oid")?;
             return Ok(oid);
@@ -200,7 +206,11 @@ impl PgMetaManager {
         )))
     }
 
-    async fn get_foreign_keys(&self, schema: &str, tb: &str) -> Result<Vec<ForeignKey>, Error> {
+    async fn get_foreign_keys(
+        conn_pool: &Pool<Postgres>,
+        schema: &str,
+        tb: &str,
+    ) -> Result<Vec<ForeignKey>, Error> {
         let mut foreign_keys = Vec::new();
         let sql = format!(
             "SELECT
@@ -223,7 +233,7 @@ impl PgMetaManager {
             schema, tb
         );
 
-        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+        let mut rows = sqlx::query(&sql).fetch(conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let col: String = row.try_get("column_name")?;
             let ref_schema: String = row.try_get("referenced_schema_name")?;

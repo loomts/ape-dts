@@ -70,7 +70,8 @@ impl BatchCheckExtractor for PgCheckExtractor {
         let tb_meta = self
             .meta_manager
             .get_tb_meta(&check_logs[0].schema, &check_logs[0].tb)
-            .await?;
+            .await?
+            .to_owned();
         let check_row_datas = self.build_check_row_datas(check_logs, &tb_meta)?;
 
         let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);

@@ -68,10 +68,10 @@ impl PgSinker {
 
         for row_data in data.iter() {
             let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&row_data).await?;
-            let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
+            let query_builder = RdbQueryBuilder::new_for_pg(tb_meta);
 
             let (sql, cols, binds) = if row_data.row_type == RowType::Insert {
-                self.get_insert_query(&query_builder, &tb_meta, row_data)?
+                Self::get_insert_query(&query_builder, tb_meta, row_data)?
             } else {
                 query_builder.get_query_info(row_data)?
             };
@@ -91,7 +91,7 @@ impl PgSinker {
         let start_time = Instant::now();
 
         let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&data[0]).await?;
-        let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
+        let query_builder = RdbQueryBuilder::new_for_pg(tb_meta);
 
         let (sql, cols, binds) =
             query_builder.get_batch_delete_query(data, start_index, batch_size)?;
@@ -110,7 +110,7 @@ impl PgSinker {
         let start_time = Instant::now();
 
         let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&data[0]).await?;
-        let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
+        let query_builder = RdbQueryBuilder::new_for_pg(tb_meta);
 
         let (sql, cols, binds) =
             query_builder.get_batch_insert_query(data, start_index, batch_size)?;
@@ -133,7 +133,6 @@ impl PgSinker {
 
     #[allow(clippy::type_complexity)]
     fn get_insert_query<'a>(
-        &self,
         query_builder: &RdbQueryBuilder,
         tb_meta: &PgTbMeta,
         row_data: &'a RowData,

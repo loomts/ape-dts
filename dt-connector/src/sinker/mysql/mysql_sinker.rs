@@ -103,10 +103,10 @@ impl MysqlSinker {
 
         for row_data in data.iter() {
             let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&row_data).await?;
-            let query_builder = RdbQueryBuilder::new_for_mysql(&tb_meta);
+            let query_builder = RdbQueryBuilder::new_for_mysql(tb_meta);
 
             let (mut sql, cols, binds) = query_builder.get_query_info(row_data)?;
-            sql = self.handle_dialect(&sql);
+            sql = Self::handle_dialect(&sql);
             let query = query_builder.create_mysql_query(&sql, &cols, &binds);
 
             query.execute(&self.conn_pool).await.unwrap();
@@ -122,10 +122,10 @@ impl MysqlSinker {
 
         for row_data in data.iter() {
             let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&row_data).await?;
-            let query_builder = RdbQueryBuilder::new_for_mysql(&tb_meta);
+            let query_builder = RdbQueryBuilder::new_for_mysql(tb_meta);
 
             let (mut sql, cols, binds) = query_builder.get_query_info(row_data)?;
-            sql = self.handle_dialect(&sql);
+            sql = Self::handle_dialect(&sql);
             let query = query_builder.create_mysql_query(&sql, &cols, &binds);
 
             query.execute(&mut transaction).await.unwrap();
@@ -145,7 +145,7 @@ impl MysqlSinker {
         let start_time = Instant::now();
 
         let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&data[0]).await?;
-        let query_builder = RdbQueryBuilder::new_for_mysql(&tb_meta);
+        let query_builder = RdbQueryBuilder::new_for_mysql(tb_meta);
 
         let (sql, cols, binds) =
             query_builder.get_batch_delete_query(data, start_index, batch_size)?;
@@ -174,12 +174,16 @@ impl MysqlSinker {
     ) -> Result<(), Error> {
         let start_time = Instant::now();
 
-        let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&data[0]).await?;
+        let tb_meta = self
+            .meta_manager
+            .get_tb_meta_by_row_data(&data[0])
+            .await?
+            .to_owned();
         let query_builder = RdbQueryBuilder::new_for_mysql(&tb_meta);
 
         let (mut sql, cols, binds) =
             query_builder.get_batch_insert_query(data, start_index, batch_size)?;
-        sql = self.handle_dialect(&sql);
+        sql = Self::handle_dialect(&sql);
         let query = query_builder.create_mysql_query(&sql, &cols, &binds);
 
         let execute_error: Option<sqlx::Error>;
@@ -218,7 +222,7 @@ impl MysqlSinker {
     }
 
     #[inline(always)]
-    fn handle_dialect(&self, sql: &str) -> String {
+    fn handle_dialect(sql: &str) -> String {
         sql.replace("INSERT", "REPLACE")
     }
 

@@ -186,10 +186,10 @@ impl RedisSinker {
             return Ok(None);
         }
 
-        let key = if let Some(col) = tb_meta.order_col {
+        let key = if let Some(col) = &tb_meta.order_col {
             match row_data.row_type {
-                RowType::Insert | RowType::Update => row_data.after.as_ref().unwrap().get(&col),
-                RowType::Delete => row_data.before.as_ref().unwrap().get(&col),
+                RowType::Insert | RowType::Update => row_data.after.as_ref().unwrap().get(col),
+                RowType::Delete => row_data.before.as_ref().unwrap().get(col),
             }
         } else {
             None

@@ -65,7 +65,8 @@ impl PgSnapshotExtractor {
         let tb_meta = self
             .meta_manager
             .get_tb_meta(&self.schema, &self.tb)
-            .await?;
+            .await?
+            .to_owned();
 
         if let Some(order_col) = &tb_meta.basic.order_col {
             let order_col_type = tb_meta.col_type_map.get(order_col).unwrap();
