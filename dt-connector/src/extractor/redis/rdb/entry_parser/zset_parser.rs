@@ -17,8 +17,8 @@ impl ZsetLoader {
         match type_byte {
             super::RDB_TYPE_ZSET => Self::read_zset(&mut obj, reader, false)?,
             super::RDB_TYPE_ZSET_2 => Self::read_zset(&mut obj, reader, true)?,
-            super::RDB_TYPE_ZSET_ZIP_LIST => Self::read_zset_zip_list(&mut obj, reader)?,
-            super::RDB_TYPE_ZSET_LIST_PACK => Self::read_zset_list_pack(&mut obj, reader)?,
+            super::RDB_TYPE_ZSET_ZIPLIST => Self::read_zset_zip_list(&mut obj, reader)?,
+            super::RDB_TYPE_ZSET_LISTPACK => Self::read_zset_list_pack(&mut obj, reader)?,
             _ => {
                 return Err(Error::RedisRdbError(format!(
                     "unknown zset type. type_byte=[{}]",

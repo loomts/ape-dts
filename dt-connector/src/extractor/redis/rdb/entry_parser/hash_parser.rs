@@ -16,9 +16,9 @@ impl HashLoader {
 
         match type_byte {
             super::RDB_TYPE_HASH => Self::read_hash(&mut obj, reader)?,
-            super::RDB_TYPE_HASH_ZIP_MAP => Self::read_hash_zip_map(&mut obj, reader)?,
-            super::RDB_TYPE_HASH_ZIP_LIST => Self::read_hash_zip_list(&mut obj, reader)?,
-            super::RDB_TYPE_HASH_LIST_PACK => Self::read_hash_list_pack(&mut obj, reader)?,
+            super::RDB_TYPE_HASH_ZIPMAP => Self::read_hash_zip_map(&mut obj, reader)?,
+            super::RDB_TYPE_HASH_ZIPLIST => Self::read_hash_zip_list(&mut obj, reader)?,
+            super::RDB_TYPE_HASH_LISTPACK => Self::read_hash_list_pack(&mut obj, reader)?,
             _ => {
                 return Err(Error::RedisRdbError(format!(
                     "unknown hash type. type_byte=[{}]",
