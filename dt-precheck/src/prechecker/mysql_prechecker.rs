@@ -234,7 +234,7 @@ impl Prechecker for MySqlPrechecker {
     async fn check_table_structs(&mut self) -> Result<CheckResult, Error> {
         let mut check_error: Option<Error> = None;
 
-        if !self.is_source {
+        if !self.is_source && self.precheck_config.do_struct_init {
             // do nothing when the database is a target
             return Ok(CheckResult::build_with_err(
                 CheckItem::CheckIfTableStructSupported,
@@ -259,7 +259,7 @@ impl Prechecker for MySqlPrechecker {
         all_db_names.extend(&dbs);
         all_db_names.extend(&tb_dbs);
 
-        let (mut has_pkuk_tables, mut has_fk_tables, mut no_pkuk_tables, mut err_msgs): (
+        let (mut has_pkuk_tables, mut fkref_nonexists_tables, mut no_pkuk_tables, mut err_msgs): (
             HashSet<String>,
             HashSet<String>,
             HashSet<String>,
@@ -275,7 +275,23 @@ impl Prechecker for MySqlPrechecker {
                     match constraint.constraint_type.as_str() {
                         "PRIMARY KEY" => has_pkuk_tables.insert(db_tb_name),
                         "UNIQUE" => has_pkuk_tables.insert(db_tb_name),
-                        "FOREIGN KEY" => has_fk_tables.insert(db_tb_name),
+                        "FOREIGN KEY" => {
+                            if !constraint.rel_database_name.is_empty()
+                                && !constraint.rel_table_name.is_empty()
+                            {
+                                let rel_db_tb_name = format!(
+                                    "{}.{}",
+                                    constraint.rel_database_name, constraint.rel_table_name
+                                );
+                                if self.fetcher.filter.filter_tb(
+                                    &constraint.rel_database_name,
+                                    &constraint.rel_table_name,
+                                ) {
+                                    fkref_nonexists_tables.insert(rel_db_tb_name);
+                                }
+                            }
+                            true
+                        }
                         _ => true,
                     };
                 }
@@ -296,17 +312,16 @@ impl Prechecker for MySqlPrechecker {
             Err(e) => return Err(e),
         }
 
-        // Todo:
-        // if !has_fk_tables.is_empty() {
-        //     err_msgs.push(format!(
-        //         "foreign keys are not supported, but these tables have foreign keys:[{}]",
-        //         has_fk_tables
-        //             .iter()
-        //             .map(|e| e.to_string())
-        //             .collect::<Vec<String>>()
-        //             .join(";")
-        //     ))
-        // }
+        if !fkref_nonexists_tables.is_empty() {
+            err_msgs.push(format!(
+                "the following foreign key dependent tables are not defined in the replication object:[{}]",
+                fkref_nonexists_tables
+                    .iter()
+                    .map(|e| e.to_string())
+                    .collect::<Vec<String>>()
+                    .join(";")
+            ))
+        }
 
         if !no_pkuk_tables.is_empty() {
             err_msgs.push(format!(
