@@ -23,31 +23,33 @@ impl EntryParser {
             }
 
             super::RDB_TYPE_LIST
-            | super::RDB_TYPE_LIST_ZIP_LIST
-            | super::RDB_TYPE_LIST_QUICK_LIST
-            | super::RDB_TYPE_LIST_QUICK_LIST_2 => {
+            | super::RDB_TYPE_LIST_ZIPLIST
+            | super::RDB_TYPE_LIST_QUICKLIST
+            | super::RDB_TYPE_LIST_QUICKLIST_2 => {
                 RedisObject::List(ListLoader::load_from_buffer(reader, key, type_byte)?)
             }
 
-            super::RDB_TYPE_SET | super::RDB_TYPE_SET_INT_SET => {
+            super::RDB_TYPE_SET | super::RDB_TYPE_SET_INTSET | super::RDB_TYPE_SET_LISTPACK => {
                 RedisObject::Set(SetLoader::load_from_buffer(reader, key, type_byte)?)
             }
 
             super::RDB_TYPE_ZSET
             | super::RDB_TYPE_ZSET_2
-            | super::RDB_TYPE_ZSET_ZIP_LIST
-            | super::RDB_TYPE_ZSET_LIST_PACK => {
+            | super::RDB_TYPE_ZSET_ZIPLIST
+            | super::RDB_TYPE_ZSET_LISTPACK => {
                 RedisObject::Zset(ZsetLoader::load_from_buffer(reader, key, type_byte)?)
             }
 
             super::RDB_TYPE_HASH
-            | super::RDB_TYPE_HASH_ZIP_MAP
-            | super::RDB_TYPE_HASH_ZIP_LIST
-            | super::RDB_TYPE_HASH_LIST_PACK => {
+            | super::RDB_TYPE_HASH_ZIPMAP
+            | super::RDB_TYPE_HASH_ZIPLIST
+            | super::RDB_TYPE_HASH_LISTPACK => {
                 RedisObject::Hash(HashLoader::load_from_buffer(reader, key, type_byte)?)
             }
 
-            super::RDB_TYPE_STREAM_LIST_PACKS | super::RDB_TYPE_STREAM_LIST_PACKS_2 => {
+            super::RDB_TYPE_STREAM_LISTPACKS
+            | super::RDB_TYPE_STREAM_LISTPACKS_2
+            | super::RDB_TYPE_STREAM_LISTPACKS_3 => {
                 RedisObject::Stream(StreamLoader::load_from_buffer(reader, key, type_byte)?)
             }
 
@@ -56,7 +58,11 @@ impl EntryParser {
             }
 
             _ => {
-                log::error!("unknown type byte: {}", type_byte);
+                log::error!(
+                    "unknown type byte: {}, key: {}",
+                    type_byte,
+                    String::from(key)
+                );
                 RedisObject::Unknown
             }
         };

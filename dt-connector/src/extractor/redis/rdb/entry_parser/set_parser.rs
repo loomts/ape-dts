@@ -19,7 +19,8 @@ impl SetLoader {
 
         match type_byte {
             super::RDB_TYPE_SET => Self::read_str_set(&mut obj, reader)?,
-            super::RDB_TYPE_SET_INT_SET => Self::read_int_set(&mut obj, reader)?,
+            super::RDB_TYPE_SET_INTSET => Self::read_int_set(&mut obj, reader)?,
+            super::RDB_TYPE_SET_LISTPACK => obj.elements = reader.read_list_pack()?,
             _ => {
                 return Err(Error::RedisRdbError(format!(
                     "unknown set type. type_byte=[{}]",

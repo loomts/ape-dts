@@ -19,9 +19,9 @@ impl ListLoader {
 
         match type_byte {
             super::RDB_TYPE_LIST => Self::read_list(&mut obj, reader)?,
-            super::RDB_TYPE_LIST_ZIP_LIST => obj.elements = reader.read_zip_list()?,
-            super::RDB_TYPE_LIST_QUICK_LIST => Self::read_quick_list(&mut obj, reader)?,
-            super::RDB_TYPE_LIST_QUICK_LIST_2 => Self::read_quick_list_2(&mut obj, reader)?,
+            super::RDB_TYPE_LIST_ZIPLIST => obj.elements = reader.read_zip_list()?,
+            super::RDB_TYPE_LIST_QUICKLIST => Self::read_quick_list(&mut obj, reader)?,
+            super::RDB_TYPE_LIST_QUICKLIST_2 => Self::read_quick_list_2(&mut obj, reader)?,
             _ => {
                 return Err(Error::RedisRdbError(format!(
                     "unknown list type {}",

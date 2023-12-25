@@ -118,7 +118,7 @@ impl StreamLoader {
         cmd.add_str_arg(&last_id);
         obj.cmds.push(cmd);
 
-        if type_byte == super::RDB_TYPE_STREAM_LIST_PACKS_2 {
+        if type_byte >= super::RDB_TYPE_STREAM_LISTPACKS_2 {
             // Load the first entry ID.
             let _ = reader.read_length()?; // first_ms
             let _ = reader.read_length()?; // first_seq
@@ -154,7 +154,7 @@ impl StreamLoader {
             obj.cmds.push(cmd);
 
             /* Load group offset. */
-            if type_byte == super::RDB_TYPE_STREAM_LIST_PACKS_2 {
+            if type_byte >= super::RDB_TYPE_STREAM_LISTPACKS_2 {
                 reader.read_length()?; // offset
             }
 
@@ -189,6 +189,11 @@ impl StreamLoader {
 
                 /* Load lastSeenTime */
                 let _ = reader.read_u64()?;
+
+                if type_byte >= super::RDB_TYPE_STREAM_LISTPACKS_3 {
+                    // consumer->active_time = rdbLoadMillisecondTime(rdb,RDB_VERSION);
+                    let _ = reader.read_u64();
+                }
 
                 /* Consumer PEL */
                 let n_pel = reader.read_length()?;
