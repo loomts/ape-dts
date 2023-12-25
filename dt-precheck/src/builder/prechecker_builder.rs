@@ -147,6 +147,7 @@ impl PrecheckerBuilder {
 
         println!("[*]begin to check the database structs");
         check_results.push(source_checker.check_table_structs().await);
+        check_results.push(sink_checker.check_table_structs().await);
 
         Ok(check_results)
     }

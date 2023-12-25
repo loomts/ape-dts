@@ -136,23 +136,40 @@ impl Fetcher for PgFetcher {
 
     async fn fetch_constraints(&mut self) -> Result<Vec<Constraint>, Error> {
         let mut constraints: Vec<Constraint> = vec![];
-        let sql = "SELECT nsp.nspname, rel.relname, con.conname as constraint_name, con.contype::varchar as constraint_type
-        FROM pg_catalog.pg_constraint con JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace";
+        let sql = "SELECT
+          con.conname,
+          con.contype::varchar as contype,
+          con.connamespace::regnamespace::text AS schema_name,
+          ct.relname::text AS table_name,
+          rt.relname::text AS ref_table_name,
+          cs.relnamespace::regnamespace::text as ref_schema_name
+        FROM
+             pg_constraint con
+        LEFT JOIN pg_class cs 
+        ON   con.confrelid = cs.oid
+        LEFT JOIN pg_class ct
+        ON   con.conrelid = ct.oid
+        LEFT JOIN pg_class rt
+        ON   con.confrelid = rt.oid";
 
         let rows_result = self.fetch_row(sql, "pg query constraint sql");
         match rows_result {
             Ok(mut rows) => {
                 while let Some(row) = rows.try_next().await.unwrap() {
-                    let (schema_name, table_name, constraint_name, constraint_type): (
-                        String,
-                        String,
-                        String,
-                        String,
-                    ) = (
-                        row.get("nspname"),
-                        row.get("relname"),
-                        row.get("constraint_name"),
-                        row.get("constraint_type"),
+                    let (
+                        schema_name,
+                        table_name,
+                        rel_schema_name,
+                        rel_table_name,
+                        constraint_name,
+                        constraint_type,
+                    ): (String, String, String, String, String, String) = (
+                        Self::get_text_with_null(&row, "schema_name").unwrap(),
+                        Self::get_text_with_null(&row, "table_name").unwrap(),
+                        Self::get_text_with_null(&row, "ref_schema_name").unwrap(),
+                        Self::get_text_with_null(&row, "ref_table_name").unwrap(),
+                        row.get("conname"),
+                        row.get("contype"),
                     );
                     if !self.filter.filter_tb(&schema_name, &table_name) {
                         constraints.push(Constraint {
@@ -160,6 +177,10 @@ impl Fetcher for PgFetcher {
                             schema_name,
                             table_name,
                             column_name: String::from(""),
+                            rel_database_name: String::from(""),
+                            rel_schema_name,
+                            rel_table_name,
+                            rel_column_name: String::from(""),
                             constraint_name,
                             constraint_type,
                         })
@@ -220,5 +241,15 @@ impl PgFetcher {
             Err(e) => return Err(e),
         }
         Ok(slots)
+    }
+
+    fn get_text_with_null(row: &PgRow, col_name: &str) -> Result<String, Error> {
+        let mut str_val = String::new();
+
+        if let Some(s) = row.get(col_name) {
+            str_val = s
+        }
+
+        Ok(str_val)
     }
 }

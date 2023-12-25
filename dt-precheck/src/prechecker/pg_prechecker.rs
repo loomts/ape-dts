@@ -256,7 +256,7 @@ impl Prechecker for PostgresqlPrechecker {
         // all tables have a pk, and have no fk
         let mut check_error: Option<Error> = None;
 
-        if !self.is_source {
+        if !self.is_source && self.precheck_config.do_struct_init {
             // do nothing when the database is a target
             return Ok(CheckResult::build_with_err(
                 CheckItem::CheckIfTableStructSupported,
@@ -287,7 +287,7 @@ impl Prechecker for PostgresqlPrechecker {
             ));
         }
 
-        let (mut has_pkuk_tables, mut has_fk_tables): (HashSet<String>, HashSet<String>) =
+        let (mut has_pkuk_tables, mut fkref_nonexists_tables): (HashSet<String>, HashSet<String>) =
             (HashSet::new(), HashSet::new());
 
         let table_result = self.fetcher.fetch_tables().await;
@@ -308,25 +308,29 @@ impl Prechecker for PostgresqlPrechecker {
                         || c.constraint_type == ConstraintTypeEnum::Unique.to_str().unwrap()
                     {
                         has_pkuk_tables.insert(schema_table_name);
-                    } else if c.constraint_type == ConstraintTypeEnum::Foregin.to_str().unwrap() {
-                        has_fk_tables.insert(schema_table_name);
+                    } else if c.constraint_type == ConstraintTypeEnum::Foregin.to_str().unwrap()
+                        && self
+                            .fetcher
+                            .filter
+                            .filter_tb(c.rel_schema_name.as_str(), &c.rel_table_name)
+                    {
+                        fkref_nonexists_tables.insert(schema_table_name);
                     }
                 }
             }
             Err(e) => return Err(e),
         }
 
-        // Todo:
-        // if !has_fk_tables.is_empty() {
-        //     err_msgs.push(format!(
-        //         "foreign keys are not supported, but these tables have foreign keys:[{}]",
-        //         has_fk_tables
-        //             .iter()
-        //             .map(|e| e.to_string())
-        //             .collect::<Vec<String>>()
-        //             .join(";")
-        //     ));
-        // }
+        if !fkref_nonexists_tables.is_empty() {
+            err_msgs.push(format!(
+                "the following foreign key dependent tables are not defined in the replication object:[{}]",
+                fkref_nonexists_tables
+                    .iter()
+                    .map(|e| e.to_string())
+                    .collect::<Vec<String>>()
+                    .join(";")
+            ));
+        }
 
         let mut no_pkuk_tables: HashSet<String> = HashSet::new();
         for current_table in current_tables {
