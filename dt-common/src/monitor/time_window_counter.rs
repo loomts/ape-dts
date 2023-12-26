@@ -42,13 +42,13 @@ impl TimeWindowCounter {
     }
 
     #[inline(always)]
-    pub fn avg_by_interval(&mut self) -> usize {
+    pub fn avg_by_window(&mut self) -> usize {
         self.sum() / self.time_window_secs
     }
 
     #[inline(always)]
     pub fn avg_by_count(&mut self) -> usize {
-        if self.counters.len() > 0 {
+        if !self.counters.is_empty() {
             self.sum() / self.count()
         } else {
             0

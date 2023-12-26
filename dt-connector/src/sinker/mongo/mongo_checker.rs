@@ -1,6 +1,9 @@
-use std::{collections::HashMap, sync::Arc, time::Instant};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 
-use async_rwlock::RwLock;
 use async_trait::async_trait;
 use mongodb::{
     bson::{doc, Document},
@@ -29,7 +32,7 @@ pub struct MongoChecker {
     pub router: RdbRouter,
     pub batch_size: usize,
     pub mongo_client: Client,
-    pub monitor: Arc<RwLock<Monitor>>,
+    pub monitor: Arc<Mutex<Monitor>>,
 }
 
 #[async_trait]
@@ -41,10 +44,6 @@ impl Sinker for MongoChecker {
 
         call_batch_fn!(self, data, Self::batch_check);
         Ok(())
-    }
-
-    fn get_monitor(&self) -> Option<Arc<RwLock<Monitor>>> {
-        Some(self.monitor.clone())
     }
 }
 

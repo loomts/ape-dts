@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
-    sync::{atomic::AtomicBool, Arc},
+    sync::{atomic::AtomicBool, Arc, Mutex},
+    time::Instant,
 };
 
 use async_recursion::async_recursion;
@@ -27,7 +28,9 @@ use mysql_binlog_connector_rust::{
     },
 };
 
-use dt_common::{error::Error, log_error, log_info, utils::rdb_filter::RdbFilter};
+use dt_common::{
+    error::Error, log_error, log_info, monitor::monitor::Monitor, utils::rdb_filter::RdbFilter,
+};
 
 use crate::{
     datamarker::traits::DataMarkerFilter, extractor::base_extractor::BaseExtractor,
@@ -45,6 +48,7 @@ pub struct MysqlCdcExtractor {
     pub shut_down: Arc<AtomicBool>,
     pub router: RdbRouter,
     pub datamarker_filter: Option<Box<dyn DataMarkerFilter + Send>>,
+    pub monitor: Arc<Mutex<Monitor>>,
 }
 
 const QUERY_BEGIN: &str = "BEGIN";
@@ -63,6 +67,12 @@ impl Extractor for MysqlCdcExtractor {
 
 impl MysqlCdcExtractor {
     async fn extract_internal(&mut self) -> Result<(), Error> {
+        let mut last_monitored_time = Instant::now();
+        let monitor_count_window = self.monitor.lock().unwrap().count_window;
+        let monitor_time_window_secs = self.monitor.lock().unwrap().time_window_secs as u64;
+        let mut monitored_count = 0;
+        let mut extracted_count = 0;
+
         let mut client = BinlogClient {
             url: self.url.clone(),
             binlog_filename: self.binlog_filename.clone(),
@@ -81,10 +91,25 @@ impl MysqlCdcExtractor {
                 }
 
                 _ => {
-                    self.parse_events(header, data, &binlog_filename, &mut table_map_event_map)
-                        .await?
+                    self.parse_events(
+                        header,
+                        data,
+                        &binlog_filename,
+                        &mut table_map_event_map,
+                        &mut extracted_count,
+                    )
+                    .await?
                 }
             }
+
+            (last_monitored_time, monitored_count) = BaseExtractor::update_monitor(
+                &mut self.monitor,
+                extracted_count,
+                monitored_count,
+                monitor_count_window,
+                monitor_time_window_secs,
+                last_monitored_time,
+            );
         }
     }
 
@@ -95,6 +120,7 @@ impl MysqlCdcExtractor {
         data: EventData,
         binlog_filename: &str,
         table_map_event_map: &mut HashMap<u64, TableMapEvent>,
+        extracted_count: &mut usize,
     ) -> Result<(), Error> {
         let position = Position::MysqlCdc {
             // TODO, get server_id from source mysql
@@ -114,8 +140,14 @@ impl MysqlCdcExtractor {
                     // headers of uncompressed events have no next_event_position,
                     // use header of TransactionPayload instead
                     inner_header.next_event_position = header.next_event_position;
-                    self.parse_events(inner_header, data, binlog_filename, table_map_event_map)
-                        .await?;
+                    self.parse_events(
+                        inner_header,
+                        data,
+                        binlog_filename,
+                        table_map_event_map,
+                        extracted_count,
+                    )
+                    .await?;
                 }
             }
 
@@ -137,6 +169,7 @@ impl MysqlCdcExtractor {
                         after: Some(col_values),
                     };
                     self.push_row_to_buf(row_data, position.clone()).await?;
+                    *extracted_count += 1;
                 }
             }
 
@@ -161,6 +194,7 @@ impl MysqlCdcExtractor {
                         after: Some(col_values_after),
                     };
                     self.push_row_to_buf(row_data, position.clone()).await?;
+                    *extracted_count += 1;
                 }
             }
 
@@ -182,6 +216,7 @@ impl MysqlCdcExtractor {
                         after: Option::None,
                     };
                     self.push_row_to_buf(row_data, position.clone()).await?;
+                    *extracted_count += 1;
                 }
             }
 

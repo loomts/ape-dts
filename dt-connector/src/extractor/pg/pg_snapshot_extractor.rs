@@ -1,4 +1,7 @@
-use std::sync::{atomic::AtomicBool, Arc};
+use std::{
+    sync::{atomic::AtomicBool, Arc, Mutex},
+    time::Instant,
+};
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
@@ -6,7 +9,7 @@ use futures::TryStreamExt;
 
 use sqlx::{Pool, Postgres};
 
-use dt_common::{config::config_enums::DbType, log_info};
+use dt_common::{config::config_enums::DbType, log_info, monitor::monitor::Monitor};
 
 use dt_meta::{
     adaptor::{pg_col_value_convertor::PgColValueConvertor, sqlx_ext::SqlxPgExt},
@@ -36,6 +39,7 @@ pub struct PgSnapshotExtractor {
     pub schema: String,
     pub tb: String,
     pub shut_down: Arc<AtomicBool>,
+    pub monitor: Arc<Mutex<Monitor>>,
     pub router: RdbRouter,
 }
 
@@ -91,13 +95,18 @@ impl PgSnapshotExtractor {
     }
 
     async fn extract_all(&mut self, tb_meta: &PgTbMeta) -> Result<(), Error> {
+        let mut last_monitored_time = Instant::now();
+        let monitor_count_window = self.monitor.lock().unwrap().count_window;
+        let monitor_time_window_secs = self.monitor.lock().unwrap().time_window_secs as u64;
+        let mut monitored_count = 0;
+        let mut extracted_count = 0;
+
         log_info!(
             r#"start extracting data from "{}"."{}" without slices"#,
             self.schema,
             self.tb
         );
 
-        let mut all_count = 0;
         let sql = self.build_extract_sql(tb_meta, false);
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
@@ -110,14 +119,23 @@ impl PgSnapshotExtractor {
             )
             .await
             .unwrap();
-            all_count += 1;
+            extracted_count += 1;
+
+            (last_monitored_time, monitored_count) = BaseExtractor::update_monitor(
+                &mut self.monitor,
+                extracted_count,
+                monitored_count,
+                monitor_count_window,
+                monitor_time_window_secs,
+                last_monitored_time,
+            );
         }
 
         log_info!(
             r#"end extracting data from "{}"."{}", all count: {}"#,
             self.schema,
             self.tb,
-            all_count
+            extracted_count
         );
         Ok(())
     }
@@ -129,13 +147,18 @@ impl PgSnapshotExtractor {
         order_col_type: &PgColType,
         resume_value: ColValue,
     ) -> Result<(), Error> {
+        let mut last_monitored_time = Instant::now();
+        let monitor_count_window = self.monitor.lock().unwrap().count_window;
+        let monitor_time_window_secs = self.monitor.lock().unwrap().time_window_secs as u64;
+        let mut monitored_count = 0;
+        let mut extracted_count = 0;
+
         log_info!(
             r#"start extracting data from "{}"."{}" by slices"#,
             self.schema,
             self.tb
         );
 
-        let mut all_count = 0;
         let mut start_value = resume_value;
         let sql1 = self.build_extract_sql(tb_meta, false);
         let sql2 = self.build_extract_sql(tb_meta, true);
@@ -153,9 +176,9 @@ impl PgSnapshotExtractor {
                 start_value =
                     PgColValueConvertor::from_query(&row, order_col, order_col_type).unwrap();
                 slice_count += 1;
-                all_count += 1;
+                extracted_count += 1;
                 // sampling may be used in check scenario
-                if all_count % self.sample_interval != 0 {
+                if extracted_count % self.sample_interval != 0 {
                     continue;
                 }
 
@@ -179,6 +202,15 @@ impl PgSnapshotExtractor {
                 )
                 .await
                 .unwrap();
+
+                (last_monitored_time, monitored_count) = BaseExtractor::update_monitor(
+                    &mut self.monitor,
+                    extracted_count,
+                    monitored_count,
+                    monitor_count_window,
+                    monitor_time_window_secs,
+                    last_monitored_time,
+                );
             }
 
             // all data extracted
@@ -191,7 +223,7 @@ impl PgSnapshotExtractor {
             r#"end extracting data from "{}"."{}"", all count: {}"#,
             self.schema,
             self.tb,
-            all_count
+            extracted_count
         );
         Ok(())
     }

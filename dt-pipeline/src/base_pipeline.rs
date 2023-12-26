@@ -6,14 +6,13 @@ use std::{
     time::Instant,
 };
 
-use async_rwlock::RwLock;
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
     config::sinker_config::SinkerBasicConfig,
     error::Error,
     log_info, log_position,
-    monitor::monitor::{CounterType, Monitor},
+    monitor::{counter_type::CounterType, monitor::Monitor},
     utils::time_util::TimeUtil,
 };
 use dt_connector::Sinker;
@@ -37,7 +36,7 @@ pub struct BasePipeline {
     pub checkpoint_interval_secs: u64,
     pub batch_sink_interval_secs: u64,
     pub syncer: Arc<Mutex<Syncer>>,
-    pub monitor: Arc<RwLock<Monitor>>,
+    pub monitor: Arc<Mutex<Monitor>>,
 }
 
 enum SinkMethod {
@@ -70,8 +69,8 @@ impl Pipeline for BasePipeline {
 
         while !self.shut_down.load(Ordering::Acquire) || !self.buffer.is_empty() {
             self.monitor
-                .write()
-                .await
+                .lock()
+                .unwrap()
                 .add_counter(CounterType::BufferSize, self.buffer.len());
 
             // some sinkers (foxlake) need to accumulate data to a big batch and sink
@@ -107,8 +106,8 @@ impl Pipeline for BasePipeline {
             );
 
             self.monitor
-                .write()
-                .await
+                .lock()
+                .unwrap()
                 .add_counter(CounterType::SinkedCount, sinked_count);
 
             // sleep 1 millis for data preparing
@@ -116,10 +115,6 @@ impl Pipeline for BasePipeline {
         }
 
         Ok(())
-    }
-
-    fn get_monitor(&self) -> Option<Arc<RwLock<Monitor>>> {
-        Some(self.monitor.clone())
     }
 }
 

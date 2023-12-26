@@ -14,5 +14,4 @@ tokio = { workspace = true }
 concurrent-queue = { workspace = true }
 log = { workspace = true }
 log4rs = { workspace = true }
-async-rwlock = { workspace = true }
 ratelimit = { workspace = true }

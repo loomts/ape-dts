@@ -1,6 +1,9 @@
-use std::{collections::HashMap, sync::Arc, time::Instant};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 
-use async_rwlock::RwLock;
 use async_trait::async_trait;
 use futures::TryStreamExt;
 use sqlx::{MySql, Pool};
@@ -29,7 +32,7 @@ pub struct MysqlChecker {
     pub extractor_meta_manager: RdbMetaManager,
     pub router: RdbRouter,
     pub batch_size: usize,
-    pub monitor: Arc<RwLock<Monitor>>,
+    pub monitor: Arc<Mutex<Monitor>>,
     pub filter: RdbFilter,
 }
 
@@ -59,10 +62,6 @@ impl Sinker for MysqlChecker {
 
         self.serial_ddl_check(data).await.unwrap();
         Ok(())
-    }
-
-    fn get_monitor(&self) -> Option<Arc<RwLock<Monitor>>> {
-        Some(self.monitor.clone())
     }
 }
 

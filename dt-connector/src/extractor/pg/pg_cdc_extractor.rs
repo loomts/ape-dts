@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     pin::Pin,
     sync::{atomic::AtomicBool, Arc, Mutex},
-    time::{Duration, UNIX_EPOCH},
+    time::{Duration, Instant, UNIX_EPOCH},
 };
 
 use async_trait::async_trait;
@@ -21,12 +21,12 @@ use postgres_protocol::message::backend::{
 };
 
 use postgres_types::PgLsn;
-use tokio::time::Instant;
 use tokio_postgres::replication::LogicalReplicationStream;
 
 use dt_common::{
     error::Error,
     log_error, log_info,
+    monitor::monitor::Monitor,
     utils::{rdb_filter::RdbFilter, time_util::TimeUtil},
 };
 
@@ -59,6 +59,7 @@ pub struct PgCdcExtractor {
     pub shut_down: Arc<AtomicBool>,
     pub syncer: Arc<Mutex<Syncer>>,
     pub router: RdbRouter,
+    pub monitor: Arc<Mutex<Monitor>>,
 }
 
 const SECS_FROM_1970_TO_2000: i64 = 946_684_800;
@@ -79,6 +80,12 @@ impl Extractor for PgCdcExtractor {
 
 impl PgCdcExtractor {
     async fn extract_internal(&mut self) -> Result<(), Error> {
+        let mut last_monitored_time = Instant::now();
+        let monitor_count_window = self.monitor.lock().unwrap().count_window;
+        let monitor_time_window_secs = self.monitor.lock().unwrap().time_window_secs as u64;
+        let mut monitored_count = 0;
+        let mut extracted_count = 0;
+
         let mut cdc_client = PgCdcClient {
             url: self.url.clone(),
             pub_name: self.pub_name.clone(),
@@ -177,6 +184,16 @@ impl PgCdcExtractor {
 
                 None => panic!("unexpected replication stream end"),
             }
+
+            extracted_count += 1;
+            (last_monitored_time, monitored_count) = BaseExtractor::update_monitor(
+                &mut self.monitor,
+                extracted_count,
+                monitored_count,
+                monitor_count_window,
+                monitor_time_window_secs,
+                last_monitored_time,
+            );
         }
     }
 

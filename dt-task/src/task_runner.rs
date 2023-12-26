@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     fs::{self, File},
     io::Read,
     sync::{
@@ -9,7 +8,6 @@ use std::{
     time::Duration,
 };
 
-use async_rwlock::RwLock;
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
     config::{
@@ -17,8 +15,7 @@ use dt_common::{
         extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
     },
     error::Error,
-    log_monitor,
-    monitor::monitor::{CounterType, Monitor},
+    monitor::monitor::Monitor,
     utils::{rdb_filter::RdbFilter, time_util::TimeUtil},
 };
 use dt_connector::{
@@ -30,6 +27,8 @@ use dt_pipeline::{base_pipeline::BasePipeline, Pipeline};
 use log4rs::config::RawConfig;
 use ratelimit::Ratelimiter;
 use tokio::try_join;
+
+use crate::task_util::TaskUtil;
 
 use super::{
     extractor_util::ExtractorUtil, parallelizer_util::ParallelizerUtil, sinker_util::SinkerUtil,
@@ -152,31 +151,51 @@ impl TaskRunner {
             checkpoint_position: Position::None,
         }));
 
+        let monitor_time_window_secs = self.config.pipeline.checkpoint_interval_secs as usize;
+        let monitor_count_window = self.config.pipeline.buffer_size;
+
         // extractor
+        let extractor_monitor = Arc::new(Mutex::new(Monitor::new(
+            "extractor",
+            monitor_time_window_secs,
+            monitor_count_window,
+        )));
         let mut extractor = self
             .create_extractor(
                 extractor_config,
                 buffer.clone(),
                 shut_down.clone(),
                 syncer.clone(),
+                extractor_monitor.clone(),
             )
             .await?;
-        let extractor_monitor = extractor.get_monitor();
 
         // sinkers
+        let sinker_monitor = Arc::new(Mutex::new(Monitor::new(
+            "sinker",
+            monitor_time_window_secs,
+            monitor_count_window,
+        )));
         let transaction_command = self.fetch_transaction_command();
-        let sinkers = SinkerUtil::create_sinkers(&self.config, transaction_command).await?;
-
-        let mut sinker_monitors = Vec::new();
-        for sinker in sinkers.iter() {
-            sinker_monitors.push(sinker.lock().await.get_monitor())
-        }
+        let sinkers =
+            SinkerUtil::create_sinkers(&self.config, transaction_command, sinker_monitor.clone())
+                .await?;
 
         // pipeline
+        let pipeline_monitor = Arc::new(Mutex::new(Monitor::new(
+            "pipeline",
+            monitor_time_window_secs,
+            monitor_count_window,
+        )));
         let mut pipeline = self
-            .create_pipeline(buffer, shut_down.clone(), syncer, sinkers)
+            .create_pipeline(
+                buffer,
+                shut_down.clone(),
+                syncer,
+                sinkers,
+                pipeline_monitor.clone(),
+            )
             .await?;
-        let pipeline_monitor = pipeline.get_monitor();
 
         // start threads
         let f1 = tokio::spawn(async move {
@@ -189,14 +208,14 @@ impl TaskRunner {
             pipeline.stop().await.unwrap();
         });
 
-        let interval_secs = self.config.pipeline.checkpoint_interval_secs as usize;
+        let interval_secs = self.config.pipeline.checkpoint_interval_secs;
         let f3 = tokio::spawn(async move {
             Self::flush_monitors(
                 interval_secs,
                 shut_down,
                 extractor_monitor,
                 pipeline_monitor,
-                sinker_monitors,
+                sinker_monitor,
             )
             .await
         });
@@ -210,8 +229,8 @@ impl TaskRunner {
         shut_down: Arc<AtomicBool>,
         syncer: Arc<Mutex<Syncer>>,
         sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
+        monitor: Arc<Mutex<Monitor>>,
     ) -> Result<Box<dyn Pipeline + Send>, Error> {
-        let monitor = Arc::new(RwLock::new(Monitor::new_default()));
         let rps_limiter = if self.config.pipeline.max_rps > 0 {
             Some(
                 Ratelimiter::builder(self.config.pipeline.max_rps, Duration::from_secs(1))
@@ -247,6 +266,7 @@ impl TaskRunner {
         buffer: Arc<ConcurrentQueue<DtItem>>,
         shut_down: Arc<AtomicBool>,
         syncer: Arc<Mutex<Syncer>>,
+        monitor: Arc<Mutex<Monitor>>,
     ) -> Result<Box<dyn Extractor + Send>, Error> {
         let resumer =
             SnapshotResumer::new(&self.config.extractor_basic.db_type, &self.config.resumer)?;
@@ -271,6 +291,7 @@ impl TaskRunner {
                     &self.config.runtime.log_level,
                     shut_down,
                     router.clone(),
+                    monitor,
                 )
                 .await?;
                 Box::new(extractor)
@@ -289,6 +310,7 @@ impl TaskRunner {
                     &self.config.runtime.log_level,
                     shut_down,
                     router.clone(),
+                    monitor,
                 )
                 .await?;
                 Box::new(extractor)
@@ -322,6 +344,7 @@ impl TaskRunner {
                     shut_down,
                     datamarker_filter,
                     router.clone(),
+                    monitor,
                 )
                 .await?;
                 Box::new(extractor)
@@ -344,6 +367,7 @@ impl TaskRunner {
                     &self.config.runtime.log_level,
                     shut_down,
                     router,
+                    monitor,
                 )
                 .await?;
                 Box::new(extractor)
@@ -362,6 +386,7 @@ impl TaskRunner {
                     &self.config.runtime.log_level,
                     shut_down,
                     router,
+                    monitor,
                 )
                 .await?;
                 Box::new(extractor)
@@ -387,6 +412,7 @@ impl TaskRunner {
                     shut_down,
                     syncer,
                     router,
+                    monitor,
                 )
                 .await?;
                 Box::new(extractor)
@@ -401,6 +427,7 @@ impl TaskRunner {
                     buffer,
                     shut_down,
                     router.clone(),
+                    monitor,
                 )
                 .await?;
                 Box::new(extractor)
@@ -422,6 +449,7 @@ impl TaskRunner {
                     filter,
                     shut_down,
                     router.clone(),
+                    monitor,
                 )
                 .await?;
                 Box::new(extractor)
@@ -439,6 +467,7 @@ impl TaskRunner {
                     buffer,
                     shut_down,
                     router,
+                    monitor,
                 )
                 .await?;
                 Box::new(extractor)
@@ -475,7 +504,7 @@ impl TaskRunner {
             ExtractorConfig::RedisSnapshot { url, repl_port } => {
                 let filter = RdbFilter::from_config(&self.config.filter, DbType::Redis)?;
                 let extractor = ExtractorUtil::create_redis_snapshot_extractor(
-                    url, *repl_port, buffer, filter, shut_down,
+                    url, *repl_port, buffer, filter, shut_down, monitor,
                 )
                 .await?;
                 Box::new(extractor)
@@ -503,6 +532,7 @@ impl TaskRunner {
                     filter,
                     shut_down,
                     syncer,
+                    monitor,
                 )
                 .await?;
                 Box::new(extractor)
@@ -516,6 +546,7 @@ impl TaskRunner {
                 offset,
                 ack_interval_secs,
             } => {
+                let meta_manager = TaskUtil::create_rdb_meta_manager(&self.config).await?;
                 let extractor = ExtractorUtil::create_kafka_extractor(
                     url,
                     group,
@@ -523,10 +554,11 @@ impl TaskRunner {
                     *partition,
                     *offset,
                     *ack_interval_secs,
-                    &self.config.sinker_basic,
+                    meta_manager,
                     buffer,
                     shut_down,
                     syncer,
+                    monitor,
                 )
                 .await?;
                 Box::new(extractor)
@@ -579,134 +611,22 @@ impl TaskRunner {
     }
 
     async fn flush_monitors(
-        interval_secs: usize,
+        interval_secs: u64,
         shut_down: Arc<AtomicBool>,
-        extractor_monitor: Option<Arc<RwLock<Monitor>>>,
-        pipeline_monitor: Option<Arc<RwLock<Monitor>>>,
-        mut sinker_monitors: Vec<Option<Arc<RwLock<Monitor>>>>,
+        extractor_monitor: Arc<Mutex<Monitor>>,
+        pipeline_monitor: Arc<Mutex<Monitor>>,
+        sinker_monitor: Arc<Mutex<Monitor>>,
     ) {
-        // override the interval_secs
-        if let Some(monitor) = &extractor_monitor {
-            monitor.write().await.time_window_secs = interval_secs;
-        }
-        if let Some(monitor) = &pipeline_monitor {
-            monitor.write().await.time_window_secs = interval_secs;
-        }
-        for monitor in sinker_monitors.iter_mut() {
-            if let Some(monitor) = monitor {
-                monitor.write().await.time_window_secs = interval_secs;
-            }
-        }
-
         loop {
             // do an extra flush before exit if task finished
             let finished = shut_down.load(Ordering::Acquire);
             if !finished {
-                TimeUtil::sleep_millis(interval_secs as u64 * 1000).await;
+                TimeUtil::sleep_millis(interval_secs * 1000).await;
             }
 
-            // aggregate extractor counters
-            if let Some(monitor) = &extractor_monitor {
-                for (counter_type, counter) in monitor.write().await.time_window_counters.iter_mut()
-                {
-                    counter.refresh_window();
-                    let agrregate = match counter_type {
-                        _ => 0,
-                    };
-                    log_monitor!("extractor | {} | {}", counter_type.to_string(), agrregate)
-                }
-
-                for (counter_type, counter) in monitor.read().await.accumulate_counters.iter() {
-                    log_monitor!(
-                        "extractor | {} | {}",
-                        counter_type.to_string(),
-                        counter.value
-                    )
-                }
-            }
-
-            // aggregate pipeline counters
-            if let Some(monitor) = &pipeline_monitor {
-                for (counter_type, counter) in monitor.write().await.time_window_counters.iter_mut()
-                {
-                    counter.refresh_window();
-                    let agrregate = match counter_type {
-                        CounterType::BufferSize | CounterType::RecordSize => counter.avg_by_count(),
-                        _ => 0,
-                    };
-                    log_monitor!("pipeline | {} | {}", counter_type.to_string(), agrregate)
-                }
-
-                for (counter_type, counter) in monitor.read().await.accumulate_counters.iter() {
-                    log_monitor!(
-                        "pipeline | {} | {}",
-                        counter_type.to_string(),
-                        counter.value
-                    )
-                }
-            }
-
-            // aggregate sinker monitors
-            let mut time_window_aggregates = HashMap::new();
-            let mut accumulate_aggregates = HashMap::new();
-            for monitor in sinker_monitors.iter_mut() {
-                if monitor.is_none() {
-                    continue;
-                }
-
-                if let Some(monitor) = monitor {
-                    // time window counters
-                    for (counter_type, counter) in
-                        monitor.write().await.time_window_counters.iter_mut()
-                    {
-                        counter.refresh_window();
-                        let (sum, count) =
-                            if let Some((sum, count)) = time_window_aggregates.get(counter_type) {
-                                (*sum, *count)
-                            } else {
-                                (0, 0)
-                            };
-                        time_window_aggregates.insert(
-                            counter_type.clone(),
-                            (counter.sum() + sum, counter.count() + count),
-                        );
-                    }
-
-                    // accumulate counters
-                    for (counter_type, counter) in monitor.read().await.accumulate_counters.iter() {
-                        let sum = if let Some(sum) = accumulate_aggregates.get(counter_type) {
-                            *sum
-                        } else {
-                            0
-                        };
-                        accumulate_aggregates.insert(counter_type.clone(), counter.value + sum);
-                    }
-                }
-            }
-
-            for (counter_type, (sum, count)) in time_window_aggregates {
-                let agrregate = match counter_type {
-                    CounterType::BatchWriteFailures | CounterType::SerialWrites => sum,
-
-                    CounterType::Records => sum / interval_secs,
-
-                    CounterType::BytesPerQuery
-                    | CounterType::RecordsPerQuery
-                    | CounterType::RtPerQuery => {
-                        if count > 0 {
-                            sum / count
-                        } else {
-                            0
-                        }
-                    }
-                    _ => 0,
-                };
-                log_monitor!("sinker | {} | {}", counter_type.to_string(), agrregate);
-            }
-
-            for (counter_type, sum) in accumulate_aggregates {
-                log_monitor!("sinker | {} | {}", counter_type.to_string(), sum);
-            }
+            extractor_monitor.lock().unwrap().flush();
+            pipeline_monitor.lock().unwrap().flush();
+            sinker_monitor.lock().unwrap().flush();
 
             if finished {
                 break;

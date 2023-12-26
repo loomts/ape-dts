@@ -1,7 +1,7 @@
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Instant;
 
-use async_rwlock::RwLock;
 use async_trait::async_trait;
 use dt_common::error::Error;
 use dt_common::monitor::monitor::Monitor;
@@ -29,7 +29,7 @@ pub struct RedisSinker {
     pub version: f32,
     pub method: RedisWriteMethod,
     pub meta_manager: Option<RdbMetaManager>,
-    pub monitor: Arc<RwLock<Monitor>>,
+    pub monitor: Arc<Mutex<Monitor>>,
 }
 
 #[async_trait]
@@ -50,10 +50,6 @@ impl Sinker for RedisSinker {
             self.serial_sink_dml(&mut data).await?;
         }
         Ok(())
-    }
-
-    fn get_monitor(&self) -> Option<Arc<RwLock<Monitor>>> {
-        Some(self.monitor.clone())
     }
 }
 

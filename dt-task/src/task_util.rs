@@ -97,7 +97,9 @@ impl TaskUtil {
         ))
     }
 
-    pub async fn create_rdb_meta_manager(config: &TaskConfig) -> Result<RdbMetaManager, Error> {
+    pub async fn create_rdb_meta_manager(
+        config: &TaskConfig,
+    ) -> Result<Option<RdbMetaManager>, Error> {
         let log_level = &config.runtime.log_level;
         let meta_manager = match &config.sinker {
             SinkerConfig::Mysql { url, .. } | SinkerConfig::MysqlCheck { url, .. } => {
@@ -118,10 +120,10 @@ impl TaskUtil {
             }
 
             _ => {
-                return Err(Error::ConfigError("unsupported sinker config".into()));
+                return Ok(None);
             }
         };
-        Ok(meta_manager)
+        Ok(Some(meta_manager))
     }
 
     pub async fn create_mysql_meta_manager(

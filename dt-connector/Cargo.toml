@@ -41,4 +41,3 @@ thiserror = { workspace = true }
 async-std = { workspace = true }
 chrono =  { workspace = true }
 apache-avro = {workspace = true}
-async-rwlock = { workspace = true }

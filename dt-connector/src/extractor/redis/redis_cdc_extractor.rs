@@ -1,12 +1,14 @@
 use super::redis_client::RedisClient;
 use super::redis_psync_extractor::RedisPsyncExtractor;
 use super::redis_resp_types::Value;
+use crate::extractor::base_extractor::BaseExtractor;
 use crate::Extractor;
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 use dt_common::error::Error;
 use dt_common::log_error;
 use dt_common::log_info;
+use dt_common::monitor::monitor::Monitor;
 use dt_common::utils::rdb_filter::RdbFilter;
 use dt_meta::dt_data::DtItem;
 use dt_meta::position::Position;
@@ -32,6 +34,7 @@ pub struct RedisCdcExtractor {
     pub shut_down: Arc<AtomicBool>,
     pub syncer: Arc<Mutex<Syncer>>,
     pub filter: RdbFilter,
+    pub monitor: Arc<Mutex<Monitor>>,
 }
 
 #[async_trait]
@@ -45,6 +48,7 @@ impl Extractor for RedisCdcExtractor {
             repl_port: self.repl_port,
             now_db_id: self.now_db_id,
             filter: self.filter.clone(),
+            monitor: self.monitor.clone(),
         };
 
         // receive rdb data if needed
@@ -65,6 +69,13 @@ impl RedisCdcExtractor {
         let mut heartbeat_timestamp = String::new();
         let mut hearbeat_conn = RedisClient::new(&self.conn.url).await?;
         let mut start_time = Instant::now();
+
+        let mut last_monitored_time = Instant::now();
+        let monitor_count_window = self.monitor.lock().unwrap().count_window;
+        let monitor_time_window_secs = self.monitor.lock().unwrap().time_window_secs as u64;
+        let mut monitored_count = 0;
+        let mut extracted_count = 0;
+
         loop {
             // heartbeat
             if start_time.elapsed().as_secs() > self.heartbeat_interval_secs {
@@ -108,6 +119,16 @@ impl RedisCdcExtractor {
                 };
                 RedisPsyncExtractor::push_to_buf(&self.buffer, &mut self.filter, entry, position)
                     .await;
+                extracted_count += 1;
+
+                (last_monitored_time, monitored_count) = BaseExtractor::update_monitor(
+                    &mut self.monitor,
+                    extracted_count,
+                    monitored_count,
+                    monitor_count_window,
+                    monitor_time_window_secs,
+                    last_monitored_time,
+                );
             }
         }
     }

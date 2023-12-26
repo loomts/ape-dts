@@ -1,6 +1,8 @@
-use std::{collections::VecDeque, sync::Arc};
+use std::{
+    collections::VecDeque,
+    sync::{Arc, Mutex},
+};
 
-use async_rwlock::RwLock;
 use dt_common::{
     config::{
         config_enums::{DbType, ParallelType},
@@ -26,7 +28,7 @@ pub struct ParallelizerUtil {}
 impl ParallelizerUtil {
     pub async fn create_parallelizer(
         config: &TaskConfig,
-        monitor: Arc<RwLock<Monitor>>,
+        monitor: Arc<Mutex<Monitor>>,
         rps_limiter: Option<Ratelimiter>,
     ) -> Result<Box<dyn Parallelizer + Send>, Error> {
         let parallel_size = config.parallelizer.parallel_size;
@@ -60,7 +62,7 @@ impl ParallelizerUtil {
                     merger,
                     parallel_size,
                     sinker_basic_config: config.sinker_basic.clone(),
-                    meta_manager: Some(meta_manager),
+                    meta_manager,
                 })
             }
 
@@ -105,7 +107,7 @@ impl ParallelizerUtil {
     pub async fn create_rdb_merger(
         config: &TaskConfig,
     ) -> Result<Box<dyn Merger + Send + Sync>, Error> {
-        let meta_manager = TaskUtil::create_rdb_meta_manager(config).await?;
+        let meta_manager = TaskUtil::create_rdb_meta_manager(config).await?.unwrap();
         let rdb_merger = RdbMerger { meta_manager };
         Ok(Box::new(rdb_merger))
     }
@@ -116,7 +118,7 @@ impl ParallelizerUtil {
     }
 
     pub async fn create_rdb_partitioner(config: &TaskConfig) -> Result<RdbPartitioner, Error> {
-        let meta_manager = TaskUtil::create_rdb_meta_manager(config).await?;
+        let meta_manager = TaskUtil::create_rdb_meta_manager(config).await?.unwrap();
         Ok(RdbPartitioner { meta_manager })
     }
 }

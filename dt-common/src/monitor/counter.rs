@@ -24,4 +24,13 @@ impl Counter {
         self.value += value;
         self.count += count;
     }
+
+    #[inline(always)]
+    pub fn avg_by_count(&self) -> usize {
+        if self.count > 0 {
+            self.value / self.count
+        } else {
+            0
+        }
+    }
 }
