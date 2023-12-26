@@ -132,27 +132,49 @@ impl Fetcher for MysqlFetcher {
 
     async fn fetch_constraints(&mut self) -> Result<Vec<Constraint>, Error> {
         let mut results: Vec<Constraint> = vec![];
-        let query_constaint = "SELECT 
-            TABLE_SCHEMA,
-            TABLE_NAME,
-            CONSTRAINT_NAME, 
-            CONSTRAINT_TYPE 
-            from information_schema.table_constraints";
+        let sys_dbs = MysqlFetcher::get_system_databases();
 
-        let rows_result = self.fetch_row(query_constaint, "mysql query constraints sql:");
+        let query_constaint = format!(
+            "SELECT
+              kcu.CONSTRAINT_NAME,
+              tc.CONSTRAINT_TYPE,
+              kcu.CONSTRAINT_SCHEMA,
+              kcu.TABLE_NAME,
+              kcu.COLUMN_NAME,
+              kcu.REFERENCED_TABLE_SCHEMA,
+              kcu.REFERENCED_TABLE_NAME,
+              kcu.REFERENCED_COLUMN_NAME
+            FROM
+              INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+            JOIN INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
+              ON kcu.CONSTRAINT_NAME = tc.CONSTRAINT_NAME AND kcu.CONSTRAINT_SCHEMA=tc.CONSTRAINT_SCHEMA
+            WHERE kcu.CONSTRAINT_SCHEMA not in ({})
+        ",
+            sys_dbs
+                .iter()
+                .map(|s| format!("'{}'", s))
+                .collect::<Vec<String>>()
+                .join(",")
+        );
+
+        let rows_result = self.fetch_row(query_constaint.as_str(), "mysql query constraints sql:");
         match rows_result {
             Ok(mut rows) => {
                 while let Some(row) = rows.try_next().await.unwrap() {
-                    let (db, table, constraint_name, constraint_type): (
+                    let (db, table, rel_db, rel_table, constraint_name, constraint_type): (
+                        String,
+                        String,
                         String,
                         String,
                         String,
                         String,
                     ) = (
-                        row.get("TABLE_SCHEMA"),
-                        row.get("TABLE_NAME"),
-                        row.get("CONSTRAINT_NAME"),
-                        row.get("CONSTRAINT_TYPE"),
+                        Self::get_str_with_null(&row, "CONSTRAINT_SCHEMA").unwrap(),
+                        Self::get_str_with_null(&row, "TABLE_NAME").unwrap(),
+                        Self::get_str_with_null(&row, "REFERENCED_TABLE_SCHEMA").unwrap(),
+                        Self::get_str_with_null(&row, "REFERENCED_TABLE_NAME").unwrap(),
+                        Self::get_str_with_null(&row, "CONSTRAINT_NAME").unwrap(),
+                        Self::get_str_with_null(&row, "CONSTRAINT_TYPE").unwrap(),
                     );
                     if !self.filter.filter_tb(&db, &table) {
                         results.push(Constraint {
@@ -160,6 +182,10 @@ impl Fetcher for MysqlFetcher {
                             schema_name: String::from(""),
                             table_name: table,
                             column_name: String::from(""),
+                            rel_database_name: rel_db,
+                            rel_schema_name: String::from(""),
+                            rel_table_name: rel_table,
+                            rel_column_name: String::from(""),
                             constraint_name,
                             constraint_type,
                         })
@@ -203,5 +229,19 @@ impl MysqlFetcher {
             }
             None => Err(Error::from(sqlx::Error::PoolClosed)),
         }
+    }
+
+    fn get_system_databases() -> Vec<String> {
+        let dbs = vec!["mysql", "performance_schema", "sys", "information_schema"];
+        return dbs.iter().map(|d| String::from(d.to_string())).collect();
+    }
+
+    fn get_str_with_null(row: &MySqlRow, col_name: &str) -> Result<String, Error> {
+        let mut str_val = String::new();
+        let str_val_option = row.get(col_name);
+        if let Some(s) = str_val_option {
+            str_val = s;
+        }
+        Ok(str_val)
     }
 }
