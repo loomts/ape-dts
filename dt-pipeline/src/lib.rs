@@ -1,10 +1,7 @@
 pub mod base_pipeline;
 
-use std::sync::Arc;
-
-use async_rwlock::RwLock;
 use async_trait::async_trait;
-use dt_common::{error::Error, monitor::monitor::Monitor};
+use dt_common::error::Error;
 
 #[async_trait]
 pub trait Pipeline {
@@ -14,9 +11,5 @@ pub trait Pipeline {
 
     async fn stop(&mut self) -> Result<(), Error> {
         Ok(())
-    }
-
-    fn get_monitor(&self) -> Option<Arc<RwLock<Monitor>>> {
-        None
     }
 }

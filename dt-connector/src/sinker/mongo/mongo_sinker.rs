@@ -1,6 +1,8 @@
-use std::{sync::Arc, time::Instant};
+use std::{
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 
-use async_rwlock::RwLock;
 use async_trait::async_trait;
 use mongodb::{
     bson::{doc, Document},
@@ -22,7 +24,7 @@ pub struct MongoSinker {
     pub router: RdbRouter,
     pub batch_size: usize,
     pub mongo_client: Client,
-    pub monitor: Arc<RwLock<Monitor>>,
+    pub monitor: Arc<Mutex<Monitor>>,
 }
 
 #[async_trait]
@@ -46,10 +48,6 @@ impl Sinker for MongoSinker {
             }
         }
         Ok(())
-    }
-
-    fn get_monitor(&self) -> Option<Arc<RwLock<Monitor>>> {
-        Some(self.monitor.clone())
     }
 }
 

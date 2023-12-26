@@ -1,11 +1,19 @@
 use std::{
     collections::HashMap,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
+    time::Instant,
 };
 
 use concurrent_queue::ConcurrentQueue;
 
-use dt_common::{error::Error, utils::time_util::TimeUtil};
+use dt_common::{
+    error::Error,
+    monitor::{counter_type::CounterType, monitor::Monitor},
+    utils::time_util::TimeUtil,
+};
 use dt_meta::{
     col_value::ColValue,
     dt_data::{DtData, DtItem},
@@ -83,6 +91,32 @@ impl BaseExtractor {
         }
 
         return row_data;
+    }
+
+    /// return: (last monitor time, monitored count)
+    pub fn update_monitor(
+        monitor: &mut Arc<Mutex<Monitor>>,
+        extracted_count: usize,
+        monitored_count: usize,
+        monitor_count_window: usize,
+        monitor_time_window_secs: u64,
+        last_monitored_time: Instant,
+    ) -> (Instant, usize) {
+        let count = extracted_count - monitored_count;
+        if count >= monitor_count_window
+            || last_monitored_time.elapsed().as_secs() >= monitor_time_window_secs
+        {
+            monitor
+                .lock()
+                .unwrap()
+                .add_counter(CounterType::Records, count)
+                .add_counter(
+                    CounterType::RtPerQuery,
+                    last_monitored_time.elapsed().as_micros() as usize,
+                );
+            return (Instant::now(), extracted_count);
+        }
+        (last_monitored_time, monitored_count)
     }
 
     pub async fn wait_task_finish(

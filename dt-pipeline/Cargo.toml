@@ -18,4 +18,3 @@ log4rs = { workspace = true }
 futures = { workspace = true }
 regex = { workspace = true }
 async-std = { workspace = true }
-async-rwlock = { workspace = true }

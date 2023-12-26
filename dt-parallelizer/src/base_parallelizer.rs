@@ -1,10 +1,6 @@
-use std::collections::VecDeque;
-use std::sync::Arc;
-
-use async_rwlock::RwLock;
 use concurrent_queue::ConcurrentQueue;
 use dt_common::monitor::counter::Counter;
-use dt_common::monitor::monitor::CounterType;
+use dt_common::monitor::counter_type::CounterType;
 use dt_common::{error::Error, monitor::monitor::Monitor};
 use dt_connector::Sinker;
 use dt_meta::{
@@ -13,10 +9,12 @@ use dt_meta::{
     row_data::RowData,
 };
 use ratelimit::Ratelimiter;
+use std::collections::VecDeque;
+use std::sync::{Arc, Mutex};
 
 pub struct BaseParallelizer {
     pub poped_data: VecDeque<DtItem>,
-    pub monitor: Arc<RwLock<Monitor>>,
+    pub monitor: Arc<Mutex<Monitor>>,
     pub rps_limiter: Option<Ratelimiter>,
 }
 
@@ -73,7 +71,7 @@ impl BaseParallelizer {
 
     pub async fn update_monitor(&self, record_size_counter: &Counter) {
         if record_size_counter.value > 0 {
-            self.monitor.write().await.add_batch_counter(
+            self.monitor.lock().unwrap().add_batch_counter(
                 CounterType::RecordSize,
                 record_size_counter.value,
                 record_size_counter.count,

@@ -1,10 +1,11 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
     config::{config_enums::DbType, extractor_config::ExtractorConfig, task_config::TaskConfig},
     error::Error,
+    monitor::monitor::Monitor,
     utils::rdb_filter::RdbFilter,
 };
 use dt_connector::extractor::redis::{
@@ -71,6 +72,8 @@ impl Prechecker for RedisPrechecker {
         let buffer = Arc::new(ConcurrentQueue::bounded(1));
 
         let filter = RdbFilter::from_config(&self.task_config.filter, DbType::Redis)?;
+        let monitor = Arc::new(Mutex::new(Monitor::new("extractor", 1, 1)));
+
         let mut psyncer = RedisPsyncExtractor {
             conn: &mut conn,
             run_id: String::new(),
@@ -79,6 +82,7 @@ impl Prechecker for RedisPrechecker {
             repl_port,
             buffer,
             filter,
+            monitor,
         };
 
         if let Err(error) = psyncer.start_psync().await {

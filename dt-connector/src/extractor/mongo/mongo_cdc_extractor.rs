@@ -1,12 +1,13 @@
 use std::{
     collections::HashMap,
-    sync::{atomic::AtomicBool, Arc},
+    sync::{atomic::AtomicBool, Arc, Mutex},
+    time::Instant,
 };
 
 use async_trait::async_trait;
 use chrono::Utc;
 use concurrent_queue::ConcurrentQueue;
-use dt_common::{error::Error, log_info, utils::rdb_filter::RdbFilter};
+use dt_common::{error::Error, log_info, monitor::monitor::Monitor, utils::rdb_filter::RdbFilter};
 use dt_meta::{
     col_value::ColValue,
     dt_data::DtItem,
@@ -36,6 +37,7 @@ pub struct MongoCdcExtractor {
     pub source: MongoCdcSource,
     pub mongo_client: Client,
     pub router: RdbRouter,
+    pub monitor: Arc<Mutex<Monitor>>,
 }
 
 #[async_trait]
@@ -57,6 +59,12 @@ impl Extractor for MongoCdcExtractor {
 
 impl MongoCdcExtractor {
     async fn extract_oplog(&mut self) -> Result<(), Error> {
+        let mut last_monitored_time = Instant::now();
+        let monitor_count_window = self.monitor.lock().unwrap().count_window;
+        let monitor_time_window_secs = self.monitor.lock().unwrap().time_window_secs as u64;
+        let mut monitored_count = 0;
+        let mut extracted_count = 0;
+
         let start_timestamp = self.parse_start_timestamp();
         let filter = doc! {
             "ts": { "$gte": start_timestamp }
@@ -127,6 +135,7 @@ impl MongoCdcExtractor {
                     let data = Self::extract_oplog_delete_many(&doc);
                     for (row_data, position) in data {
                         self.push_row_to_buf(row_data, position).await.unwrap();
+                        extracted_count += 1;
                     }
                     continue;
                 }
@@ -144,6 +153,16 @@ impl MongoCdcExtractor {
             let (row_data, position) =
                 Self::build_oplog_row_data(&ns, &ts, row_type, before, after);
             self.push_row_to_buf(row_data, position).await.unwrap();
+            extracted_count += 1;
+
+            (last_monitored_time, monitored_count) = BaseExtractor::update_monitor(
+                &mut self.monitor,
+                extracted_count,
+                monitored_count,
+                monitor_count_window,
+                monitor_time_window_secs,
+                last_monitored_time,
+            );
         }
         Ok(())
     }
@@ -269,6 +288,12 @@ impl MongoCdcExtractor {
     }
 
     async fn extract_change_stream(&mut self) -> Result<(), Error> {
+        let mut last_monitored_time = Instant::now();
+        let monitor_count_window = self.monitor.lock().unwrap().count_window;
+        let monitor_time_window_secs = self.monitor.lock().unwrap().time_window_secs as u64;
+        let mut monitored_count = 0;
+        let mut extracted_count = 0;
+
         let (resume_token, start_timestamp) = if self.resume_token.is_empty() {
             (None, Some(self.parse_start_timestamp()))
         } else {
@@ -360,6 +385,16 @@ impl MongoCdcExtractor {
                     after: Some(after),
                 };
                 self.push_row_to_buf(row_data, position).await.unwrap();
+                extracted_count += 1;
+
+                (last_monitored_time, monitored_count) = BaseExtractor::update_monitor(
+                    &mut self.monitor,
+                    extracted_count,
+                    monitored_count,
+                    monitor_count_window,
+                    monitor_time_window_secs,
+                    last_monitored_time,
+                );
             }
         }
     }

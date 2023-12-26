@@ -1,7 +1,9 @@
-use std::{sync::Arc, time::Instant};
+use std::{
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 
 use crate::{call_batch_fn, sinker::base_sinker::BaseSinker, Sinker};
-use async_rwlock::RwLock;
 use async_trait::async_trait;
 use dt_common::{error::Error, log_error, monitor::monitor::Monitor};
 use dt_meta::{row_data::RowData, row_type::RowType};
@@ -16,7 +18,7 @@ pub struct StarRocksSinker {
     pub port: String,
     pub username: String,
     pub password: String,
-    pub monitor: Arc<RwLock<Monitor>>,
+    pub monitor: Arc<Mutex<Monitor>>,
 }
 
 #[async_trait]
@@ -37,10 +39,6 @@ impl Sinker for StarRocksSinker {
             }
         }
         Ok(())
-    }
-
-    fn get_monitor(&self) -> Option<Arc<RwLock<Monitor>>> {
-        Some(self.monitor.clone())
     }
 }
 

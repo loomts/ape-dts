@@ -5,10 +5,11 @@ use crate::Extractor;
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 use dt_common::error::Error;
+use dt_common::monitor::monitor::Monitor;
 use dt_common::utils::rdb_filter::RdbFilter;
 use dt_meta::dt_data::DtItem;
 use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 pub struct RedisSnapshotExtractor {
     pub conn: RedisClient,
@@ -16,6 +17,7 @@ pub struct RedisSnapshotExtractor {
     pub buffer: Arc<ConcurrentQueue<DtItem>>,
     pub shut_down: Arc<AtomicBool>,
     pub filter: RdbFilter,
+    pub monitor: Arc<Mutex<Monitor>>,
 }
 
 #[async_trait]
@@ -29,6 +31,7 @@ impl Extractor for RedisSnapshotExtractor {
             repl_port: self.repl_port,
             now_db_id: 0,
             filter: self.filter.clone(),
+            monitor: self.monitor.clone(),
         };
         psync_extractor.extract().await?;
         BaseExtractor::wait_task_finish(self.buffer.as_ref(), self.shut_down.as_ref()).await

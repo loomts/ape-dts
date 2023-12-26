@@ -1,11 +1,13 @@
-use std::{sync::Arc, time::Instant};
+use std::{
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 
 use crate::{
     call_batch_fn, close_conn_pool, rdb_query_builder::RdbQueryBuilder, rdb_router::RdbRouter,
     sinker::base_sinker::BaseSinker, Sinker,
 };
 
-use async_rwlock::RwLock;
 use dt_common::{
     config::config_enums::DbType, error::Error, log_error, monitor::monitor::Monitor,
     utils::sql_util::SqlUtil,
@@ -27,7 +29,7 @@ pub struct PgSinker {
     pub meta_manager: PgMetaManager,
     pub router: RdbRouter,
     pub batch_size: usize,
-    pub monitor: Arc<RwLock<Monitor>>,
+    pub monitor: Arc<Mutex<Monitor>>,
 }
 
 #[async_trait]
@@ -55,10 +57,6 @@ impl Sinker for PgSinker {
 
     async fn close(&mut self) -> Result<(), Error> {
         return close_conn_pool!(self);
-    }
-
-    fn get_monitor(&self) -> Option<Arc<RwLock<Monitor>>> {
-        Some(self.monitor.clone())
     }
 }
 

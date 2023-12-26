@@ -6,12 +6,9 @@ pub mod rdb_query_builder;
 pub mod rdb_router;
 pub mod sinker;
 
-use std::sync::Arc;
-
-use async_rwlock::RwLock;
 use async_trait::async_trait;
 use check_log::check_log::CheckLog;
-use dt_common::{error::Error, monitor::monitor::Monitor};
+use dt_common::error::Error;
 use dt_meta::{ddl_data::DdlData, dt_data::DtData, row_data::RowData};
 
 #[async_trait]
@@ -35,10 +32,6 @@ pub trait Sinker {
     async fn refresh_meta(&mut self, _data: Vec<DdlData>) -> Result<(), Error> {
         Ok(())
     }
-
-    fn get_monitor(&self) -> Option<Arc<RwLock<Monitor>>> {
-        None
-    }
 }
 
 #[async_trait]
@@ -47,10 +40,6 @@ pub trait Extractor {
 
     async fn close(&mut self) -> Result<(), Error> {
         Ok(())
-    }
-
-    fn get_monitor(&self) -> Option<Arc<RwLock<Monitor>>> {
-        None
     }
 }
 

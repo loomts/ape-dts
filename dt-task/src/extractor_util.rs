@@ -4,12 +4,11 @@ use std::{
     sync::{atomic::AtomicBool, Arc, Mutex},
 };
 
-use async_rwlock::RwLock;
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
     config::{
         config_enums::DbType, datamarker_config::DataMarkerConfig,
-        extractor_config::ExtractorConfig, sinker_config::SinkerBasicConfig,
+        extractor_config::ExtractorConfig,
     },
     datamarker::transaction_control::TransactionWorker,
     error::Error,
@@ -179,6 +178,7 @@ impl ExtractorUtil {
         shut_down: Arc<AtomicBool>,
         datamarker_filter: Option<Box<dyn DataMarkerFilter + Send>>,
         router: RdbRouter,
+        monitor: Arc<Mutex<Monitor>>,
     ) -> Result<MysqlCdcExtractor, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool = TaskUtil::create_mysql_conn_pool(url, 2, enable_sqlx_log).await?;
@@ -195,6 +195,7 @@ impl ExtractorUtil {
             shut_down,
             datamarker_filter,
             router,
+            monitor,
         })
     }
 
@@ -211,6 +212,7 @@ impl ExtractorUtil {
         shut_down: Arc<AtomicBool>,
         syncer: Arc<Mutex<Syncer>>,
         router: RdbRouter,
+        monitor: Arc<Mutex<Monitor>>,
     ) -> Result<PgCdcExtractor, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool = TaskUtil::create_pg_conn_pool(url, 2, enable_sqlx_log).await?;
@@ -228,6 +230,7 @@ impl ExtractorUtil {
             syncer,
             heartbeat_interval_secs,
             router,
+            monitor,
         })
     }
 
@@ -243,6 +246,7 @@ impl ExtractorUtil {
         log_level: &str,
         shut_down: Arc<AtomicBool>,
         router: RdbRouter,
+        monitor: Arc<Mutex<Monitor>>,
     ) -> Result<MysqlSnapshotExtractor, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         // max_connections: 1 for extracting data from table, 1 for db-meta-manager
@@ -259,7 +263,7 @@ impl ExtractorUtil {
             slice_size,
             sample_interval,
             shut_down,
-            monitor: Arc::new(RwLock::new(Monitor::new_default())),
+            monitor,
             router,
         })
     }
@@ -272,6 +276,7 @@ impl ExtractorUtil {
         log_level: &str,
         shut_down: Arc<AtomicBool>,
         router: RdbRouter,
+        monitor: Arc<Mutex<Monitor>>,
     ) -> Result<MysqlCheckExtractor, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool = TaskUtil::create_mysql_conn_pool(url, 2, enable_sqlx_log).await?;
@@ -285,6 +290,7 @@ impl ExtractorUtil {
             batch_size,
             shut_down,
             router,
+            monitor,
         })
     }
 
@@ -296,6 +302,7 @@ impl ExtractorUtil {
         log_level: &str,
         shut_down: Arc<AtomicBool>,
         router: RdbRouter,
+        monitor: Arc<Mutex<Monitor>>,
     ) -> Result<PgCheckExtractor, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool = TaskUtil::create_pg_conn_pool(url, 2, enable_sqlx_log).await?;
@@ -309,6 +316,7 @@ impl ExtractorUtil {
             batch_size,
             shut_down,
             router,
+            monitor,
         })
     }
 
@@ -324,6 +332,7 @@ impl ExtractorUtil {
         log_level: &str,
         shut_down: Arc<AtomicBool>,
         router: RdbRouter,
+        monitor: Arc<Mutex<Monitor>>,
     ) -> Result<PgSnapshotExtractor, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool = TaskUtil::create_pg_conn_pool(url, 2, enable_sqlx_log).await?;
@@ -340,6 +349,7 @@ impl ExtractorUtil {
             tb: tb.to_string(),
             shut_down,
             router,
+            monitor,
         })
     }
 
@@ -351,6 +361,7 @@ impl ExtractorUtil {
         buffer: Arc<ConcurrentQueue<DtItem>>,
         shut_down: Arc<AtomicBool>,
         router: RdbRouter,
+        monitor: Arc<Mutex<Monitor>>,
     ) -> Result<MongoSnapshotExtractor, Error> {
         let mongo_client = TaskUtil::create_mongo_client(url).await.unwrap();
         Ok(MongoSnapshotExtractor {
@@ -361,6 +372,7 @@ impl ExtractorUtil {
             shut_down,
             mongo_client,
             router,
+            monitor,
         })
     }
 
@@ -373,6 +385,7 @@ impl ExtractorUtil {
         filter: RdbFilter,
         shut_down: Arc<AtomicBool>,
         router: RdbRouter,
+        monitor: Arc<Mutex<Monitor>>,
     ) -> Result<MongoCdcExtractor, Error> {
         let mongo_client = TaskUtil::create_mongo_client(url).await.unwrap();
         Ok(MongoCdcExtractor {
@@ -384,6 +397,7 @@ impl ExtractorUtil {
             shut_down,
             mongo_client,
             router,
+            monitor,
         })
     }
 
@@ -394,6 +408,7 @@ impl ExtractorUtil {
         buffer: Arc<ConcurrentQueue<DtItem>>,
         shut_down: Arc<AtomicBool>,
         router: RdbRouter,
+        monitor: Arc<Mutex<Monitor>>,
     ) -> Result<MongoCheckExtractor, Error> {
         let mongo_client = TaskUtil::create_mongo_client(url).await.unwrap();
         Ok(MongoCheckExtractor {
@@ -403,6 +418,7 @@ impl ExtractorUtil {
             batch_size,
             shut_down,
             router,
+            monitor,
         })
     }
 
@@ -454,6 +470,7 @@ impl ExtractorUtil {
         buffer: Arc<ConcurrentQueue<DtItem>>,
         filter: RdbFilter,
         shut_down: Arc<AtomicBool>,
+        monitor: Arc<Mutex<Monitor>>,
     ) -> Result<RedisSnapshotExtractor, Error> {
         // let conn = TaskUtil::create_redis_conn(url).await?;
         let conn = RedisClient::new(url).await.unwrap();
@@ -463,6 +480,7 @@ impl ExtractorUtil {
             shut_down,
             repl_port,
             filter,
+            monitor,
         })
     }
 
@@ -478,6 +496,7 @@ impl ExtractorUtil {
         filter: RdbFilter,
         shut_down: Arc<AtomicBool>,
         syncer: Arc<Mutex<Syncer>>,
+        monitor: Arc<Mutex<Monitor>>,
     ) -> Result<RedisCdcExtractor, Error> {
         // let conn = TaskUtil::create_redis_conn(url).await?;
         let conn = RedisClient::new(url).await.unwrap();
@@ -493,6 +512,7 @@ impl ExtractorUtil {
             repl_port,
             now_db_id: now_db_id,
             filter,
+            monitor,
         })
     }
 
@@ -503,28 +523,13 @@ impl ExtractorUtil {
         partition: i32,
         offset: i64,
         ack_interval_secs: u64,
-        sinker_basic_config: &SinkerBasicConfig,
+        meta_manager: Option<RdbMetaManager>,
         buffer: Arc<ConcurrentQueue<DtItem>>,
         shut_down: Arc<AtomicBool>,
         syncer: Arc<Mutex<Syncer>>,
+        monitor: Arc<Mutex<Monitor>>,
     ) -> Result<KafkaExtractor, Error> {
-        // kafka extractor may need to get sinker meta data if sinker is RDB
-        let sinker_url = &sinker_basic_config.url;
-        let meta_manager = match sinker_basic_config.db_type {
-            DbType::Mysql => {
-                let conn_pool = TaskUtil::create_mysql_conn_pool(sinker_url, 1, true).await?;
-                let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
-                Some(RdbMetaManager::from_mysql(meta_manager))
-            }
-            DbType::Pg => {
-                let conn_pool = TaskUtil::create_pg_conn_pool(sinker_url, 1, true).await?;
-                let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
-                Some(RdbMetaManager::from_pg(meta_manager))
-            }
-            _ => None,
-        };
         let avro_converter = AvroConverter::new(meta_manager);
-
         Ok(KafkaExtractor {
             url: url.into(),
             group: group.into(),
@@ -536,6 +541,7 @@ impl ExtractorUtil {
             shut_down,
             avro_converter,
             syncer,
+            monitor,
         })
     }
 

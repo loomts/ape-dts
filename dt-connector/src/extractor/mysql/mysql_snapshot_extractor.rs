@@ -1,6 +1,8 @@
-use std::sync::{atomic::AtomicBool, Arc};
+use std::{
+    sync::{atomic::AtomicBool, Arc, Mutex},
+    time::Instant,
+};
 
-use async_rwlock::RwLock;
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 use dt_meta::{
@@ -36,7 +38,7 @@ pub struct MysqlSnapshotExtractor {
     pub db: String,
     pub tb: String,
     pub shut_down: Arc<AtomicBool>,
-    pub monitor: Arc<RwLock<Monitor>>,
+    pub monitor: Arc<Mutex<Monitor>>,
     pub router: RdbRouter,
 }
 
@@ -58,10 +60,6 @@ impl Extractor for MysqlSnapshotExtractor {
         }
         self.conn_pool.close().await;
         Ok(())
-    }
-
-    fn get_monitor(&self) -> Option<Arc<RwLock<Monitor>>> {
-        Some(self.monitor.clone())
     }
 }
 
@@ -93,13 +91,18 @@ impl MysqlSnapshotExtractor {
     }
 
     async fn extract_all(&mut self, tb_meta: &MysqlTbMeta) -> Result<(), Error> {
+        let mut last_monitored_time = Instant::now();
+        let monitor_count_window = self.monitor.lock().unwrap().count_window;
+        let monitor_time_window_secs = self.monitor.lock().unwrap().time_window_secs as u64;
+        let mut monitored_count = 0;
+        let mut extracted_count = 0;
+
         log_info!(
             "start extracting data from `{}`.`{}` without slices",
             self.db,
             self.tb
         );
 
-        let mut all_count = 0;
         let sql = format!("SELECT * FROM `{}`.`{}`", self.db, self.tb);
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
@@ -112,14 +115,23 @@ impl MysqlSnapshotExtractor {
             )
             .await
             .unwrap();
-            all_count += 1;
+            extracted_count += 1;
+
+            (last_monitored_time, monitored_count) = BaseExtractor::update_monitor(
+                &mut self.monitor,
+                extracted_count,
+                monitored_count,
+                monitor_count_window,
+                monitor_time_window_secs,
+                last_monitored_time,
+            );
         }
 
         log_info!(
             "end extracting data from `{}`.`{}`, all count: {}",
             self.db,
             self.tb,
-            all_count
+            extracted_count
         );
         Ok(())
     }
@@ -131,13 +143,18 @@ impl MysqlSnapshotExtractor {
         order_col_type: &MysqlColType,
         resume_value: ColValue,
     ) -> Result<(), Error> {
+        let mut last_monitored_time = Instant::now();
+        let monitor_count_window = self.monitor.lock().unwrap().count_window;
+        let monitor_time_window_secs = self.monitor.lock().unwrap().time_window_secs as u64;
+        let mut monitored_count = 0;
+        let mut extracted_count = 0;
+
         log_info!(
             "start extracting data from `{}`.`{}` by slices",
             self.db,
             self.tb
         );
 
-        let mut all_count = 0;
         let mut start_value = resume_value;
         let sql1 = format!(
             "SELECT * FROM `{}`.`{}` ORDER BY `{}` ASC LIMIT {}",
@@ -161,10 +178,10 @@ impl MysqlSnapshotExtractor {
             while let Some(row) = rows.try_next().await.unwrap() {
                 start_value =
                     MysqlColValueConvertor::from_query(&row, order_col, order_col_type).unwrap();
-                all_count += 1;
+                extracted_count += 1;
                 slice_count += 1;
                 // sampling may be used in check scenario
-                if all_count % self.sample_interval != 0 {
+                if extracted_count % self.sample_interval != 0 {
                     continue;
                 }
 
@@ -188,6 +205,15 @@ impl MysqlSnapshotExtractor {
                 )
                 .await
                 .unwrap();
+
+                (last_monitored_time, monitored_count) = BaseExtractor::update_monitor(
+                    &mut self.monitor,
+                    extracted_count,
+                    monitored_count,
+                    monitor_count_window,
+                    monitor_time_window_secs,
+                    last_monitored_time,
+                );
             }
 
             // all data extracted
@@ -200,7 +226,7 @@ impl MysqlSnapshotExtractor {
             "end extracting data from `{}`.`{}`, all count: {}",
             self.db,
             self.tb,
-            all_count
+            extracted_count
         );
         Ok(())
     }

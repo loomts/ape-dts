@@ -1,22 +1,24 @@
-use std::{sync::Arc, time::Instant};
+use std::{
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 
-use async_rwlock::RwLock;
 use dt_common::{
     error::Error,
-    monitor::monitor::{CounterType, Monitor},
+    monitor::{counter_type::CounterType, monitor::Monitor},
 };
 
 pub struct BaseSinker {}
 
 impl BaseSinker {
     pub async fn update_batch_monitor(
-        monitor: &mut Arc<RwLock<Monitor>>,
+        monitor: &mut Arc<Mutex<Monitor>>,
         batch_size: usize,
         start_time: Instant,
     ) -> Result<(), Error> {
         monitor
-            .write()
-            .await
+            .lock()
+            .unwrap()
             .add_counter(CounterType::RecordsPerQuery, batch_size)
             .add_counter(CounterType::Records, batch_size)
             .add_counter(
@@ -27,13 +29,13 @@ impl BaseSinker {
     }
 
     pub async fn update_serial_monitor(
-        monitor: &mut Arc<RwLock<Monitor>>,
+        monitor: &mut Arc<Mutex<Monitor>>,
         record_count: usize,
         start_time: Instant,
     ) -> Result<(), Error> {
         monitor
-            .write()
-            .await
+            .lock()
+            .unwrap()
             .add_batch_counter(CounterType::RecordsPerQuery, record_count, record_count)
             .add_counter(CounterType::Records, record_count)
             .add_counter(CounterType::SerialWrites, record_count)

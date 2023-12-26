@@ -1,6 +1,8 @@
-use std::{sync::Arc, time::Instant};
+use std::{
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 
-use async_rwlock::RwLock;
 use async_trait::async_trait;
 
 use crate::{call_batch_fn, rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker};
@@ -16,7 +18,7 @@ pub struct KafkaSinker {
     pub router: RdbRouter,
     pub producer: Producer,
     pub avro_converter: AvroConverter,
-    pub monitor: Arc<RwLock<Monitor>>,
+    pub monitor: Arc<Mutex<Monitor>>,
 }
 
 #[async_trait]
@@ -27,10 +29,6 @@ impl Sinker for KafkaSinker {
         call_batch_fn!(self, data, Self::send_avro);
 
         BaseSinker::update_batch_monitor(&mut self.monitor, data.len(), start_time).await
-    }
-
-    fn get_monitor(&self) -> Option<Arc<RwLock<Monitor>>> {
-        Some(self.monitor.clone())
     }
 }
 

@@ -1,58 +1,59 @@
 use std::collections::HashMap;
 
-use strum::{Display, EnumString, IntoStaticStr};
+use crate::log_monitor;
+use crate::monitor::counter_type::AggreateType;
 
 use super::counter::Counter;
+use super::counter_type::{CounterType, WindowType};
 use super::time_window_counter::TimeWindowCounter;
 
 #[derive(Clone)]
 pub struct Monitor {
-    pub accumulate_counters: HashMap<CounterType, Counter>,
+    pub name: String,
+    pub no_window_counters: HashMap<CounterType, Counter>,
     pub time_window_counters: HashMap<CounterType, TimeWindowCounter>,
     pub time_window_secs: usize,
+    pub count_window: usize,
 }
-
-#[derive(EnumString, IntoStaticStr, Display, PartialEq, Eq, Hash, Clone)]
-pub enum CounterType {
-    // time window counter, aggregate by: sum by interval
-    #[strum(serialize = "batch_write_failures")]
-    BatchWriteFailures,
-    #[strum(serialize = "serial_writes")]
-    SerialWrites,
-
-    // time window counter, aggregate by: avg by interval
-    #[strum(serialize = "rps")]
-    Records,
-
-    // time window counter, aggregate by: avg by count
-    #[strum(serialize = "bytes_per_query")]
-    BytesPerQuery,
-    #[strum(serialize = "records_per_query")]
-    RecordsPerQuery,
-    #[strum(serialize = "rt_per_query")]
-    RtPerQuery,
-    #[strum(serialize = "buffer_size")]
-    BufferSize,
-    #[strum(serialize = "record_size")]
-    RecordSize,
-
-    // accumulate counter
-    #[strum(serialize = "sinked_count")]
-    SinkedCount,
-}
-
-const DEFAULT_INTERVAL_SECS: usize = 5;
 
 impl Monitor {
-    pub fn new_default() -> Self {
-        Self::new(DEFAULT_INTERVAL_SECS)
+    pub fn new(name: &str, time_window_secs: usize, count_window: usize) -> Self {
+        Self {
+            name: name.into(),
+            no_window_counters: HashMap::new(),
+            time_window_counters: HashMap::new(),
+            time_window_secs,
+            count_window,
+        }
     }
 
-    pub fn new(interval_secs: usize) -> Self {
-        Self {
-            accumulate_counters: HashMap::new(),
-            time_window_counters: HashMap::new(),
-            time_window_secs: interval_secs,
+    pub fn flush(&mut self) {
+        for (counter_type, counter) in self.time_window_counters.iter_mut() {
+            counter.refresh_window();
+            let aggregate = match counter_type.get_aggregate_type() {
+                AggreateType::AvgByCount => counter.avg_by_count(),
+                AggreateType::AvgByWindow => counter.avg_by_window(),
+                AggreateType::Sum => counter.sum(),
+            };
+            log_monitor!(
+                "{} | {} | {}",
+                self.name,
+                counter_type.to_string(),
+                aggregate
+            );
+        }
+
+        for (counter_type, counter) in self.no_window_counters.iter() {
+            let aggregate = match counter_type.get_aggregate_type() {
+                AggreateType::AvgByCount => counter.avg_by_count(),
+                _ => counter.value,
+            };
+            log_monitor!(
+                "{} | {} | {}",
+                self.name,
+                counter_type.to_string(),
+                aggregate
+            );
         }
     }
 
@@ -78,17 +79,17 @@ impl Monitor {
         value: usize,
         count: usize,
     ) -> &mut Self {
-        match counter_type {
-            CounterType::SinkedCount => {
-                if let Some(counter) = self.accumulate_counters.get_mut(&counter_type) {
+        match counter_type.get_window_type() {
+            WindowType::NoWindow => {
+                if let Some(counter) = self.no_window_counters.get_mut(&counter_type) {
                     counter.add(value, count);
                 } else {
-                    self.accumulate_counters
+                    self.no_window_counters
                         .insert(counter_type, Counter::new(value, count));
                 }
             }
 
-            _ => {
+            WindowType::TimeWindow => {
                 if let Some(counter) = self.time_window_counters.get_mut(&counter_type) {
                     counter.add(value, count)
                 } else {

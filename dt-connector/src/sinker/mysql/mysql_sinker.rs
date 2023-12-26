@@ -1,11 +1,14 @@
-use std::{str::FromStr, sync::Arc, time::Instant};
+use std::{
+    str::FromStr,
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 
 use crate::{
     call_batch_fn, close_conn_pool, rdb_query_builder::RdbQueryBuilder, rdb_router::RdbRouter,
     sinker::base_sinker::BaseSinker, Sinker,
 };
 
-use async_rwlock::RwLock;
 use dt_common::{error::Error, log_error, log_info, monitor::monitor::Monitor};
 
 use dt_meta::{
@@ -27,7 +30,7 @@ pub struct MysqlSinker {
     pub meta_manager: MysqlMetaManager,
     pub router: RdbRouter,
     pub batch_size: usize,
-    pub monitor: Arc<RwLock<Monitor>>,
+    pub monitor: Arc<Mutex<Monitor>>,
     pub transaction_command: String,
 }
 
@@ -86,10 +89,6 @@ impl Sinker for MysqlSinker {
                 .invalidate_cache(&ddl_data.schema, &ddl_data.tb);
         }
         Ok(())
-    }
-
-    fn get_monitor(&self) -> Option<Arc<RwLock<Monitor>>> {
-        Some(self.monitor.clone())
     }
 }
 
