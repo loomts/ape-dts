@@ -1,21 +1,7 @@
-use std::{
-    collections::HashMap,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
-    },
-    time::Instant,
-};
-
 use async_trait::async_trait;
-use concurrent_queue::ConcurrentQueue;
-use dt_common::{
-    config::config_enums::DbType, error::Error, log_info, monitor::monitor::Monitor,
-    utils::time_util::TimeUtil,
-};
+use dt_common::{config::config_enums::DbType, error::Error, log_info};
 use dt_meta::{
     col_value::ColValue,
-    dt_data::DtItem,
     mongo::{mongo_constant::MongoConstants, mongo_key::MongoKey},
     position::Position,
     row_data::RowData,
@@ -26,22 +12,19 @@ use mongodb::{
     options::FindOptions,
     Client,
 };
+use std::collections::HashMap;
 
 use crate::{
     extractor::{base_extractor::BaseExtractor, snapshot_resumer::SnapshotResumer},
-    rdb_router::RdbRouter,
     Extractor,
 };
 
 pub struct MongoSnapshotExtractor {
+    pub base_extractor: BaseExtractor,
     pub resumer: SnapshotResumer,
-    pub buffer: Arc<ConcurrentQueue<DtItem>>,
     pub db: String,
     pub tb: String,
-    pub shut_down: Arc<AtomicBool>,
     pub mongo_client: Client,
-    pub router: RdbRouter,
-    pub monitor: Arc<Mutex<Monitor>>,
 }
 
 #[async_trait]
@@ -58,12 +41,6 @@ impl Extractor for MongoSnapshotExtractor {
 
 impl MongoSnapshotExtractor {
     pub async fn extract_internal(&mut self) -> Result<(), Error> {
-        let mut last_monitored_time = Instant::now();
-        let monitor_count_window = self.monitor.lock().unwrap().count_window;
-        let monitor_time_window_secs = self.monitor.lock().unwrap().time_window_secs as u64;
-        let mut monitored_count = 0;
-        let mut extracted_count = 0;
-
         log_info!("start extracting data from {}.{}", self.db, self.tb);
 
         let filter = if let Some(resume_value) =
@@ -98,13 +75,13 @@ impl MongoSnapshotExtractor {
             };
             after.insert(MongoConstants::ID.to_string(), ColValue::String(id));
             after.insert(MongoConstants::DOC.to_string(), ColValue::MongoDoc(doc));
-            let row_data = RowData {
-                schema: self.db.clone(),
-                tb: self.tb.clone(),
-                row_type: RowType::Insert,
-                after: Some(after),
-                before: None,
-            };
+            let row_data = RowData::new(
+                self.db.clone(),
+                self.tb.clone(),
+                RowType::Insert,
+                None,
+                Some(after),
+            );
             let position = Position::RdbSnapshot {
                 db_type: DbType::Mongo.to_string(),
                 schema: self.db.clone(),
@@ -112,35 +89,20 @@ impl MongoSnapshotExtractor {
                 order_col: MongoConstants::ID.into(),
                 value: object_id,
             };
-            BaseExtractor::push_row(self.buffer.as_ref(), row_data, position, Some(&self.router))
+
+            self.base_extractor
+                .push_row(row_data, position)
                 .await
                 .unwrap();
-            extracted_count += 1;
-
-            (last_monitored_time, monitored_count) = BaseExtractor::update_monitor(
-                &mut self.monitor,
-                extracted_count,
-                monitored_count,
-                monitor_count_window,
-                monitor_time_window_secs,
-                last_monitored_time,
-            );
         }
 
         log_info!(
             "end extracting data from {}.{}, all count: {}",
             self.db,
             self.tb,
-            extracted_count
+            self.base_extractor.monitor.counters.record_count
         );
-
-        // wait all data to be transfered
-        while !self.buffer.is_empty() {
-            TimeUtil::sleep_millis(1).await;
-        }
-
-        self.shut_down.store(true, Ordering::Release);
-        Ok(())
+        self.base_extractor.wait_task_finish().await
     }
 
     fn get_object_id(doc: &Document) -> String {

@@ -15,15 +15,6 @@ impl DtItem {
     pub fn is_ddl(&self) -> bool {
         self.dt_data.is_ddl()
     }
-
-    pub fn get_data_malloc_size(&self) -> usize {
-        match &self.dt_data {
-            DtData::Dml { row_data } => row_data.get_data_malloc_size(),
-            DtData::Redis { entry } => entry.get_data_malloc_size(),
-            // ignore other item types
-            _ => 0,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,5 +42,14 @@ impl DtData {
 
     pub fn to_string(&self) -> String {
         json!(self).to_string()
+    }
+
+    pub fn get_data_size(&self) -> usize {
+        match &self {
+            DtData::Dml { row_data } => row_data.data_size,
+            DtData::Redis { entry } => entry.data_size,
+            // ignore other item types
+            _ => 0,
+        }
     }
 }

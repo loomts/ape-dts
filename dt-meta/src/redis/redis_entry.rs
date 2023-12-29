@@ -15,6 +15,7 @@ pub struct RedisEntry {
     pub raw_bytes: Vec<u8>,
 
     pub cmd: RedisCmd,
+    pub data_size: usize,
 }
 
 impl RedisEntry {
@@ -32,6 +33,7 @@ impl RedisEntry {
             value_type_byte: 0,
 
             cmd: RedisCmd::new(),
+            data_size: 0,
         }
     }
 
@@ -43,7 +45,7 @@ impl RedisEntry {
         if self.is_raw() {
             self.raw_bytes.len()
         } else {
-            self.key.bytes.len() + self.value.get_malloc_size()
+            self.key.bytes.len() + self.value.get_malloc_size() + self.cmd.get_malloc_size()
         }
     }
 }

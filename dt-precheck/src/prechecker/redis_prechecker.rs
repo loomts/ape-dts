@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{atomic::AtomicBool, Arc, Mutex};
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
@@ -8,8 +8,13 @@ use dt_common::{
     monitor::monitor::Monitor,
     utils::rdb_filter::RdbFilter,
 };
-use dt_connector::extractor::redis::{
-    redis_client::RedisClient, redis_psync_extractor::RedisPsyncExtractor,
+use dt_connector::{
+    extractor::{
+        base_extractor::BaseExtractor,
+        extractor_monitor::ExtractorMonitor,
+        redis::{redis_client::RedisClient, redis_psync_extractor::RedisPsyncExtractor},
+    },
+    rdb_router::RdbRouter,
 };
 
 use crate::{
@@ -73,6 +78,12 @@ impl Prechecker for RedisPrechecker {
 
         let filter = RdbFilter::from_config(&self.task_config.filter, DbType::Redis)?;
         let monitor = Arc::new(Mutex::new(Monitor::new("extractor", 1, 1)));
+        let mut base_extractor = BaseExtractor {
+            buffer,
+            router: RdbRouter::from_config(&self.task_config.router, &DbType::Redis)?,
+            shut_down: Arc::new(AtomicBool::new(false)),
+            monitor: ExtractorMonitor::new(monitor),
+        };
 
         let mut psyncer = RedisPsyncExtractor {
             conn: &mut conn,
@@ -80,9 +91,8 @@ impl Prechecker for RedisPrechecker {
             repl_offset: 0,
             now_db_id: 0,
             repl_port,
-            buffer,
             filter,
-            monitor,
+            base_extractor: &mut base_extractor,
         };
 
         if let Err(error) = psyncer.start_psync().await {

@@ -24,11 +24,8 @@ pub struct KafkaSinker {
 #[async_trait]
 impl Sinker for KafkaSinker {
     async fn sink_dml(&mut self, mut data: Vec<RowData>, _batch: bool) -> Result<(), Error> {
-        let start_time = Instant::now();
-
         call_batch_fn!(self, data, Self::send_avro);
-
-        BaseSinker::update_batch_monitor(&mut self.monitor, data.len(), start_time).await
+        Ok(())
     }
 }
 
@@ -39,6 +36,9 @@ impl KafkaSinker {
         sinked_count: usize,
         batch_size: usize,
     ) -> Result<(), Error> {
+        let start_time = Instant::now();
+        let mut data_size = 0;
+
         let mut messages = Vec::new();
         for (_, row_data) in data
             .iter_mut()
@@ -46,6 +46,8 @@ impl KafkaSinker {
             .take(batch_size)
             .enumerate()
         {
+            data_size += row_data.data_size;
+
             let topic = self.router.get_topic(&row_data.schema, &row_data.tb);
             let key = self.avro_converter.row_data_to_avro_key(row_data).await?;
             let payload = self
@@ -61,6 +63,7 @@ impl KafkaSinker {
         }
 
         self.producer.send_all(&messages).unwrap();
-        Ok(())
+
+        BaseSinker::update_batch_monitor(&mut self.monitor, data.len(), data_size, start_time).await
     }
 }

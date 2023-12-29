@@ -45,13 +45,16 @@ impl Sinker for StarRocksSinker {
 impl StarRocksSinker {
     async fn serial_sink(&mut self, mut data: Vec<RowData>) -> Result<(), Error> {
         let start_time = Instant::now();
+        let mut data_size = 0;
 
         let data = data.as_mut_slice();
         for i in 0..data.len() {
+            data_size += data[i].data_size;
             self.send_data(data, i, 1).await.unwrap();
         }
 
-        BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), start_time).await
+        BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
+            .await
     }
 
     async fn batch_sink(
@@ -62,9 +65,9 @@ impl StarRocksSinker {
     ) -> Result<(), Error> {
         let start_time = Instant::now();
 
-        self.send_data(data, start_index, batch_size).await.unwrap();
+        let data_size = self.send_data(data, start_index, batch_size).await.unwrap();
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, start_time).await
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
 
     async fn send_data(
@@ -72,10 +75,12 @@ impl StarRocksSinker {
         data: &mut [RowData],
         start_index: usize,
         batch_size: usize,
-    ) -> Result<(), Error> {
+    ) -> Result<usize, Error> {
+        let mut data_size = 0;
         // build stream load data
         let mut load_data = Vec::new();
         for rd in data.iter().skip(start_index).take(batch_size) {
+            data_size += rd.data_size;
             if data[start_index].row_type == RowType::Delete {
                 load_data.push(rd.before.as_ref().unwrap());
             } else {
@@ -98,7 +103,9 @@ impl StarRocksSinker {
         );
         let request = self.build_request(&url, op, &body).unwrap();
         let response = self.client.execute(request).await.unwrap();
-        Self::check_response(response).await
+        Self::check_response(response).await.unwrap();
+
+        Ok(data_size)
     }
 
     fn build_request(

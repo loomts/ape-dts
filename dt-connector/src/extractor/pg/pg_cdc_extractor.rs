@@ -1,13 +1,11 @@
 use std::{
     collections::HashMap,
     pin::Pin,
-    sync::{atomic::AtomicBool, Arc, Mutex},
+    sync::{Arc, Mutex},
     time::{Duration, Instant, UNIX_EPOCH},
 };
 
 use async_trait::async_trait;
-
-use concurrent_queue::ConcurrentQueue;
 use futures::StreamExt;
 
 use postgres_protocol::message::backend::{
@@ -23,22 +21,16 @@ use postgres_protocol::message::backend::{
 use postgres_types::PgLsn;
 use tokio_postgres::replication::LogicalReplicationStream;
 
-use dt_common::{
-    error::Error,
-    log_error, log_info,
-    monitor::monitor::Monitor,
-    utils::{rdb_filter::RdbFilter, time_util::TimeUtil},
-};
+use dt_common::{error::Error, log_error, log_info, utils::rdb_filter::RdbFilter};
 
 use crate::{
     extractor::{base_extractor::BaseExtractor, pg::pg_cdc_client::PgCdcClient},
-    rdb_router::RdbRouter,
     Extractor,
 };
 use dt_meta::{
     adaptor::pg_col_value_convertor::PgColValueConvertor,
     col_value::ColValue,
-    dt_data::{DtData, DtItem},
+    dt_data::DtData,
     pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
     position::Position,
     rdb_tb_meta::RdbTbMeta,
@@ -48,18 +40,15 @@ use dt_meta::{
 };
 
 pub struct PgCdcExtractor {
+    pub base_extractor: BaseExtractor,
     pub meta_manager: PgMetaManager,
-    pub buffer: Arc<ConcurrentQueue<DtItem>>,
     pub filter: RdbFilter,
     pub url: String,
     pub slot_name: String,
     pub pub_name: String,
     pub start_lsn: String,
     pub heartbeat_interval_secs: u64,
-    pub shut_down: Arc<AtomicBool>,
     pub syncer: Arc<Mutex<Syncer>>,
-    pub router: RdbRouter,
-    pub monitor: Arc<Mutex<Monitor>>,
 }
 
 const SECS_FROM_1970_TO_2000: i64 = 946_684_800;
@@ -80,12 +69,6 @@ impl Extractor for PgCdcExtractor {
 
 impl PgCdcExtractor {
     async fn extract_internal(&mut self) -> Result<(), Error> {
-        let mut last_monitored_time = Instant::now();
-        let monitor_count_window = self.monitor.lock().unwrap().count_window;
-        let monitor_time_window_secs = self.monitor.lock().unwrap().time_window_secs as u64;
-        let mut monitored_count = 0;
-        let mut extracted_count = 0;
-
         let mut cdc_client = PgCdcClient {
             url: self.url.clone(),
             pub_name: self.pub_name.clone(),
@@ -117,11 +100,6 @@ impl PgCdcExtractor {
                 start_time = Instant::now();
             }
 
-            while self.buffer.is_full() {
-                TimeUtil::sleep_millis(1).await;
-                continue;
-            }
-
             match stream.next().await {
                 Some(Ok(XLogData(body))) => {
                     let data = body.into_data();
@@ -139,11 +117,10 @@ impl PgCdcExtractor {
                         Commit(commit) => {
                             last_tx_end_lsn = PgLsn::from(commit.end_lsn()).to_string();
                             position = get_position(&last_tx_end_lsn, commit.timestamp());
-                            let item = DtItem {
-                                dt_data: DtData::Commit { xid: xid.clone() },
-                                position: position.clone(),
-                            };
-                            self.buffer.push(item).unwrap();
+                            let commit = DtData::Commit { xid: xid.clone() };
+                            self.base_extractor
+                                .push_dt_data(commit, position.clone())
+                                .await?;
                         }
 
                         Origin(_origin) => {}
@@ -184,16 +161,6 @@ impl PgCdcExtractor {
 
                 None => panic!("unexpected replication stream end"),
             }
-
-            extracted_count += 1;
-            (last_monitored_time, monitored_count) = BaseExtractor::update_monitor(
-                &mut self.monitor,
-                extracted_count,
-                monitored_count,
-                monitor_count_window,
-                monitor_time_window_secs,
-                last_monitored_time,
-            );
         }
     }
 
@@ -282,13 +249,13 @@ impl PgCdcExtractor {
         }
 
         let col_values = self.parse_row_data(&tb_meta, event.tuple().tuple_data())?;
-        let row_data = RowData {
-            schema: tb_meta.basic.schema,
-            tb: tb_meta.basic.tb,
-            row_type: RowType::Insert,
-            before: Option::None,
-            after: Some(col_values),
-        };
+        let row_data = RowData::new(
+            tb_meta.basic.schema,
+            tb_meta.basic.tb,
+            RowType::Insert,
+            None,
+            Some(col_values),
+        );
         self.push_row_to_buf(row_data, position.clone()).await
     }
 
@@ -320,13 +287,13 @@ impl PgCdcExtractor {
             HashMap::new()
         };
 
-        let row_data = RowData {
-            schema: basic.schema.clone(),
-            tb: basic.tb.clone(),
-            row_type: RowType::Update,
-            before: Some(col_values_before),
-            after: Some(col_values_after),
-        };
+        let row_data = RowData::new(
+            basic.schema.clone(),
+            basic.tb.clone(),
+            RowType::Update,
+            Some(col_values_before),
+            Some(col_values_after),
+        );
         self.push_row_to_buf(row_data, position.clone()).await
     }
 
@@ -350,13 +317,13 @@ impl PgCdcExtractor {
             HashMap::new()
         };
 
-        let row_data = RowData {
-            schema: tb_meta.basic.schema,
-            tb: tb_meta.basic.tb,
-            row_type: RowType::Delete,
-            before: Some(col_values),
-            after: None,
-        };
+        let row_data = RowData::new(
+            tb_meta.basic.schema,
+            tb_meta.basic.tb,
+            RowType::Delete,
+            Some(col_values),
+            None,
+        );
         self.push_row_to_buf(row_data, position.clone()).await
     }
 
@@ -397,7 +364,7 @@ impl PgCdcExtractor {
         row_data: RowData,
         position: Position,
     ) -> Result<(), Error> {
-        BaseExtractor::push_row(self.buffer.as_ref(), row_data, position, Some(&self.router)).await
+        self.base_extractor.push_row(row_data, position).await
     }
 
     fn filter_event(&mut self, tb_meta: &PgTbMeta, row_type: RowType) -> bool {

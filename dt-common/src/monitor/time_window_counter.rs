@@ -1,6 +1,16 @@
-use std::collections::LinkedList;
+use std::{cmp, collections::LinkedList};
 
 use super::counter::Counter;
+
+#[derive(Default)]
+pub struct WindowCounterStatistic {
+    pub sum: usize,
+    pub max: usize,
+    pub max_by_sec: usize,
+    pub count: usize,
+    pub avg_by_count: usize,
+    pub avg_by_sec: usize,
+}
 
 #[derive(Clone)]
 pub struct TimeWindowCounter {
@@ -24,35 +34,37 @@ impl TimeWindowCounter {
     }
 
     #[inline(always)]
-    pub fn sum(&mut self) -> usize {
-        let mut sum = 0;
+    pub fn statistics(&mut self) -> WindowCounterStatistic {
+        self.refresh_window();
+
+        let mut statistics = WindowCounterStatistic {
+            ..Default::default()
+        };
+
+        let mut sum_in_current_sec = 0;
+        let mut current_elapsed_secs = 0;
+
         for counter in self.counters.iter() {
-            sum += counter.value;
-        }
-        sum
-    }
+            statistics.sum += counter.value;
+            statistics.count += counter.count;
+            statistics.max = cmp::max(statistics.max, counter.value);
 
-    #[inline(always)]
-    pub fn count(&mut self) -> usize {
-        let mut count = 0;
-        for counter in self.counters.iter() {
-            count += counter.count;
+            if current_elapsed_secs == counter.timestamp.elapsed().as_secs() {
+                sum_in_current_sec += counter.value;
+            } else {
+                current_elapsed_secs = counter.timestamp.elapsed().as_secs();
+                statistics.max_by_sec = cmp::max(statistics.max_by_sec, sum_in_current_sec);
+                sum_in_current_sec = counter.value;
+            }
         }
-        count
-    }
+        statistics.max_by_sec = cmp::max(statistics.max_by_sec, sum_in_current_sec);
 
-    #[inline(always)]
-    pub fn avg_by_window(&mut self) -> usize {
-        self.sum() / self.time_window_secs
-    }
-
-    #[inline(always)]
-    pub fn avg_by_count(&mut self) -> usize {
-        if !self.counters.is_empty() {
-            self.sum() / self.count()
-        } else {
-            0
+        if statistics.count > 0 {
+            statistics.avg_by_count = statistics.sum / statistics.count;
+            statistics.avg_by_sec = statistics.sum / self.time_window_secs;
         }
+
+        statistics
     }
 
     #[inline(always)]

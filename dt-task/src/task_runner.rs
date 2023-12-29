@@ -19,7 +19,12 @@ use dt_common::{
     utils::{rdb_filter::RdbFilter, time_util::TimeUtil},
 };
 use dt_connector::{
-    extractor::snapshot_resumer::SnapshotResumer, rdb_router::RdbRouter, Extractor, Sinker,
+    extractor::{
+        base_extractor::BaseExtractor, extractor_monitor::ExtractorMonitor,
+        snapshot_resumer::SnapshotResumer,
+    },
+    rdb_router::RdbRouter,
+    Extractor, Sinker,
 };
 use dt_meta::{dt_data::DtItem, position::Position, row_type::RowType, syncer::Syncer};
 use dt_pipeline::{base_pipeline::BasePipeline, Pipeline};
@@ -272,6 +277,12 @@ impl TaskRunner {
             SnapshotResumer::new(&self.config.extractor_basic.db_type, &self.config.resumer)?;
         let router =
             RdbRouter::from_config(&self.config.router, &self.config.extractor_basic.db_type)?;
+        let base_extractor = BaseExtractor {
+            buffer,
+            router,
+            shut_down,
+            monitor: ExtractorMonitor::new(monitor),
+        };
 
         let extractor: Box<dyn Extractor + Send> = match extractor_config {
             ExtractorConfig::MysqlSnapshot {
@@ -281,17 +292,14 @@ impl TaskRunner {
                 sample_interval,
             } => {
                 let extractor = ExtractorUtil::create_mysql_snapshot_extractor(
+                    base_extractor,
                     url,
                     db,
                     tb,
                     self.config.pipeline.buffer_size,
                     *sample_interval,
                     resumer.clone(),
-                    buffer,
                     &self.config.runtime.log_level,
-                    shut_down,
-                    router.clone(),
-                    monitor,
                 )
                 .await?;
                 Box::new(extractor)
@@ -303,14 +311,11 @@ impl TaskRunner {
                 batch_size,
             } => {
                 let extractor = ExtractorUtil::create_mysql_check_extractor(
+                    base_extractor,
                     url,
                     check_log_dir,
                     *batch_size,
-                    buffer,
                     &self.config.runtime.log_level,
-                    shut_down,
-                    router.clone(),
-                    monitor,
                 )
                 .await?;
                 Box::new(extractor)
@@ -334,17 +339,14 @@ impl TaskRunner {
                 )?;
 
                 let extractor = ExtractorUtil::create_mysql_cdc_extractor(
+                    base_extractor,
                     url,
                     binlog_filename,
                     *binlog_position,
                     *server_id,
-                    buffer,
                     filter,
                     &self.config.runtime.log_level,
-                    shut_down,
                     datamarker_filter,
-                    router.clone(),
-                    monitor,
                 )
                 .await?;
                 Box::new(extractor)
@@ -357,17 +359,14 @@ impl TaskRunner {
                 sample_interval,
             } => {
                 let extractor = ExtractorUtil::create_pg_snapshot_extractor(
+                    base_extractor,
                     url,
                     db,
                     tb,
                     self.config.pipeline.buffer_size,
                     *sample_interval,
                     resumer.clone(),
-                    buffer,
                     &self.config.runtime.log_level,
-                    shut_down,
-                    router,
-                    monitor,
                 )
                 .await?;
                 Box::new(extractor)
@@ -379,14 +378,11 @@ impl TaskRunner {
                 batch_size,
             } => {
                 let extractor = ExtractorUtil::create_pg_check_extractor(
+                    base_extractor,
                     url,
                     check_log_dir,
                     *batch_size,
-                    buffer,
                     &self.config.runtime.log_level,
-                    shut_down,
-                    router,
-                    monitor,
                 )
                 .await?;
                 Box::new(extractor)
@@ -401,18 +397,15 @@ impl TaskRunner {
             } => {
                 let filter = RdbFilter::from_config(&self.config.filter, DbType::Pg)?;
                 let extractor = ExtractorUtil::create_pg_cdc_extractor(
+                    base_extractor,
                     url,
                     slot_name,
                     pub_name,
                     start_lsn,
                     *heartbeat_interval_secs,
-                    buffer,
                     filter,
                     &self.config.runtime.log_level,
-                    shut_down,
                     syncer,
-                    router,
-                    monitor,
                 )
                 .await?;
                 Box::new(extractor)
@@ -420,14 +413,11 @@ impl TaskRunner {
 
             ExtractorConfig::MongoSnapshot { url, db, tb } => {
                 let extractor = ExtractorUtil::create_mongo_snapshot_extractor(
+                    base_extractor,
                     url,
                     db,
                     tb,
                     resumer.clone(),
-                    buffer,
-                    shut_down,
-                    router.clone(),
-                    monitor,
                 )
                 .await?;
                 Box::new(extractor)
@@ -441,15 +431,12 @@ impl TaskRunner {
             } => {
                 let filter = RdbFilter::from_config(&self.config.filter, DbType::Mongo)?;
                 let extractor = ExtractorUtil::create_mongo_cdc_extractor(
+                    base_extractor,
                     url,
                     resume_token,
                     start_timestamp,
                     source,
-                    buffer,
                     filter,
-                    shut_down,
-                    router.clone(),
-                    monitor,
                 )
                 .await?;
                 Box::new(extractor)
@@ -461,13 +448,10 @@ impl TaskRunner {
                 batch_size,
             } => {
                 let extractor = ExtractorUtil::create_mongo_check_extractor(
+                    base_extractor,
                     url,
                     check_log_dir,
                     *batch_size,
-                    buffer,
-                    shut_down,
-                    router,
-                    monitor,
                 )
                 .await?;
                 Box::new(extractor)
@@ -476,12 +460,11 @@ impl TaskRunner {
             ExtractorConfig::MysqlStruct { url, db } => {
                 let filter = RdbFilter::from_config(&self.config.filter, DbType::Mysql)?;
                 let extractor = ExtractorUtil::create_mysql_struct_extractor(
+                    base_extractor,
                     url,
                     db,
-                    buffer,
                     filter,
                     &self.config.runtime.log_level,
-                    shut_down,
                 )
                 .await?;
                 Box::new(extractor)
@@ -490,12 +473,11 @@ impl TaskRunner {
             ExtractorConfig::PgStruct { url, db } => {
                 let filter = RdbFilter::from_config(&self.config.filter, DbType::Pg)?;
                 let extractor = ExtractorUtil::create_pg_struct_extractor(
+                    base_extractor,
                     url,
                     db,
-                    buffer,
                     filter,
                     &self.config.runtime.log_level,
-                    shut_down,
                 )
                 .await?;
                 Box::new(extractor)
@@ -504,7 +486,10 @@ impl TaskRunner {
             ExtractorConfig::RedisSnapshot { url, repl_port } => {
                 let filter = RdbFilter::from_config(&self.config.filter, DbType::Redis)?;
                 let extractor = ExtractorUtil::create_redis_snapshot_extractor(
-                    url, *repl_port, buffer, filter, shut_down, monitor,
+                    base_extractor,
+                    url,
+                    *repl_port,
+                    filter,
                 )
                 .await?;
                 Box::new(extractor)
@@ -521,6 +506,7 @@ impl TaskRunner {
             } => {
                 let filter = RdbFilter::from_config(&self.config.filter, DbType::Redis)?;
                 let extractor = ExtractorUtil::create_redis_cdc_extractor(
+                    base_extractor,
                     url,
                     run_id,
                     *repl_offset,
@@ -528,11 +514,8 @@ impl TaskRunner {
                     *now_db_id,
                     *heartbeat_interval_secs,
                     heartbeat_key,
-                    buffer,
                     filter,
-                    shut_down,
                     syncer,
-                    monitor,
                 )
                 .await?;
                 Box::new(extractor)
@@ -548,6 +531,7 @@ impl TaskRunner {
             } => {
                 let meta_manager = TaskUtil::create_rdb_meta_manager(&self.config).await?;
                 let extractor = ExtractorUtil::create_kafka_extractor(
+                    base_extractor,
                     url,
                     group,
                     topic,
@@ -555,10 +539,7 @@ impl TaskRunner {
                     *offset,
                     *ack_interval_secs,
                     meta_manager,
-                    buffer,
-                    shut_down,
                     syncer,
-                    monitor,
                 )
                 .await?;
                 Box::new(extractor)

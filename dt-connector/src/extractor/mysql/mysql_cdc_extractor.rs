@@ -1,24 +1,12 @@
-use std::{
-    collections::HashMap,
-    sync::{atomic::AtomicBool, Arc, Mutex},
-    time::Instant,
-};
-
 use async_recursion::async_recursion;
 use async_trait::async_trait;
+use std::collections::HashMap;
 
-use concurrent_queue::ConcurrentQueue;
 use dt_meta::{
-    adaptor::mysql_col_value_convertor::MysqlColValueConvertor,
-    col_value::ColValue,
-    ddl_data::DdlData,
-    ddl_type::DdlType,
-    dt_data::{DtData, DtItem},
-    mysql::mysql_meta_manager::MysqlMetaManager,
-    position::Position,
-    row_data::RowData,
-    row_type::RowType,
-    sql_parser::ddl_parser::DdlParser,
+    adaptor::mysql_col_value_convertor::MysqlColValueConvertor, col_value::ColValue,
+    ddl_data::DdlData, ddl_type::DdlType, dt_data::DtData,
+    mysql::mysql_meta_manager::MysqlMetaManager, position::Position, row_data::RowData,
+    row_type::RowType, sql_parser::ddl_parser::DdlParser,
 };
 use mysql_binlog_connector_rust::{
     binlog_client::BinlogClient,
@@ -28,27 +16,21 @@ use mysql_binlog_connector_rust::{
     },
 };
 
-use dt_common::{
-    error::Error, log_error, log_info, monitor::monitor::Monitor, utils::rdb_filter::RdbFilter,
-};
+use dt_common::{error::Error, log_error, log_info, utils::rdb_filter::RdbFilter};
 
 use crate::{
-    datamarker::traits::DataMarkerFilter, extractor::base_extractor::BaseExtractor,
-    rdb_router::RdbRouter, Extractor,
+    datamarker::traits::DataMarkerFilter, extractor::base_extractor::BaseExtractor, Extractor,
 };
 
 pub struct MysqlCdcExtractor {
+    pub base_extractor: BaseExtractor,
     pub meta_manager: MysqlMetaManager,
-    pub buffer: Arc<ConcurrentQueue<DtItem>>,
     pub filter: RdbFilter,
     pub url: String,
     pub binlog_filename: String,
     pub binlog_position: u32,
     pub server_id: u64,
-    pub shut_down: Arc<AtomicBool>,
-    pub router: RdbRouter,
     pub datamarker_filter: Option<Box<dyn DataMarkerFilter + Send>>,
-    pub monitor: Arc<Mutex<Monitor>>,
 }
 
 const QUERY_BEGIN: &str = "BEGIN";
@@ -67,12 +49,6 @@ impl Extractor for MysqlCdcExtractor {
 
 impl MysqlCdcExtractor {
     async fn extract_internal(&mut self) -> Result<(), Error> {
-        let mut last_monitored_time = Instant::now();
-        let monitor_count_window = self.monitor.lock().unwrap().count_window;
-        let monitor_time_window_secs = self.monitor.lock().unwrap().time_window_secs as u64;
-        let mut monitored_count = 0;
-        let mut extracted_count = 0;
-
         let mut client = BinlogClient {
             url: self.url.clone(),
             binlog_filename: self.binlog_filename.clone(),
@@ -91,25 +67,10 @@ impl MysqlCdcExtractor {
                 }
 
                 _ => {
-                    self.parse_events(
-                        header,
-                        data,
-                        &binlog_filename,
-                        &mut table_map_event_map,
-                        &mut extracted_count,
-                    )
-                    .await?
+                    self.parse_events(header, data, &binlog_filename, &mut table_map_event_map)
+                        .await?
                 }
             }
-
-            (last_monitored_time, monitored_count) = BaseExtractor::update_monitor(
-                &mut self.monitor,
-                extracted_count,
-                monitored_count,
-                monitor_count_window,
-                monitor_time_window_secs,
-                last_monitored_time,
-            );
         }
     }
 
@@ -120,7 +81,6 @@ impl MysqlCdcExtractor {
         data: EventData,
         binlog_filename: &str,
         table_map_event_map: &mut HashMap<u64, TableMapEvent>,
-        extracted_count: &mut usize,
     ) -> Result<(), Error> {
         let position = Position::MysqlCdc {
             // TODO, get server_id from source mysql
@@ -140,14 +100,8 @@ impl MysqlCdcExtractor {
                     // headers of uncompressed events have no next_event_position,
                     // use header of TransactionPayload instead
                     inner_header.next_event_position = header.next_event_position;
-                    self.parse_events(
-                        inner_header,
-                        data,
-                        binlog_filename,
-                        table_map_event_map,
-                        extracted_count,
-                    )
-                    .await?;
+                    self.parse_events(inner_header, data, binlog_filename, table_map_event_map)
+                        .await?;
                 }
             }
 
@@ -161,15 +115,14 @@ impl MysqlCdcExtractor {
                     let col_values = self
                         .parse_row_data(table_map_event, &w.included_columns, event)
                         .await?;
-                    let row_data = RowData {
-                        schema: table_map_event.database_name.clone(),
-                        tb: table_map_event.table_name.clone(),
-                        row_type: RowType::Insert,
-                        before: Option::None,
-                        after: Some(col_values),
-                    };
+                    let row_data = RowData::new(
+                        table_map_event.database_name.clone(),
+                        table_map_event.table_name.clone(),
+                        RowType::Insert,
+                        None,
+                        Some(col_values),
+                    );
                     self.push_row_to_buf(row_data, position.clone()).await?;
-                    *extracted_count += 1;
                 }
             }
 
@@ -186,15 +139,14 @@ impl MysqlCdcExtractor {
                     let col_values_after = self
                         .parse_row_data(table_map_event, &u.included_columns_after, &mut event.1)
                         .await?;
-                    let row_data = RowData {
-                        schema: table_map_event.database_name.clone(),
-                        tb: table_map_event.table_name.clone(),
-                        row_type: RowType::Update,
-                        before: Some(col_values_before),
-                        after: Some(col_values_after),
-                    };
+                    let row_data = RowData::new(
+                        table_map_event.database_name.clone(),
+                        table_map_event.table_name.clone(),
+                        RowType::Update,
+                        Some(col_values_before),
+                        Some(col_values_after),
+                    );
                     self.push_row_to_buf(row_data, position.clone()).await?;
-                    *extracted_count += 1;
                 }
             }
 
@@ -208,15 +160,14 @@ impl MysqlCdcExtractor {
                     let col_values = self
                         .parse_row_data(table_map_event, &d.included_columns, event)
                         .await?;
-                    let row_data = RowData {
-                        schema: table_map_event.database_name.clone(),
-                        tb: table_map_event.table_name.clone(),
-                        row_type: RowType::Delete,
-                        before: Some(col_values),
-                        after: Option::None,
-                    };
+                    let row_data = RowData::new(
+                        table_map_event.database_name.clone(),
+                        table_map_event.table_name.clone(),
+                        RowType::Delete,
+                        Some(col_values),
+                        None,
+                    );
                     self.push_row_to_buf(row_data, position.clone()).await?;
-                    *extracted_count += 1;
                 }
             }
 
@@ -236,7 +187,9 @@ impl MysqlCdcExtractor {
                     return Ok(());
                 }
 
-                BaseExtractor::push_dt_data(self.buffer.as_ref(), commit, position.clone()).await?;
+                self.base_extractor
+                    .push_dt_data(commit, position.clone())
+                    .await?;
             }
 
             _ => {}
@@ -257,7 +210,7 @@ impl MysqlCdcExtractor {
             return Ok(());
         }
 
-        BaseExtractor::push_row(self.buffer.as_ref(), row_data, position, Some(&self.router)).await
+        self.base_extractor.push_row(row_data, position).await
     }
 
     async fn parse_row_data(
@@ -355,8 +308,10 @@ impl MysqlCdcExtractor {
         };
 
         if !self.filter.filter_ddl() && !filter {
-            BaseExtractor::push_dt_data(self.buffer.as_ref(), DtData::Ddl { ddl_data }, position)
-                .await?;
+            self.base_extractor
+                .push_dt_data(DtData::Ddl { ddl_data }, position)
+                .await
+                .unwrap();
         }
         Ok(())
     }

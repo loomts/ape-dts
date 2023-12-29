@@ -70,22 +70,22 @@ impl MongoMerger {
                 RowType::Update => {
                     let before = row_data.before.unwrap();
                     let after: HashMap<String, ColValue> = row_data.after.unwrap();
-                    let delete_row = RowData {
-                        row_type: RowType::Delete,
-                        schema: row_data.schema.clone(),
-                        tb: row_data.tb.clone(),
-                        before: Some(before),
-                        after: Option::None,
-                    };
+                    let delete_row = RowData::new(
+                        row_data.schema.clone(),
+                        row_data.tb.clone(),
+                        RowType::Delete,
+                        Some(before),
+                        None,
+                    );
                     delete_map.insert(id.clone(), delete_row);
 
-                    let insert_row = RowData {
-                        row_type: RowType::Insert,
-                        schema: row_data.schema,
-                        tb: row_data.tb,
-                        before: Option::None,
-                        after: Some(after),
-                    };
+                    let insert_row = RowData::new(
+                        row_data.schema,
+                        row_data.tb,
+                        RowType::Insert,
+                        Option::None,
+                        Some(after),
+                    );
                     insert_map.insert(id, insert_row);
                 }
             }

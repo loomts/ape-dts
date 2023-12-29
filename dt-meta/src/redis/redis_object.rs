@@ -214,6 +214,14 @@ impl RedisCmd {
         }
         str_args.join(" ")
     }
+
+    pub fn get_malloc_size(&self) -> usize {
+        let mut size = 0;
+        for arg in &self.args {
+            size += arg.len();
+        }
+        size
+    }
 }
 
 impl RedisObject {

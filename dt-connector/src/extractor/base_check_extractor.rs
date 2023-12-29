@@ -1,29 +1,26 @@
-use std::sync::{atomic::AtomicBool, Arc};
-
-use concurrent_queue::ConcurrentQueue;
-
-use dt_common::error::Error;
-use dt_meta::dt_data::DtItem;
+use dt_common::{error::Error, log_info};
 
 use crate::{
     check_log::{check_log::CheckLog, log_reader::LogReader},
     BatchCheckExtractor,
 };
 
-use super::base_extractor::BaseExtractor;
-
 pub struct BaseCheckExtractor {
     pub check_log_dir: String,
-    pub buffer: Arc<ConcurrentQueue<DtItem>>,
     pub batch_size: usize,
-    pub shut_down: Arc<AtomicBool>,
 }
 
 impl BaseCheckExtractor {
     pub async fn extract(
-        &mut self,
+        &self,
         extractor: &mut (dyn BatchCheckExtractor + Send),
     ) -> Result<(), Error> {
+        log_info!(
+            "BaseCheckExtractor starts, check_log_dir: {}, batch_size: {}",
+            self.check_log_dir,
+            self.batch_size
+        );
+
         let mut log_reader = LogReader::new(&self.check_log_dir);
         let mut batch = Vec::new();
 
@@ -48,13 +45,16 @@ impl BaseCheckExtractor {
         }
 
         Self::batch_extract_and_clear(extractor, &mut batch).await;
-        BaseExtractor::wait_task_finish(self.buffer.as_ref(), self.shut_down.as_ref()).await
+        Ok(())
     }
 
     async fn batch_extract_and_clear(
         extractor: &mut (dyn BatchCheckExtractor + Send),
         batch: &mut Vec<CheckLog>,
     ) {
+        if batch.is_empty() {
+            return;
+        }
         extractor.batch_extract(batch).await.unwrap();
         batch.clear();
     }

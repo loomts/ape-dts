@@ -62,25 +62,30 @@ impl RedisSinker {
         batch_size: usize,
     ) -> Result<(), Error> {
         let start_time = Instant::now();
+        let mut data_size = 0;
 
         let mut cmds = Vec::new();
         for dt_data in data.iter_mut().skip(start_index).take(batch_size) {
+            data_size += dt_data.get_data_size();
             cmds.extend_from_slice(&self.rewrite_entry(dt_data)?);
         }
         self.batch_sink(cmds, batch_size).await.unwrap();
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, start_time).await
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
 
     async fn serial_sink_raw(&mut self, data: &mut [DtData]) -> Result<(), Error> {
         let start_time = Instant::now();
+        let mut data_size = 0;
 
         for dt_data in data.iter_mut() {
+            data_size += dt_data.get_data_size();
             let cmds = self.rewrite_entry(dt_data)?;
             self.serial_sink(cmds).await.unwrap()
         }
 
-        BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), start_time).await
+        BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
+            .await
     }
 
     fn rewrite_entry(&mut self, dt_data: &mut DtData) -> Result<Vec<RedisCmd>, Error> {
@@ -141,28 +146,33 @@ impl RedisSinker {
         batch_size: usize,
     ) -> Result<(), Error> {
         let start_time = Instant::now();
+        let mut data_size = 0;
 
         let mut cmds = Vec::new();
         for row_data in data.iter_mut().skip(start_index).take(batch_size) {
+            data_size += row_data.data_size;
             if let Some(cmd) = self.dml_to_redis_cmd(row_data).await? {
                 cmds.push(cmd);
             }
         }
         self.batch_sink(cmds, batch_size).await.unwrap();
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, start_time).await
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
 
     async fn serial_sink_dml(&mut self, data: &mut [RowData]) -> Result<(), Error> {
         let start_time = Instant::now();
+        let mut data_size = 0;
 
         for row_data in data.iter_mut() {
+            data_size += row_data.data_size;
             if let Some(cmd) = self.dml_to_redis_cmd(row_data).await? {
                 self.serial_sink(vec![cmd]).await?
             }
         }
 
-        BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), start_time).await
+        BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
+            .await
     }
 
     async fn dml_to_redis_cmd(&mut self, row_data: &RowData) -> Result<Option<RedisCmd>, Error> {

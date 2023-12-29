@@ -1,4 +1,4 @@
-use std::{cmp, time::Instant};
+use std::time::Instant;
 
 #[derive(Clone)]
 pub struct Counter {
@@ -10,7 +10,6 @@ pub struct Counter {
 
 impl Counter {
     pub fn new(value: usize, count: usize) -> Self {
-        let count = cmp::max(1, count);
         Self {
             timestamp: Instant::now(),
             value,

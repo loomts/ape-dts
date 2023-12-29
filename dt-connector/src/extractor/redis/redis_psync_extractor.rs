@@ -1,17 +1,11 @@
 use async_trait::async_trait;
-use concurrent_queue::ConcurrentQueue;
 use dt_common::log_position;
-use dt_common::monitor::monitor::Monitor;
 use dt_common::utils::rdb_filter::RdbFilter;
-use dt_common::utils::time_util::TimeUtil;
 use dt_common::{error::Error, log_info};
-use dt_meta::dt_data::{DtData, DtItem};
+use dt_meta::dt_data::DtData;
 use dt_meta::position::Position;
 use dt_meta::redis::redis_entry::RedisEntry;
 use dt_meta::redis::redis_object::RedisCmd;
-
-use std::sync::{Arc, Mutex};
-use std::time::Instant;
 
 use crate::extractor::base_extractor::BaseExtractor;
 use crate::extractor::redis::rdb::rdb_loader::RdbLoader;
@@ -22,14 +16,13 @@ use crate::Extractor;
 use super::redis_client::RedisClient;
 
 pub struct RedisPsyncExtractor<'a> {
+    pub base_extractor: &'a mut BaseExtractor,
     pub conn: &'a mut RedisClient,
-    pub buffer: Arc<ConcurrentQueue<DtItem>>,
     pub run_id: String,
     pub repl_offset: u64,
     pub now_db_id: i64,
     pub repl_port: u64,
     pub filter: RdbFilter,
-    pub monitor: Arc<Mutex<Monitor>>,
 }
 
 #[async_trait]
@@ -140,32 +133,22 @@ impl RedisPsyncExtractor<'_> {
         let version = loader.load_meta()?;
         log_info!("source redis version: {:?}", version);
 
-        let mut last_monitored_time = Instant::now();
-        let monitor_count_window = self.monitor.lock().unwrap().count_window;
-        let monitor_time_window_secs = self.monitor.lock().unwrap().time_window_secs as u64;
-        let mut monitored_count = 0;
-        let mut extracted_count = 0;
-
         loop {
             if let Some(entry) = loader.load_entry()? {
                 self.now_db_id = entry.db_id;
-                Self::push_to_buf(&self.buffer, &mut self.filter, entry, Position::None).await;
-                extracted_count += 1;
+                Self::push_to_buf(
+                    &mut self.base_extractor,
+                    &mut self.filter,
+                    entry,
+                    Position::None,
+                )
+                .await?;
             }
-
-            (last_monitored_time, monitored_count) = BaseExtractor::update_monitor(
-                &mut self.monitor,
-                extracted_count,
-                monitored_count,
-                monitor_count_window,
-                monitor_time_window_secs,
-                last_monitored_time,
-            );
 
             if loader.is_end {
                 log_info!(
                     "end extracting data from rdb, all count: {}",
-                    extracted_count
+                    self.base_extractor.monitor.counters.record_count
                 );
                 break;
             }
@@ -187,25 +170,20 @@ impl RedisPsyncExtractor<'_> {
     }
 
     pub async fn push_to_buf(
-        buffer: &Arc<ConcurrentQueue<DtItem>>,
+        base_extractor: &mut BaseExtractor,
         filter: &mut RdbFilter,
-        entry: RedisEntry,
+        mut entry: RedisEntry,
         position: Position,
-    ) {
+    ) -> Result<(), Error> {
         // currently only support db filter
         let db_id = &entry.db_id.to_string();
         if filter.filter_db(db_id) {
-            return;
+            return Ok(());
         }
 
-        while buffer.is_full() {
-            TimeUtil::sleep_millis(1).await;
-        }
-
-        let item = DtItem {
-            dt_data: DtData::Redis { entry },
-            position,
-        };
-        buffer.push(item).unwrap();
+        entry.data_size = entry.get_data_malloc_size();
+        base_extractor
+            .push_dt_data(DtData::Redis { entry }, position)
+            .await
     }
 }

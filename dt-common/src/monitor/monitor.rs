@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::log_monitor;
-use crate::monitor::counter_type::AggreateType;
+use crate::monitor::counter_type::AggregateType;
 
 use super::counter::Counter;
 use super::counter_type::{CounterType, WindowType};
@@ -29,31 +29,44 @@ impl Monitor {
 
     pub fn flush(&mut self) {
         for (counter_type, counter) in self.time_window_counters.iter_mut() {
-            counter.refresh_window();
-            let aggregate = match counter_type.get_aggregate_type() {
-                AggreateType::AvgByCount => counter.avg_by_count(),
-                AggreateType::AvgByWindow => counter.avg_by_window(),
-                AggreateType::Sum => counter.sum(),
-            };
-            log_monitor!(
-                "{} | {} | {}",
-                self.name,
-                counter_type.to_string(),
-                aggregate
-            );
+            let statistics = counter.statistics();
+            let mut log = format!("{} | {}", self.name, counter_type.to_string());
+            for aggregate_type in counter_type.get_aggregate_types() {
+                let aggregate_value = match aggregate_type {
+                    AggregateType::AvgByCount => statistics.avg_by_count,
+                    AggregateType::AvgBySec => statistics.avg_by_sec,
+                    AggregateType::Sum => statistics.sum,
+                    AggregateType::MaxBySec => statistics.max_by_sec,
+                    AggregateType::MaxByCount => statistics.max,
+                    AggregateType::Count => statistics.count,
+                    _ => continue,
+                };
+                log = format!(
+                    "{} | {}={}",
+                    log,
+                    aggregate_type.to_string(),
+                    aggregate_value
+                );
+            }
+            log_monitor!("{}", log);
         }
 
         for (counter_type, counter) in self.no_window_counters.iter() {
-            let aggregate = match counter_type.get_aggregate_type() {
-                AggreateType::AvgByCount => counter.avg_by_count(),
-                _ => counter.value,
-            };
-            log_monitor!(
-                "{} | {} | {}",
-                self.name,
-                counter_type.to_string(),
-                aggregate
-            );
+            let mut log = format!("{} | {}", self.name, counter_type.to_string());
+            for aggregate_type in counter_type.get_aggregate_types() {
+                let aggregate_value = match aggregate_type {
+                    AggregateType::Latest => counter.value,
+                    AggregateType::AvgByCount => counter.avg_by_count(),
+                    _ => continue,
+                };
+                log = format!(
+                    "{} | {}={}",
+                    log,
+                    aggregate_type.to_string(),
+                    aggregate_value
+                );
+            }
+            log_monitor!("{}", log);
         }
     }
 

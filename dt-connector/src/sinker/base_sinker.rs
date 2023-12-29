@@ -14,13 +14,15 @@ impl BaseSinker {
     pub async fn update_batch_monitor(
         monitor: &mut Arc<Mutex<Monitor>>,
         batch_size: usize,
+        data_size: usize,
         start_time: Instant,
     ) -> Result<(), Error> {
         monitor
             .lock()
             .unwrap()
             .add_counter(CounterType::RecordsPerQuery, batch_size)
-            .add_counter(CounterType::Records, batch_size)
+            .add_counter(CounterType::RecordCount, batch_size)
+            .add_counter(CounterType::DataBytes, data_size)
             .add_counter(
                 CounterType::RtPerQuery,
                 start_time.elapsed().as_micros() as usize,
@@ -31,14 +33,16 @@ impl BaseSinker {
     pub async fn update_serial_monitor(
         monitor: &mut Arc<Mutex<Monitor>>,
         record_count: usize,
+        data_size: usize,
         start_time: Instant,
     ) -> Result<(), Error> {
         monitor
             .lock()
             .unwrap()
             .add_batch_counter(CounterType::RecordsPerQuery, record_count, record_count)
-            .add_counter(CounterType::Records, record_count)
+            .add_counter(CounterType::RecordCount, record_count)
             .add_counter(CounterType::SerialWrites, record_count)
+            .add_batch_counter(CounterType::DataBytes, data_size, record_count)
             .add_batch_counter(
                 CounterType::RtPerQuery,
                 start_time.elapsed().as_micros() as usize,
