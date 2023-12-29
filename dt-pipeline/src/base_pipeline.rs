@@ -68,10 +68,13 @@ impl Pipeline for BasePipeline {
         let mut last_commit_position = Option::None;
 
         while !self.shut_down.load(Ordering::Acquire) || !self.buffer.is_empty() {
-            self.monitor
-                .lock()
-                .unwrap()
-                .add_counter(CounterType::BufferSize, self.buffer.len());
+            // to avoid too many sub counters, only add counter when buffer is not empty
+            if !self.buffer.is_empty() {
+                self.monitor
+                    .lock()
+                    .unwrap()
+                    .add_counter(CounterType::BufferSize, self.buffer.len());
+            }
 
             // some sinkers (foxlake) need to accumulate data to a big batch and sink
             let data = if last_sink_time.elapsed().as_secs() < self.batch_sink_interval_secs

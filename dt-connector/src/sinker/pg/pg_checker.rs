@@ -75,8 +75,8 @@ impl PgChecker {
         let mut diff = Vec::new();
         for row_data_src in data.iter() {
             let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
-            let (sql, cols, binds) = query_builder.get_select_query(row_data_src)?;
-            let query = query_builder.create_pg_query(&sql, &cols, &binds);
+            let query_info = query_builder.get_select_query(row_data_src)?;
+            let query = query_builder.create_pg_query(&query_info);
 
             let mut rows = query.fetch(&self.conn_pool);
             if let Some(row) = rows.try_next().await.unwrap() {
@@ -92,7 +92,7 @@ impl PgChecker {
             .await
             .unwrap();
 
-        BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), start_time).await
+        BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), 0, start_time).await
     }
 
     async fn batch_check(
@@ -107,9 +107,8 @@ impl PgChecker {
         let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
 
         // build fetch dst sql
-        let (sql, cols, binds) =
-            query_builder.get_batch_select_query(data, start_index, batch_size)?;
-        let query = query_builder.create_pg_query(&sql, &cols, &binds);
+        let query_info = query_builder.get_batch_select_query(data, start_index, batch_size)?;
+        let query = query_builder.create_pg_query(&query_info);
 
         // fetch dst
         let mut dst_row_data_map = HashMap::new();
@@ -131,7 +130,7 @@ impl PgChecker {
             .await
             .unwrap();
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, start_time).await
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, 0, start_time).await
     }
 
     async fn serial_ddl_check(&mut self, mut data: Vec<DdlData>) -> Result<(), Error> {

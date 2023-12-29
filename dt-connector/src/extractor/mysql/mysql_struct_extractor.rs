@@ -1,15 +1,9 @@
-use std::sync::{atomic::AtomicBool, Arc};
-
 use async_trait::async_trait;
-use concurrent_queue::ConcurrentQueue;
 use dt_common::{error::Error, log_info, utils::rdb_filter::RdbFilter};
 
 use dt_meta::{
-    ddl_data::DdlData,
-    ddl_type::DdlType,
-    dt_data::{DtData, DtItem},
-    mysql::mysql_meta_manager::MysqlMetaManager,
-    position::Position,
+    ddl_data::DdlData, ddl_type::DdlType, dt_data::DtData,
+    mysql::mysql_meta_manager::MysqlMetaManager, position::Position,
     struct_meta::statement::struct_statement::StructStatement,
 };
 use sqlx::{MySql, Pool};
@@ -20,11 +14,10 @@ use crate::{
 };
 
 pub struct MysqlStructExtractor {
+    pub base_extractor: BaseExtractor,
     pub conn_pool: Pool<MySql>,
-    pub buffer: Arc<ConcurrentQueue<DtItem>>,
     pub db: String,
     pub filter: RdbFilter,
-    pub shut_down: Arc<AtomicBool>,
 }
 
 #[async_trait]
@@ -58,7 +51,7 @@ impl MysqlStructExtractor {
                 .await;
         }
 
-        BaseExtractor::wait_task_finish(self.buffer.as_ref(), self.shut_down.as_ref()).await
+        self.base_extractor.wait_task_finish().await
     }
 
     pub async fn push_dt_data(&mut self, statement: StructStatement) {
@@ -70,12 +63,9 @@ impl MysqlStructExtractor {
             ddl_type: DdlType::Unknown,
         };
 
-        BaseExtractor::push_dt_data(
-            self.buffer.as_ref(),
-            DtData::Ddl { ddl_data },
-            Position::None,
-        )
-        .await
-        .unwrap()
+        self.base_extractor
+            .push_dt_data(DtData::Ddl { ddl_data }, Position::None)
+            .await
+            .unwrap()
     }
 }

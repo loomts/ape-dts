@@ -1,14 +1,7 @@
-use std::{
-    sync::{atomic::AtomicBool, Arc, Mutex},
-    time::Instant,
-};
-
 use async_trait::async_trait;
-use concurrent_queue::ConcurrentQueue;
 use dt_meta::{
     adaptor::{mysql_col_value_convertor::MysqlColValueConvertor, sqlx_ext::SqlxMysqlExt},
     col_value::ColValue,
-    dt_data::DtItem,
     mysql::{
         mysql_col_type::MysqlColType, mysql_meta_manager::MysqlMetaManager,
         mysql_tb_meta::MysqlTbMeta,
@@ -20,26 +13,22 @@ use futures::TryStreamExt;
 
 use sqlx::{MySql, Pool};
 
-use dt_common::{config::config_enums::DbType, error::Error, log_info, monitor::monitor::Monitor};
+use dt_common::{config::config_enums::DbType, error::Error, log_info};
 
 use crate::{
     extractor::{base_extractor::BaseExtractor, snapshot_resumer::SnapshotResumer},
-    rdb_router::RdbRouter,
     Extractor,
 };
 
 pub struct MysqlSnapshotExtractor {
+    pub base_extractor: BaseExtractor,
     pub conn_pool: Pool<MySql>,
     pub meta_manager: MysqlMetaManager,
     pub resumer: SnapshotResumer,
-    pub buffer: Arc<ConcurrentQueue<DtItem>>,
     pub slice_size: usize,
     pub sample_interval: usize,
     pub db: String,
     pub tb: String,
-    pub shut_down: Arc<AtomicBool>,
-    pub monitor: Arc<Mutex<Monitor>>,
-    pub router: RdbRouter,
 }
 
 #[async_trait]
@@ -87,16 +76,10 @@ impl MysqlSnapshotExtractor {
             self.extract_all(&tb_meta).await?;
         }
 
-        BaseExtractor::wait_task_finish(self.buffer.as_ref(), self.shut_down.as_ref()).await
+        self.base_extractor.wait_task_finish().await
     }
 
     async fn extract_all(&mut self, tb_meta: &MysqlTbMeta) -> Result<(), Error> {
-        let mut last_monitored_time = Instant::now();
-        let monitor_count_window = self.monitor.lock().unwrap().count_window;
-        let monitor_time_window_secs = self.monitor.lock().unwrap().time_window_secs as u64;
-        let mut monitored_count = 0;
-        let mut extracted_count = 0;
-
         log_info!(
             "start extracting data from `{}`.`{}` without slices",
             self.db,
@@ -107,31 +90,17 @@ impl MysqlSnapshotExtractor {
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let row_data = RowData::from_mysql_row(&row, tb_meta);
-            BaseExtractor::push_row(
-                self.buffer.as_ref(),
-                row_data,
-                Position::None,
-                Some(&self.router),
-            )
-            .await
-            .unwrap();
-            extracted_count += 1;
-
-            (last_monitored_time, monitored_count) = BaseExtractor::update_monitor(
-                &mut self.monitor,
-                extracted_count,
-                monitored_count,
-                monitor_count_window,
-                monitor_time_window_secs,
-                last_monitored_time,
-            );
+            self.base_extractor
+                .push_row(row_data, Position::None)
+                .await
+                .unwrap();
         }
 
         log_info!(
             "end extracting data from `{}`.`{}`, all count: {}",
             self.db,
             self.tb,
-            extracted_count
+            self.base_extractor.monitor.counters.record_count
         );
         Ok(())
     }
@@ -143,18 +112,13 @@ impl MysqlSnapshotExtractor {
         order_col_type: &MysqlColType,
         resume_value: ColValue,
     ) -> Result<(), Error> {
-        let mut last_monitored_time = Instant::now();
-        let monitor_count_window = self.monitor.lock().unwrap().count_window;
-        let monitor_time_window_secs = self.monitor.lock().unwrap().time_window_secs as u64;
-        let mut monitored_count = 0;
-        let mut extracted_count = 0;
-
         log_info!(
             "start extracting data from `{}`.`{}` by slices",
             self.db,
             self.tb
         );
 
+        let mut extracted_count = 0;
         let mut start_value = resume_value;
         let sql1 = format!(
             "SELECT * FROM `{}`.`{}` ORDER BY `{}` ASC LIMIT {}",
@@ -197,23 +161,11 @@ impl MysqlSnapshotExtractor {
                 } else {
                     Position::None
                 };
-                BaseExtractor::push_row(
-                    self.buffer.as_ref(),
-                    row_data,
-                    position,
-                    Some(&self.router),
-                )
-                .await
-                .unwrap();
 
-                (last_monitored_time, monitored_count) = BaseExtractor::update_monitor(
-                    &mut self.monitor,
-                    extracted_count,
-                    monitored_count,
-                    monitor_count_window,
-                    monitor_time_window_secs,
-                    last_monitored_time,
-                );
+                self.base_extractor
+                    .push_row(row_data, position)
+                    .await
+                    .unwrap();
             }
 
             // all data extracted

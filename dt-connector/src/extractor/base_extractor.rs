@@ -2,18 +2,13 @@ use std::{
     collections::HashMap,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
+        Arc,
     },
-    time::Instant,
 };
 
 use concurrent_queue::ConcurrentQueue;
 
-use dt_common::{
-    error::Error,
-    monitor::{counter_type::CounterType, monitor::Monitor},
-    utils::time_util::TimeUtil,
-};
+use dt_common::{error::Error, utils::time_util::TimeUtil};
 use dt_meta::{
     col_value::ColValue,
     dt_data::{DtData, DtItem},
@@ -23,47 +18,45 @@ use dt_meta::{
 
 use crate::rdb_router::RdbRouter;
 
-pub struct BaseExtractor {}
+use super::extractor_monitor::ExtractorMonitor;
+
+pub struct BaseExtractor {
+    pub buffer: Arc<ConcurrentQueue<DtItem>>,
+    pub router: RdbRouter,
+    pub shut_down: Arc<AtomicBool>,
+    pub monitor: ExtractorMonitor,
+}
 
 impl BaseExtractor {
-    pub async fn push_dt_data(
-        buffer: &ConcurrentQueue<DtItem>,
-        dt_data: DtData,
-        position: Position,
-    ) -> Result<(), Error> {
-        while buffer.is_full() {
+    pub async fn push_dt_data(&mut self, dt_data: DtData, position: Position) -> Result<(), Error> {
+        while self.buffer.is_full() {
             TimeUtil::sleep_millis(1).await;
         }
+
+        self.monitor.counters.record_count += 1;
+        self.monitor.counters.data_size += dt_data.get_data_size();
+        self.monitor.try_flush(false);
+
         let item = DtItem { dt_data, position };
-        buffer.push(item).unwrap();
+        self.buffer.push(item).unwrap();
         Ok(())
     }
 
-    pub async fn push_row(
-        buffer: &ConcurrentQueue<DtItem>,
-        row_data: RowData,
-        position: Position,
-        router: Option<&RdbRouter>,
-    ) -> Result<(), Error> {
-        let row_data = Self::route_row(row_data, router);
+    pub async fn push_row(&mut self, row_data: RowData, position: Position) -> Result<(), Error> {
+        let row_data = self.route_row(row_data);
         let dt_data = DtData::Dml { row_data };
-        Self::push_dt_data(buffer, dt_data, position).await
+        self.push_dt_data(dt_data, position).await
     }
 
-    fn route_row(mut row_data: RowData, router: Option<&RdbRouter>) -> RowData {
-        if router.is_none() {
-            return row_data;
-        }
-        let router = router.unwrap();
-
+    fn route_row(&self, mut row_data: RowData) -> RowData {
         // tb map
         let (schema, tb) = (row_data.schema.clone(), row_data.tb.clone());
-        let (dst_schema, dst_tb) = router.get_tb_map(&schema, &tb);
+        let (dst_schema, dst_tb) = self.router.get_tb_map(&schema, &tb);
         row_data.schema = dst_schema.to_string();
         row_data.tb = dst_tb.to_string();
 
         // col map
-        let col_map = router.get_col_map(&schema, &tb);
+        let col_map = self.router.get_col_map(&schema, &tb);
         if col_map.is_none() {
             return row_data;
         }
@@ -93,42 +86,14 @@ impl BaseExtractor {
         return row_data;
     }
 
-    /// return: (last monitor time, monitored count)
-    pub fn update_monitor(
-        monitor: &mut Arc<Mutex<Monitor>>,
-        extracted_count: usize,
-        monitored_count: usize,
-        monitor_count_window: usize,
-        monitor_time_window_secs: u64,
-        last_monitored_time: Instant,
-    ) -> (Instant, usize) {
-        let count = extracted_count - monitored_count;
-        if count >= monitor_count_window
-            || last_monitored_time.elapsed().as_secs() >= monitor_time_window_secs
-        {
-            monitor
-                .lock()
-                .unwrap()
-                .add_counter(CounterType::Records, count)
-                .add_counter(
-                    CounterType::RtPerQuery,
-                    last_monitored_time.elapsed().as_micros() as usize,
-                );
-            return (Instant::now(), extracted_count);
-        }
-        (last_monitored_time, monitored_count)
-    }
-
-    pub async fn wait_task_finish(
-        buffer: &ConcurrentQueue<DtItem>,
-        shut_down: &AtomicBool,
-    ) -> Result<(), Error> {
+    pub async fn wait_task_finish(&mut self) -> Result<(), Error> {
         // wait all data to be transfered
-        while !buffer.is_empty() {
+        while !self.buffer.is_empty() {
             TimeUtil::sleep_millis(1).await;
         }
 
-        shut_down.store(true, Ordering::Release);
+        self.monitor.try_flush(true);
+        self.shut_down.store(true, Ordering::Release);
         Ok(())
     }
 }

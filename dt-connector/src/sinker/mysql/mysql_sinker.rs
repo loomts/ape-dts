@@ -94,45 +94,52 @@ impl Sinker for MysqlSinker {
 
 impl MysqlSinker {
     async fn serial_sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
-        let start_time = Instant::now();
-
         if self.is_transaction_enable() {
             return self.transaction_serial_sink(data).await;
         }
 
+        let start_time = Instant::now();
+        let mut data_size = 0;
+
         for row_data in data.iter() {
+            data_size += row_data.data_size;
+
             let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&row_data).await?;
             let query_builder = RdbQueryBuilder::new_for_mysql(tb_meta);
 
-            let (mut sql, cols, binds) = query_builder.get_query_info(row_data)?;
-            sql = Self::handle_dialect(&sql);
-            let query = query_builder.create_mysql_query(&sql, &cols, &binds);
-
+            let mut query_info = query_builder.get_query_info(row_data)?;
+            query_info.sql = Self::handle_dialect(&query_info.sql);
+            let query = query_builder.create_mysql_query(&query_info);
             query.execute(&self.conn_pool).await.unwrap();
         }
 
-        BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), start_time).await
+        BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
+            .await
     }
 
     async fn transaction_serial_sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
-        let mut transaction = self.conn_pool.begin().await.unwrap();
+        let start_time = Instant::now();
+        let mut data_size = 0;
 
+        let mut transaction = self.conn_pool.begin().await.unwrap();
         self.execute_transaction_command(&mut transaction).await;
 
         for row_data in data.iter() {
+            data_size += row_data.data_size;
+
             let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&row_data).await?;
             let query_builder = RdbQueryBuilder::new_for_mysql(tb_meta);
 
-            let (mut sql, cols, binds) = query_builder.get_query_info(row_data)?;
-            sql = Self::handle_dialect(&sql);
-            let query = query_builder.create_mysql_query(&sql, &cols, &binds);
-
+            let mut query_info = query_builder.get_query_info(row_data)?;
+            query_info.sql = Self::handle_dialect(&query_info.sql);
+            let query = query_builder.create_mysql_query(&query_info);
             query.execute(&mut transaction).await.unwrap();
         }
 
         transaction.commit().await.unwrap();
 
-        Ok(())
+        BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
+            .await
     }
 
     async fn batch_delete(
@@ -143,26 +150,26 @@ impl MysqlSinker {
     ) -> Result<(), Error> {
         let start_time = Instant::now();
 
-        let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&data[0]).await?;
-        let query_builder = RdbQueryBuilder::new_for_mysql(tb_meta);
-
-        let (sql, cols, binds) =
+        let tb_meta = self
+            .meta_manager
+            .get_tb_meta_by_row_data(&data[0])
+            .await?
+            .to_owned();
+        let query_builder = RdbQueryBuilder::new_for_mysql(&tb_meta);
+        let (query_info, data_size) =
             query_builder.get_batch_delete_query(data, start_index, batch_size)?;
-        let query = query_builder.create_mysql_query(&sql, &cols, &binds);
+        let query = query_builder.create_mysql_query(&query_info);
 
         if self.is_transaction_enable() {
             let mut transaction = self.conn_pool.begin().await.unwrap();
-
             self.execute_transaction_command(&mut transaction).await;
-
             query.execute(&mut transaction).await.unwrap();
-
             transaction.commit().await.unwrap();
         } else {
             query.execute(&self.conn_pool).await.unwrap();
         }
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, start_time).await
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
 
     async fn batch_insert(
@@ -180,30 +187,25 @@ impl MysqlSinker {
             .to_owned();
         let query_builder = RdbQueryBuilder::new_for_mysql(&tb_meta);
 
-        let (mut sql, cols, binds) =
+        let (mut query_info, data_size) =
             query_builder.get_batch_insert_query(data, start_index, batch_size)?;
-        sql = Self::handle_dialect(&sql);
-        let query = query_builder.create_mysql_query(&sql, &cols, &binds);
+        query_info.sql = Self::handle_dialect(&query_info.sql);
+        let query = query_builder.create_mysql_query(&query_info);
 
-        let execute_error: Option<sqlx::Error>;
-
-        if self.is_transaction_enable() {
+        let execute_error = if self.is_transaction_enable() {
             let mut transaction = self.conn_pool.begin().await.unwrap();
-
             self.execute_transaction_command(&mut transaction).await;
-
             query.execute(&mut transaction).await.unwrap();
-
-            execute_error = match transaction.commit().await {
+            match transaction.commit().await {
                 Err(e) => Some(e),
                 _ => None,
-            };
+            }
         } else {
-            execute_error = match query.execute(&self.conn_pool).await {
+            match query.execute(&self.conn_pool).await {
                 Err(e) => Some(e),
                 _ => None,
-            };
-        }
+            }
+        };
 
         if let Some(error) = execute_error {
             log_error!(
@@ -217,7 +219,7 @@ impl MysqlSinker {
             self.serial_sink(sub_data.to_vec()).await.unwrap();
         }
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, start_time).await
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
 
     #[inline(always)]

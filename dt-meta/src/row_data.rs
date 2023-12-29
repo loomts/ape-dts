@@ -21,9 +21,29 @@ pub struct RowData {
     pub row_type: RowType,
     pub before: Option<HashMap<String, ColValue>>,
     pub after: Option<HashMap<String, ColValue>>,
+    pub data_size: usize,
 }
 
 impl RowData {
+    pub fn new(
+        schema: String,
+        tb: String,
+        row_type: RowType,
+        before: Option<HashMap<String, ColValue>>,
+        after: Option<HashMap<String, ColValue>>,
+    ) -> Self {
+        let mut me = Self {
+            schema,
+            tb,
+            row_type,
+            before,
+            after,
+            data_size: 0,
+        };
+        me.data_size = me.get_data_malloc_size();
+        me
+    }
+
     pub fn from_mysql_row(row: &MySqlRow, tb_meta: &MysqlTbMeta) -> Self {
         Self::from_mysql_compatible_row(row, tb_meta, &DbType::Mysql)
     }
@@ -53,13 +73,13 @@ impl RowData {
     }
 
     pub fn build_insert_row_data(after: HashMap<String, ColValue>, tb_meta: &RdbTbMeta) -> Self {
-        RowData {
-            schema: tb_meta.schema.clone(),
-            tb: tb_meta.tb.clone(),
-            before: None,
-            after: Some(after),
-            row_type: RowType::Insert,
-        }
+        Self::new(
+            tb_meta.schema.clone(),
+            tb_meta.tb.clone(),
+            RowType::Insert,
+            None,
+            Some(after),
+        )
     }
 
     #[allow(clippy::inherent_to_string)]
@@ -92,7 +112,7 @@ impl RowData {
         hash_code
     }
 
-    pub fn get_data_malloc_size(&self) -> usize {
+    fn get_data_malloc_size(&self) -> usize {
         let mut size = 0;
         // do not use mem::size_of_val() since:
         // for Pointer: it returns the size of pointer without the pointed data

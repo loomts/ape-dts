@@ -4,8 +4,11 @@ use std::{
 };
 
 use crate::{
-    call_batch_fn, close_conn_pool, rdb_query_builder::RdbQueryBuilder, rdb_router::RdbRouter,
-    sinker::base_sinker::BaseSinker, Sinker,
+    call_batch_fn, close_conn_pool,
+    rdb_query_builder::{RdbQueryBuilder, RdbQueryInfo},
+    rdb_router::RdbRouter,
+    sinker::base_sinker::BaseSinker,
+    Sinker,
 };
 
 use dt_common::{
@@ -15,7 +18,6 @@ use dt_common::{
 use sqlx::{Pool, Postgres};
 
 use dt_meta::{
-    col_value::ColValue,
     pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
     row_data::RowData,
     row_type::RowType,
@@ -63,21 +65,25 @@ impl Sinker for PgSinker {
 impl PgSinker {
     async fn serial_sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
         let start_time = Instant::now();
+        let mut data_size = 0;
 
         for row_data in data.iter() {
+            data_size += row_data.data_size;
+
             let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&row_data).await?;
             let query_builder = RdbQueryBuilder::new_for_pg(tb_meta);
 
-            let (sql, cols, binds) = if row_data.row_type == RowType::Insert {
+            let query_info = if row_data.row_type == RowType::Insert {
                 Self::get_insert_query(&query_builder, tb_meta, row_data)?
             } else {
                 query_builder.get_query_info(row_data)?
             };
-            let query = query_builder.create_pg_query(&sql, &cols, &binds);
+            let query = query_builder.create_pg_query(&query_info);
             query.execute(&self.conn_pool).await.unwrap();
         }
 
-        BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), start_time).await
+        BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
+            .await
     }
 
     async fn batch_delete(
@@ -91,12 +97,12 @@ impl PgSinker {
         let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&data[0]).await?;
         let query_builder = RdbQueryBuilder::new_for_pg(tb_meta);
 
-        let (sql, cols, binds) =
+        let (query_info, data_size) =
             query_builder.get_batch_delete_query(data, start_index, batch_size)?;
-        let query = query_builder.create_pg_query(&sql, &cols, &binds);
+        let query = query_builder.create_pg_query(&query_info);
         query.execute(&self.conn_pool).await.unwrap();
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, start_time).await
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
 
     async fn batch_insert(
@@ -110,9 +116,9 @@ impl PgSinker {
         let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&data[0]).await?;
         let query_builder = RdbQueryBuilder::new_for_pg(tb_meta);
 
-        let (sql, cols, binds) =
+        let (query_info, data_size) =
             query_builder.get_batch_insert_query(data, start_index, batch_size)?;
-        let query = query_builder.create_pg_query(&sql, &cols, &binds);
+        let query = query_builder.create_pg_query(&query_info);
 
         let result = query.execute(&self.conn_pool).await;
         if let Err(error) = result {
@@ -126,18 +132,18 @@ impl PgSinker {
             self.serial_sink(sub_data.to_vec()).await.unwrap();
         }
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, start_time).await
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
 
     #[allow(clippy::type_complexity)]
     fn get_insert_query<'a>(
-        query_builder: &RdbQueryBuilder,
-        tb_meta: &PgTbMeta,
+        query_builder: &'a RdbQueryBuilder,
+        tb_meta: &'a PgTbMeta,
         row_data: &'a RowData,
-    ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
-        let (mut sql, mut cols, mut binds) = query_builder.get_insert_query(row_data)?;
+    ) -> Result<RdbQueryInfo<'a>, Error> {
+        let mut query_info = query_builder.get_insert_query(row_data)?;
 
-        let mut placeholder_index = cols.len() + 1;
+        let mut placeholder_index = query_info.cols.len() + 1;
         let after = row_data.after.as_ref().unwrap();
         let mut set_pairs = Vec::new();
         for col in tb_meta.basic.cols.iter() {
@@ -147,17 +153,17 @@ impl PgSinker {
                 query_builder.get_placeholder(placeholder_index, col)
             );
             set_pairs.push(set_pair);
-            cols.push(col.clone());
-            binds.push(after.get(col));
+            query_info.cols.push(col.clone());
+            query_info.binds.push(after.get(col));
             placeholder_index += 1;
         }
 
-        sql = format!(
+        query_info.sql = format!(
             "{} ON CONFLICT ({}) DO UPDATE SET {}",
-            sql,
+            query_info.sql,
             SqlUtil::escape_cols(&tb_meta.basic.id_cols, &DbType::Pg).join(","),
             set_pairs.join(",")
         );
-        Ok((sql, cols, binds))
+        Ok(query_info)
     }
 }

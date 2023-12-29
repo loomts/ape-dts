@@ -7,7 +7,7 @@ mod test {
 
     #[tokio::test]
     #[serial]
-    async fn cdc_basic_test() {
+    async fn snapshot_basic_test() {
         TestBase::run_rdb_redis_snapshot_test("mysql_to_redis/snapshot/basic_test").await;
     }
 }

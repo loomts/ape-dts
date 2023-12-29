@@ -115,7 +115,7 @@ impl MongoChecker {
             .await
             .unwrap();
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, start_time).await
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, 0, start_time).await
     }
 
     fn mock_tb_meta(schema: &str, tb: &str) -> RdbTbMeta {
@@ -134,12 +134,6 @@ impl MongoChecker {
             ColValue::String(key.to_string()),
         );
         after.insert(MongoConstants::DOC.to_string(), ColValue::MongoDoc(doc));
-        RowData {
-            schema: schema.into(),
-            tb: tb.into(),
-            row_type: RowType::Insert,
-            after: Some(after),
-            before: None,
-        }
+        RowData::new(schema.into(), tb.into(), RowType::Insert, None, Some(after))
     }
 }

@@ -9,8 +9,8 @@ pub enum CounterType {
     SerialWrites,
 
     // time window counter, aggregate by: avg by window
-    #[strum(serialize = "rps")]
-    Records,
+    #[strum(serialize = "record_count")]
+    RecordCount,
 
     // time window counter, aggregate by: avg by count
     #[strum(serialize = "bytes_per_query")]
@@ -21,6 +21,8 @@ pub enum CounterType {
     RtPerQuery,
     #[strum(serialize = "buffer_size")]
     BufferSize,
+    #[strum(serialize = "data_bytes")]
+    DataBytes,
     #[strum(serialize = "record_size")]
     RecordSize,
 
@@ -29,10 +31,22 @@ pub enum CounterType {
     SinkedCount,
 }
 
-pub enum AggreateType {
-    Sum,
-    AvgByWindow,
+#[derive(EnumString, IntoStaticStr, Display, PartialEq, Eq, Hash, Clone)]
+pub enum AggregateType {
+    #[strum(serialize = "latest")]
+    Latest,
+    #[strum(serialize = "avg_by_sec")]
+    AvgBySec,
+    #[strum(serialize = "avg")]
     AvgByCount,
+    #[strum(serialize = "max_by_sec")]
+    MaxBySec,
+    #[strum(serialize = "max")]
+    MaxByCount,
+    #[strum(serialize = "sum")]
+    Sum,
+    #[strum(serialize = "count")]
+    Count,
 }
 
 pub enum WindowType {
@@ -45,25 +59,50 @@ impl CounterType {
         match self {
             Self::BatchWriteFailures
             | Self::SerialWrites
-            | Self::Records
+            | Self::RecordCount
             | Self::BytesPerQuery
             | Self::RecordsPerQuery
             | Self::RtPerQuery
             | Self::BufferSize
+            | Self::DataBytes
             | Self::RecordSize => WindowType::TimeWindow,
             Self::SinkedCount => WindowType::NoWindow,
         }
     }
 
-    pub fn get_aggregate_type(&self) -> AggreateType {
-        match self {
-            Self::BatchWriteFailures | Self::SerialWrites | Self::SinkedCount => AggreateType::Sum,
-            Self::BytesPerQuery
-            | Self::RecordsPerQuery
-            | Self::RtPerQuery
-            | Self::BufferSize
-            | Self::RecordSize => AggreateType::AvgByCount,
-            Self::Records => AggreateType::AvgByWindow,
+    pub fn get_aggregate_types(&self) -> Vec<AggregateType> {
+        match self.get_window_type() {
+            WindowType::NoWindow => vec![AggregateType::Latest],
+
+            WindowType::TimeWindow => match self {
+                Self::BytesPerQuery
+                | Self::RecordsPerQuery
+                | Self::RtPerQuery
+                | Self::BufferSize => {
+                    vec![
+                        AggregateType::AvgByCount,
+                        AggregateType::Sum,
+                        AggregateType::MaxByCount,
+                    ]
+                }
+
+                Self::RecordSize => {
+                    vec![AggregateType::AvgByCount]
+                }
+
+                Self::BatchWriteFailures
+                | Self::SerialWrites
+                | Self::RecordCount
+                | Self::DataBytes => {
+                    vec![
+                        AggregateType::AvgBySec,
+                        AggregateType::Sum,
+                        AggregateType::MaxBySec,
+                    ]
+                }
+
+                _ => vec![],
+            },
         }
     }
 }

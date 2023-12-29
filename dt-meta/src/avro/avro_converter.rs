@@ -132,13 +132,13 @@ impl AvroConverter {
         let before = self.avro_to_col_values(avro_map.remove(BEFORE));
         let after = self.avro_to_col_values(avro_map.remove(AFTER));
 
-        Ok(RowData {
+        Ok(RowData::new(
             schema,
             tb,
-            row_type: RowType::from_str(&operation)?,
+            RowType::from_str(&operation)?,
             before,
             after,
-        })
+        ))
     }
 
     fn avro_to_fields(&self, value: Option<Value>) -> Vec<AvroFieldDef> {
@@ -307,13 +307,8 @@ mod tests {
             assert_eq!(row_data, decoded_row_data);
         };
 
-        let mut row_data = RowData {
-            schema: schema.into(),
-            tb: tb.into(),
-            row_type: RowType::Insert,
-            before: None,
-            after: Some(after),
-        };
+        let mut row_data =
+            RowData::new(schema.into(), tb.into(), RowType::Insert, None, Some(after));
 
         // insert
         validate(row_data.clone());

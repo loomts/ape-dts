@@ -92,13 +92,13 @@ impl RdbMerger {
                 if Self::check_collision(&merged.insert_rows, tb_meta, &insert, insert_hash_code)
                     || Self::check_collision(&merged.delete_rows, tb_meta, &delete, hash_code)
                 {
-                    let row_data = RowData {
-                        row_type: RowType::Update,
-                        schema: delete.schema,
-                        tb: delete.tb,
-                        before: delete.before,
-                        after: insert.after,
-                    };
+                    let row_data = RowData::new(
+                        delete.schema,
+                        delete.tb,
+                        RowType::Update,
+                        delete.before,
+                        insert.after,
+                    );
                     merged.unmerged_rows.push(row_data);
                     return Ok(());
                 }
@@ -157,21 +157,21 @@ impl RdbMerger {
     }
 
     async fn split_update_row_data(row_data: RowData) -> Result<(RowData, RowData), Error> {
-        let delete_row = RowData {
-            row_type: RowType::Delete,
-            schema: row_data.schema.clone(),
-            tb: row_data.tb.clone(),
-            before: row_data.before,
-            after: Option::None,
-        };
+        let delete_row = RowData::new(
+            row_data.schema.clone(),
+            row_data.tb.clone(),
+            RowType::Delete,
+            row_data.before,
+            None,
+        );
 
-        let insert_row = RowData {
-            row_type: RowType::Insert,
-            schema: row_data.schema,
-            tb: row_data.tb,
-            before: Option::None,
-            after: row_data.after,
-        };
+        let insert_row = RowData::new(
+            row_data.schema,
+            row_data.tb,
+            RowType::Insert,
+            None,
+            row_data.after,
+        );
 
         Ok((delete_row, insert_row))
     }

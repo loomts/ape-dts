@@ -4,18 +4,14 @@ use super::redis_resp_types::Value;
 use crate::extractor::base_extractor::BaseExtractor;
 use crate::Extractor;
 use async_trait::async_trait;
-use concurrent_queue::ConcurrentQueue;
 use dt_common::error::Error;
 use dt_common::log_error;
 use dt_common::log_info;
-use dt_common::monitor::monitor::Monitor;
 use dt_common::utils::rdb_filter::RdbFilter;
-use dt_meta::dt_data::DtItem;
 use dt_meta::position::Position;
 use dt_meta::redis::redis_entry::RedisEntry;
 use dt_meta::redis::redis_object::RedisCmd;
 use dt_meta::syncer::Syncer;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Instant;
@@ -23,32 +19,29 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 pub struct RedisCdcExtractor {
+    pub base_extractor: BaseExtractor,
     pub conn: RedisClient,
-    pub buffer: Arc<ConcurrentQueue<DtItem>>,
     pub run_id: String,
     pub repl_offset: u64,
     pub repl_port: u64,
     pub now_db_id: i64,
     pub heartbeat_interval_secs: u64,
     pub heartbeat_key: String,
-    pub shut_down: Arc<AtomicBool>,
     pub syncer: Arc<Mutex<Syncer>>,
     pub filter: RdbFilter,
-    pub monitor: Arc<Mutex<Monitor>>,
 }
 
 #[async_trait]
 impl Extractor for RedisCdcExtractor {
     async fn extract(&mut self) -> Result<(), Error> {
         let mut psync_extractor = RedisPsyncExtractor {
+            base_extractor: &mut self.base_extractor,
             conn: &mut self.conn,
-            buffer: self.buffer.clone(),
             run_id: self.run_id.clone(),
             repl_offset: self.repl_offset,
             repl_port: self.repl_port,
             now_db_id: self.now_db_id,
             filter: self.filter.clone(),
-            monitor: self.monitor.clone(),
         };
 
         // receive rdb data if needed
@@ -69,12 +62,6 @@ impl RedisCdcExtractor {
         let mut heartbeat_timestamp = String::new();
         let mut hearbeat_conn = RedisClient::new(&self.conn.url).await?;
         let mut start_time = Instant::now();
-
-        let mut last_monitored_time = Instant::now();
-        let monitor_count_window = self.monitor.lock().unwrap().count_window;
-        let monitor_time_window_secs = self.monitor.lock().unwrap().time_window_secs as u64;
-        let mut monitored_count = 0;
-        let mut extracted_count = 0;
 
         loop {
             // heartbeat
@@ -117,18 +104,15 @@ impl RedisCdcExtractor {
                     now_db_id: self.now_db_id,
                     timestamp: heartbeat_timestamp.clone(),
                 };
-                RedisPsyncExtractor::push_to_buf(&self.buffer, &mut self.filter, entry, position)
-                    .await;
-                extracted_count += 1;
 
-                (last_monitored_time, monitored_count) = BaseExtractor::update_monitor(
-                    &mut self.monitor,
-                    extracted_count,
-                    monitored_count,
-                    monitor_count_window,
-                    monitor_time_window_secs,
-                    last_monitored_time,
-                );
+                RedisPsyncExtractor::push_to_buf(
+                    &mut self.base_extractor,
+                    &mut self.filter,
+                    entry,
+                    position,
+                )
+                .await
+                .unwrap();
             }
         }
     }

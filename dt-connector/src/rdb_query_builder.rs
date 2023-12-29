@@ -15,6 +15,12 @@ use dt_meta::{
 };
 use sqlx::{mysql::MySqlArguments, postgres::PgArguments, query::Query, MySql, Postgres};
 
+pub struct RdbQueryInfo<'a> {
+    pub sql: String,
+    pub cols: Vec<String>,
+    pub binds: Vec<Option<&'a ColValue>>,
+}
+
 pub struct RdbQueryBuilder<'a> {
     rdb_tb_meta: &'a RdbTbMeta,
     db_type: DbType,
@@ -46,19 +52,17 @@ impl RdbQueryBuilder<'_> {
     #[inline(always)]
     pub fn create_mysql_query<'a>(
         &self,
-        sql: &'a str,
-        cols: &'a [String],
-        binds: &'a [Option<&ColValue>],
+        query_info: &'a RdbQueryInfo,
     ) -> Query<'a, MySql, MySqlArguments> {
-        let mut query: Query<MySql, MySqlArguments> = sqlx::query(sql);
-        for i in 0..binds.len() {
+        let mut query: Query<MySql, MySqlArguments> = sqlx::query(&query_info.sql);
+        for i in 0..query_info.binds.len() {
             let col_type = self
                 .mysql_tb_meta
                 .unwrap()
                 .col_type_map
-                .get(&cols[i])
+                .get(&query_info.cols[i])
                 .unwrap();
-            query = query.bind_col_value(binds[i], col_type);
+            query = query.bind_col_value(query_info.binds[i], col_type);
         }
         query
     }
@@ -66,29 +70,28 @@ impl RdbQueryBuilder<'_> {
     #[inline(always)]
     pub fn create_pg_query<'a>(
         &self,
-        sql: &'a str,
-        cols: &'a [String],
-        binds: &'a [Option<&ColValue>],
+        query_info: &'a RdbQueryInfo,
     ) -> Query<'a, Postgres, PgArguments> {
-        let mut query: Query<Postgres, PgArguments> = sqlx::query(sql);
-        for i in 0..binds.len() {
-            let col_type = self.pg_tb_meta.unwrap().col_type_map.get(&cols[i]).unwrap();
-            query = query.bind_col_value(binds[i], col_type);
+        let mut query: Query<Postgres, PgArguments> = sqlx::query(&query_info.sql);
+        for i in 0..query_info.binds.len() {
+            let col_type = self
+                .pg_tb_meta
+                .unwrap()
+                .col_type_map
+                .get(&query_info.cols[i])
+                .unwrap();
+            query = query.bind_col_value(query_info.binds[i], col_type);
         }
         query
     }
 
     #[allow(clippy::type_complexity)]
-    pub fn get_query_info<'a>(
-        &self,
-        row_data: &'a RowData,
-    ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
-        let (sql, cols, binds) = match row_data.row_type {
-            RowType::Insert => self.get_insert_query(row_data)?,
-            RowType::Update => self.get_update_query(row_data)?,
-            RowType::Delete => self.get_delete_query(row_data)?,
-        };
-        Ok((sql, cols, binds))
+    pub fn get_query_info<'a>(&self, row_data: &'a RowData) -> Result<RdbQueryInfo<'a>, Error> {
+        match row_data.row_type {
+            RowType::Insert => self.get_insert_query(row_data),
+            RowType::Update => self.get_update_query(row_data),
+            RowType::Delete => self.get_delete_query(row_data),
+        }
     }
 
     #[allow(clippy::type_complexity)]
@@ -97,7 +100,8 @@ impl RdbQueryBuilder<'_> {
         data: &'a [RowData],
         start_index: usize,
         batch_size: usize,
-    ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
+    ) -> Result<(RdbQueryInfo<'a>, usize), Error> {
+        let mut data_size = 0;
         let mut all_placeholders = Vec::new();
         let mut placeholder_index = 1;
         for _ in 0..batch_size {
@@ -120,6 +124,7 @@ impl RdbQueryBuilder<'_> {
         let mut cols = Vec::new();
         let mut binds = Vec::new();
         for row_data in data.iter().skip(start_index).take(batch_size) {
+            data_size += row_data.data_size;
             let before = row_data.before.as_ref().unwrap();
             for col in self.rdb_tb_meta.id_cols.iter() {
                 cols.push(col.clone());
@@ -133,7 +138,7 @@ impl RdbQueryBuilder<'_> {
                 binds.push(col_value);
             }
         }
-        Ok((sql, cols, binds))
+        Ok((RdbQueryInfo { sql, cols, binds }, data_size))
     }
 
     #[allow(clippy::type_complexity)]
@@ -142,7 +147,8 @@ impl RdbQueryBuilder<'_> {
         data: &'a [RowData],
         start_index: usize,
         batch_size: usize,
-    ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
+    ) -> Result<(RdbQueryInfo<'a>, usize), Error> {
+        let mut malloc_size = 0;
         let mut placeholder_index = 1;
         let mut row_values = Vec::new();
         for _ in 0..batch_size {
@@ -165,20 +171,18 @@ impl RdbQueryBuilder<'_> {
         let mut cols = Vec::new();
         let mut binds = Vec::new();
         for row_data in data.iter().skip(start_index).take(batch_size) {
+            malloc_size += row_data.data_size;
             let after = row_data.after.as_ref().unwrap();
             for col_name in self.rdb_tb_meta.cols.iter() {
                 cols.push(col_name.clone());
                 binds.push(after.get(col_name));
             }
         }
-        Ok((sql, cols, binds))
+        Ok((RdbQueryInfo { sql, cols, binds }, malloc_size))
     }
 
     #[allow(clippy::type_complexity)]
-    pub fn get_insert_query<'a>(
-        &self,
-        row_data: &'a RowData,
-    ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
+    pub fn get_insert_query<'a>(&self, row_data: &'a RowData) -> Result<RdbQueryInfo<'a>, Error> {
         let mut col_values = Vec::new();
         for i in 0..self.rdb_tb_meta.cols.len() {
             col_values.push(self.get_placeholder(i + 1, &self.rdb_tb_meta.cols[i]));
@@ -199,14 +203,11 @@ impl RdbQueryBuilder<'_> {
             cols.push(col_name.clone());
             binds.push(after.get(col_name));
         }
-        Ok((sql, cols, binds))
+        Ok(RdbQueryInfo { sql, cols, binds })
     }
 
     #[allow(clippy::type_complexity)]
-    fn get_delete_query<'a>(
-        &self,
-        row_data: &'a RowData,
-    ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
+    fn get_delete_query<'a>(&self, row_data: &'a RowData) -> Result<RdbQueryInfo<'a>, Error> {
         let before = row_data.before.as_ref().unwrap();
         let (where_sql, not_null_cols) = self.get_where_info(1, before)?;
         let mut sql = format!(
@@ -225,14 +226,11 @@ impl RdbQueryBuilder<'_> {
             cols.push(col_name.clone());
             binds.push(before.get(col_name));
         }
-        Ok((sql, cols, binds))
+        Ok(RdbQueryInfo { sql, cols, binds })
     }
 
     #[allow(clippy::type_complexity)]
-    fn get_update_query<'a>(
-        &self,
-        row_data: &'a RowData,
-    ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
+    fn get_update_query<'a>(&self, row_data: &'a RowData) -> Result<RdbQueryInfo<'a>, Error> {
         let before = row_data.before.as_ref().unwrap();
         let after = row_data.after.as_ref().unwrap();
 
@@ -277,14 +275,11 @@ impl RdbQueryBuilder<'_> {
             cols.push(col_name.clone());
             binds.push(before.get(col_name));
         }
-        Ok((sql, cols, binds))
+        Ok(RdbQueryInfo { sql, cols, binds })
     }
 
     #[allow(clippy::type_complexity)]
-    pub fn get_select_query<'a>(
-        &self,
-        row_data: &'a RowData,
-    ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
+    pub fn get_select_query<'a>(&self, row_data: &'a RowData) -> Result<RdbQueryInfo<'a>, Error> {
         let after = row_data.after.as_ref().unwrap();
         let (where_sql, not_null_cols) = self.get_where_info(1, after)?;
         let mut sql = format!(
@@ -305,7 +300,7 @@ impl RdbQueryBuilder<'_> {
             cols.push(col_name.clone());
             binds.push(after.get(col_name));
         }
-        Ok((sql, cols, binds))
+        Ok(RdbQueryInfo { sql, cols, binds })
     }
 
     #[allow(clippy::type_complexity)]
@@ -314,7 +309,7 @@ impl RdbQueryBuilder<'_> {
         data: &'a [RowData],
         start_index: usize,
         batch_size: usize,
-    ) -> Result<(String, Vec<String>, Vec<Option<&'a ColValue>>), Error> {
+    ) -> Result<RdbQueryInfo<'a>, Error> {
         let where_sql = self.get_where_in_info(batch_size)?;
         let sql = format!(
             "SELECT {} FROM {}.{} WHERE {}",
@@ -340,7 +335,7 @@ impl RdbQueryBuilder<'_> {
                 binds.push(col_value);
             }
         }
-        Ok((sql, cols, binds))
+        Ok(RdbQueryInfo { sql, cols, binds })
     }
 
     pub fn build_extract_cols_str(&self) -> Result<String, Error> {

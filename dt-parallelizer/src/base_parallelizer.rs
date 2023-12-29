@@ -59,7 +59,7 @@ impl BaseParallelizer {
         match buffer.pop() {
             Ok(item) => {
                 // counter
-                record_size_counter.add(item.get_data_malloc_size(), 1);
+                record_size_counter.add(item.dt_data.get_data_size(), 1);
                 Ok(item)
             }
             Err(error) => Err(Error::PipelineError(format!(
