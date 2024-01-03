@@ -2,8 +2,8 @@
 INSERT INTO test_db_1.tb_1 VALUES (1,1);
 
 -- add column
-ALTER TABLE test_db_1.tb_1 ADD COLUMN f_2 smallint DEFAULT NULL;
-ALTER TABLE test_db_1.tb_1 ADD COLUMN f_3 smallint DEFAULT NULL;
+ALTER TABLE test_db_1.tb_1 ADD COLUMN f_2 int DEFAULT NULL;
+ALTER TABLE test_db_1.tb_1 ADD COLUMN f_3 int DEFAULT NULL;
 
 INSERT INTO test_db_1.tb_1 VALUES (2,2,2,2);
 
@@ -24,18 +24,18 @@ TRUNCATE TABLE test_db_1.truncate_tb_2;
 DROP TABLE test_db_1.drop_tb_1;
 
 -- drop database 
-DROP DATABASE test_db_3;
+DROP SCHEMA test_db_3 CASCADE;
 
 -- create database
-CREATE DATABASE test_db_4;
+CREATE SCHEMA test_db_4;
 
 -- create table
-CREATE TABLE test_db_2.tb_1 ( f_0 tinyint, f_1 smallint DEFAULT NULL, f_2 smallint DEFAULT NULL, PRIMARY KEY (f_0) ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4; 
+CREATE TABLE test_db_2.tb_1 ( f_0 int, f_1 int DEFAULT NULL, f_2 int DEFAULT NULL, PRIMARY KEY (f_0) ) ; 
 
 INSERT INTO test_db_2.tb_1 VALUES (1,1,1);
 
 -- add index
-ALTER TABLE test_db_2.tb_1 ADD INDEX idx_f_1 (f_1);
+ALTER TABLE test_db_2.tb_1 ADD CONSTRAINT idx_f_1 UNIQUE (f_1);
 
 -- NOT supported ddl
 CREATE INDEX idx_f_2 ON test_db_2.tb_1 (f_2);
@@ -43,9 +43,9 @@ CREATE INDEX idx_f_2 ON test_db_2.tb_1 (f_2);
 -- RENAME TABLE products TO products_old, products_new TO products;
 
 -- create database with special character
-CREATE DATABASE `中文database!@#$%^&*()_+`;
+CREATE SCHEMA "中文database!@$%^&*()_+";
 
 -- create table with chinese character
-CREATE TABLE `中文database!@#$%^&*()_+`.`中文` ( f_0 tinyint, f_1 smallint DEFAULT NULL, f_2 smallint DEFAULT NULL, PRIMARY KEY (f_0) ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4; 
+CREATE TABLE "中文database!@$%^&*()_+"."中文" ( f_0 int, f_1 int DEFAULT NULL, f_2 int DEFAULT NULL, PRIMARY KEY (f_0) ) ; 
 
-INSERT INTO `中文database!@#$%^&*()_+`.`中文` VALUES(1, 1, 1);
+INSERT INTO "中文database!@$%^&*()_+"."中文" VALUES(1, 1, 1);

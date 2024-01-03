@@ -353,6 +353,7 @@ impl SinkerUtil {
         let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
         for _ in 0..parallel_size {
             let sinker = PgSinker {
+                url: url.to_string(),
                 conn_pool: conn_pool.clone(),
                 meta_manager: meta_manager.clone(),
                 router: router.clone(),

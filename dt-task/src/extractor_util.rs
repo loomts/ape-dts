@@ -201,6 +201,7 @@ impl ExtractorUtil {
         heartbeat_interval_secs: u64,
         filter: RdbFilter,
         log_level: &str,
+        ddl_command_table: &str,
         syncer: Arc<Mutex<Syncer>>,
     ) -> Result<PgCdcExtractor, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
@@ -216,6 +217,7 @@ impl ExtractorUtil {
             start_lsn: start_lsn.to_string(),
             syncer,
             heartbeat_interval_secs,
+            ddl_command_table: ddl_command_table.to_string(),
             base_extractor,
         })
     }

@@ -93,6 +93,16 @@ impl PgMetaManager {
         Ok(self.name_to_tb_meta.get(&full_name).unwrap())
     }
 
+    pub fn invalidate_cache(&mut self, schema: &str, tb: &str) {
+        // TODO, if schema is not empty but tb is empty, only clear cache for the schema
+        if !schema.is_empty() && !tb.is_empty() {
+            let full_name = format!(r#""{}"."{}""#, schema, tb);
+            self.name_to_tb_meta.remove(&full_name);
+        } else {
+            self.name_to_tb_meta.clear();
+        }
+    }
+
     async fn parse_cols(
         conn_pool: &Pool<Postgres>,
         type_registry: &mut TypeRegistry,

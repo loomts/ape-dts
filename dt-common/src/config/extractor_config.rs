@@ -45,6 +45,7 @@ pub enum ExtractorConfig {
         pub_name: String,
         start_lsn: String,
         heartbeat_interval_secs: u64,
+        ddl_command_table: String,
     },
 
     PgCheck {

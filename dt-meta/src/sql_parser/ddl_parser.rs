@@ -66,6 +66,9 @@ pub fn sql_query(i: &[u8]) -> IResult<&[u8], (DdlType, Option<Vec<u8>>, Option<V
         }),
         map(drop_database, |r| (DdlType::DropDatabase, Some(r), None)),
         map(alter_database, |r| (DdlType::AlterDatabase, Some(r), None)),
+        map(create_schema, |r| (DdlType::CreateSchema, Some(r), None)),
+        map(drop_schema, |r| (DdlType::DropSchema, Some(r), None)),
+        map(alter_schema, |r| (DdlType::AlterSchema, Some(r), None)),
         map(create_table, |r| (DdlType::CreateTable, r.0, Some(r.1))),
         map(drop_table, |r| (DdlType::DropTable, r.0, Some(r.1))),
         map(alter_table, |r| (DdlType::AlterTable, r.0, Some(r.1))),
@@ -105,6 +108,44 @@ pub fn alter_database(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
         tag_no_case("alter"),
         multispace1,
         tag_no_case("database"),
+        multispace1,
+        sql_identifier,
+        multispace1,
+    ))(i)?;
+    Ok((remaining_input, database.to_vec()))
+}
+
+pub fn create_schema(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
+    let (remaining_input, (_, _, _, _, _, database, _)) = tuple((
+        tag_no_case("create"),
+        multispace1,
+        tag_no_case("schema"),
+        multispace1,
+        opt(if_not_exists),
+        sql_identifier,
+        multispace0,
+    ))(i)?;
+    Ok((remaining_input, database.to_vec()))
+}
+
+pub fn drop_schema(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
+    let (remaining_input, (_, _, _, _, _, database, _)) = tuple((
+        tag_no_case("drop"),
+        multispace1,
+        tag_no_case("schema"),
+        multispace1,
+        opt(if_exists),
+        sql_identifier,
+        multispace0,
+    ))(i)?;
+    Ok((remaining_input, database.to_vec()))
+}
+
+pub fn alter_schema(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
+    let (remaining_input, (_, _, _, _, database, _)) = tuple((
+        tag_no_case("alter"),
+        multispace1,
+        tag_no_case("schema"),
         multispace1,
         sql_identifier,
         multispace1,
@@ -649,6 +690,99 @@ mod test {
             assert_eq!(r.0, DdlType::TuncateTable);
             assert_eq!(r.1, None);
             assert_eq!(r.2, Some("bbb".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_create_schema() {
+        let sqls = vec![
+            "create schema aaa",
+            // escapes
+            "create schema \"aaa\"",
+            // spaces
+            "  create   schema   aaa",
+            // spaces + escapes
+            "  create   schema   \"aaa\"  ",
+            // if exists
+            "create schema if  not  exists \"aaa\"",
+            // comments
+            "create /*some comments,*/schema/*some comments*/ \"aaa\"",
+            //  escapes + spaces + if exists + comments
+            "create /*some comments,*/schema/*some comments*/ if  not  exists    \"aaa\"  ",
+        ];
+
+        for sql in sqls {
+            let r = DdlParser::parse(sql).unwrap();
+            assert_eq!(r.0, DdlType::CreateSchema);
+            assert_eq!(r.1, Some("aaa".to_string()));
+            assert_eq!(r.2, None);
+        }
+    }
+
+    #[test]
+    fn test_create_schema_with_special_characters() {
+        let sqls = vec![
+            "CREATE SCHEMA IF NOT EXISTS \"test_db_*.*\";",
+            "CREATE SCHEMA IF NOT EXISTS \"中文.others*&^%$#@!+_)(&^%#\";",
+        ];
+        let dbs = vec!["test_db_*.*", "中文.others*&^%$#@!+_)(&^%#"];
+
+        for i in 0..sqls.len() {
+            let sql = sqls[i];
+            let r = DdlParser::parse(sql).unwrap();
+            assert_eq!(r.0, DdlType::CreateSchema);
+            assert_eq!(r.1, Some(dbs[i].to_string()));
+            assert_eq!(r.2, None);
+        }
+    }
+
+    #[test]
+    fn test_drop_schema() {
+        let sqls = vec![
+            "drop schema aaa",
+            // escapes
+            "drop schema \"aaa\"",
+            // spaces
+            "  drop   schema   aaa",
+            // spaces + escapes
+            "  drop   schema   \"aaa\"  ",
+            // if exists
+            "drop schema if  exists \"aaa\"",
+            // comments
+            "drop /*some comments,*/schema/*some comments*/ \"aaa\"",
+            //  escapes + spaces + if exists + comments
+            "drop /*some comments,*/schema/*some comments*/ if  exists    \"aaa\"  ",
+        ];
+
+        for sql in sqls {
+            let r = DdlParser::parse(sql).unwrap();
+            assert_eq!(r.0, DdlType::DropSchema);
+            assert_eq!(r.1, Some("aaa".to_string()));
+            assert_eq!(r.2, None);
+        }
+    }
+
+    #[test]
+    fn test_alter_schema() {
+        let sqls = vec![
+            "alter schema aaa rename to bbb",
+            // escapes
+            "alter schema \"aaa\" rename to bbb",
+            // spaces
+            "  alter   schema   aaa rename to bbb",
+            // spaces + escapes
+            "  alter   schema   \"aaa\"   rename to bbb",
+            // comments
+            "alter /*some comments,*/schema/*some comments*/ \"aaa\" rename to bbb",
+            //  escapes + spaces + comments
+            "alter /*some comments,*/schema/*some comments*/    \"aaa\"   rename to bbb",
+        ];
+
+        for sql in sqls {
+            let r = DdlParser::parse(sql).unwrap();
+            assert_eq!(r.0, DdlType::AlterSchema);
+            assert_eq!(r.1, Some("aaa".to_string()));
+            assert_eq!(r.2, None);
         }
     }
 }

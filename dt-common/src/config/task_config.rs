@@ -144,6 +144,8 @@ impl TaskConfig {
                         .getuint(EXTRACTOR, "heartbeat_interval_secs")
                         .unwrap()
                         .unwrap(),
+                    ddl_command_table: Self::get_value(ini, EXTRACTOR, "ddl_command_table")
+                        .unwrap(),
                 },
 
                 ExtractType::CheckLog => ExtractorConfig::PgCheck {
@@ -392,12 +394,13 @@ impl TaskConfig {
     }
 
     fn load_filter_config(ini: &Ini) -> Result<FilterConfig, Error> {
-        Ok(FilterConfig::Rdb {
+        Ok(FilterConfig {
             do_dbs: ini.get(FILTER, "do_dbs").unwrap(),
             ignore_dbs: ini.get(FILTER, "ignore_dbs").unwrap(),
             do_tbs: ini.get(FILTER, "do_tbs").unwrap(),
             ignore_tbs: ini.get(FILTER, "ignore_tbs").unwrap(),
             do_events: ini.get(FILTER, "do_events").unwrap(),
+            do_ddls: Self::get_value(ini, FILTER, "do_ddls").unwrap(),
             do_structures: Self::get_value_with_default(
                 ini,
                 FILTER,

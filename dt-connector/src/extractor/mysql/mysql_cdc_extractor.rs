@@ -4,9 +4,8 @@ use std::collections::HashMap;
 
 use dt_meta::{
     adaptor::mysql_col_value_convertor::MysqlColValueConvertor, col_value::ColValue,
-    ddl_data::DdlData, ddl_type::DdlType, dt_data::DtData,
-    mysql::mysql_meta_manager::MysqlMetaManager, position::Position, row_data::RowData,
-    row_type::RowType, sql_parser::ddl_parser::DdlParser,
+    dt_data::DtData, mysql::mysql_meta_manager::MysqlMetaManager, position::Position,
+    row_data::RowData, row_type::RowType,
 };
 use mysql_binlog_connector_rust::{
     binlog_client::BinlogClient,
@@ -16,7 +15,7 @@ use mysql_binlog_connector_rust::{
     },
 };
 
-use dt_common::{error::Error, log_error, log_info, utils::rdb_filter::RdbFilter};
+use dt_common::{error::Error, log_info, utils::rdb_filter::RdbFilter};
 
 use crate::{
     datamarker::traits::DataMarkerFilter, extractor::base_extractor::BaseExtractor, Extractor,
@@ -253,7 +252,7 @@ impl MysqlCdcExtractor {
     ) -> Result<(), Error> {
         // TODO, currently we do not parse ddl if filtered,
         // but we should always try to parse ddl in the future
-        if self.filter.filter_ddl() {
+        if self.filter.filter_all_ddl() {
             return Ok(());
         }
 
@@ -262,56 +261,25 @@ impl MysqlCdcExtractor {
         }
 
         log_info!("received ddl: {:?}", query);
-        let mut ddl_data = DdlData {
-            schema: query.schema,
-            tb: String::new(),
-            query: query.query.clone(),
-            ddl_type: DdlType::Unknown,
-            statement: None,
-        };
+        if let Ok(ddl_data) = self
+            .base_extractor
+            .parse_ddl(&query.schema, &query.query)
+            .await
+        {
+            // invalidate metadata cache
+            self.meta_manager
+                .invalidate_cache(&ddl_data.schema, &ddl_data.tb);
 
-        let parse_result = DdlParser::parse(&query.query);
-        if let Err(error) = parse_result {
-            // clear all metadata cache
-            self.meta_manager.invalidate_cache("", "");
-            log_error!(
-                    "failed to parse ddl, will try ignore it, please execute the ddl manually in target, sql: {}, error: {}",
-                    ddl_data.query,
-                    error
-                );
-            return Ok(());
-        }
-
-        // case 1, execute: use db_1; create table tb_1(id int);
-        // binlog query.schema == db_1, schema from DdlParser == None
-        // case 2, execute: create table db_1.tb_1(id int);
-        // binlog query.schema == empty, schema from DdlParser == db_1
-        // case 3, execute: use db_1; create table db_2.tb_1(id int);
-        // binlog query.schema == db_1, schema from DdlParser == db_2
-        let (ddl_type, schema, tb) = parse_result.unwrap();
-        ddl_data.ddl_type = ddl_type;
-        if let Some(schema) = schema {
-            ddl_data.schema = schema;
-        }
-        if let Some(tb) = tb {
-            ddl_data.tb = tb;
-        }
-
-        // invalidate metadata cache
-        self.meta_manager
-            .invalidate_cache(&ddl_data.schema, &ddl_data.tb);
-
-        let filter = if ddl_data.tb.is_empty() {
-            self.filter.filter_db(&ddl_data.schema)
-        } else {
-            self.filter.filter_tb(&ddl_data.schema, &ddl_data.tb)
-        };
-
-        if !self.filter.filter_ddl() && !filter {
-            self.base_extractor
-                .push_dt_data(DtData::Ddl { ddl_data }, position)
-                .await
-                .unwrap();
+            if !self.filter.filter_ddl(
+                &ddl_data.schema,
+                &ddl_data.tb,
+                &ddl_data.ddl_type.to_string(),
+            ) {
+                self.base_extractor
+                    .push_dt_data(DtData::Ddl { ddl_data }, position)
+                    .await
+                    .unwrap();
+            }
         }
         Ok(())
     }

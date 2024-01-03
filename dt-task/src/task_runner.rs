@@ -394,6 +394,7 @@ impl TaskRunner {
                 pub_name,
                 start_lsn,
                 heartbeat_interval_secs,
+                ddl_command_table,
             } => {
                 let filter = RdbFilter::from_config(&self.config.filter, DbType::Pg)?;
                 let extractor = ExtractorUtil::create_pg_cdc_extractor(
@@ -405,6 +406,7 @@ impl TaskRunner {
                     *heartbeat_interval_secs,
                     filter,
                     &self.config.runtime.log_level,
+                    &ddl_command_table,
                     syncer,
                 )
                 .await?;
