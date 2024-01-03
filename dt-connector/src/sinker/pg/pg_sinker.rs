@@ -1,4 +1,5 @@
 use std::{
+    str::FromStr,
     sync::{Arc, Mutex},
     time::Instant,
 };
@@ -12,12 +13,17 @@ use crate::{
 };
 
 use dt_common::{
-    config::config_enums::DbType, error::Error, log_error, monitor::monitor::Monitor,
+    config::config_enums::DbType, error::Error, log_error, log_info, monitor::monitor::Monitor,
     utils::sql_util::SqlUtil,
 };
-use sqlx::{Pool, Postgres};
+use sqlx::{
+    postgres::{PgConnectOptions, PgPoolOptions},
+    Executor, Pool, Postgres,
+};
 
 use dt_meta::{
+    ddl_data::DdlData,
+    ddl_type::DdlType,
     pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
     row_data::RowData,
     row_type::RowType,
@@ -27,6 +33,7 @@ use async_trait::async_trait;
 
 #[derive(Clone)]
 pub struct PgSinker {
+    pub url: String,
     pub conn_pool: Pool<Postgres>,
     pub meta_manager: PgMetaManager,
     pub router: RdbRouter,
@@ -53,6 +60,39 @@ impl Sinker for PgSinker {
                 }
                 _ => self.serial_sink(data).await.unwrap(),
             }
+        }
+        Ok(())
+    }
+
+    async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> Result<(), Error> {
+        for ddl_data in data.iter() {
+            log_info!("sink ddl: {}", ddl_data.query);
+
+            let conn_options = PgConnectOptions::from_str(&self.url).unwrap();
+            let mut pool_options = PgPoolOptions::new().max_connections(1);
+            let sql = format!("SET search_path = '{}';", ddl_data.schema);
+
+            if !ddl_data.schema.is_empty() && ddl_data.ddl_type != DdlType::CreateSchema {
+                pool_options = pool_options.after_connect(move |conn, _meta| {
+                    let sql = sql.clone();
+                    Box::pin(async move {
+                        conn.execute(sql.as_str()).await?;
+                        Ok(())
+                    })
+                });
+            }
+            let conn_pool = pool_options.connect_with(conn_options).await.unwrap();
+
+            let query = sqlx::query(&ddl_data.query);
+            query.execute(&conn_pool).await.unwrap();
+        }
+        Ok(())
+    }
+
+    async fn refresh_meta(&mut self, data: Vec<DdlData>) -> Result<(), Error> {
+        for ddl_data in data.iter() {
+            self.meta_manager
+                .invalidate_cache(&ddl_data.schema, &ddl_data.tb);
         }
         Ok(())
     }

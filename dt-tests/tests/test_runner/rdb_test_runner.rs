@@ -14,7 +14,7 @@ use dt_meta::{
     col_value::ColValue, ddl_type::DdlType, mysql::mysql_meta_manager::MysqlMetaManager,
     row_data::RowData, sql_parser::ddl_parser::DdlParser,
 };
-use dt_task::{extractor_util::ExtractorUtil, task_util::TaskUtil};
+use dt_task::task_util::TaskUtil;
 
 use sqlx::{MySql, Pool, Postgres};
 
@@ -179,7 +179,16 @@ impl RdbTestRunner {
         self.execute_src_sqls(&self.base.src_dml_sqls).await?;
         TimeUtil::sleep_millis(parse_millis).await;
 
-        let (src_db_tbs, dst_db_tbs) = self.get_compare_db_tbs().await?;
+        let (mut src_db_tbs, mut dst_db_tbs) = self.get_compare_db_tbs().await?;
+        let filtered_db_tbs = self.get_filtered_db_tbs();
+        for i in (0..src_db_tbs.len()).rev() {
+            // do not check filtered tables since they may be dropped
+            if filtered_db_tbs.contains(&src_db_tbs[i]) {
+                src_db_tbs.remove(i);
+                dst_db_tbs.remove(i);
+            }
+        }
+
         assert!(self.compare_data_for_tbs(&src_db_tbs, &dst_db_tbs).await?);
         self.base.wait_task_finish(&task).await
     }
@@ -317,36 +326,9 @@ impl RdbTestRunner {
         src_db_tbs: &Vec<(String, String)>,
         dst_db_tbs: &Vec<(String, String)>,
     ) -> Result<bool, Error> {
-        let filtered_tbs_file = format!("{}/filtered_tbs.txt", &self.base.test_dir);
-        let filtered_tbs = if BaseTestRunner::check_path_exists(&filtered_tbs_file) {
-            BaseTestRunner::load_file(&filtered_tbs_file)
-        } else {
-            Vec::new()
-        };
-
-        let db_type = &self.get_db_type(SRC);
-        let get_full_tb_names = |db: &str, tb: &str| -> Vec<String> {
-            let escape_db = SqlUtil::escape_by_db_type(db, db_type);
-            let escape_tb = SqlUtil::escape_by_db_type(tb, db_type);
-            vec![
-                format!("{}.{}", db, tb),
-                format!("{}.{}", escape_db, tb),
-                format!("{}.{}", db, escape_tb),
-                format!("{}.{}", escape_db, escape_tb),
-            ]
-        };
-
+        let filtered_db_tbs = self.get_filtered_db_tbs();
         for i in 0..src_db_tbs.len() {
-            let possible_full_tb_names = get_full_tb_names(&src_db_tbs[i].0, &src_db_tbs[i].1);
-            let mut filtered = false;
-            for full_tb_name in possible_full_tb_names.iter() {
-                if filtered_tbs.contains(full_tb_name) {
-                    filtered = true;
-                    break;
-                }
-            }
-
-            if filtered {
+            if filtered_db_tbs.contains(&src_db_tbs[i]) {
                 let dst_data = self.fetch_data(&dst_db_tbs[i], DST).await?;
                 if !dst_data.is_empty() {
                     println!("tb: {:?} is filtered but dst is not emtpy", dst_db_tbs[i]);
@@ -476,47 +458,16 @@ impl RdbTestRunner {
         )
     }
 
-    /// get compare dbs from src_ddl_sqls
-    async fn get_compare_dbs(&self, url: &str, db_type: &DbType) -> Result<HashSet<String>, Error> {
-        let all_dbs = ExtractorUtil::list_dbs(url, db_type).await?;
-        let mut dbs = HashSet::new();
-        for sql in self.base.src_ddl_sqls.iter() {
-            if !sql.to_lowercase().contains("database") {
-                continue;
-            }
-            let ddl = DdlParser::parse(sql).unwrap();
-            if ddl.0 == DdlType::DropDatabase || ddl.0 == DdlType::CreateDatabase {
-                let db = ddl.1.unwrap();
-                // db may be dropped in test sql (ddl test)
-                if all_dbs.contains(&db) {
-                    dbs.insert(db);
-                }
-            }
-        }
-        Ok(dbs)
-    }
-
     /// get compare tbs
     pub async fn get_compare_db_tbs(
         &self,
     ) -> Result<(Vec<(String, String)>, Vec<(String, String)>), Error> {
-        let mut src_db_tbs = vec![];
-
-        let (src_db_type, src_url, _, _) = Self::parse_conn_info(&self.base);
-
-        if src_db_type == DbType::Mysql {
-            // for mysql, since tables may be created in src_dml.sql for ddl tests,
-            // we don't use Self::get_compare_db_tbs_from_sqls to get src_db_tbs by parsing src_ddl.sql
-            let dbs = self.get_compare_dbs(&src_url, &src_db_type).await?;
-            for db in dbs.iter() {
-                let tbs = ExtractorUtil::list_tbs(&src_url, db, &src_db_type).await?;
-                for tb in tbs.iter() {
-                    src_db_tbs.push((db.to_string(), tb.to_string()));
-                }
-            }
-        } else {
-            src_db_tbs = Self::get_compare_db_tbs_from_sqls(&self.base.src_ddl_sqls)?
-        }
+        let mut src_db_tbs = Self::get_compare_db_tbs_from_sqls(&self.base.src_ddl_sqls)?;
+        // since tables may be created/dropped in src_dml.sql for ddl tests,
+        // we also need to parse src_dml.sql.
+        src_db_tbs.extend_from_slice(&Self::get_compare_db_tbs_from_sqls(
+            &self.base.src_dml_sqls,
+        )?);
 
         let mut dst_db_tbs = vec![];
         for (db, tb) in src_db_tbs.iter() {
@@ -528,15 +479,16 @@ impl RdbTestRunner {
     }
 
     pub fn get_compare_db_tbs_from_sqls(
-        ddl_sqls: &Vec<String>,
+        sqls: &Vec<String>,
     ) -> Result<Vec<(String, String)>, Error> {
         let mut db_tbs = vec![];
 
-        for sql in ddl_sqls.iter() {
-            if !sql.to_lowercase().contains("create") || !sql.to_lowercase().contains("table") {
+        for sql in sqls.iter() {
+            let sql = sql.to_lowercase().trim().to_string();
+            if !sql.starts_with("create") || !sql.contains("table") {
                 continue;
             }
-            let ddl = DdlParser::parse(sql).unwrap();
+            let ddl = DdlParser::parse(&sql).unwrap();
             if ddl.0 == DdlType::CreateTable {
                 let db = if let Some(db) = ddl.1 {
                     db
@@ -549,6 +501,23 @@ impl RdbTestRunner {
         }
 
         Ok(db_tbs)
+    }
+
+    fn get_filtered_db_tbs(&self) -> HashSet<(String, String)> {
+        let mut filtered_db_tbs = HashSet::new();
+        let db_type = &self.get_db_type(SRC);
+        let delimiters = vec!['.'];
+        let escape_pairs = SqlUtil::get_escape_pairs(db_type);
+        let filtered_tbs_file = format!("{}/filtered_tbs.txt", &self.base.test_dir);
+
+        if BaseTestRunner::check_path_exists(&filtered_tbs_file) {
+            let lines = BaseTestRunner::load_file(&filtered_tbs_file);
+            for line in lines.iter() {
+                let db_tb = ConfigTokenParser::parse(line, &delimiters, &escape_pairs);
+                filtered_db_tbs.insert((db_tb[0].clone(), db_tb[1].clone()));
+            }
+        }
+        filtered_db_tbs
     }
 
     async fn get_tb_cols(

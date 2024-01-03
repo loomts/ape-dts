@@ -8,12 +8,15 @@ use std::{
 
 use concurrent_queue::ConcurrentQueue;
 
-use dt_common::{error::Error, utils::time_util::TimeUtil};
+use dt_common::{error::Error, log_error, utils::time_util::TimeUtil};
 use dt_meta::{
     col_value::ColValue,
+    ddl_data::DdlData,
+    ddl_type::DdlType,
     dt_data::{DtData, DtItem},
     position::Position,
     row_data::RowData,
+    sql_parser::ddl_parser::DdlParser,
 };
 
 use crate::rdb_router::RdbRouter;
@@ -84,6 +87,40 @@ impl BaseExtractor {
         }
 
         return row_data;
+    }
+
+    pub async fn parse_ddl(&self, schema: &str, query: &str) -> Result<DdlData, Error> {
+        let mut ddl_data = DdlData {
+            schema: schema.to_owned(),
+            tb: String::new(),
+            query: query.to_owned(),
+            ddl_type: DdlType::Unknown,
+            statement: None,
+        };
+
+        let parse_result = DdlParser::parse(query);
+        if let Err(err) = parse_result {
+            let error = format!("failed to parse ddl, will try ignore it, please execute the ddl manually in target, sql: {}, error: {}", query, err);
+            log_error!("{}", error);
+            return Err(Error::StructError(error));
+        }
+
+        // case 1, execute: use db_1; create table tb_1(id int);
+        // binlog query.schema == db_1, schema from DdlParser == None
+        // case 2, execute: create table db_1.tb_1(id int);
+        // binlog query.schema == empty, schema from DdlParser == db_1
+        // case 3, execute: use db_1; create table db_2.tb_1(id int);
+        // binlog query.schema == db_1, schema from DdlParser == db_2
+        let (ddl_type, schema, tb) = parse_result.unwrap();
+        ddl_data.ddl_type = ddl_type;
+        if let Some(schema) = schema {
+            ddl_data.schema = schema;
+        }
+        if let Some(tb) = tb {
+            ddl_data.tb = tb;
+        }
+
+        Ok(ddl_data)
     }
 
     pub async fn wait_task_finish(&mut self) -> Result<(), Error> {

@@ -48,6 +48,7 @@ pub struct PgCdcExtractor {
     pub pub_name: String,
     pub start_lsn: String,
     pub heartbeat_interval_secs: u64,
+    pub ddl_command_table: String,
     pub syncer: Arc<Mutex<Syncer>>,
 }
 
@@ -256,6 +257,11 @@ impl PgCdcExtractor {
             None,
             Some(col_values),
         );
+
+        if row_data.tb == self.ddl_command_table {
+            return self.decode_ddl(&row_data, &position).await;
+        }
+
         self.push_row_to_buf(row_data, position.clone()).await
     }
 
@@ -325,6 +331,60 @@ impl PgCdcExtractor {
             None,
         );
         self.push_row_to_buf(row_data, position.clone()).await
+    }
+
+    async fn decode_ddl(&mut self, row_data: &RowData, position: &Position) -> Result<(), Error> {
+        if self.filter.filter_all_ddl() {
+            return Ok(());
+        }
+
+        let get_string = |row_data: &RowData, col: &str| -> String {
+            if let Some(col_value) = row_data.after.as_ref().unwrap().get(col) {
+                if let Some(str) = col_value.to_option_string() {
+                    return str;
+                }
+            }
+            String::new()
+        };
+
+        // CREATE TABLE public.ape_dts_ddl_command
+        // (
+        //     ddl_text text COLLATE pg_catalog."default",
+        //    id bigserial primary key,
+        //    event text COLLATE pg_catalog."default",
+        //    tag text COLLATE pg_catalog."default",
+        //    username character varying COLLATE pg_catalog."default",
+        //    database character varying COLLATE pg_catalog."default",
+        //    schema character varying COLLATE pg_catalog."default",
+        //    object_type character varying COLLATE pg_catalog."default",
+        //    object_name character varying COLLATE pg_catalog."default",
+        //    client_address character varying COLLATE pg_catalog."default",
+        //    client_port integer,
+        //    event_time timestamp with time zone,
+        //    txid_current character varying(128) COLLATE pg_catalog."default",
+        //    message text COLLATE pg_catalog."default"
+        // );
+        let ddl_text = get_string(row_data, "ddl_text");
+        let _tag = get_string(row_data, "tag");
+        let schema = get_string(row_data, "schema");
+
+        if let Ok(ddl_data) = self.base_extractor.parse_ddl(&schema, &ddl_text).await {
+            // invalidate metadata cache
+            self.meta_manager
+                .invalidate_cache(&ddl_data.schema, &ddl_data.tb);
+
+            if !self.filter.filter_ddl(
+                &ddl_data.schema,
+                &ddl_data.tb,
+                &ddl_data.ddl_type.to_string(),
+            ) {
+                self.base_extractor
+                    .push_dt_data(DtData::Ddl { ddl_data }, position.to_owned())
+                    .await
+                    .unwrap();
+            }
+        }
+        Ok(())
     }
 
     fn parse_row_data(

@@ -168,15 +168,12 @@ impl Prechecker for PostgresqlPrechecker {
         let mut check_error: Option<Error> = None;
 
         let (mut db_tables, mut err_msgs): (Vec<DbTable>, Vec<String>) = (Vec::new(), Vec::new());
-        match &self.filter_config {
-            FilterConfig::Rdb { do_dbs, do_tbs, .. } => {
-                if !do_tbs.is_empty() {
-                    DbTable::from_str(do_tbs, &mut db_tables)
-                } else if !do_dbs.is_empty() {
-                    DbTable::from_str(do_dbs, &mut db_tables)
-                }
-            }
+        if !self.filter_config.do_tbs.is_empty() {
+            DbTable::from_str(&self.filter_config.do_tbs, &mut db_tables)
+        } else if !self.filter_config.do_dbs.is_empty() {
+            DbTable::from_str(&self.filter_config.do_dbs, &mut db_tables)
         }
+
         let (schemas, tb_schemas, tbs) = DbTable::get_config_maps(&db_tables).unwrap();
         let mut all_schemas = Vec::new();
         all_schemas.extend(&schemas);
@@ -267,15 +264,12 @@ impl Prechecker for PostgresqlPrechecker {
         }
 
         let (mut db_tables, mut err_msgs): (Vec<DbTable>, Vec<String>) = (Vec::new(), Vec::new());
-        match &self.filter_config {
-            FilterConfig::Rdb { do_dbs, do_tbs, .. } => {
-                if !do_tbs.is_empty() {
-                    DbTable::from_str(do_tbs, &mut db_tables)
-                } else if !do_dbs.is_empty() {
-                    DbTable::from_str(do_dbs, &mut db_tables)
-                }
-            }
+        if !self.filter_config.do_tbs.is_empty() {
+            DbTable::from_str(&self.filter_config.do_tbs, &mut db_tables)
+        } else if !self.filter_config.do_dbs.is_empty() {
+            DbTable::from_str(&self.filter_config.do_dbs, &mut db_tables)
         }
+
         let (schemas, tb_schemas, _) = DbTable::get_config_maps(&db_tables).unwrap();
         let mut all_schemas = Vec::new();
         all_schemas.extend(&schemas);
