@@ -134,6 +134,8 @@ impl MysqlStructFetcher {
             String::new()
         };
 
+        // BASE TABLE for a table, VIEW for a view, or SYSTEM VIEW for an INFORMATION_SCHEMA table.
+        // refer: https://dev.mysql.com/doc/refman/8.0/en/information-schema-tables-table.html
         let sql = format!(
             "SELECT t.TABLE_SCHEMA,
                 t.TABLE_NAME, 
@@ -154,6 +156,7 @@ impl MysqlStructFetcher {
             LEFT JOIN information_schema.columns c
             ON t.TABLE_SCHEMA = c.TABLE_SCHEMA AND t.TABLE_NAME = c.TABLE_NAME
             WHERE t.TABLE_SCHEMA ='{}' {}
+            AND t.TABLE_TYPE = 'BASE TABLE' 
             ORDER BY t.TABLE_SCHEMA, t.TABLE_NAME, c.ORDINAL_POSITION",
             self.db, tb_filter
         );
