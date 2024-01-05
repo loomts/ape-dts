@@ -102,6 +102,14 @@ impl MysqlCreateTableStatement {
         for i in columns {
             sql.push_str(&format!("`{}` {} ", i.column_name, i.column_type));
 
+            if !i.character_set.is_empty() {
+                sql.push_str(&format!("CHARACTER SET {} ", i.character_set))
+            }
+
+            if !i.collation.is_empty() {
+                sql.push_str(&format!("COLLATE {} ", i.collation))
+            }
+
             if let Some(v) = &i.default_value {
                 if v.to_lowercase().starts_with("current_") {
                     sql.push_str(&format!("DEFAULT {} ", v));
@@ -114,14 +122,6 @@ impl MysqlCreateTableStatement {
                 // DEFAULT_GENERATED
                 // DEFAULT_GENERATED on update CURRENT_TIMESTAMP
                 sql.push_str(&format!("{} ", i.extra.replace("DEFAULT_GENERATED", "")));
-            }
-
-            if !i.character_set.is_empty() {
-                sql.push_str(&format!("CHARACTER SET {} ", i.character_set))
-            }
-
-            if !i.collation.is_empty() {
-                sql.push_str(&format!("COLLATE {} ", i.collation))
             }
 
             let nullable = if i.is_nullable.to_lowercase() == "no" {

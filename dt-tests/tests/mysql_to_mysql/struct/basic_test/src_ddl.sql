@@ -2,14 +2,55 @@ drop database if exists struct_it_mysql2mysql_1;
 
 create database if not exists struct_it_mysql2mysql_1;
 
--- simple test
-CREATE TABLE struct_it_mysql2mysql_1.table_test(id integer, text varchar(10) comment 'col comment test',primary key (id)) comment 'table comment test'; 
-
 -- full column type
-CREATE TABLE struct_it_mysql2mysql_1.full_column_type (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,varchar_col VARCHAR(255) NOT NULL,char_col CHAR(10),text_col TEXT,tinyint_col TINYINT DEFAULT 0,smallint_col SMALLINT,mediumint_col MEDIUMINT,int_col INT,bigint_col BIGINT,float_col FLOAT(8, 2),double_col DOUBLE(16, 4),decimal_col DECIMAL(10, 2),date_col DATE,datetime_col DATETIME,timestamp_col TIMESTAMP DEFAULT CURRENT_TIMESTAMP,time_col TIME,year_col YEAR,binary_col BINARY(16),varbinary_col VARBINARY(255),blob_col BLOB,tinyblob_col TINYBLOB,mediumblob_col MEDIUMBLOB,longblob_col LONGBLOB,enum_col ENUM('value1', 'value2', 'value3'),set_col SET('option1', 'option2', 'option3'));
+
+CREATE TABLE struct_it_mysql2mysql_1.full_column_type (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    varchar_col VARCHAR(255) NOT NULL COMMENT 'varchar_col_comment',
+    char_col CHAR(10) COMMENT 'char_col_comment',
+    tinytext_col TINYTEXT COMMENT 'tinytext_col_comment',
+    mediumtext_col MEDIUMTEXT COMMENT 'mediumtext_col_comment',
+    longtext_col LONGTEXT COMMENT 'longtext_col_comment',
+    text_col TEXT COMMENT 'text_col_comment',
+    tinyint_col TINYINT DEFAULT 0 COMMENT 'tinyint_col_comment',
+    smallint_col SMALLINT COMMENT 'smallint_col_comment',
+    mediumint_col MEDIUMINT COMMENT 'mediumint_col_comment',
+    int_col INT COMMENT 'int_col_comment',
+    bigint_col BIGINT COMMENT 'bigint_col_comment',
+    float_col FLOAT(8, 2) COMMENT 'float_col_comment',
+    double_col DOUBLE(16, 4) COMMENT 'double_col_comment',
+    bit_col BIT(64) DEFAULT NULL COMMENT 'bit_col_comment',
+    decimal_col DECIMAL(10, 2) COMMENT 'decimal_col_comment',
+    date_col DATE COMMENT 'date_col_comment',
+    datetime_col DATETIME COMMENT 'datetime_col_comment',
+    datetime_col2 DATETIME(6) COMMENT 'datetime_col2_comment',
+    timestamp_col TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'timestamp_col_comment',
+    timestamp_co2 TIMESTAMP DEFAULT CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP COMMENT 'timestamp_co2_comment',
+    time_col TIME COMMENT 'time_col_comment',
+    time_col2 TIME(2) COMMENT 'time_col2_comment',
+    year_col YEAR COMMENT 'year_col_comment',
+    binary_col BINARY(16) COMMENT 'binary_col_comment',
+    varbinary_col VARBINARY(255) COMMENT 'varbinary_col_comment',
+    blob_col BLOB COMMENT 'blob_col_comment',
+    tinyblob_col TINYBLOB COMMENT 'tinyblob_col_comment',
+    mediumblob_col MEDIUMBLOB COMMENT 'mediumblob_col_comment',
+    longblob_col LONGBLOB COMMENT 'longblob_col_comment',
+    enum_col ENUM('value1', 'value2', 'value3') COMMENT 'enum_col_comment',
+    set_col SET('option1', 'option2', 'option3') COMMENT 'set_col_comment',
+    json_col JSON DEFAULT NULL COMMENT 'json_col_comment'
+); 
 
 -- full index type
-CREATE TABLE struct_it_mysql2mysql_1.full_index_type (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,unique_col VARCHAR(255) NOT NULL,index_col VARCHAR(255),fulltext_col TEXT,spatial_col POINT NOT NULL,simple_index_col VARCHAR(255),composite_index_col1 VARCHAR(255),composite_index_col2 VARCHAR(255),composite_index_col3 VARCHAR(255));
+CREATE TABLE struct_it_mysql2mysql_1.full_index_type (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, 
+  unique_col VARCHAR(255) NOT NULL, 
+  index_col VARCHAR(255), 
+  fulltext_col TEXT, 
+  spatial_col POINT NOT NULL, 
+  simple_index_col VARCHAR(255), 
+  composite_index_col1 VARCHAR(255), 
+  composite_index_col2 VARCHAR(255), 
+  composite_index_col3 VARCHAR(255)
+);
 
 CREATE UNIQUE INDEX unique_index ON struct_it_mysql2mysql_1.full_index_type (unique_col);
 
@@ -21,7 +62,21 @@ CREATE INDEX index_index ON struct_it_mysql2mysql_1.full_index_type (index_col);
 
 CREATE INDEX simple_index ON struct_it_mysql2mysql_1.full_index_type (simple_index_col);
 
-CREATE INDEX composite_index ON struct_it_mysql2mysql_1.full_index_type (composite_index_col1, composite_index_col2, composite_index_col3);
+CREATE INDEX composite_index ON struct_it_mysql2mysql_1.full_index_type (
+  composite_index_col1, composite_index_col2, 
+  composite_index_col3
+);
 
 -- full constraint
-CREATE TABLE struct_it_mysql2mysql_1.constraint_table (id INT PRIMARY KEY AUTO_INCREMENT,username VARCHAR(50) NOT NULL UNIQUE,password VARCHAR(50) NOT NULL,email VARCHAR(100) NOT NULL,age INT,gender ENUM('Male', 'Female', 'Other') NOT NULL,created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,CONSTRAINT chk_age CHECK (age >= 18),CONSTRAINT chk_email CHECK (email LIKE '%@%.%'));
+CREATE TABLE struct_it_mysql2mysql_1.constraint_table (
+  id INT PRIMARY KEY AUTO_INCREMENT, 
+  username VARCHAR(50) NOT NULL UNIQUE, 
+  password VARCHAR(50) NOT NULL, 
+  email VARCHAR(100) NOT NULL, 
+  age INT, 
+  gender ENUM('Male', 'Female', 'Other') NOT NULL, 
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, 
+  CONSTRAINT chk_age CHECK (age >= 18), 
+  CONSTRAINT chk_email CHECK (email LIKE '%@%.%')
+);
