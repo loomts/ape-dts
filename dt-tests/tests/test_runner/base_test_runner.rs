@@ -1,4 +1,8 @@
-use dt_common::{error::Error, utils::time_util::TimeUtil};
+use dt_common::{
+    config::{config_enums::DbType, task_config::TaskConfig},
+    error::Error,
+    utils::time_util::TimeUtil,
+};
 use dt_task::task_runner::TaskRunner;
 use std::{
     collections::HashMap,
@@ -57,6 +61,8 @@ impl BaseTestRunner {
             &test_dir,
         );
 
+        let config = TaskConfig::new(&dst_task_config_file);
+
         let (
             src_dml_sqls,
             dst_dml_sqls,
@@ -64,7 +70,11 @@ impl BaseTestRunner {
             dst_ddl_sqls,
             src_clean_sqls,
             dst_clean_sqls,
-        ) = Self::load_sqls(&test_dir);
+        ) = Self::load_sqls(
+            &test_dir,
+            &config.extractor_basic.db_type,
+            &config.sinker_basic.db_type,
+        );
 
         Ok(Self {
             task_config_file: dst_task_config_file,
@@ -137,6 +147,8 @@ impl BaseTestRunner {
 
     fn load_sqls(
         test_dir: &str,
+        src_db_type: &DbType,
+        dst_db_type: &DbType,
     ) -> (
         Vec<String>,
         Vec<String>,
@@ -145,32 +157,67 @@ impl BaseTestRunner {
         Vec<String>,
         Vec<String>,
     ) {
-        let load = |sql_file: &str| -> Vec<String> {
+        let load = |sql_file: &str, db_type: &DbType| -> Vec<String> {
             let full_sql_path = format!("{}/{}", test_dir, sql_file);
             if !Self::check_path_exists(&full_sql_path) {
                 return Vec::new();
             }
 
-            let mut lines = Self::load_file(&full_sql_path);
-            let mut sqls = Vec::new();
-            for sql in lines.drain(..) {
-                let sql = sql.trim();
-                if sql.is_empty() || sql.starts_with("--") {
-                    continue;
-                }
-                sqls.push(sql.to_string());
+            if db_type == &DbType::Mysql || db_type == &DbType::Pg {
+                Self::load_rdb_sqls(&full_sql_path)
+            } else {
+                Self::load_non_rdb_sqls(&full_sql_path)
             }
-            sqls
         };
 
         (
-            load("src_dml.sql"),
-            load("dst_dml.sql"),
-            load("src_ddl.sql"),
-            load("dst_ddl.sql"),
-            load("src_clean.sql"),
-            load("dst_clean.sql"),
+            load("src_dml.sql", src_db_type),
+            load("dst_dml.sql", dst_db_type),
+            load("src_ddl.sql", src_db_type),
+            load("dst_ddl.sql", dst_db_type),
+            load("src_clean.sql", src_db_type),
+            load("dst_clean.sql", dst_db_type),
         )
+    }
+
+    fn load_non_rdb_sqls(sql_file: &str) -> Vec<String> {
+        let mut sqls = Vec::new();
+        let mut lines = Self::load_file(&sql_file);
+        for line in lines.drain(..) {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with("--") {
+                continue;
+            }
+            sqls.push(line.to_string());
+        }
+        sqls
+    }
+
+    fn load_rdb_sqls(sql_file: &str) -> Vec<String> {
+        let mut sqls = Vec::new();
+        let sql_start_keywords = vec![
+            "create ", "drop ", "alter ", "insert ", "update ", "delete ", "comment ",
+        ];
+        let mut lines = Self::load_file(&sql_file);
+        for line in lines.drain(..) {
+            let check_line = line.trim().to_lowercase();
+            if check_line.is_empty() || check_line.starts_with("--") {
+                continue;
+            }
+
+            if sql_start_keywords
+                .iter()
+                .any(|keyword| -> bool { check_line.starts_with(keyword) })
+            {
+                sqls.push(line);
+            } else {
+                if let Some(last_sql) = sqls.last_mut() {
+                    last_sql.push_str("\n");
+                    last_sql.push_str(&line);
+                }
+            }
+        }
+        sqls
     }
 
     pub fn check_path_exists(file: &str) -> bool {
