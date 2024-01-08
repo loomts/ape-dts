@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     str::FromStr,
     sync::{Arc, Mutex},
 };
@@ -15,7 +14,8 @@ use dt_common::{
 };
 use dt_connector::{
     datamarker::{
-        mysql::mysql_transaction_marker::MysqlTransactionMarker, traits::DataMarkerFilter,
+        mysql::mysql_transaction_marker::MysqlTransactionMarker,
+        pg::pg_transaction_marker::PgTransactionMarker, traits::DataMarkerFilter,
     },
     extractor::{
         base_extractor::BaseExtractor,
@@ -202,6 +202,7 @@ impl ExtractorUtil {
         filter: RdbFilter,
         log_level: &str,
         syncer: Arc<Mutex<Syncer>>,
+        datamarker_filter: Option<Box<dyn DataMarkerFilter + Send>>,
     ) -> Result<PgCdcExtractor, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool = TaskUtil::create_pg_conn_pool(url, 2, enable_sqlx_log).await?;
@@ -217,6 +218,7 @@ impl ExtractorUtil {
             syncer,
             heartbeat_interval_secs,
             base_extractor,
+            datamarker_filter,
         })
     }
 
@@ -493,12 +495,14 @@ impl ExtractorUtil {
         }
 
         match extractor_config {
-            ExtractorConfig::MysqlCdc { .. } => Ok(Some(Box::new(MysqlTransactionMarker {
+            ExtractorConfig::MysqlCdc { .. } => Ok(Some(Box::new(MysqlTransactionMarker::new(
                 transaction_worker,
                 current_topology,
-                do_transaction_filter: false,
-                cache: HashMap::new(),
-            }))),
+            )))),
+            ExtractorConfig::PgCdc { .. } => Ok(Some(Box::new(PgTransactionMarker::new(
+                transaction_worker,
+                current_topology,
+            )))),
             _ => Err(Error::ConfigError(String::from(
                 "extractor type not support transaction filter yet.",
             ))),

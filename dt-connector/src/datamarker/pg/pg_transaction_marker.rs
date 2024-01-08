@@ -6,19 +6,19 @@ use dt_meta::{dt_data::DtData, row_data::RowData};
 
 use crate::datamarker::{rdb_basic::RdbBasicTransactionMarker, traits::DataMarkerFilter};
 
-pub struct MysqlTransactionMarker {
+pub struct PgTransactionMarker {
     pub rdb_basic_marker: RdbBasicTransactionMarker,
 }
 
-impl MysqlTransactionMarker {
+impl PgTransactionMarker {
     pub fn new(transaction_worker: TransactionWorker, current_topology: TopologyInfo) -> Self {
-        MysqlTransactionMarker {
+        PgTransactionMarker {
             rdb_basic_marker: RdbBasicTransactionMarker::new(transaction_worker, current_topology),
         }
     }
 }
 
-impl DataMarkerFilter for MysqlTransactionMarker {
+impl DataMarkerFilter for PgTransactionMarker {
     fn filter_dtdata(&mut self, data: &DtData) -> Result<bool, Error> {
         self.rdb_basic_marker.filter_dtdata(data)
     }

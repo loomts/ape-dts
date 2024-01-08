@@ -15,7 +15,7 @@ use dt_common::{
     config::config_enums::DbType, error::Error, log_error, monitor::monitor::Monitor,
     utils::sql_util::SqlUtil,
 };
-use sqlx::{Pool, Postgres};
+use sqlx::{Pool, Postgres, Transaction};
 
 use dt_meta::{
     pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
@@ -32,6 +32,7 @@ pub struct PgSinker {
     pub router: RdbRouter,
     pub batch_size: usize,
     pub monitor: Arc<Mutex<Monitor>>,
+    pub transaction_command: String,
 }
 
 #[async_trait]
@@ -64,6 +65,10 @@ impl Sinker for PgSinker {
 
 impl PgSinker {
     async fn serial_sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
+        if self.is_transaction_enable() {
+            return self.transaction_serial_sink(data).await;
+        }
+
         let start_time = Instant::now();
         let mut data_size = 0;
 
@@ -100,7 +105,15 @@ impl PgSinker {
         let (query_info, data_size) =
             query_builder.get_batch_delete_query(data, start_index, batch_size)?;
         let query = query_builder.create_pg_query(&query_info);
-        query.execute(&self.conn_pool).await.unwrap();
+
+        if self.is_transaction_enable() {
+            let mut transaction = self.conn_pool.begin().await.unwrap();
+            self.execute_transaction_command(&mut transaction).await;
+            query.execute(&mut transaction).await.unwrap();
+            transaction.commit().await.unwrap();
+        } else {
+            query.execute(&self.conn_pool).await.unwrap();
+        }
 
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
@@ -113,14 +126,29 @@ impl PgSinker {
     ) -> Result<(), Error> {
         let start_time = Instant::now();
 
-        let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&data[0]).await?;
-        let query_builder = RdbQueryBuilder::new_for_pg(tb_meta);
+        let tb_meta = self
+            .meta_manager
+            .get_tb_meta_by_row_data(&data[0])
+            .await?
+            .to_owned();
+        let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
 
         let (query_info, data_size) =
             query_builder.get_batch_insert_query(data, start_index, batch_size)?;
         let query = query_builder.create_pg_query(&query_info);
 
-        let result = query.execute(&self.conn_pool).await;
+        let result = if self.is_transaction_enable() {
+            let mut transaction = self.conn_pool.begin().await.unwrap();
+            self.execute_transaction_command(&mut transaction).await;
+            query.execute(&mut transaction).await.unwrap();
+            transaction.commit().await
+        } else {
+            match query.execute(&self.conn_pool).await {
+                Err(e) => Err(e),
+                _ => Ok(()),
+            }
+        };
+
         if let Err(error) = result {
             log_error!(
                 "batch insert failed, will insert one by one, schema: {}, tb: {}, error: {}",
@@ -165,5 +193,44 @@ impl PgSinker {
             set_pairs.join(",")
         );
         Ok(query_info)
+    }
+
+    async fn transaction_serial_sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
+        let start_time = Instant::now();
+        let mut data_size = 0;
+
+        let mut transaction = self.conn_pool.begin().await.unwrap();
+        self.execute_transaction_command(&mut transaction).await;
+
+        for row_data in data.iter() {
+            data_size += row_data.data_size;
+
+            let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&row_data).await?;
+            let query_builder = RdbQueryBuilder::new_for_pg(tb_meta);
+
+            let query_info = if row_data.row_type == RowType::Insert {
+                Self::get_insert_query(&query_builder, tb_meta, row_data)?
+            } else {
+                query_builder.get_query_info(row_data)?
+            };
+            let query = query_builder.create_pg_query(&query_info);
+            query.execute(&mut transaction).await.unwrap();
+        }
+
+        transaction.commit().await.unwrap();
+
+        BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
+            .await
+    }
+
+    async fn execute_transaction_command(&self, transaction: &mut Transaction<'_, Postgres>) {
+        sqlx::query(&self.transaction_command)
+            .execute(transaction)
+            .await
+            .unwrap();
+    }
+
+    fn is_transaction_enable(&self) -> bool {
+        !self.transaction_command.is_empty()
     }
 }

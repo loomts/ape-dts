@@ -107,7 +107,7 @@ impl Fetcher for MysqlFetcher {
 
     async fn fetch_tables(&mut self) -> Result<Vec<Table>, Error> {
         let mut results: Vec<Table> = vec![];
-        let query_tb = "SELECT TABLE_SCHEMA, TABLE_NAME FROM information_schema.tables";
+        let query_tb = "SELECT TABLE_SCHEMA, TABLE_NAME FROM information_schema.tables where TABLE_TYPE = 'BASE TABLE'";
 
         let rows_result = self.fetch_row(query_tb, "mysql query tables sql:");
         match rows_result {

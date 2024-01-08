@@ -24,6 +24,7 @@ use tokio_postgres::replication::LogicalReplicationStream;
 use dt_common::{error::Error, log_error, log_info, utils::rdb_filter::RdbFilter};
 
 use crate::{
+    datamarker::traits::DataMarkerFilter,
     extractor::{base_extractor::BaseExtractor, pg::pg_cdc_client::PgCdcClient},
     Extractor,
 };
@@ -49,6 +50,7 @@ pub struct PgCdcExtractor {
     pub start_lsn: String,
     pub heartbeat_interval_secs: u64,
     pub syncer: Arc<Mutex<Syncer>>,
+    pub datamarker_filter: Option<Box<dyn DataMarkerFilter + Send>>,
 }
 
 const SECS_FROM_1970_TO_2000: i64 = 946_684_800;
@@ -118,6 +120,12 @@ impl PgCdcExtractor {
                             last_tx_end_lsn = PgLsn::from(commit.end_lsn()).to_string();
                             position = get_position(&last_tx_end_lsn, commit.timestamp());
                             let commit = DtData::Commit { xid: xid.clone() };
+
+                            match &mut self.datamarker_filter {
+                                Some(f) => f.filter_dtdata(&commit)?,
+                                _ => false,
+                            };
+
                             self.base_extractor
                                 .push_dt_data(commit, position.clone())
                                 .await?;
