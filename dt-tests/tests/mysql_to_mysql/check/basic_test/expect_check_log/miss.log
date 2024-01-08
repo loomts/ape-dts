@@ -4,6 +4,7 @@
 9,test_db_1|15,one_pk_multi_uk|3,f_0|1,7
 9,test_db_1|15,one_pk_multi_uk|3,f_0|1,8
 9,test_db_1|15,one_pk_multi_uk|3,f_0|1,9
+9,test_db_1|12,one_pk_no_uk|3,f_0|2,-1
 9,test_db_1|12,one_pk_no_uk|3,f_0|1,7
 9,test_db_1|12,one_pk_no_uk|3,f_0|1,8
 9,test_db_1|12,one_pk_no_uk|3,f_0|1,9
