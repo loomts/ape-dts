@@ -178,7 +178,15 @@ impl MysqlMetaManager {
                 }
             }
 
-            "mediumint" | "int" => {
+            "mediumint" => {
+                if unsigned {
+                    MysqlColType::UnsignedMedium
+                } else {
+                    MysqlColType::Medium
+                }
+            }
+
+            "int" => {
                 if unsigned {
                     MysqlColType::UnsignedLong
                 } else {

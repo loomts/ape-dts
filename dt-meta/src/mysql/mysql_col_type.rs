@@ -7,6 +7,8 @@ pub enum MysqlColType {
     UnsignedTiny,
     Short,
     UnsignedShort,
+    Medium,
+    UnsignedMedium,
     Long,
     UnsignedLong,
     LongLong,
