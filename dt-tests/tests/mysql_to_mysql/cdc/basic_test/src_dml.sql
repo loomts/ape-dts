@@ -51,6 +51,13 @@ INSERT INTO test_db_1.one_pk_multi_uk VALUES (9, NULL, NULL, NULL, NULL, NULL, N
 INSERT INTO test_db_1.col_has_special_character_table VALUES(1, 'col:1:value', 'col&2:value', 'col\3:value');
 INSERT INTO test_db_1.col_has_special_character_table VALUES(2, NULL, NULL, NULL);
 
+-- min for each col
+INSERT INTO test_db_1.numeric_table VALUES(-128, 0, -32768, 0, -8388608, 0, -2147483648, 0, -9223372036854775808, 0);
+-- max for each col
+INSERT INTO test_db_1.numeric_table VALUES(127, 255, 32767, 65535, 8388607, 16777215, 2147483647, 4294967295, 9223372036854775807, 18446744073709551615);
+-- zero
+INSERT INTO test_db_1.numeric_table VALUES(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+
 UPDATE test_db_1.no_pk_no_uk SET f_1=20, f_2=30, f_3=40, f_4=50, f_5=654321.4321, f_6=4321.21, f_7=54321.321, f_8=3045, f_9='2021-02-01 04:05:06.654321', f_10='04:05:06.654321', f_11='2012-02-01', f_12=2021, f_13='2021-02-01 04:05:06.654321', f_14='1', f_15='2', f_16='3', f_17='4', f_18='5', f_19='6', f_20='7', f_21='8', f_22=x'ABCDEF0123456789', f_23=x'ABCDEF0123456789', f_24=x'ABCDEF0123456789', f_25=x'ABCDEF0123456789', f_26='small', f_27='b', f_28=NULL WHERE f_0=1;
 
 UPDATE test_db_1.one_pk_no_uk SET f_1=20, f_2=30, f_3=40, f_4=50, f_5=654321.4321, f_6=4321.21, f_7=54321.321, f_8=3045, f_9='2021-02-01 04:05:06.654321', f_10='04:05:06.654321', f_11='2012-02-01', f_12=2021, f_13='2021-02-01 04:05:06.654321', f_14='1', f_15='2', f_16='3', f_17='4', f_18='5', f_19='6', f_20='7', f_21='8', f_22=x'ABCDEF0123456789', f_23=x'ABCDEF0123456789', f_24=x'ABCDEF0123456789', f_25=x'ABCDEF0123456789', f_26='small', f_27='b', f_28=NULL WHERE f_0=1;
@@ -68,9 +75,14 @@ UPDATE test_db_1.one_pk_multi_uk SET f_1=20, f_2=30, f_3=40, f_4=50, f_5=23456.1
 UPDATE test_db_1.col_has_special_character_table SET `col"1`=NULL, `col,2`=NULL, `col\3`=NULL WHERE `p:k`=1;
 UPDATE test_db_1.col_has_special_character_table SET `col"1`='col:1:value', `col,2`='col&2:value', `col\3`='col\3:value' WHERE `p:k`=2;
 
+UPDATE test_db_1.numeric_table SET f_1=255, f_2=32767, f_3=65535, f_4=8388607, f_5=16777215, f_6=2147483647, f_7=4294967295, f_8=9223372036854775807, f_9=18446744073709551615 WHERE f_0=-128;
+UPDATE test_db_1.numeric_table SET f_1=0, f_2=0, f_3=0, f_4=0, f_5=0, f_6=0, f_7=0, f_8=0, f_9=0 WHERE f_0=127;
+UPDATE test_db_1.numeric_table SET f_1=0, f_2=-32768, f_3=0, f_4=-8388608, f_5=0, f_6=-2147483648, f_7=0, f_8=-9223372036854775808, f_9=0 WHERE f_0=0;
+
 DELETE FROM test_db_1.no_pk_no_uk;
 DELETE FROM test_db_1.one_pk_no_uk;
 DELETE FROM test_db_1.no_pk_one_uk;
 DELETE FROM test_db_1.no_pk_multi_uk;
 DELETE FROM test_db_1.one_pk_multi_uk;
 DELETE FROM test_db_1.col_has_special_character_table;
+DELETE FROM test_db_1.numeric_table;

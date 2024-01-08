@@ -50,3 +50,10 @@ INSERT INTO test_db_1.one_pk_multi_uk VALUES (9, NULL, NULL, NULL, NULL, NULL, N
 
 INSERT INTO test_db_1.col_has_special_character_table VALUES(1, 'col:1:value', 'col&2:value', 'col\3:value');
 INSERT INTO test_db_1.col_has_special_character_table VALUES(2, NULL, NULL, NULL);
+
+-- min for each col
+INSERT INTO test_db_1.numeric_table VALUES(-128, 0, -32768, 0, -8388608, 0, -2147483648, 0, -9223372036854775808, 0);
+-- max for each col
+INSERT INTO test_db_1.numeric_table VALUES(127, 255, 32767, 65535, 8388607, 16777215, 2147483647, 4294967295, 9223372036854775807, 18446744073709551615);
+-- zero
+INSERT INTO test_db_1.numeric_table VALUES(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);

@@ -55,13 +55,9 @@ impl RdbQueryBuilder<'_> {
         query_info: &'a RdbQueryInfo,
     ) -> Query<'a, MySql, MySqlArguments> {
         let mut query: Query<MySql, MySqlArguments> = sqlx::query(&query_info.sql);
+        let col_type_map = &self.mysql_tb_meta.as_ref().unwrap().col_type_map;
         for i in 0..query_info.binds.len() {
-            let col_type = self
-                .mysql_tb_meta
-                .unwrap()
-                .col_type_map
-                .get(&query_info.cols[i])
-                .unwrap();
+            let col_type = col_type_map.get(&query_info.cols[i]).unwrap();
             query = query.bind_col_value(query_info.binds[i], col_type);
         }
         query

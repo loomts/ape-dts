@@ -108,7 +108,9 @@ impl MysqlColValueConvertor {
             }
 
             ColumnValue::Long(v) => {
-                if *col_type == MysqlColType::UnsignedLong {
+                if *col_type == MysqlColType::UnsignedMedium {
+                    ColValue::UnsignedLong((v as u32) << 8 >> 8)
+                } else if *col_type == MysqlColType::UnsignedLong {
                     ColValue::UnsignedLong(v as u32)
                 } else {
                     ColValue::Long(v)
@@ -196,14 +198,16 @@ impl MysqlColValueConvertor {
                 Ok(value) => ColValue::UnsignedShort(value),
                 Err(_) => ColValue::None,
             },
-            MysqlColType::Long => match value_str.parse::<i32>() {
+            MysqlColType::Medium | MysqlColType::Long => match value_str.parse::<i32>() {
                 Ok(value) => ColValue::Long(value),
                 Err(_) => ColValue::None,
             },
-            MysqlColType::UnsignedLong => match value_str.parse::<u32>() {
-                Ok(value) => ColValue::UnsignedLong(value),
-                Err(_) => ColValue::None,
-            },
+            MysqlColType::UnsignedMedium | MysqlColType::UnsignedLong => {
+                match value_str.parse::<u32>() {
+                    Ok(value) => ColValue::UnsignedLong(value),
+                    Err(_) => ColValue::None,
+                }
+            }
             MysqlColType::LongLong => match value_str.parse::<i64>() {
                 Ok(value) => ColValue::LongLong(value),
                 Err(_) => ColValue::None,
@@ -295,11 +299,11 @@ impl MysqlColValueConvertor {
                 let value: u16 = row.try_get(col).unwrap();
                 return Ok(ColValue::UnsignedShort(value));
             }
-            MysqlColType::Long => {
+            MysqlColType::Medium | MysqlColType::Long => {
                 let value: i32 = row.try_get(col).unwrap();
                 return Ok(ColValue::Long(value));
             }
-            MysqlColType::UnsignedLong => {
+            MysqlColType::UnsignedMedium | MysqlColType::UnsignedLong => {
                 let value: u32 = row.try_get(col).unwrap();
                 return Ok(ColValue::UnsignedLong(value));
             }
