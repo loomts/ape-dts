@@ -210,8 +210,9 @@ impl PgCdcExtractor {
         let schema = event.namespace()?;
         let tb = event.name()?;
         // if the tb is filtered, we won't try to get the tb_meta since we may get privilege errors,
-        // but we need to keep the oid —— tb_meta map which may be used for decoding events.
-        if self.filter.filter_tb(schema, tb) {
+        // but we need to keep the oid —— tb_meta map which may be used for decoding events,
+        // the built-in object used by datamarker, although it is not in filter config, still needs to get tb_meta.
+        if self.filter.filter_tb(schema, tb) && !self.is_datamarker_object(schema, tb) {
             let tb_meta = Self::mock_pg_tb_meta(schema, tb, event.rel_id() as i32);
             self.meta_manager
                 .update_tb_meta_by_oid(event.rel_id() as i32, tb_meta)?;
@@ -432,6 +433,14 @@ impl PgCdcExtractor {
         row_data: RowData,
         position: Position,
     ) -> Result<(), Error> {
+        if match &mut self.datamarker_filter {
+            // update the 'do_transaction_filter' flag in a transaction with DataMarkerFilter
+            Some(f) => f.filter_rowdata(&row_data)?,
+            None => false,
+        } {
+            return Ok(());
+        }
+
         self.base_extractor.push_row(row_data, position).await
     }
 
@@ -452,6 +461,13 @@ impl PgCdcExtractor {
             },
             oid,
             col_type_map: HashMap::new(),
+        }
+    }
+
+    fn is_datamarker_object(&self, schema: &str, tb: &str) -> bool {
+        match &self.datamarker_filter {
+            Some(f) => f.is_buildin_object(schema, tb),
+            None => false,
         }
     }
 }

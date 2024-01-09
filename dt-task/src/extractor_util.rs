@@ -13,10 +13,7 @@ use dt_common::{
     utils::rdb_filter::RdbFilter,
 };
 use dt_connector::{
-    datamarker::{
-        mysql::mysql_transaction_marker::MysqlTransactionMarker,
-        pg::pg_transaction_marker::PgTransactionMarker, traits::DataMarkerFilter,
-    },
+    datamarker::{basic_transaction_marker::BasicTransactionMarker, traits::DataMarkerFilter},
     extractor::{
         base_extractor::BaseExtractor,
         kafka::kafka_extractor::KafkaExtractor,
@@ -497,14 +494,9 @@ impl ExtractorUtil {
         }
 
         match extractor_config {
-            ExtractorConfig::MysqlCdc { .. } => Ok(Some(Box::new(MysqlTransactionMarker::new(
-                transaction_worker,
-                current_topology,
-            )))),
-            ExtractorConfig::PgCdc { .. } => Ok(Some(Box::new(PgTransactionMarker::new(
-                transaction_worker,
-                current_topology,
-            )))),
+            ExtractorConfig::MysqlCdc { .. } | ExtractorConfig::PgCdc { .. } => Ok(Some(Box::new(
+                BasicTransactionMarker::new(transaction_worker, current_topology),
+            ))),
             _ => Err(Error::ConfigError(String::from(
                 "extractor type not support transaction filter yet.",
             ))),
