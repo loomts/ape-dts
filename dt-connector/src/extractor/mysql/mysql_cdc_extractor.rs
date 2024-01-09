@@ -204,6 +204,7 @@ impl MysqlCdcExtractor {
         position: Position,
     ) -> Result<(), Error> {
         if match &mut self.datamarker_filter {
+            // update the 'do_transaction_filter' flag in a transaction with DataMarkerFilter
             Some(f) => f.filter_rowdata(&row_data)?,
             None => false,
         } {

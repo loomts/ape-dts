@@ -5,4 +5,6 @@ pub trait DataMarkerFilter {
     fn filter_dtdata(&mut self, data: &DtData) -> Result<bool, Error>;
 
     fn filter_rowdata(&mut self, data: &RowData) -> Result<bool, Error>;
+
+    fn is_buildin_object(&self, db: &str, tb: &str) -> bool;
 }
