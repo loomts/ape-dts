@@ -196,7 +196,14 @@ impl BaseTestRunner {
     fn load_rdb_sqls(sql_file: &str) -> Vec<String> {
         let mut sqls = Vec::new();
         let sql_start_keywords = vec![
-            "create ", "drop ", "alter ", "insert ", "update ", "delete ", "comment ",
+            "create ",
+            "drop ",
+            "alter ",
+            "insert ",
+            "update ",
+            "delete ",
+            "comment ",
+            "truncate ",
         ];
         let mut lines = Self::load_file(&sql_file);
         for line in lines.drain(..) {
