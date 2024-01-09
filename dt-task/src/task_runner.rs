@@ -396,7 +396,17 @@ impl TaskRunner {
                 heartbeat_interval_secs,
                 ddl_command_table,
             } => {
-                let filter = RdbFilter::from_config(&self.config.filter, DbType::Pg)?;
+                let filter = RdbFilter::from_config_with_transaction(
+                    &self.config.filter,
+                    DbType::Pg,
+                    &self.config.datamarker,
+                )?;
+
+                let datamarker_filter = ExtractorUtil::datamarker_filter_builder(
+                    &self.config.extractor,
+                    &self.config.datamarker,
+                )?;
+
                 let extractor = ExtractorUtil::create_pg_cdc_extractor(
                     base_extractor,
                     url,
@@ -408,6 +418,7 @@ impl TaskRunner {
                     &self.config.runtime.log_level,
                     &ddl_command_table,
                     syncer,
+                    datamarker_filter,
                 )
                 .await?;
                 Box::new(extractor)

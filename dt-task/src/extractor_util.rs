@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     str::FromStr,
     sync::{Arc, Mutex},
 };
@@ -14,9 +13,7 @@ use dt_common::{
     utils::rdb_filter::RdbFilter,
 };
 use dt_connector::{
-    datamarker::{
-        mysql::mysql_transaction_marker::MysqlTransactionMarker, traits::DataMarkerFilter,
-    },
+    datamarker::{basic_transaction_marker::BasicTransactionMarker, traits::DataMarkerFilter},
     extractor::{
         base_extractor::BaseExtractor,
         kafka::kafka_extractor::KafkaExtractor,
@@ -203,6 +200,7 @@ impl ExtractorUtil {
         log_level: &str,
         ddl_command_table: &str,
         syncer: Arc<Mutex<Syncer>>,
+        datamarker_filter: Option<Box<dyn DataMarkerFilter + Send>>,
     ) -> Result<PgCdcExtractor, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool = TaskUtil::create_pg_conn_pool(url, 2, enable_sqlx_log).await?;
@@ -219,6 +217,7 @@ impl ExtractorUtil {
             heartbeat_interval_secs,
             ddl_command_table: ddl_command_table.to_string(),
             base_extractor,
+            datamarker_filter,
         })
     }
 
@@ -495,12 +494,9 @@ impl ExtractorUtil {
         }
 
         match extractor_config {
-            ExtractorConfig::MysqlCdc { .. } => Ok(Some(Box::new(MysqlTransactionMarker {
-                transaction_worker,
-                current_topology,
-                do_transaction_filter: false,
-                cache: HashMap::new(),
-            }))),
+            ExtractorConfig::MysqlCdc { .. } | ExtractorConfig::PgCdc { .. } => Ok(Some(Box::new(
+                BasicTransactionMarker::new(transaction_worker, current_topology),
+            ))),
             _ => Err(Error::ConfigError(String::from(
                 "extractor type not support transaction filter yet.",
             ))),

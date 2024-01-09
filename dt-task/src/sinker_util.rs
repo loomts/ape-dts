@@ -94,6 +94,7 @@ impl SinkerUtil {
                     &task_config.runtime.log_level,
                     task_config.parallelizer.parallel_size,
                     *batch_size,
+                    transaction_command,
                     monitor,
                 )
                 .await?
@@ -343,6 +344,7 @@ impl SinkerUtil {
         log_level: &str,
         parallel_size: usize,
         batch_size: usize,
+        transaction_command: String,
         monitor: Arc<Mutex<Monitor>>,
     ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
@@ -359,6 +361,7 @@ impl SinkerUtil {
                 router: router.clone(),
                 batch_size,
                 monitor: monitor.clone(),
+                transaction_command: transaction_command.to_owned(),
             };
             sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
         }

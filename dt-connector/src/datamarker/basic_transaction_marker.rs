@@ -7,9 +7,12 @@ use dt_common::{
 };
 use dt_meta::{dt_data::DtData, row_data::RowData};
 
-use crate::datamarker::traits::DataMarkerFilter;
+use super::traits::DataMarkerFilter;
 
-pub struct MysqlTransactionMarker {
+// BasicTransactionMarker:
+//   most databases that have transaction structures in the log (such as: begin ... commit)
+//   can basically use this implementation to mark replication data
+pub struct BasicTransactionMarker {
     pub transaction_worker: TransactionWorker,
     pub current_topology: TopologyInfo,
     pub do_transaction_filter: bool,
@@ -17,7 +20,18 @@ pub struct MysqlTransactionMarker {
     pub cache: HashMap<(String, String), bool>,
 }
 
-impl DataMarkerFilter for MysqlTransactionMarker {
+impl BasicTransactionMarker {
+    pub fn new(transaction_worker: TransactionWorker, current_topology: TopologyInfo) -> Self {
+        BasicTransactionMarker {
+            transaction_worker,
+            current_topology,
+            do_transaction_filter: false,
+            cache: HashMap::new(),
+        }
+    }
+}
+
+impl DataMarkerFilter for BasicTransactionMarker {
     fn filter_dtdata(&mut self, data: &DtData) -> Result<bool, Error> {
         match data {
             DtData::Dml { row_data } => return self.filter_rowdata(row_data),
@@ -65,5 +79,12 @@ impl DataMarkerFilter for MysqlTransactionMarker {
         }
 
         Ok(self.do_transaction_filter)
+    }
+
+    fn is_buildin_object(&self, db: &str, _tb: &str) -> bool {
+        // the premise of such a simple comparison is that the upstream management and control system
+        // will provide an independent database/schema to manage transaction-related tables,
+        // sacrificing certain accuracy in exchange for efficiency.
+        return self.transaction_worker.transaction_db.eq(db);
     }
 }
