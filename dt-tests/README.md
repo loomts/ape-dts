@@ -12,7 +12,7 @@ docker run --name some-postgres-1 \
 -d postgis/postgis:latest
 
 docker exec -it some-postgres-1 bash
-login: `psql -h 127.0.0.1 -U postgres -d postgres-p 5432 -W`
+login: `psql -h 127.0.0.1 -U postgres -d postgres -p 5432 -W`
 run `ALTER SYSTEM SET wal_level = logical;` and restart
 ```
 

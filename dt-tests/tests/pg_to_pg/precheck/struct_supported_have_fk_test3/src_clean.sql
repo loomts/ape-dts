@@ -1,1 +1,1 @@
-DROP DATABASE IF EXISTS precheck_it_pg2pg_5_3;
+DROP SCHEMA IF EXISTS precheck_it_pg2pg_5_3 CASCADE;

@@ -88,13 +88,7 @@ mod test {
         let mut dst_expected_results = HashMap::new();
         dst_expected_results.insert(CheckItem::CheckIfTableStructSupported.to_string(), true);
 
-        TestBase::run_precheck_test(
-            test_dir,
-            &HashSet::new(),
-            &src_expected_results,
-            &dst_expected_results,
-        )
-        .await
+        run_precheck_test(test_dir, &src_expected_results, &dst_expected_results).await
     }
 
     #[tokio::test]
@@ -108,13 +102,7 @@ mod test {
         let mut dst_expected_results = HashMap::new();
         dst_expected_results.insert(CheckItem::CheckIfTableStructSupported.to_string(), true);
 
-        TestBase::run_precheck_test(
-            test_dir,
-            &HashSet::new(),
-            &src_expected_results,
-            &dst_expected_results,
-        )
-        .await
+        run_precheck_test(test_dir, &src_expected_results, &dst_expected_results).await
     }
 
     #[tokio::test]
@@ -128,13 +116,7 @@ mod test {
         let mut dst_expected_results = HashMap::new();
         dst_expected_results.insert(CheckItem::CheckIfTableStructSupported.to_string(), false);
 
-        TestBase::run_precheck_test(
-            test_dir,
-            &HashSet::new(),
-            &src_expected_results,
-            &dst_expected_results,
-        )
-        .await
+        run_precheck_test(test_dir, &src_expected_results, &dst_expected_results).await
     }
 
     async fn run_precheck_test(

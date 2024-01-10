@@ -1,5 +1,5 @@
-DROP SCHEMA IF EXISTS precheck_it_pg2pg_5_3;
-DROP SCHEMA IF EXISTS precheck_it_pg2pg_5_3_2;
+DROP SCHEMA IF EXISTS precheck_it_pg2pg_5_3 CASCADE;
+DROP SCHEMA IF EXISTS precheck_it_pg2pg_5_3_2 CASCADE;
 
 CREATE SCHEMA precheck_it_pg2pg_5_3;
 CREATE SCHEMA precheck_it_pg2pg_5_3_2;

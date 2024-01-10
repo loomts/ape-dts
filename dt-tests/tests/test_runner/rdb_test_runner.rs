@@ -513,8 +513,12 @@ impl RdbTestRunner {
         if BaseTestRunner::check_path_exists(&filtered_tbs_file) {
             let lines = BaseTestRunner::load_file(&filtered_tbs_file);
             for line in lines.iter() {
-                let db_tb = ConfigTokenParser::parse(line, &delimiters, &escape_pairs);
-                filtered_db_tbs.insert((db_tb[0].clone(), db_tb[1].clone()));
+                let db_tb = ConfigTokenParser::parse_config(line, &db_type, &delimiters).unwrap();
+                if db_tb.len() == 2 {
+                    let db = SqlUtil::unescape(&db_tb[0], &escape_pairs[0]);
+                    let tb = SqlUtil::unescape(&db_tb[1], &escape_pairs[0]);
+                    filtered_db_tbs.insert((db, tb));
+                }
             }
         }
         filtered_db_tbs
