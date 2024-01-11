@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
 use dt_common::{config::config_enums::DbType, error::Error, utils::rdb_filter::RdbFilter};
 use dt_meta::{
@@ -12,7 +12,7 @@ use dt_meta::{
             column::Column,
             constraint::{Constraint, ConstraintType},
             database::Database,
-            index::{Index, IndexColumn, IndexKind},
+            index::{Index, IndexColumn, IndexKind, IndexType},
             table::Table,
         },
     },
@@ -263,13 +263,15 @@ impl MysqlStructFetcher {
                 index.columns.push(column);
             } else {
                 let non_unique = row.try_get(NON_UNIQUE).unwrap();
-                let index_kind = Self::get_index_kind(non_unique, &index_name);
+                let index_type_str = Self::get_str_with_null(&row, INDEX_TYPE).unwrap();
+                let index_type = IndexType::from_str(&index_type_str).unwrap();
+                let index_kind = Self::get_index_kind(non_unique, &index_type);
                 let index = Index {
                     database_name: Self::get_str_with_null(&row, TABLE_SCHEMA).unwrap(),
                     table_name,
                     index_name,
                     index_kind,
-                    index_type: Self::get_str_with_null(&row, INDEX_TYPE).unwrap(),
+                    index_type,
                     comment: Self::get_str_with_null(&row, COMMENT).unwrap(),
                     columns: vec![column],
                     ..Default::default()
@@ -417,13 +419,15 @@ impl MysqlStructFetcher {
         false
     }
 
-    fn get_index_kind(non_unique: i32, index_name: &str) -> IndexKind {
-        if index_name == PRIMARY && non_unique == 0 {
-            IndexKind::PrimaryKey
-        } else if non_unique == 0 {
+    fn get_index_kind(non_unique: i32, index_type: &IndexType) -> IndexKind {
+        if non_unique == 0 {
             IndexKind::Unique
         } else {
-            IndexKind::Index
+            match index_type {
+                IndexType::FullText => IndexKind::FullText,
+                IndexType::Spatial => IndexKind::Spatial,
+                _ => IndexKind::Unknown,
+            }
         }
     }
 

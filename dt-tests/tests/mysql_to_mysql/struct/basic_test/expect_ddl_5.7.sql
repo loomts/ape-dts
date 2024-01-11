@@ -42,19 +42,21 @@ CREATE TABLE `full_column_type` (
 struct_it_mysql2mysql_1.full_index_type
 CREATE TABLE `full_index_type` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `unique_col` varchar(255) NOT NULL,
-  `index_col` varchar(255) DEFAULT NULL,
-  `fulltext_col` text,
-  `spatial_col` point NOT NULL,
-  `simple_index_col` varchar(255) DEFAULT NULL,
-  `composite_index_col1` varchar(255) DEFAULT NULL,
-  `composite_index_col2` varchar(255) DEFAULT NULL,
-  `composite_index_col3` varchar(255) DEFAULT NULL,
+  `f_1` int(11) DEFAULT NULL,
+  `f_2` char(128) DEFAULT NULL,
+  `f_3` varchar(128) DEFAULT NULL,
+  `f_4` varchar(128) DEFAULT NULL,
+  `f_5` varchar(128) DEFAULT NULL,
+  `f_6` text,
+  `f_7` text,
+  `f_8` text,
+  `f_9` point NOT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `unique_index` (`unique_col`) USING BTREE,
-  KEY `composite_index` (`composite_index_col1`,`composite_index_col2`,`composite_index_col3`) USING BTREE,
-  KEY `index_index` (`index_col`) USING BTREE,
-  KEY `simple_index` (`simple_index_col`) USING BTREE
+  UNIQUE KEY `idx_unique_1` (`f_1`,`f_2`,`f_3`),
+  UNIQUE KEY `idx_unique_2` (`f_3`),
+  SPATIAL KEY `idx_spatial_1` (`f_9`),
+  FULLTEXT KEY `idx_full_text_1` (`f_6`,`f_7`,`f_8`),
+  FULLTEXT KEY `idx_full_text_2` (`f_8`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8
 
 struct_it_mysql2mysql_1.constraint_table
@@ -68,5 +70,5 @@ CREATE TABLE `constraint_table` (
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `username` (`username`) USING BTREE
+  UNIQUE KEY `username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8

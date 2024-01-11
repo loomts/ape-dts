@@ -29,7 +29,7 @@ impl MysqlCreateTableStatement {
 
         for i in self.indexes.iter_mut() {
             match i.index_kind {
-                IndexKind::PrimaryKey | IndexKind::Unique => {
+                IndexKind::Unique => {
                     if filter.filter_structure(StructureType::Table.into()) {
                         continue;
                     }
@@ -151,12 +151,6 @@ impl MysqlCreateTableStatement {
     }
 
     fn index_to_sql(index: &mut Index) -> String {
-        let index_kind_str = if index.index_kind == IndexKind::Unique {
-            "UNIQUE".into()
-        } else {
-            String::new()
-        };
-
         index
             .columns
             .sort_by(|a, b| a.seq_in_index.cmp(&b.seq_in_index));
@@ -169,10 +163,12 @@ impl MysqlCreateTableStatement {
             .join(",");
 
         let mut sql = format!(
-            "CREATE {} INDEX `{}` USING {} ON `{}`.`{}` ({}) ",
-            index_kind_str,
+            // no need index_type in "CREATE {} INDEX `{}` USING {IndexType}"
+            // since only BETREE supported in both InnoDB and MyISAM
+            // refer: https://dev.mysql.com/doc/refman/8.0/en/create-index.html
+            "CREATE {} INDEX `{}` ON `{}`.`{}` ({}) ",
+            index.index_kind.to_string(),
             index.index_name,
-            index.index_type,
             index.database_name,
             index.table_name,
             columns_sql
