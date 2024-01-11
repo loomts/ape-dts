@@ -600,7 +600,7 @@ impl PgStructFetcher {
         if definition.starts_with("CREATE UNIQUE INDEX") {
             IndexKind::Unique
         } else {
-            IndexKind::Index
+            IndexKind::Unknown
         }
     }
 

@@ -13,10 +13,10 @@ CREATE TABLE `full_index_type` (
   `composite_index_col2` varchar(255) DEFAULT NULL,
   `composite_index_col3` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `unique_index` (`unique_col`) USING BTREE,
-  KEY `composite_index` (`composite_index_col1`,`composite_index_col2`,`composite_index_col3`) USING BTREE,
-  KEY `simple_index` (`simple_index_col`) USING BTREE,
-  KEY `index_index` (`index_col`) USING BTREE
+  UNIQUE KEY `unique_index` (`unique_col`),
+  KEY `composite_index` (`composite_index_col1`,`composite_index_col2`,`composite_index_col3`),
+  KEY `simple_index` (`simple_index_col`),
+  KEY `index_index` (`index_col`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8
 
 struct_it_mysql2mysql_1.constraint_table
@@ -30,7 +30,7 @@ CREATE TABLE `constraint_table` (
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `username` (`username`) USING BTREE
+  UNIQUE KEY `username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8
 
 struct_it_mysql2mysql_1.foreign_key_parent

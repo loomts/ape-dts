@@ -80,7 +80,7 @@ impl PgCreateTableStatement {
 
         for i in self.indexes.iter() {
             match i.index_kind {
-                IndexKind::PrimaryKey | IndexKind::Unique => {
+                IndexKind::Unique => {
                     if filter.filter_structure(StructureType::Table.into()) {
                         continue;
                     }

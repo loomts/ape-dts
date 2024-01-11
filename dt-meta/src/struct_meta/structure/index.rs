@@ -1,3 +1,5 @@
+use strum::{Display, EnumString};
+
 #[derive(Debug, Clone, Default)]
 pub struct Index {
     pub database_name: String,
@@ -5,20 +7,42 @@ pub struct Index {
     pub table_name: String,
     pub index_name: String,
     pub index_kind: IndexKind,
-    pub index_type: String, // btree, hash
+    pub index_type: IndexType,
     pub comment: String,
     pub tablespace: String,
     pub definition: String,
     pub columns: Vec<IndexColumn>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Display, EnumString, Default)]
 pub enum IndexKind {
-    PrimaryKey,
+    #[strum(serialize = "UNIQUE")]
     Unique,
-    Index,
+    #[strum(serialize = "FULLTEXT")]
+    FullText,
+    #[strum(serialize = "SPATIAL")]
+    Spatial,
     #[default]
-    Unkown,
+    #[strum(serialize = "")]
+    Unknown,
+}
+
+/// for mysql, IndexType corresponds to INDEX_TYPE in information_schema.statistics
+/// for posgres, this is ignored
+#[derive(Debug, Clone, PartialEq, Display, EnumString, Default)]
+pub enum IndexType {
+    #[strum(serialize = "FULLTEXT")]
+    FullText,
+    #[strum(serialize = "SPATIAL")]
+    Spatial,
+    #[strum(serialize = "BTREE")]
+    Btree,
+    // HASH is NOT supported in Storage engine, refer: https://dev.mysql.com/doc/refman/8.0/en/create-index.html
+    #[strum(serialize = "HASH")]
+    Hash,
+    #[default]
+    #[strum(serialize = "")]
+    Unknown,
 }
 
 #[derive(Clone, Debug, PartialEq)]

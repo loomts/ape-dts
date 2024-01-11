@@ -40,32 +40,38 @@ CREATE TABLE struct_it_mysql2mysql_1.full_column_type (id INT UNSIGNED AUTO_INCR
 ); 
 
 -- full index type
-CREATE TABLE struct_it_mysql2mysql_1.full_index_type (
-  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, 
-  unique_col VARCHAR(255) NOT NULL, 
-  index_col VARCHAR(255), 
-  fulltext_col TEXT, 
-  spatial_col POINT NOT NULL, 
-  simple_index_col VARCHAR(255), 
-  composite_index_col1 VARCHAR(255), 
-  composite_index_col2 VARCHAR(255), 
-  composite_index_col3 VARCHAR(255)
+
+CREATE TABLE struct_it_mysql2mysql_1.full_index_type(
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, 
+    f_1 int, 
+    f_2 char(128),
+    f_3 varchar(128),
+    f_4 varchar(128),
+    f_5 varchar(128),
+    f_6 TEXT,
+    f_7 TEXT, 
+    f_8 TEXT, 
+    f_9 POINT NOT NULL
 );
 
-CREATE UNIQUE INDEX unique_index ON struct_it_mysql2mysql_1.full_index_type (unique_col);
+-- unique key with multiple columns
+CREATE UNIQUE INDEX idx_unique_1 ON struct_it_mysql2mysql_1.full_index_type(f_1, f_2, f_3);
 
-CREATE INDEX index_index ON struct_it_mysql2mysql_1.full_index_type (index_col);
+-- unique key with 1 column
+CREATE UNIQUE INDEX idx_unique_2 ON struct_it_mysql2mysql_1.full_index_type(f_3);
 
--- not support: CREATE FULLTEXT INDEX fulltext_index ON struct_it_mysql2mysql_1.full_index_type (fulltext_col);
+-- HASH indexes are only for in-memory tables (or NDB) but not myISAM or InnoDB 
+-- CREATE UNIQUE INDEX idx_unique_3 USING HASH ON struct_it_mysql2mysql_1.full_index_type(f_4, f_5);
 
--- not support: CREATE SPATIAL INDEX spatial_index ON struct_it_mysql2mysql_1.full_index_type (spatial_col);
+-- fulltext key with multiple columns
+CREATE FULLTEXT INDEX idx_full_text_1 ON struct_it_mysql2mysql_1.full_index_type(f_6, f_7, f_8);
 
-CREATE INDEX simple_index ON struct_it_mysql2mysql_1.full_index_type (simple_index_col);
+-- fulltext key with 1 columns
+CREATE FULLTEXT INDEX idx_full_text_2 ON struct_it_mysql2mysql_1.full_index_type(f_8);
 
-CREATE INDEX composite_index ON struct_it_mysql2mysql_1.full_index_type (
-  composite_index_col1, composite_index_col2, 
-  composite_index_col3
-);
+-- spatial index
+-- only 1 column supported in spatial key
+CREATE SPATIAL INDEX idx_spatial_1 ON struct_it_mysql2mysql_1.full_index_type(f_9);
 
 -- full constraint
 CREATE TABLE struct_it_mysql2mysql_1.constraint_table (
