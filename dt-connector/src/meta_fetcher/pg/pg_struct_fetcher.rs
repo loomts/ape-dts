@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use dt_common::{
     config::{config_enums::DbType, config_token_parser::ConfigTokenParser},
     error::Error,
-    log_error, log_info,
+    log_error, log_info, log_warn,
     utils::{rdb_filter::RdbFilter, sql_util::SqlUtil},
 };
 use dt_meta::struct_meta::{
@@ -213,8 +213,20 @@ impl PgStructFetcher {
             if let Some(default_value) = &column.default_value {
                 let (schema, sequence_name) =
                     Self::get_sequence_name_by_default_value(&default_value);
+                // example, default_value is 'Standard'::text
+                if sequence_name.is_empty() {
+                    log_warn!(
+                        "table: {}.{} has default value: {} for column: {}, not sequence",
+                        table.schema_name,
+                        table.table_name,
+                        default_value,
+                        column.column_name
+                    );
+                    continue;
+                }
+
                 // sequence and table should be in the same schema, otherwise we don't support
-                if schema != self.schema {
+                if !schema.is_empty() && schema != self.schema {
                     log_error!(
                         "table: {}.{} is using sequence: {}.{} from a different schema",
                         table.schema_name,
