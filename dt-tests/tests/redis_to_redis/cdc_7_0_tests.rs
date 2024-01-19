@@ -32,4 +32,10 @@ mod test {
     async fn cdc_filter_db_test() {
         TestBase::run_redis_cdc_test("redis_to_redis/cdc/7_0/filter_db_test", 2000, 10000).await;
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn cdc_to_cluste_test() {
+        TestBase::run_redis_cdc_test("redis_to_redis/cdc/7_0/to_cluster_test", 2000, 10000).await;
+    }
 }

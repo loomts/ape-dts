@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 
-use dt_common::config::config_token_parser::ConfigTokenParser;
+use dt_common::{config::config_token_parser::ConfigTokenParser, utils::sql_util::SqlUtil};
 use dt_connector::sinker::redis::cmd_encoder::CmdEncoder;
 use dt_meta::redis::redis_object::RedisCmd;
 use redis::{Connection, ConnectionLike, Value};
+
+use super::redis_cluster_connection::RedisClusterConnection;
 
 const DELIMITERS: [char; 1] = [' '];
 const DEFAULT_ESCAPE_PAIRS: [(char, char); 1] = [('"', '"')];
@@ -122,6 +124,35 @@ impl RedisUtil {
         conn.req_packed_command(&packed_cmd).unwrap()
     }
 
+    pub fn execute_cmds_in_cluster(&self, conn: &mut RedisClusterConnection, cmds: &Vec<String>) {
+        for cmd in cmds.iter() {
+            self.execute_cmd_in_cluster(conn, cmd)
+        }
+    }
+
+    pub fn execute_cmd_in_cluster(&self, conn: &mut RedisClusterConnection, cmd: &str) {
+        let args = self.get_cmd_args(cmd);
+        for mut node_conn in conn.get_node_conns_by_cmd(&args) {
+            self.execute_cmd(&mut node_conn, cmd);
+        }
+    }
+
+    pub fn execute_cmd_in_one_cluster_node(
+        &self,
+        conn: &mut RedisClusterConnection,
+        cmd: &str,
+    ) -> Value {
+        let args = self.get_cmd_args(cmd);
+        let mut node_conns = conn.get_node_conns_by_cmd(&args);
+        if node_conns.len() > 1 {
+            panic!(
+                "cmd has multi keys which hashed to different nodes, cmd: {}",
+                cmd
+            )
+        }
+        self.execute_cmd(&mut node_conns[0], cmd)
+    }
+
     fn pack_cmd(&self, cmd: &str) -> Vec<u8> {
         // parse cmd args
         let mut redis_cmd = RedisCmd::new();
@@ -136,5 +167,15 @@ impl RedisUtil {
             redis_cmd.add_str_arg(&arg);
         }
         CmdEncoder::encode(&redis_cmd)
+    }
+
+    fn get_cmd_args(&self, cmd: &str) -> Vec<String> {
+        let tokens = ConfigTokenParser::parse(cmd, &DELIMITERS, &self.escape_pairs);
+        let mut args = Vec::new();
+        for token in tokens.iter() {
+            let arg = SqlUtil::unescape(token, &self.escape_pairs[0]);
+            args.push(arg);
+        }
+        args
     }
 }

@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use super::command::key_parser::KeyParser;
+
 #[derive(Debug, Clone)]
 pub enum RedisObject {
     String(StringObject),
@@ -157,14 +159,18 @@ impl From<RedisString> for String {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct RedisCmd {
     pub args: Vec<Vec<u8>>,
+    pub name: String,
+    pub group: String,
+    pub keys: Vec<String>,
+    pub key_indexes: Vec<usize>,
 }
 
 impl RedisCmd {
     pub fn new() -> Self {
-        Self { args: Vec::new() }
+        Self::default()
     }
 
     pub fn from_args(args: Vec<Vec<u8>>) -> Self {
@@ -196,23 +202,31 @@ impl RedisCmd {
     }
 
     pub fn get_name(&self) -> String {
-        return self.get_str_arg(0);
+        if self.name.is_empty() {
+            return self.get_str_arg(0);
+        }
+        self.name.clone()
     }
 
     pub fn get_str_arg(&self, idx: usize) -> String {
         if self.args.len() <= idx {
             String::new()
         } else {
-            String::from_utf8(self.args[idx].clone()).unwrap()
+            String::from_utf8_lossy(&self.args[idx]).to_string()
         }
     }
 
     pub fn to_string(&self) -> String {
+        let str_args = self.args_to_string();
+        str_args.join(" ")
+    }
+
+    pub fn args_to_string(&self) -> Vec<String> {
         let mut str_args = Vec::new();
         for arg in self.args.iter() {
-            str_args.push(String::from_utf8_lossy(arg));
+            str_args.push(String::from_utf8_lossy(arg).to_string());
         }
-        str_args.join(" ")
+        str_args
     }
 
     pub fn get_malloc_size(&self) -> usize {
@@ -221,6 +235,15 @@ impl RedisCmd {
             size += arg.len();
         }
         size
+    }
+
+    pub fn parse_keys(&mut self, key_parser: &KeyParser) {
+        let args = self.args_to_string();
+        let (cmd_name, group, keys, keys_indexes) = key_parser.parse_key_from_argv(&args).unwrap();
+        self.name = cmd_name;
+        self.group = group;
+        self.keys = keys;
+        self.key_indexes = keys_indexes;
     }
 }
 

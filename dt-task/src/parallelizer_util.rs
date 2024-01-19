@@ -1,16 +1,18 @@
 use std::{
-    collections::VecDeque,
+    collections::{HashMap, VecDeque},
     sync::{Arc, Mutex},
 };
 
 use dt_common::{
     config::{
         config_enums::{DbType, ParallelType},
+        sinker_config::SinkerConfig,
         task_config::TaskConfig,
     },
     error::Error,
     monitor::monitor::Monitor,
 };
+use dt_meta::redis::command::key_parser::KeyParser;
 use dt_parallelizer::{
     base_parallelizer::BaseParallelizer, check_parallelizer::CheckParallelizer,
     merge_parallelizer::MergeParallelizer, mongo_merger::MongoMerger,
@@ -20,6 +22,8 @@ use dt_parallelizer::{
     table_parallelizer::TableParallelizer, Merger, Parallelizer,
 };
 use ratelimit::Ratelimiter;
+
+use crate::redis_util::RedisUtil;
 
 use super::task_util::TaskUtil;
 
@@ -96,10 +100,27 @@ impl ParallelizerUtil {
                 })
             }
 
-            ParallelType::Redis => Box::new(RedisParallelizer {
-                base_parallelizer,
-                parallel_size,
-            }),
+            ParallelType::Redis => {
+                let mut conn = RedisUtil::create_redis_conn(&config.sinker_basic.url).await?;
+                let mut slot_node_map = HashMap::new();
+                if let SinkerConfig::Redis { is_cluster, .. } = config.sinker {
+                    if is_cluster {
+                        let (nodes, slots) = RedisUtil::get_cluster_nodes(&mut conn)?;
+                        for i in 0..nodes.len() {
+                            let node: &'static str = Box::leak(nodes[i].clone().into_boxed_str());
+                            for slot in slots[i].iter() {
+                                slot_node_map.insert(*slot, node);
+                            }
+                        }
+                    }
+                }
+                Box::new(RedisParallelizer {
+                    base_parallelizer,
+                    parallel_size,
+                    slot_node_map,
+                    key_parser: KeyParser::new(),
+                })
+            }
         };
         Ok(parallelizer)
     }

@@ -71,6 +71,7 @@ pub enum SinkerConfig {
         url: String,
         batch_size: usize,
         method: String,
+        is_cluster: bool,
     },
 
     Starrocks {

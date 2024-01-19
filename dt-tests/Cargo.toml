@@ -29,4 +29,5 @@ serde_json = { workspace = true }
 concurrent-queue = { workspace = true }
 redis = { workspace = true }
 rdkafka = { workspace = true }
+url = { workspace = true }
 rand = "0.8.5"

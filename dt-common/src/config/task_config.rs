@@ -329,6 +329,7 @@ impl TaskConfig {
                 url,
                 batch_size,
                 method: Self::get_value(ini, SINKER, "method").unwrap(),
+                is_cluster: Self::get_value(ini, SINKER, "is_cluster").unwrap(),
             },
 
             DbType::StarRocks => SinkerConfig::Starrocks {

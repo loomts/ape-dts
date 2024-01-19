@@ -1,6 +1,6 @@
 use crate::test_runner::redis_util::RedisUtil;
 
-use super::base_test_runner::BaseTestRunner;
+use super::{base_test_runner::BaseTestRunner, redis_cluster_connection::RedisClusterConnection};
 use dt_common::{
     config::{
         config_enums::DbType, extractor_config::ExtractorConfig, sinker_config::SinkerConfig,
@@ -16,7 +16,7 @@ use redis::{Connection, Value};
 pub struct RedisTestRunner {
     pub base: BaseTestRunner,
     src_conn: Connection,
-    dst_conn: Connection,
+    dst_conn: RedisClusterConnection,
     redis_util: RedisUtil,
     filter: RdbFilter,
 }
@@ -43,7 +43,9 @@ impl RedisTestRunner {
         };
 
         let dst_conn = match config.sinker {
-            SinkerConfig::Redis { url, .. } => TaskUtil::create_redis_conn(&url).await.unwrap(),
+            SinkerConfig::Redis {
+                url, is_cluster, ..
+            } => RedisClusterConnection::new(&url, is_cluster).await.unwrap(),
             _ => {
                 return Err(Error::ConfigError("unsupported sinker config".into()));
             }
@@ -63,8 +65,7 @@ impl RedisTestRunner {
     pub async fn run_snapshot_test(&mut self) -> Result<(), Error> {
         self.execute_test_ddl_sqls()?;
 
-        println!("src: {}", TaskUtil::get_redis_version(&mut self.src_conn)?);
-        println!("dst: {}", TaskUtil::get_redis_version(&mut self.dst_conn)?);
+        self.print_version_info();
 
         self.redis_util
             .execute_cmds(&mut self.src_conn, &self.base.src_dml_sqls.clone());
@@ -82,8 +83,7 @@ impl RedisTestRunner {
         let task = self.base.spawn_task().await?;
         TimeUtil::sleep_millis(start_millis).await;
 
-        println!("src: {}", TaskUtil::get_redis_version(&mut self.src_conn)?);
-        println!("dst: {}", TaskUtil::get_redis_version(&mut self.dst_conn)?);
+        self.print_version_info();
 
         self.redis_util
             .execute_cmds(&mut self.src_conn, &self.base.src_dml_sqls.clone());
@@ -97,7 +97,7 @@ impl RedisTestRunner {
         self.redis_util
             .execute_cmds(&mut self.src_conn, &self.base.src_ddl_sqls.clone());
         self.redis_util
-            .execute_cmds(&mut self.dst_conn, &self.base.dst_ddl_sqls.clone());
+            .execute_cmds_in_cluster(&mut self.dst_conn, &self.base.dst_ddl_sqls.clone());
         Ok(())
     }
 
@@ -114,7 +114,7 @@ impl RedisTestRunner {
         self.redis_util
             .execute_cmd(&mut self.src_conn, &format!("SELECT {}", db));
         self.redis_util
-            .execute_cmd(&mut self.dst_conn, &format!("SELECT {}", db));
+            .execute_cmd_in_cluster(&mut self.dst_conn, &format!("SELECT {}", db));
 
         let mut string_keys = Vec::new();
         let mut hash_keys = Vec::new();
@@ -165,7 +165,9 @@ impl RedisTestRunner {
         for key in keys {
             let cmd = format!("PTTL {}", self.redis_util.escape_key(key));
             let src_result = self.redis_util.execute_cmd(&mut self.src_conn, &cmd);
-            let dst_result = self.redis_util.execute_cmd(&mut self.dst_conn, &cmd);
+            let dst_result = self
+                .redis_util
+                .execute_cmd_in_one_cluster_node(&mut self.dst_conn, &cmd);
 
             let get_expire = |result: Value| -> i64 {
                 match result {
@@ -201,7 +203,8 @@ impl RedisTestRunner {
     fn compare_hash_entries(&mut self, db: &str, keys: &Vec<String>) {
         for key in keys {
             let src_kvs = self.redis_util.get_hash_entry(&mut self.src_conn, key);
-            let dst_kvs = self.redis_util.get_hash_entry(&mut self.dst_conn, key);
+            let mut dst_node_conn = self.dst_conn.get_node_conn_by_key(key);
+            let dst_kvs = self.redis_util.get_hash_entry(&mut dst_node_conn, key);
             println!(
                 "compare results for hash entries, \r\n src_kvs: {:?} \r\n dst_kvs: {:?}",
                 src_kvs, dst_kvs
@@ -267,7 +270,9 @@ impl RedisTestRunner {
 
     fn compare_cmd_results(&mut self, cmd: &str, db: &str, key: &str) {
         let src_result = self.redis_util.execute_cmd(&mut self.src_conn, cmd);
-        let dst_result = self.redis_util.execute_cmd(&mut self.dst_conn, cmd);
+        let dst_result = self
+            .redis_util
+            .execute_cmd_in_one_cluster_node(&mut self.dst_conn, cmd);
         println!(
             "compare results for cmd: {}, \r\n src_kvs: {:?} \r\n dst_kvs: {:?}",
             cmd, src_result, dst_result
@@ -282,5 +287,17 @@ impl RedisTestRunner {
         } else {
             assert_eq!(src_result, dst_result);
         }
+    }
+
+    fn print_version_info(&mut self) {
+        println!(
+            "src: {}",
+            TaskUtil::get_redis_version(&mut self.src_conn).unwrap()
+        );
+        let mut dst_node_conn = self.dst_conn.get_default_conn();
+        println!(
+            "dst: {}",
+            TaskUtil::get_redis_version(&mut dst_node_conn).unwrap()
+        );
     }
 }
