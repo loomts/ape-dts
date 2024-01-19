@@ -41,6 +41,8 @@ use reqwest::{redirect::Policy, Client, Url};
 use rusoto_core::Region;
 use rusoto_s3::S3Client;
 
+use crate::redis_util::RedisUtil;
+
 use super::task_util::TaskUtil;
 
 pub struct SinkerUtil {}
@@ -241,6 +243,7 @@ impl SinkerUtil {
                 url,
                 batch_size,
                 method,
+                is_cluster,
             } => {
                 // redis sinker may need meta data from RDB extractor
                 let meta_manager = Self::get_extractor_meta_manager(&task_config).await?;
@@ -251,6 +254,7 @@ impl SinkerUtil {
                     method,
                     meta_manager,
                     monitor,
+                    *is_cluster,
                 )
                 .await?
             }
@@ -586,23 +590,56 @@ impl SinkerUtil {
         method: &str,
         meta_manager: Option<RdbMetaManager>,
         monitor: Arc<Mutex<Monitor>>,
+        is_cluster: bool,
     ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
         let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
-        for _ in 0..parallel_size {
-            let mut conn = TaskUtil::create_redis_conn(url).await?;
-            let version = TaskUtil::get_redis_version(&mut conn)?;
-            let method = RedisWriteMethod::from_str(method).unwrap();
-            let sinker = RedisSinker {
-                conn,
-                batch_size,
-                now_db_id: -1,
-                version,
-                method,
-                meta_manager: meta_manager.clone(),
-                monitor: monitor.clone(),
+
+        let mut conn = RedisUtil::create_redis_conn(url).await?;
+        let version = RedisUtil::get_redis_version(&mut conn)?;
+        let method = RedisWriteMethod::from_str(method).unwrap();
+
+        if is_cluster {
+            let url_info = Url::parse(url).unwrap();
+            let username = url_info.username();
+            let password = if let Some(password) = url_info.password() {
+                password.to_string()
+            } else {
+                String::new()
             };
-            sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
+
+            let (addresses, _slots) = RedisUtil::get_cluster_nodes(&mut conn)?;
+            for address in addresses {
+                let new_url = format!("redis://{}:{}@{}", username, password, address);
+                let conn = RedisUtil::create_redis_conn(&new_url).await?;
+                let sinker = RedisSinker {
+                    id: address,
+                    conn,
+                    batch_size,
+                    now_db_id: -1,
+                    version,
+                    method: method.clone(),
+                    meta_manager: meta_manager.clone(),
+                    monitor: monitor.clone(),
+                };
+                sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
+            }
+        } else {
+            for _ in 0..parallel_size {
+                let conn = RedisUtil::create_redis_conn(url).await?;
+                let sinker = RedisSinker {
+                    id: String::new(),
+                    conn,
+                    batch_size,
+                    now_db_id: -1,
+                    version,
+                    method: method.clone(),
+                    meta_manager: meta_manager.clone(),
+                    monitor: monitor.clone(),
+                };
+                sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
+            }
         }
+
         Ok(sub_sinkers)
     }
 

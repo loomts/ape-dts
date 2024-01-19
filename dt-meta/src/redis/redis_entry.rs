@@ -1,4 +1,7 @@
-use super::redis_object::{RedisCmd, RedisObject, RedisString};
+use super::{
+    command::key_parser::KeyParser,
+    redis_object::{RedisCmd, RedisObject, RedisString},
+};
 
 #[derive(Debug, Clone)]
 pub struct RedisEntry {
@@ -16,6 +19,7 @@ pub struct RedisEntry {
 
     pub cmd: RedisCmd,
     pub data_size: usize,
+    pub slot: i32,
 }
 
 impl RedisEntry {
@@ -34,6 +38,7 @@ impl RedisEntry {
 
             cmd: RedisCmd::new(),
             data_size: 0,
+            slot: 0,
         }
     }
 
@@ -46,6 +51,22 @@ impl RedisEntry {
             self.raw_bytes.len()
         } else {
             self.key.bytes.len() + self.value.get_malloc_size() + self.cmd.get_malloc_size()
+        }
+    }
+
+    pub fn cal_slots(&mut self, key_parser: &KeyParser) -> Vec<u16> {
+        if self.is_base {
+            vec![KeyParser::calc_slot(self.key.as_bytes())]
+        } else {
+            if self.cmd.keys.is_empty() {
+                self.cmd.parse_keys(key_parser);
+            }
+
+            let mut slots = Vec::new();
+            for key in self.cmd.keys.iter() {
+                slots.push(KeyParser::calc_slot(&key.as_bytes()))
+            }
+            slots
         }
     }
 }

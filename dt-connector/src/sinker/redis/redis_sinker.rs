@@ -23,6 +23,7 @@ use super::cmd_encoder::CmdEncoder;
 use super::entry_rewriter::EntryRewriter;
 
 pub struct RedisSinker {
+    pub id: String,
     pub batch_size: usize,
     pub conn: Connection,
     pub now_db_id: i64,
@@ -50,6 +51,10 @@ impl Sinker for RedisSinker {
             self.serial_sink_dml(&mut data).await?;
         }
         Ok(())
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
     }
 }
 

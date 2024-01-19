@@ -32,6 +32,10 @@ pub trait Sinker {
     async fn refresh_meta(&mut self, _data: Vec<DdlData>) -> Result<(), Error> {
         Ok(())
     }
+
+    fn get_id(&self) -> String {
+        String::new()
+    }
 }
 
 #[async_trait]
