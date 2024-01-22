@@ -111,7 +111,7 @@ impl PgCdcExtractor {
                             self.decode_relation(&relation).await?;
                         }
 
-                        // do not push Begin and Commit into buffer to accelerate sinking
+                        // do not push Begin into buffer to accelerate sinking
                         Begin(begin) => {
                             position = get_position(&last_tx_end_lsn, begin.timestamp());
                             xid = begin.xid().to_string();
@@ -178,7 +178,7 @@ impl PgCdcExtractor {
         stream: &mut Pin<&mut LogicalReplicationStream>,
         start_lsn: &str,
     ) -> Result<(), Error> {
-        let lsn =
+        let lsn: PgLsn =
             if let Position::PgCdc { lsn, .. } = &self.syncer.lock().unwrap().checkpoint_position {
                 if lsn.is_empty() {
                     start_lsn.parse().unwrap()
@@ -188,6 +188,7 @@ impl PgCdcExtractor {
             } else {
                 start_lsn.parse().unwrap()
             };
+        log_info!("confirmed flush lsn: {}", lsn.to_string());
 
         // Postgres epoch is 2000-01-01T00:00:00Z
         let pg_epoch = UNIX_EPOCH + Duration::from_secs(SECS_FROM_1970_TO_2000 as u64);
