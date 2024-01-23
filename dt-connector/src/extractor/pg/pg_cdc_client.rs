@@ -1,5 +1,6 @@
 use dt_common::error::Error;
-use dt_common::log_info;
+use dt_common::{log_info, log_warn};
+use postgres_types::PgLsn;
 use tokio_postgres::NoTls;
 use tokio_postgres::SimpleQueryMessage::Row;
 use tokio_postgres::{replication::LogicalReplicationStream, Client};
@@ -52,8 +53,12 @@ impl PgCdcClient {
             "pg_catalog.pg_publication", pub_name
         );
         let res = client.simple_query(&query).await.unwrap();
-        if res.len() <= 1 {
+        let pub_exists = res.len() > 1;
+        log_info!("publication: {} exists: {}", pub_name, pub_exists);
+
+        if !pub_exists {
             let query = format!("CREATE PUBLICATION {} FOR ALL TABLES", pub_name);
+            log_info!("execute: {}", query);
             client.simple_query(&query).await.unwrap();
         }
 
@@ -63,24 +68,56 @@ impl PgCdcClient {
             "pg_catalog.pg_replication_slots", self.slot_name
         );
         let res = client.simple_query(&query).await.unwrap();
-        let mut slot_exists = res.len() > 1;
+        let slot_exists = res.len() > 1;
+        let mut create_slot = !slot_exists;
+        log_info!("slot: {} exists: {}", self.slot_name, slot_exists);
 
-        // drop existing slot to create a new one if no start_lsn was provided
-        if start_lsn.is_empty() && slot_exists {
-            let query = format!(
-                "SELECT {} ('{}')",
-                "pg_drop_replication_slot", self.slot_name
-            );
-            client.simple_query(&query).await.unwrap();
-            slot_exists = false;
+        if slot_exists {
+            let confirmed_flush_lsn = if let Row(row) = &res[0] {
+                row.get("confirmed_flush_lsn").unwrap().to_string()
+            } else {
+                String::new()
+            };
+            log_info!("slot confirmed_flush_lsn: {}", confirmed_flush_lsn);
+
+            if confirmed_flush_lsn.is_empty() {
+                // should never happen
+                create_slot = true;
+                log_warn!("slot exists but confirmed_flush_lsn is empty, will recreate slot");
+            } else {
+                if start_lsn.is_empty() {
+                    log_warn!("start_lsn is empty, will use confirmed_flush_lsn");
+                    start_lsn = confirmed_flush_lsn;
+                } else {
+                    let actual_lsn: PgLsn = confirmed_flush_lsn.parse().unwrap();
+                    let input_lsn: PgLsn = start_lsn.parse().unwrap();
+                    if input_lsn < actual_lsn {
+                        log_warn!("start_lsn: {} is order than confirmed_flush_lsn: {}, will use confirmed_flush_lsn", 
+                        start_lsn, confirmed_flush_lsn);
+                        start_lsn = confirmed_flush_lsn;
+                    }
+                }
+            }
         }
 
         // create replication slot
-        if !slot_exists {
+        if create_slot {
+            // should never happen
+            if slot_exists {
+                let query = format!(
+                    "SELECT {} ('{}')",
+                    "pg_drop_replication_slot", self.slot_name
+                );
+                log_info!("execute: {}", query);
+                client.simple_query(&query).await.unwrap();
+            }
+
             let query = format!(
                 r#"CREATE_REPLICATION_SLOT {} LOGICAL "{}""#,
                 self.slot_name, "pgoutput"
             );
+            log_info!("execute: {}", query);
+
             let res = client.simple_query(&query).await.unwrap();
             // get the lsn for the newly created slot
             start_lsn = if let Row(row) = &res[0] {
@@ -91,6 +128,11 @@ impl PgCdcClient {
                     query
                 )));
             };
+
+            log_info!(
+                "slot created, returned start_sln: {}",
+                start_lsn.to_string()
+            );
         }
 
         // start replication slot
@@ -102,6 +144,7 @@ impl PgCdcClient {
             "START_REPLICATION SLOT {} LOGICAL {} {}",
             self.slot_name, start_lsn, options
         );
+        log_info!("execute: {}", query);
 
         let copy_stream = client
             .copy_both_simple::<bytes::Bytes>(&query)

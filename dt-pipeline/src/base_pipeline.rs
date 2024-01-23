@@ -87,19 +87,17 @@ impl Pipeline for BasePipeline {
             };
 
             // process all row_datas in buffer at a time
-            let mut sinked_count = 0;
-            if !data.is_empty() {
-                let (count, last_received, last_commit) = match Self::get_sink_method(&data) {
-                    SinkMethod::Ddl => self.sink_ddl(data).await.unwrap(),
-                    SinkMethod::Dml => self.sink_dml(data).await.unwrap(),
-                    SinkMethod::Raw => self.sink_raw(data).await.unwrap(),
-                };
+            let (count, last_received, last_commit) = match Self::get_sink_method(&data) {
+                SinkMethod::Ddl => self.sink_ddl(data).await.unwrap(),
+                SinkMethod::Dml => self.sink_dml(data).await.unwrap(),
+                SinkMethod::Raw => self.sink_raw(data).await.unwrap(),
+            };
 
-                sinked_count = count;
+            if last_received.is_some() {
                 last_received_position = last_received;
-                if last_commit.is_some() {
-                    last_commit_position = last_commit;
-                }
+            }
+            if last_commit.is_some() {
+                last_commit_position = last_commit;
             }
 
             last_checkpoint_time = self.record_checkpoint(
@@ -111,7 +109,7 @@ impl Pipeline for BasePipeline {
             self.monitor
                 .lock()
                 .unwrap()
-                .add_counter(CounterType::SinkedCount, sinked_count);
+                .add_counter(CounterType::SinkedCount, count);
 
             // sleep 1 millis for data preparing
             TimeUtil::sleep_millis(1).await;
