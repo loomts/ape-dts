@@ -1,7 +1,7 @@
 # NOTES: `cargo search` will not work as crates source has been overwritten, need to specify `--registry` flag, 
 # i.e., `cargo search <CRATE> --registry crates-io` 
 [source.crates-io]
-replace-with = 'ustc'
+# replace-with = 'ustc'
 
 [source.ustc]
 # requires cargo 1.68+ to enable sparse index

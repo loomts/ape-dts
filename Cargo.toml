@@ -12,14 +12,11 @@ members = [
     "dt-tests"
 ]
 
-exclude = [
-    "./plugins/mysql-binlog-connector-rust"
-]
 
 [workspace.dependencies]
 sqlx = {git = "https://github.com/qianyiwen2019/sqlx", features = ["runtime-async-std-rustls", "mysql", "postgres", "bigdecimal", "ipnetwork", "mac_address", "bit-vec", "time", "chrono", "json", "uuid"]}
 futures = "0.3.25"
-mysql-binlog-connector-rust = { path = "./plugins/mysql-binlog-connector-rust" }
+mysql-binlog-connector-rust = "0.1.0"
 serde = {version = "1", features = ["derive"]}
 serde_json = "1.0.87"
 chrono = "0.4.23"

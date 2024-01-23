@@ -1,3 +1,0 @@
-[submodule "plugins/mysql-binlog-connector-rust"]
-	path = plugins/mysql-binlog-connector-rust
-	url = https://github.com/apecloud/mysql-binlog-connector-rust.git
