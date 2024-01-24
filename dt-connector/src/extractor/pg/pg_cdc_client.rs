@@ -42,6 +42,10 @@ impl PgCdcClient {
     ) -> Result<(LogicalReplicationStream, String), Error> {
         let mut start_lsn = self.start_lsn.clone();
 
+        // set extra_float_digits to max so no precision will lose
+        let query = "SET extra_float_digits=3";
+        client.simple_query(&query).await.unwrap();
+
         // create publication for all tables if not exists
         let pub_name = if self.pub_name.is_empty() {
             format!("{}_publication_for_all_tables", self.slot_name)
