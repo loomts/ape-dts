@@ -32,6 +32,10 @@ impl ConfigTokenParser {
         let mut start_index = 0;
         let mut tokens = Vec::new();
 
+        if chars.is_empty() {
+            return tokens;
+        }
+
         loop {
             let (token, next_index) =
                 Self::read_token(&chars, start_index, delimiters, escape_pairs);

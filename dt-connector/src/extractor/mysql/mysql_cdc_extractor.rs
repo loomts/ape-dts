@@ -1,11 +1,16 @@
 use async_recursion::async_recursion;
 use async_trait::async_trait;
-use std::collections::HashMap;
+use sqlx::{mysql::MySqlArguments, query::Query, MySql, Pool};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 
 use dt_meta::{
     adaptor::mysql_col_value_convertor::MysqlColValueConvertor, col_value::ColValue,
     dt_data::DtData, mysql::mysql_meta_manager::MysqlMetaManager, position::Position,
-    row_data::RowData, row_type::RowType,
+    row_data::RowData, row_type::RowType, syncer::Syncer,
 };
 use mysql_binlog_connector_rust::{
     binlog_client::BinlogClient,
@@ -15,7 +20,12 @@ use mysql_binlog_connector_rust::{
     },
 };
 
-use dt_common::{error::Error, log_info, utils::rdb_filter::RdbFilter};
+use dt_common::{
+    config::{config_enums::DbType, config_token_parser::ConfigTokenParser},
+    error::Error,
+    log_error, log_info, log_warn,
+    utils::{rdb_filter::RdbFilter, sql_util::SqlUtil, time_util::TimeUtil},
+};
 
 use crate::{
     datamarker::traits::DataMarkerFilter, extractor::base_extractor::BaseExtractor, Extractor,
@@ -24,12 +34,16 @@ use crate::{
 pub struct MysqlCdcExtractor {
     pub base_extractor: BaseExtractor,
     pub meta_manager: MysqlMetaManager,
+    pub conn_pool: Pool<MySql>,
     pub filter: RdbFilter,
     pub url: String,
     pub binlog_filename: String,
     pub binlog_position: u32,
     pub server_id: u64,
+    pub heartbeat_interval_secs: u64,
+    pub heartbeat_tb: String,
     pub datamarker_filter: Option<Box<dyn DataMarkerFilter + Send>>,
+    pub syncer: Arc<Mutex<Syncer>>,
 }
 
 const QUERY_BEGIN: &str = "BEGIN";
@@ -38,9 +52,11 @@ const QUERY_BEGIN: &str = "BEGIN";
 impl Extractor for MysqlCdcExtractor {
     async fn extract(&mut self) -> Result<(), Error> {
         log_info!(
-            "MysqlCdcExtractor starts, binlog_filename: {}, binlog_position: {}",
+            "MysqlCdcExtractor starts, binlog_filename: {}, binlog_position: {}, heartbeat_interval_secs: {}, heartbeat_tb: {}",
             self.binlog_filename,
-            self.binlog_position
+            self.binlog_position,
+            self.heartbeat_interval_secs,
+            self.heartbeat_tb
         );
         self.extract_internal().await
     }
@@ -57,6 +73,9 @@ impl MysqlCdcExtractor {
         let mut stream = client.connect().await.unwrap();
         let mut table_map_event_map = HashMap::new();
         let mut binlog_filename = self.binlog_filename.clone();
+
+        // start heartbeat
+        self.start_heartbeat().unwrap();
 
         loop {
             let (header, data) = stream.read().await.unwrap();
@@ -291,5 +310,125 @@ impl MysqlCdcExtractor {
             &table_map_event.table_name,
             &row_type.to_string(),
         )
+    }
+
+    fn start_heartbeat(&self) -> Result<(), Error> {
+        log_info!(
+            "try starting heartbeat, heartbeat_interval_secs: {}, heartbeat_tb: {}, ",
+            self.heartbeat_interval_secs,
+            self.heartbeat_tb
+        );
+
+        if self.heartbeat_interval_secs == 0 || self.heartbeat_tb.is_empty() {
+            log_warn!("heartbeat disabled, heartbeat_tb is empty");
+            return Ok(());
+        }
+
+        let db_tb = ConfigTokenParser::parse(
+            &self.heartbeat_tb,
+            &vec!['.'],
+            &SqlUtil::get_escape_pairs(&DbType::Mysql),
+        );
+        if db_tb.len() < 2 {
+            log_warn!("heartbeat disabled, heartbeat_tb should be like db.tb");
+            return Ok(());
+        }
+
+        let (server_id, heartbeat_interval_secs, syncer, conn_pool) = (
+            self.server_id,
+            self.heartbeat_interval_secs,
+            self.syncer.clone(),
+            self.conn_pool.clone(),
+        );
+
+        let _ = tokio::spawn(async move {
+            let mut start_time = Instant::now();
+            loop {
+                if start_time.elapsed().as_secs() >= heartbeat_interval_secs {
+                    Self::heartbeat(server_id, &db_tb[0], &db_tb[1], &syncer, &conn_pool)
+                        .await
+                        .unwrap();
+                    start_time = Instant::now();
+                }
+                TimeUtil::sleep_millis(1000 * heartbeat_interval_secs).await;
+            }
+        });
+        log_info!("heartbeat started");
+        Ok(())
+    }
+
+    async fn heartbeat(
+        server_id: u64,
+        db: &str,
+        tb: &str,
+        syncer: &Arc<Mutex<Syncer>>,
+        conn_pool: &Pool<MySql>,
+    ) -> Result<(), Error> {
+        let (received_binlog_filename, received_next_event_position, received_timestamp) =
+            if let Position::MysqlCdc {
+                binlog_filename,
+                next_event_position,
+                timestamp,
+                ..
+            } = &syncer.lock().unwrap().received_position
+            {
+                (
+                    binlog_filename.to_owned(),
+                    *next_event_position,
+                    timestamp.to_owned(),
+                )
+            } else {
+                (String::new(), 0, String::new())
+            };
+
+        let (flushed_binlog_filename, flushed_next_event_position, flushed_timestamp) =
+            if let Position::MysqlCdc {
+                binlog_filename,
+                next_event_position,
+                timestamp,
+                ..
+            } = &syncer.lock().unwrap().committed_position
+            {
+                (
+                    binlog_filename.to_owned(),
+                    *next_event_position,
+                    timestamp.to_owned(),
+                )
+            } else {
+                (String::new(), 0, String::new())
+            };
+
+        // CREATE TABLE test_db_1.ape_dts_heartbeat(
+        //     server_id INT UNSIGNED,
+        //     update_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        //     received_binlog_filename VARCHAR(255),
+        //     received_next_event_position INT UNSIGNED,
+        //     received_timestamp VARCHAR(255),
+        //     flushed_binlog_filename VARCHAR(255),
+        //     flushed_next_event_position INT UNSIGNED,
+        //     flushed_timestamp VARCHAR(255),
+        //     PRIMARY KEY(server_id)
+        // );
+        let sql = format!(
+            "REPLACE INTO `{}`.`{}` (server_id, update_timestamp, 
+                received_binlog_filename, received_next_event_position, received_timestamp, 
+                flushed_binlog_filename, flushed_next_event_position, flushed_timestamp) 
+            VALUES ({}, now(), '{}', {}, '{}', '{}', {}, '{}')",
+            db,
+            tb,
+            server_id,
+            received_binlog_filename,
+            received_next_event_position,
+            received_timestamp,
+            flushed_binlog_filename,
+            flushed_next_event_position,
+            flushed_timestamp,
+        );
+
+        let query: Query<MySql, MySqlArguments> = sqlx::query(&sql);
+        if let Err(err) = query.execute(conn_pool).await {
+            log_error!("heartbeat failed: {:?}", err);
+        }
+        Ok(())
     }
 }

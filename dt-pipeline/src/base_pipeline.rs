@@ -93,7 +93,8 @@ impl Pipeline for BasePipeline {
                 SinkMethod::Raw => self.sink_raw(data).await.unwrap(),
             };
 
-            if last_received.is_some() {
+            if let Some(position) = &last_received {
+                self.syncer.lock().unwrap().received_position = position.to_owned();
                 last_received_position = last_received;
             }
             if last_commit.is_some() {
@@ -285,7 +286,7 @@ impl BasePipeline {
 
         if let Some(position) = last_commit_position {
             log_position!("checkpoint_position | {}", position.to_string());
-            self.syncer.lock().unwrap().checkpoint_position = position.clone();
+            self.syncer.lock().unwrap().committed_position = position.clone();
         }
         Instant::now()
     }

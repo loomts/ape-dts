@@ -59,6 +59,15 @@ impl TestBase {
         //     .unwrap();
     }
 
+    pub async fn run_heartbeat_test(test_dir: &str, start_millis: u64, parse_millis: u64) {
+        let runner = RdbTestRunner::new(test_dir).await.unwrap();
+        runner
+            .run_heartbeat_test(start_millis, parse_millis)
+            .await
+            .unwrap();
+        runner.close().await.unwrap();
+    }
+
     pub async fn run_ddl_test(test_dir: &str, start_millis: u64, parse_millis: u64) {
         let runner = RdbTestRunner::new(test_dir).await.unwrap();
         runner
@@ -159,6 +168,14 @@ impl TestBase {
         let mut runner = RedisTestRunner::new_default(test_dir).await.unwrap();
         runner
             .run_cdc_test(start_millis, parse_millis)
+            .await
+            .unwrap();
+    }
+
+    pub async fn run_redis_heartbeat_test(test_dir: &str, start_millis: u64, parse_millis: u64) {
+        let mut runner = RedisTestRunner::new_default(test_dir).await.unwrap();
+        runner
+            .run_heartbeat_test(start_millis, parse_millis)
             .await
             .unwrap();
     }

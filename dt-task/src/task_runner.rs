@@ -153,7 +153,8 @@ impl TaskRunner {
         let buffer = Arc::new(ConcurrentQueue::bounded(self.config.pipeline.buffer_size));
         let shut_down = Arc::new(AtomicBool::new(false));
         let syncer = Arc::new(Mutex::new(Syncer {
-            checkpoint_position: Position::None,
+            received_position: Position::None,
+            committed_position: Position::None,
         }));
 
         let monitor_time_window_secs = self.config.pipeline.checkpoint_interval_secs as usize;
@@ -326,6 +327,8 @@ impl TaskRunner {
                 binlog_filename,
                 binlog_position,
                 server_id,
+                heartbeat_interval_secs,
+                heartbeat_tb,
             } => {
                 let filter = RdbFilter::from_config_with_transaction(
                     &self.config.filter,
@@ -344,8 +347,11 @@ impl TaskRunner {
                     binlog_filename,
                     *binlog_position,
                     *server_id,
+                    *heartbeat_interval_secs,
+                    heartbeat_tb,
                     filter,
                     &self.config.runtime.log_level,
+                    syncer,
                     datamarker_filter,
                 )
                 .await?;
@@ -393,8 +399,10 @@ impl TaskRunner {
                 slot_name,
                 pub_name,
                 start_lsn,
+                keepalive_interval_secs,
                 heartbeat_interval_secs,
-                ddl_command_table,
+                heartbeat_tb,
+                ddl_command_tb,
             } => {
                 let filter = RdbFilter::from_config_with_transaction(
                     &self.config.filter,
@@ -413,10 +421,12 @@ impl TaskRunner {
                     slot_name,
                     pub_name,
                     start_lsn,
+                    *keepalive_interval_secs,
                     *heartbeat_interval_secs,
+                    &heartbeat_tb,
                     filter,
                     &self.config.runtime.log_level,
-                    &ddl_command_table,
+                    &ddl_command_tb,
                     syncer,
                     datamarker_filter,
                 )
@@ -514,6 +524,7 @@ impl TaskRunner {
                 repl_offset,
                 now_db_id,
                 repl_port,
+                keepalive_interval_secs,
                 heartbeat_interval_secs,
                 heartbeat_key,
             } => {
@@ -525,6 +536,7 @@ impl TaskRunner {
                     *repl_offset,
                     *repl_port,
                     *now_db_id,
+                    *keepalive_interval_secs,
                     *heartbeat_interval_secs,
                     heartbeat_key,
                     filter,

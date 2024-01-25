@@ -3,11 +3,11 @@ use crate::test_runner::redis_util::RedisUtil;
 use super::{base_test_runner::BaseTestRunner, redis_cluster_connection::RedisClusterConnection};
 use dt_common::{
     config::{
-        config_enums::DbType, extractor_config::ExtractorConfig, sinker_config::SinkerConfig,
-        task_config::TaskConfig,
+        config_enums::DbType, config_token_parser::ConfigTokenParser,
+        extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
     },
     error::Error,
-    utils::{rdb_filter::RdbFilter, time_util::TimeUtil},
+    utils::{rdb_filter::RdbFilter, sql_util::SqlUtil, time_util::TimeUtil},
 };
 
 use dt_task::task_util::TaskUtil;
@@ -91,6 +91,43 @@ impl RedisTestRunner {
         self.compare_all_data()?;
 
         self.base.wait_task_finish(&task).await
+    }
+
+    pub async fn run_heartbeat_test(
+        &mut self,
+        start_millis: u64,
+        _parse_millis: u64,
+    ) -> Result<(), Error> {
+        let config = TaskConfig::new(&self.base.task_config_file);
+        let heartbeat_key = match config.extractor {
+            ExtractorConfig::RedisCdc { heartbeat_key, .. } => heartbeat_key.clone(),
+            _ => String::new(),
+        };
+
+        let heartbeat_db_key = ConfigTokenParser::parse(
+            &heartbeat_key,
+            &vec!['.'],
+            &SqlUtil::get_escape_pairs(&DbType::Redis),
+        );
+        let db_id: i64 = heartbeat_db_key[0].parse().unwrap();
+        let key = &heartbeat_db_key[1];
+
+        let cmd = format!("SELECT {}", db_id);
+        self.redis_util.execute_cmd(&mut self.src_conn, &cmd);
+
+        self.execute_test_ddl_sqls()?;
+
+        let cmd = format!("GET {}", self.redis_util.escape_key(key));
+        let result = self.redis_util.execute_cmd(&mut self.src_conn, &cmd);
+        assert_eq!(result, Value::Nil);
+
+        let task = self.base.spawn_task().await?;
+        TimeUtil::sleep_millis(start_millis).await;
+        self.base.wait_task_finish(&task).await.unwrap();
+
+        let result = self.redis_util.execute_cmd(&mut self.src_conn, &cmd);
+        assert_ne!(result, Value::Nil);
+        Ok(())
     }
 
     pub fn execute_test_ddl_sqls(&mut self) -> Result<(), Error> {

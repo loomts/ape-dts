@@ -47,6 +47,9 @@ const DATAMARKER_SECTION: &str = "datamarker";
 const BATCH_SIZE: &str = "batch_size";
 const SAMPLE_INTERVAL: &str = "sample_interval";
 const ASTRISK: &str = "*";
+const HEARTBEAT_INTERVAL_SECS: &str = "heartbeat_interval_secs";
+const KEEPALIVE_INTERVAL_SECS: &str = "keepalive_interval_secs";
+const HEARTBEAT_TB: &str = "heartbeat_tb";
 
 impl TaskConfig {
     pub fn new(task_config_file: &str) -> Self {
@@ -107,6 +110,14 @@ impl TaskConfig {
                     binlog_position: ini.getuint(EXTRACTOR, "binlog_position").unwrap().unwrap()
                         as u32,
                     server_id: ini.getuint(EXTRACTOR, "server_id").unwrap().unwrap(),
+                    heartbeat_interval_secs: Self::get_value_with_default(
+                        ini,
+                        EXTRACTOR,
+                        HEARTBEAT_INTERVAL_SECS,
+                        10,
+                    )
+                    .unwrap(),
+                    heartbeat_tb: Self::get_value(ini, EXTRACTOR, HEARTBEAT_TB).unwrap(),
                 },
 
                 ExtractType::CheckLog => ExtractorConfig::MysqlCheck {
@@ -140,12 +151,22 @@ impl TaskConfig {
                     slot_name: ini.get(EXTRACTOR, "slot_name").unwrap(),
                     pub_name: Self::get_value(ini, EXTRACTOR, "pub_name").unwrap(),
                     start_lsn: ini.get(EXTRACTOR, "start_lsn").unwrap(),
-                    heartbeat_interval_secs: ini
-                        .getuint(EXTRACTOR, "heartbeat_interval_secs")
-                        .unwrap()
-                        .unwrap(),
-                    ddl_command_table: Self::get_value(ini, EXTRACTOR, "ddl_command_table")
-                        .unwrap(),
+                    keepalive_interval_secs: Self::get_value_with_default(
+                        ini,
+                        EXTRACTOR,
+                        KEEPALIVE_INTERVAL_SECS,
+                        10,
+                    )
+                    .unwrap(),
+                    heartbeat_interval_secs: Self::get_value_with_default(
+                        ini,
+                        EXTRACTOR,
+                        HEARTBEAT_INTERVAL_SECS,
+                        10,
+                    )
+                    .unwrap(),
+                    heartbeat_tb: Self::get_value(ini, EXTRACTOR, HEARTBEAT_TB).unwrap(),
+                    ddl_command_tb: Self::get_value(ini, EXTRACTOR, "ddl_command_tb").unwrap(),
                 },
 
                 ExtractType::CheckLog => ExtractorConfig::PgCheck {
@@ -198,17 +219,21 @@ impl TaskConfig {
                         repl_port,
                         run_id: ini.get(EXTRACTOR, "run_id").unwrap(),
                         repl_offset: ini.getuint(EXTRACTOR, "repl_offset").unwrap().unwrap(),
-                        heartbeat_interval_secs: ini
-                            .getuint(EXTRACTOR, "heartbeat_interval_secs")
-                            .unwrap()
-                            .unwrap(),
-                        heartbeat_key: Self::get_value_with_default(
+                        keepalive_interval_secs: Self::get_value_with_default(
                             ini,
                             EXTRACTOR,
-                            "heartbeat_key",
-                            "ape_dts_heartbeat_key".into(),
+                            KEEPALIVE_INTERVAL_SECS,
+                            10,
                         )
                         .unwrap(),
+                        heartbeat_interval_secs: Self::get_value_with_default(
+                            ini,
+                            EXTRACTOR,
+                            HEARTBEAT_INTERVAL_SECS,
+                            10,
+                        )
+                        .unwrap(),
+                        heartbeat_key: Self::get_value(ini, EXTRACTOR, "heartbeat_key").unwrap(),
                         now_db_id: ini.getint(EXTRACTOR, "now_db_id").unwrap().unwrap(),
                     },
 

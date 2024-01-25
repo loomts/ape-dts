@@ -45,7 +45,7 @@ impl RdbTestRunner {
         relative_test_dir: &str,
         config_tmp_relative_dir: &str,
     ) -> Result<Self, Error> {
-        let base = BaseTestRunner::new_internal(relative_test_dir, config_tmp_relative_dir)
+        let mut base = BaseTestRunner::new_internal(relative_test_dir, config_tmp_relative_dir)
             .await
             .unwrap();
 
@@ -70,6 +70,24 @@ impl RdbTestRunner {
 
         let config = TaskConfig::new(&base.task_config_file);
         let router = RdbRouter::from_config(&config.router, &dst_db_type).unwrap();
+
+        // for pg cdc, recreate publication & slot before each test
+        if let ExtractorConfig::PgCdc {
+            slot_name,
+            pub_name,
+            ..
+        } = config.extractor
+        {
+            let pub_name = if pub_name.is_empty() {
+                format!("{}_publication_for_all_tables", slot_name)
+            } else {
+                pub_name.clone()
+            };
+            let drop_pub_sql = format!("DROP PUBLICATION IF EXISTS {}", pub_name);
+            let drop_slot_sql= format!("SELECT pg_drop_replication_slot(slot_name) FROM pg_replication_slots WHERE slot_name = '{}'", slot_name);
+            base.src_ddl_sqls.push(drop_pub_sql);
+            base.src_ddl_sqls.push(drop_slot_sql);
+        }
 
         Ok(Self {
             src_conn_pool_mysql,
@@ -206,6 +224,42 @@ impl RdbTestRunner {
         self.base.wait_task_finish(&task).await
     }
 
+    pub async fn run_heartbeat_test(
+        &self,
+        start_millis: u64,
+        parse_millis: u64,
+    ) -> Result<(), Error> {
+        let config = TaskConfig::new(&self.base.task_config_file);
+        let (heartbeat_tb, db_type) = match config.extractor {
+            ExtractorConfig::PgCdc { heartbeat_tb, .. } => (heartbeat_tb.clone(), DbType::Pg),
+            ExtractorConfig::MysqlCdc { heartbeat_tb, .. } => (heartbeat_tb.clone(), DbType::Mysql),
+            _ => (String::new(), DbType::Mysql),
+        };
+
+        let tokens = ConfigTokenParser::parse(
+            &heartbeat_tb,
+            &vec!['.'],
+            &SqlUtil::get_escape_pairs(&db_type),
+        );
+        let db_tb = (tokens[0].clone(), tokens[1].clone());
+
+        // recreate heartbeat table
+        self.execute_test_ddl_sqls().await?;
+        TimeUtil::sleep_millis(start_millis).await;
+
+        let src_data = self.fetch_data(&db_tb, SRC).await?;
+        assert!(src_data.is_empty());
+
+        // start task
+        let task = self.base.spawn_task().await?;
+        TimeUtil::sleep_millis(parse_millis).await;
+        self.base.wait_task_finish(&task).await.unwrap();
+
+        let src_data = self.fetch_data(&db_tb, SRC).await?;
+        assert_eq!(src_data.len(), 1);
+        Ok(())
+    }
+
     pub async fn execute_test_sqls_and_compare(&self, parse_millis: u64) -> Result<(), Error> {
         // load dml sqls
         let mut src_insert_sqls = Vec::new();
@@ -224,7 +278,9 @@ impl RdbTestRunner {
 
         // insert src data
         self.execute_src_sqls(&src_insert_sqls).await?;
-        TimeUtil::sleep_millis(parse_millis).await;
+        if !src_insert_sqls.is_empty() {
+            TimeUtil::sleep_millis(parse_millis).await;
+        }
 
         let (src_db_tbs, dst_db_tbs) = self.get_compare_db_tbs().await?;
         self.compare_data_for_tbs(&src_db_tbs, &dst_db_tbs).await?;

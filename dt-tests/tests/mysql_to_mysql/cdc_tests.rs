@@ -125,4 +125,10 @@ mod test {
     async fn cdc_foreign_key_test() {
         TestBase::run_cdc_test("mysql_to_mysql/cdc/foreign_key_test", 3000, 2000).await;
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn cdc_heartbeat_test() {
+        TestBase::run_heartbeat_test("mysql_to_mysql/cdc/heartbeat_test", 3000, 2000).await;
+    }
 }

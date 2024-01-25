@@ -168,22 +168,29 @@ impl ExtractorUtil {
         binlog_filename: &str,
         binlog_position: u32,
         server_id: u64,
+        heartbeat_interval_secs: u64,
+        heartbeat_tb: &str,
         filter: RdbFilter,
         log_level: &str,
+        syncer: Arc<Mutex<Syncer>>,
         datamarker_filter: Option<Box<dyn DataMarkerFilter + Send>>,
     ) -> Result<MysqlCdcExtractor, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool = TaskUtil::create_mysql_conn_pool(url, 2, enable_sqlx_log).await?;
-        let meta_manager = MysqlMetaManager::new(conn_pool).init().await?;
+        let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
 
         Ok(MysqlCdcExtractor {
             meta_manager,
             filter,
+            conn_pool,
             url: url.to_string(),
             binlog_filename: binlog_filename.to_string(),
             binlog_position,
             server_id,
+            heartbeat_interval_secs,
+            heartbeat_tb: heartbeat_tb.to_string(),
             datamarker_filter,
+            syncer,
             base_extractor,
         })
     }
@@ -195,10 +202,12 @@ impl ExtractorUtil {
         slot_name: &str,
         pub_name: &str,
         start_lsn: &str,
+        keepalive_interval_secs: u64,
         heartbeat_interval_secs: u64,
+        heartbeat_tb: &str,
         filter: RdbFilter,
         log_level: &str,
-        ddl_command_table: &str,
+        ddl_command_tb: &str,
         syncer: Arc<Mutex<Syncer>>,
         datamarker_filter: Option<Box<dyn DataMarkerFilter + Send>>,
     ) -> Result<PgCdcExtractor, Error> {
@@ -210,12 +219,15 @@ impl ExtractorUtil {
             meta_manager,
             filter,
             url: url.to_string(),
+            conn_pool,
             slot_name: slot_name.to_string(),
             pub_name: pub_name.to_string(),
             start_lsn: start_lsn.to_string(),
             syncer,
+            keepalive_interval_secs,
             heartbeat_interval_secs,
-            ddl_command_table: ddl_command_table.to_string(),
+            heartbeat_tb: heartbeat_tb.to_string(),
+            ddl_command_tb: ddl_command_tb.to_string(),
             base_extractor,
             datamarker_filter,
         })
@@ -428,6 +440,7 @@ impl ExtractorUtil {
         repl_offset: u64,
         repl_port: u64,
         now_db_id: i64,
+        keepalive_interval_secs: u64,
         heartbeat_interval_secs: u64,
         heartbeat_key: &str,
         filter: RdbFilter,
@@ -439,11 +452,12 @@ impl ExtractorUtil {
             conn,
             run_id: run_id.to_string(),
             repl_offset,
+            keepalive_interval_secs,
             heartbeat_interval_secs,
             heartbeat_key: heartbeat_key.into(),
             syncer,
             repl_port,
-            now_db_id: now_db_id,
+            now_db_id,
             filter,
             base_extractor,
         })
