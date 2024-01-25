@@ -1,5 +1,6 @@
 use crate::position::Position;
 
 pub struct Syncer {
-    pub checkpoint_position: Position,
+    pub received_position: Position,
+    pub committed_position: Position,
 }

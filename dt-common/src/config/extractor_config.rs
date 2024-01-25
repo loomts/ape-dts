@@ -24,6 +24,8 @@ pub enum ExtractorConfig {
         binlog_filename: String,
         binlog_position: u32,
         server_id: u64,
+        heartbeat_interval_secs: u64,
+        heartbeat_tb: String,
     },
 
     MysqlCheck {
@@ -44,8 +46,10 @@ pub enum ExtractorConfig {
         slot_name: String,
         pub_name: String,
         start_lsn: String,
+        keepalive_interval_secs: u64,
         heartbeat_interval_secs: u64,
-        ddl_command_table: String,
+        heartbeat_tb: String,
+        ddl_command_tb: String,
     },
 
     PgCheck {
@@ -84,6 +88,7 @@ pub enum ExtractorConfig {
         run_id: String,
         repl_offset: u64,
         repl_port: u64,
+        keepalive_interval_secs: u64,
         heartbeat_interval_secs: u64,
         heartbeat_key: String,
         now_db_id: i64,

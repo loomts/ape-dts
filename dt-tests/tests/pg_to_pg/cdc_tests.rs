@@ -127,4 +127,10 @@ mod test {
         )
         .await;
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn cdc_heartbeat_test() {
+        TestBase::run_heartbeat_test("pg_to_pg/cdc/heartbeat_test", 3000, 2000).await;
+    }
 }

@@ -19,9 +19,15 @@ use postgres_protocol::message::backend::{
 };
 
 use postgres_types::PgLsn;
+use sqlx::{postgres::PgArguments, query::Query, Pool, Postgres};
 use tokio_postgres::replication::LogicalReplicationStream;
 
-use dt_common::{error::Error, log_error, log_info, utils::rdb_filter::RdbFilter};
+use dt_common::{
+    config::{config_enums::DbType, config_token_parser::ConfigTokenParser},
+    error::Error,
+    log_error, log_info, log_warn,
+    utils::{rdb_filter::RdbFilter, sql_util::SqlUtil, time_util::TimeUtil},
+};
 
 use crate::{
     datamarker::traits::DataMarkerFilter,
@@ -43,13 +49,16 @@ use dt_meta::{
 pub struct PgCdcExtractor {
     pub base_extractor: BaseExtractor,
     pub meta_manager: PgMetaManager,
+    pub conn_pool: Pool<Postgres>,
     pub filter: RdbFilter,
     pub url: String,
     pub slot_name: String,
     pub pub_name: String,
     pub start_lsn: String,
+    pub keepalive_interval_secs: u64,
     pub heartbeat_interval_secs: u64,
-    pub ddl_command_table: String,
+    pub heartbeat_tb: String,
+    pub ddl_command_tb: String,
     pub syncer: Arc<Mutex<Syncer>>,
     pub datamarker_filter: Option<Box<dyn DataMarkerFilter + Send>>,
 }
@@ -60,10 +69,12 @@ const SECS_FROM_1970_TO_2000: i64 = 946_684_800;
 impl Extractor for PgCdcExtractor {
     async fn extract(&mut self) -> Result<(), Error> {
         log_info!(
-            "PgCdcExtractor starts, slot_name: {}, start_lsn: {}, heartbeat_interval_secs: {}",
+            "PgCdcExtractor starts, slot_name: {}, start_lsn: {}, keepalive_interval_secs: {}, heartbeat_interval_secs: {}, heartbeat_tb: {}",
             self.slot_name,
             self.start_lsn,
-            self.heartbeat_interval_secs
+            self.keepalive_interval_secs,
+            self.heartbeat_interval_secs,
+            self.heartbeat_tb
         );
         self.extract_internal().await.unwrap();
         Ok(())
@@ -81,6 +92,9 @@ impl PgCdcExtractor {
         let (stream, actual_start_lsn) = cdc_client.connect().await?;
         tokio::pin!(stream);
 
+        // start heartbeat
+        self.start_heartbeat().unwrap();
+
         let mut last_tx_end_lsn = actual_start_lsn.clone();
         let mut xid = String::new();
         let mut start_time = Instant::now();
@@ -97,9 +111,8 @@ impl PgCdcExtractor {
 
         // refer: https://www.postgresql.org/docs/10/protocol-replication.html to get WAL data details
         loop {
-            // send a heartbeat to keep alive
-            if start_time.elapsed().as_secs() > self.heartbeat_interval_secs {
-                self.heartbeat(&mut stream, &actual_start_lsn).await?;
+            if start_time.elapsed().as_secs() >= self.keepalive_interval_secs {
+                self.keep_alive_ack(&mut stream, &actual_start_lsn).await?;
                 start_time = Instant::now();
             }
 
@@ -157,7 +170,7 @@ impl PgCdcExtractor {
                 Some(Ok(PrimaryKeepAlive(data))) => {
                     // Send a standby status update and require a keep alive response
                     if data.reply() == 1 {
-                        self.heartbeat(&mut stream, &actual_start_lsn).await?;
+                        self.keep_alive_ack(&mut stream, &actual_start_lsn).await?;
                         start_time = Instant::now();
                     }
                 }
@@ -173,13 +186,13 @@ impl PgCdcExtractor {
         }
     }
 
-    async fn heartbeat(
+    async fn keep_alive_ack(
         &mut self,
         stream: &mut Pin<&mut LogicalReplicationStream>,
         start_lsn: &str,
     ) -> Result<(), Error> {
         let lsn: PgLsn =
-            if let Position::PgCdc { lsn, .. } = &self.syncer.lock().unwrap().checkpoint_position {
+            if let Position::PgCdc { lsn, .. } = &self.syncer.lock().unwrap().committed_position {
                 if lsn.is_empty() {
                     start_lsn.parse().unwrap()
                 } else {
@@ -268,7 +281,7 @@ impl PgCdcExtractor {
             Some(col_values),
         );
 
-        if row_data.tb == self.ddl_command_table {
+        if row_data.tb == self.ddl_command_tb {
             return self.decode_ddl(&row_data, &position).await;
         }
 
@@ -470,5 +483,115 @@ impl PgCdcExtractor {
             Some(f) => f.is_buildin_object(schema, tb),
             None => false,
         }
+    }
+
+    fn start_heartbeat(&self) -> Result<(), Error> {
+        log_info!(
+            "try starting heartbeat, heartbeat_interval_secs: {}, heartbeat_tb: {}, ",
+            self.heartbeat_interval_secs,
+            self.heartbeat_tb
+        );
+
+        if self.heartbeat_interval_secs == 0 || self.heartbeat_tb.is_empty() {
+            log_warn!("heartbeat disabled, heartbeat_tb is empty");
+            return Ok(());
+        }
+
+        let schema_tb = ConfigTokenParser::parse(
+            &self.heartbeat_tb,
+            &vec!['.'],
+            &SqlUtil::get_escape_pairs(&DbType::Pg),
+        );
+        if schema_tb.len() < 2 {
+            log_warn!("heartbeat disabled, heartbeat_tb should be like schema.tb");
+            return Ok(());
+        }
+
+        let (slot_name, heartbeat_interval_secs, syncer, conn_pool) = (
+            self.slot_name.clone(),
+            self.heartbeat_interval_secs,
+            self.syncer.clone(),
+            self.conn_pool.clone(),
+        );
+        let _ = tokio::spawn(async move {
+            let mut start_time = Instant::now();
+            loop {
+                if start_time.elapsed().as_secs() >= heartbeat_interval_secs {
+                    Self::heartbeat(
+                        &slot_name,
+                        &schema_tb[0],
+                        &schema_tb[1],
+                        &syncer,
+                        &conn_pool,
+                    )
+                    .await
+                    .unwrap();
+                    start_time = Instant::now();
+                }
+                TimeUtil::sleep_millis(1000 * heartbeat_interval_secs).await;
+            }
+        });
+        log_info!("heartbeat started");
+        Ok(())
+    }
+
+    async fn heartbeat(
+        slot_name: &str,
+        schema: &str,
+        tb: &str,
+        syncer: &Arc<Mutex<Syncer>>,
+        conn_pool: &Pool<Postgres>,
+    ) -> Result<(), Error> {
+        let (received_lsn, received_timestamp) =
+            if let Position::PgCdc { lsn, timestamp } = &syncer.lock().unwrap().received_position {
+                (lsn.clone(), timestamp.clone())
+            } else {
+                (String::new(), String::new())
+            };
+
+        let (flushed_lsn, flushed_timetimestamp) = if let Position::PgCdc { lsn, timestamp } =
+            &syncer.lock().unwrap().committed_position
+        {
+            (lsn.clone(), timestamp.clone())
+        } else {
+            (String::new(), String::new())
+        };
+
+        // create table ape_dts_heartbeat(
+        //     slot_name character varying(64) not null,
+        //     update_timestamp timestamp without time zone default (now() at time zone 'utc'),
+        //     received_lsn character varying(64),
+        //     received_timestamp character varying(64),
+        //     flushed_lsn character varying(64),
+        //     flushed_timestamp character varying(64),
+        //     primary key(slot_name)
+        // );
+        let sql = format!(
+            r#"INSERT INTO "{}"."{}" (slot_name, update_timestamp, received_lsn, received_timestamp, flushed_lsn, flushed_timestamp) 
+                VALUES ('{}', now(), '{}', '{}', '{}', '{}')
+                ON CONFLICT (slot_name) DO UPDATE 
+                SET update_timestamp = now(),
+                    received_lsn = '{}', 
+                    received_timestamp = '{}',
+                    flushed_lsn = '{}', 
+                    flushed_timestamp = '{}'"#,
+            schema,
+            tb,
+            slot_name,
+            received_lsn,
+            received_timestamp,
+            flushed_lsn,
+            flushed_timetimestamp,
+            received_lsn,
+            received_timestamp,
+            flushed_lsn,
+            flushed_timetimestamp
+        );
+
+        let query: Query<Postgres, PgArguments> = sqlx::query(&sql);
+        if let Err(err) = query.execute(conn_pool).await {
+            log_error!("heartbeat failed: {:?}", err);
+        }
+        Ok(())
     }
 }

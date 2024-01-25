@@ -6,6 +6,7 @@ pub struct SqlUtil {}
 
 const MYSQL_ESCAPE: char = '`';
 const PG_ESCAPE: char = '"';
+const REDIS_ESCAPE: char = '"';
 
 impl SqlUtil {
     pub fn is_escaped(token: &str, escape_pair: &(char, char)) -> bool {
@@ -49,6 +50,7 @@ impl SqlUtil {
         match db_type {
             DbType::Mysql => vec![(MYSQL_ESCAPE, MYSQL_ESCAPE)],
             DbType::Pg => vec![(PG_ESCAPE, PG_ESCAPE)],
+            DbType::Redis => vec![(REDIS_ESCAPE, REDIS_ESCAPE)],
             _ => vec![],
         }
     }
