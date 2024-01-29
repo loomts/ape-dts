@@ -21,15 +21,18 @@ db.tb_2.updateOne({ "age" : "1" }, { "$set": { "name" : "a_1" } });
 db.tb_2.updateOne({ "age" : "2" }, { "$set": { "name" : "b_1" } });
 
 -- set, i
-db.tb_1.updateOne({ "age" : "4" }, { "$set": { "name2" : "d_1" } });
-db.tb_1.updateOne({ "age" : "5" }, { "$set": { "name2" : "e_1" } });
+db.tb_1.updateOne({ "age" : "4" }, { "$set": { "salary" : 100 } });
+db.tb_1.updateOne({ "age" : "5" }, { "$set": { "salary" : 100 } });
 
-db.tb_2.updateOne({ "age" : "1" }, { "$set": { "name2" : "a_1" } });
-db.tb_2.updateOne({ "age" : "2" }, { "$set": { "name2" : "b_1" } });
+db.tb_2.updateOne({ "age" : "1" }, { "$set": { "salary" : 100 } });
+db.tb_2.updateOne({ "age" : "2" }, { "$set": { "salary" : 100 } });
 
 -- unset, d
-db.tb_1.updateOne({ "age" : "4" }, { "$unset": { "name2" : "" } });
-db.tb_1.updateOne({ "age" : "5" }, { "$unset": { "name2" : "" } });
+db.tb_1.updateOne({ "age" : "4" }, { "$unset": { "salary" : "" } });
+db.tb_1.updateOne({ "age" : "5" }, { "$unset": { "salary" : "" } });
+
+-- inc, u
+db.tb_2.updateOne({ "age" : "1" }, { "$inc": { "salary" : 100 } });
 
 -- delete
 db.tb_1.deleteOne({ "name": "a", "age": "1" });
