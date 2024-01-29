@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use async_trait::async_trait;
 use chrono::Utc;
-use dt_common::{error::Error, log_info, utils::rdb_filter::RdbFilter};
+use dt_common::{error::Error, log_error, log_info, utils::rdb_filter::RdbFilter};
 use dt_meta::{
     col_value::ColValue,
     mongo::{mongo_cdc_source::MongoCdcSource, mongo_constant::MongoConstants},
@@ -96,11 +96,43 @@ impl MongoCdcExtractor {
                     row_type = RowType::Update;
                     // for update op log, doc.o contains only diff instead of full doc
                     let after_doc = o.unwrap().as_document().unwrap();
-                    let diff_doc = after_doc.get("diff").unwrap().as_document().unwrap();
-                    let u_doc = diff_doc.get("u").unwrap().as_document().unwrap();
+                    // refer: https://www.mongodb.com/community/forums/t/oplog-update-entry-without-set-and-unset/171771
+                    // https://www.mongodb.com/docs/manual/reference/operator/update/#update-operators-1
+                    // in MongoDB 4.4 and earlier, after_doc contains $set with all new document fields,
+                    // after that, after_doc contains diff with only changed fields.
+                    let diff_doc = if let Some(doc) = after_doc.get("diff") {
+                        let doc = doc.as_document().unwrap();
+                        if let Some(i_doc) = doc.get("i") {
+                            doc! {MongoConstants::SET: i_doc.as_document().unwrap()}
+                        } else if let Some(u_doc) = doc.get("u") {
+                            doc! {MongoConstants::SET: u_doc.as_document().unwrap()}
+                        } else if let Some(d_doc) = doc.get("d") {
+                            doc! {MongoConstants::UNSET: d_doc.as_document().unwrap()}
+                        } else {
+                            doc! {}
+                        }
+                    } else {
+                        if let Some(set_doc) = after_doc.get(MongoConstants::SET) {
+                            doc! {MongoConstants::SET: set_doc.as_document().unwrap()}
+                        } else if let Some(unset_doc) = after_doc.get(MongoConstants::UNSET) {
+                            doc! {MongoConstants::UNSET: unset_doc.as_document().unwrap()}
+                        } else {
+                            doc! {}
+                        }
+                    };
+
+                    if diff_doc.is_empty() {
+                        log_error!(
+                            "update op_log is neither $set nor $unset, ignore, o2: {:?}, o: {:?}",
+                            o2,
+                            o
+                        );
+                        continue;
+                    }
+
                     after.insert(
                         MongoConstants::DIFF_DOC.to_string(),
-                        ColValue::MongoDoc(u_doc.clone()),
+                        ColValue::MongoDoc(diff_doc.clone()),
                     );
                     before.insert(
                         MongoConstants::DOC.to_string(),
@@ -263,6 +295,9 @@ impl MongoCdcExtractor {
             (Some(token), None)
         };
 
+        // refer: https://www.mongodb.com/docs/manual/changeStreams/
+        // Starting in MongoDB 6.0, you can use change stream events to output the version of
+        // a document before and after changes (the document pre- and post-images)
         let stream_options = ChangeStreamOptions::builder()
             .start_at_operation_time(start_timestamp)
             .start_after(resume_token)

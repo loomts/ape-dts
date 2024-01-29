@@ -70,7 +70,10 @@ impl MongoSinker {
                     if let Some(ColValue::MongoDoc(doc)) = after.remove(MongoConstants::DOC) {
                         let query_doc =
                             doc! {MongoConstants::ID: doc.get(MongoConstants::ID).unwrap()};
-                        self.upsert(&collection, query_doc, doc).await.unwrap();
+                        let update_doc = doc! {MongoConstants::SET: doc};
+                        self.upsert(&collection, query_doc, update_doc)
+                            .await
+                            .unwrap();
                     }
                 }
 
@@ -196,10 +199,9 @@ impl MongoSinker {
         query_doc: Document,
         update_doc: Document,
     ) -> Result<(), Error> {
-        let update = doc! {MongoConstants::SET: update_doc};
         let options = UpdateOptions::builder().upsert(true).build();
         collection
-            .update_one(query_doc, update, Some(options))
+            .update_one(query_doc, update_doc, Some(options))
             .await
             .unwrap();
         Ok(())
