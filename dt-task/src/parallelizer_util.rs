@@ -101,9 +101,9 @@ impl ParallelizerUtil {
             }
 
             ParallelType::Redis => {
-                let mut conn = RedisUtil::create_redis_conn(&config.sinker_basic.url).await?;
                 let mut slot_node_map = HashMap::new();
                 if let SinkerConfig::Redis { is_cluster, .. } = config.sinker {
+                    let mut conn = RedisUtil::create_redis_conn(&config.sinker_basic.url).await?;
                     if is_cluster {
                         let (nodes, slots) = RedisUtil::get_cluster_nodes(&mut conn)?;
                         for i in 0..nodes.len() {

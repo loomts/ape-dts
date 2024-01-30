@@ -4,7 +4,7 @@ use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
 use dt_common::error::Error;
 use dt_meta::redis::redis_object::RedisString;
 
-use crate::extractor::redis::RawByteReader;
+use crate::extractor::redis::StreamReader;
 
 use super::rdb_reader::RdbReader;
 
@@ -72,26 +72,26 @@ impl RdbReader<'_> {
         }
 
         // read encoding
-        let first_byte = reader.read_raw(1)?[0];
+        let first_byte = reader.read_bytes(1)?[0];
         let first_2_bits = (first_byte & 0xc0) >> 6; // first 2 bits of encoding
         match first_2_bits {
             ZIP_STR_06B => {
                 let length = (first_byte & 0x3f) as usize; // 0x3f = 00111111
-                let buf = reader.read_raw(length)?;
+                let buf = reader.read_bytes(length)?;
                 return Ok(RedisString::from(buf));
             }
 
             ZIP_STR_14B => {
                 let second_byte = reader.read_u8()?;
                 let length = (((first_byte & 0x3f) as u16) << 8) | second_byte as u16;
-                let buf = reader.read_raw(length as usize)?;
+                let buf = reader.read_bytes(length as usize)?;
                 return Ok(RedisString::from(buf));
             }
 
             ZIP_STR_32B => {
-                let mut buf = reader.read_raw(4)?;
+                let mut buf = reader.read_bytes(4)?;
                 let length = BigEndian::read_u32(&buf);
-                buf = reader.read_raw(length as usize)?;
+                buf = reader.read_bytes(length as usize)?;
                 return Ok(RedisString::from(buf));
             }
 

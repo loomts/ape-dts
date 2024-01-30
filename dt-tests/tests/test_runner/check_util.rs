@@ -1,8 +1,6 @@
 use std::{collections::HashSet, fs::File};
 
-use dt_common::error::Error;
-
-use crate::test_config_util::TestConfigUtil;
+use dt_common::{config::sinker_config::SinkerConfig, error::Error};
 
 use super::base_test_runner::BaseTestRunner;
 
@@ -62,10 +60,12 @@ impl CheckUtil {
             }
         }
 
-        let dst_check_log_dir = base_test_runner
-            .updated_config_fields
-            .get(TestConfigUtil::SINKER_CHECK_LOG_DIR)
-            .unwrap();
+        let dst_check_log_dir = match base_test_runner.get_config().sinker {
+            SinkerConfig::MysqlCheck { check_log_dir, .. }
+            | SinkerConfig::PgCheck { check_log_dir, .. }
+            | SinkerConfig::MongoCheck { check_log_dir, .. } => check_log_dir.clone(),
+            _ => String::new(),
+        };
         (expect_check_log_dir, dst_check_log_dir.into())
     }
 

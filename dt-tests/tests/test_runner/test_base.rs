@@ -11,7 +11,7 @@ use super::{
     precheck_test_runner::PrecheckTestRunner, rdb_check_test_runner::RdbCheckTestRunner,
     rdb_kafka_rdb_test_runner::RdbKafkaRdbTestRunner, rdb_redis_test_runner::RdbRedisTestRunner,
     rdb_struct_test_runner::RdbStructTestRunner, rdb_test_runner::RdbTestRunner,
-    redis_test_runner::RedisTestRunner,
+    redis_statistic_runner::RedisStatisticTestRunner, redis_test_runner::RedisTestRunner,
 };
 
 pub struct TestBase {}
@@ -188,6 +188,11 @@ impl TestBase {
             .run_cdc_test(start_millis, parse_millis)
             .await
             .unwrap();
+    }
+
+    pub async fn run_redis_statistic_test(test_dir: &str) {
+        let mut runner = RedisStatisticTestRunner::new(test_dir).await.unwrap();
+        runner.run_statistic_test().await.unwrap();
     }
 
     pub async fn run_mysql_struct_test(test_dir: &str) {

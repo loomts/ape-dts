@@ -1,17 +1,25 @@
 use super::redis_resp_reader::RedisRespReader;
 use super::redis_resp_types::Value;
+use super::StreamReader;
 use crate::sinker::redis::cmd_encoder::CmdEncoder;
 use async_std::io::BufReader;
 use async_std::net::TcpStream;
 use async_std::prelude::*;
 use dt_common::error::Error;
 use dt_meta::redis::redis_object::RedisCmd;
+use futures::executor::block_on;
 
 use url::Url;
 
 pub struct RedisClient {
     pub url: String,
     stream: BufReader<TcpStream>,
+}
+
+impl StreamReader for RedisClient {
+    fn read_bytes(&mut self, size: usize) -> Result<Vec<u8>, Error> {
+        block_on(self.read_bytes(size))
+    }
 }
 
 impl RedisClient {
@@ -75,7 +83,7 @@ impl RedisClient {
         Ok((value, resp_reader.read_len))
     }
 
-    pub async fn read_raw(&mut self, length: usize) -> Result<Vec<u8>, Error> {
+    pub async fn read_bytes(&mut self, length: usize) -> Result<Vec<u8>, Error> {
         let mut buf = vec![0; length];
         // if length is bigger than buffer size of BufReader, the buf will be filled by 0,
         // so here we must read from inner TcpStream instead of BufReader

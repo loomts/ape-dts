@@ -4,7 +4,7 @@ use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
 use dt_common::error::Error;
 use dt_meta::redis::redis_object::{RedisString, SetObject};
 
-use crate::extractor::redis::{rdb::reader::rdb_reader::RdbReader, RawByteReader};
+use crate::extractor::redis::{rdb::reader::rdb_reader::RdbReader, StreamReader};
 
 pub struct SetLoader {}
 
@@ -46,7 +46,7 @@ impl SetLoader {
         let encoding_type = reader.read_u32::<LittleEndian>()? as usize;
         let size = reader.read_u32::<LittleEndian>()?;
         for _ in 0..size {
-            let buf = reader.read_raw(encoding_type)?;
+            let buf = reader.read_bytes(encoding_type)?;
             let int_str = match encoding_type {
                 2 => LittleEndian::read_i16(&buf).to_string(),
                 4 => LittleEndian::read_i32(&buf).to_string(),

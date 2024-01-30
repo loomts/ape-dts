@@ -1,6 +1,7 @@
 pub mod cmd_encoder;
 pub mod entry_rewriter;
 pub mod redis_sinker;
+pub mod redis_statistic_sinker;
 
 /// redis resp protocol data type
 pub const RESP_STATUS: u8 = b'+'; // +<string>\r\n

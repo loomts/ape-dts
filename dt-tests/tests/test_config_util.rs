@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     env,
     fs::{self, File},
     io::Read,
@@ -223,7 +222,7 @@ impl TestConfigUtil {
         src_task_config_file: &str,
         dst_task_config_file: &str,
         project_root: &str,
-    ) -> HashMap<String, String> {
+    ) {
         let config = TaskConfig::new(&src_task_config_file);
         let mut update_configs = Vec::new();
 
@@ -236,43 +235,60 @@ impl TestConfigUtil {
         update_configs.push((RUNTIME.to_string(), "log_dir".to_string(), log_dir.clone()));
 
         // extractor/check_log_dir
-        let mut extractor_check_log_dir = String::new();
         match config.extractor {
             ExtractorConfig::MysqlCheck { check_log_dir, .. }
             | ExtractorConfig::PgCheck { check_log_dir, .. }
             | ExtractorConfig::MongoCheck { check_log_dir, .. } => {
-                extractor_check_log_dir = format!("{}/{}", project_root, check_log_dir);
+                let extractor_check_log_dir = format!("{}/{}", project_root, check_log_dir);
                 update_configs.push((
                     EXTRACTOR.to_string(),
                     "check_log_dir".to_string(),
-                    extractor_check_log_dir.clone(),
+                    extractor_check_log_dir,
                 ));
             }
+
+            ExtractorConfig::RedisSnapshotFile { file_path } => {
+                let file_path = format!("{}/{}", project_root, file_path);
+                update_configs.push((EXTRACTOR.to_string(), "file_path".to_string(), file_path));
+            }
+
             _ => {}
         }
 
-        // sinker/check_log_dir
-        let mut sinker_check_log_dir = String::new();
         match config.sinker {
+            // sinker/check_log_dir
             SinkerConfig::MysqlCheck { check_log_dir, .. }
             | SinkerConfig::PgCheck { check_log_dir, .. }
             | SinkerConfig::MongoCheck { check_log_dir, .. } => {
-                if let Some(dir) = check_log_dir {
-                    if !dir.is_empty() {
-                        sinker_check_log_dir = format!("{}/{}", project_root, dir);
-                        update_configs.push((
-                            SINKER.to_string(),
-                            "check_log_dir".to_string(),
-                            sinker_check_log_dir.clone(),
-                        ));
-                    }
-                }
+                let sinker_check_log_dir = if !check_log_dir.is_empty() {
+                    format!("{}/{}", project_root, check_log_dir)
+                } else {
+                    format!("{}/check", log_dir)
+                };
+                update_configs.push((
+                    SINKER.to_string(),
+                    "check_log_dir".to_string(),
+                    sinker_check_log_dir,
+                ));
             }
-            _ => {}
-        }
 
-        if sinker_check_log_dir.is_empty() {
-            sinker_check_log_dir = format!("{}/check", log_dir);
+            // sinker/statistic_log_dir
+            SinkerConfig::RedisStatistic {
+                statistic_log_dir, ..
+            } => {
+                let sinker_statistic_log_dir = if !statistic_log_dir.is_empty() {
+                    format!("{}/{}", project_root, statistic_log_dir)
+                } else {
+                    format!("{}/statistic", log_dir)
+                };
+                update_configs.push((
+                    SINKER.to_string(),
+                    "statistic_log_dir".to_string(),
+                    sinker_statistic_log_dir,
+                ));
+            }
+
+            _ => {}
         }
 
         TestConfigUtil::update_task_config(
@@ -280,15 +296,6 @@ impl TestConfigUtil {
             &dst_task_config_file,
             &update_configs,
         );
-
-        let mut updated_config_fields = HashMap::new();
-        updated_config_fields.insert(Self::LOG_DIR.to_string(), log_dir);
-        updated_config_fields.insert(
-            Self::EXTRACTOR_CHECK_LOG_DIR.to_string(),
-            extractor_check_log_dir,
-        );
-        updated_config_fields.insert(Self::SINKER_CHECK_LOG_DIR.to_string(), sinker_check_log_dir);
-        updated_config_fields
     }
 
     pub fn update_task_config(

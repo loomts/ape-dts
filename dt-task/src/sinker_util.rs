@@ -26,7 +26,7 @@ use dt_connector::{
         },
         open_faas_sinker::OpenFaasSinker,
         pg::{pg_checker::PgChecker, pg_sinker::PgSinker, pg_struct_sinker::PgStructSinker},
-        redis::redis_sinker::RedisSinker,
+        redis::{redis_sinker::RedisSinker, redis_statistic_sinker::RedisStatisticSinker},
         starrocks::starrocks_sinker::StarRocksSinker,
     },
     Sinker,
@@ -255,6 +255,18 @@ impl SinkerUtil {
                     meta_manager,
                     monitor,
                     *is_cluster,
+                )
+                .await?
+            }
+
+            SinkerConfig::RedisStatistic {
+                data_size_threshold,
+                ..
+            } => {
+                SinkerUtil::create_redis_statistic_sinker(
+                    task_config.parallelizer.parallel_size,
+                    *data_size_threshold,
+                    monitor,
                 )
                 .await?
             }
@@ -640,6 +652,22 @@ impl SinkerUtil {
             }
         }
 
+        Ok(sub_sinkers)
+    }
+
+    async fn create_redis_statistic_sinker(
+        parallel_size: usize,
+        data_size_threshold: usize,
+        monitor: Arc<Mutex<Monitor>>,
+    ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
+        let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
+        for _ in 0..parallel_size {
+            let sinker = RedisStatisticSinker {
+                data_size_threshold,
+                monitor: monitor.clone(),
+            };
+            sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
+        }
         Ok(sub_sinkers)
     }
 

@@ -2,7 +2,7 @@ use dt_common::{error::Error, log_info};
 use dt_meta::redis::{redis_entry::RedisEntry, redis_object::RedisCmd};
 use sqlx::types::chrono;
 
-use crate::extractor::redis::RawByteReader;
+use crate::extractor::redis::StreamReader;
 
 use super::{entry_parser::entry_parser::EntryParser, reader::rdb_reader::RdbReader};
 
@@ -18,7 +18,7 @@ const K_FLAG_EXPIRE: u8 = 0xfd; // Old expire time in seconds.
 const K_FLAG_SELECT: u8 = 0xfe; // DB number of the following keys.
 const K_EOF: u8 = 0xff; // End of the RDB file.
 
-pub struct RdbLoader<'a> {
+pub struct RdbParser<'a> {
     pub reader: RdbReader<'a>,
     pub repl_stream_db_id: i64,
     pub now_db_id: i64,
@@ -29,17 +29,17 @@ pub struct RdbLoader<'a> {
     pub is_end: bool,
 }
 
-impl RdbLoader<'_> {
+impl RdbParser<'_> {
     pub fn load_meta(&mut self) -> Result<String, Error> {
         // magic
-        let mut buf = self.reader.read_raw(5)?;
+        let mut buf = self.reader.read_bytes(5)?;
         let magic = String::from_utf8(buf).unwrap();
         if magic != "REDIS" {
             return Err(Error::RedisRdbError("invalid rdb format".to_string()));
         }
 
         // version
-        buf = self.reader.read_raw(4)?;
+        buf = self.reader.read_bytes(4)?;
         let version = String::from_utf8(buf).unwrap();
         Ok(version)
     }
@@ -123,7 +123,7 @@ impl RdbLoader<'_> {
             K_EOF => {
                 self.is_end = true;
                 self.reader
-                    .read_raw(self.reader.rdb_length - self.reader.position)?;
+                    .read_bytes(self.reader.rdb_length - self.reader.position)?;
             }
 
             _ => {

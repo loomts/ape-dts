@@ -44,9 +44,11 @@ pub struct TaskRunner {
 }
 
 const CHECK_LOG_DIR_PLACEHODLER: &str = "CHECK_LOG_DIR_PLACEHODLER";
+const STATISTIC_LOG_DIR_PLACEHODLER: &str = "STATISTIC_LOG_DIR_PLACEHODLER";
 const LOG_LEVEL_PLACEHODLER: &str = "LOG_LEVEL_PLACEHODLER";
 const LOG_DIR_PLACEHODLER: &str = "LOG_DIR_PLACEHODLER";
 const DEFAULT_CHECK_LOG_DIR_PLACEHODLER: &str = "LOG_DIR_PLACEHODLER/check";
+const DEFAULT_STATISTIC_LOG_DIR_PLACEHODLER: &str = "LOG_DIR_PLACEHODLER/statistic";
 
 impl TaskRunner {
     pub async fn new(task_config_file: String) -> Self {
@@ -518,6 +520,17 @@ impl TaskRunner {
                 Box::new(extractor)
             }
 
+            ExtractorConfig::RedisSnapshotFile { file_path } => {
+                let filter = RdbFilter::from_config(&self.config.filter, DbType::Redis)?;
+                let extractor = ExtractorUtil::create_redis_snapshot_file_extractor(
+                    base_extractor,
+                    file_path,
+                    filter,
+                )
+                .await?;
+                Box::new(extractor)
+            }
+
             ExtractorConfig::RedisCdc {
                 url,
                 run_id,
@@ -597,17 +610,29 @@ impl TaskRunner {
         match &self.config.sinker {
             SinkerConfig::MysqlCheck { check_log_dir, .. }
             | SinkerConfig::PgCheck { check_log_dir, .. } => {
-                if let Some(dir) = check_log_dir {
-                    if !dir.is_empty() {
-                        config_str = config_str.replace(CHECK_LOG_DIR_PLACEHODLER, dir);
-                    }
+                if !check_log_dir.is_empty() {
+                    config_str = config_str.replace(CHECK_LOG_DIR_PLACEHODLER, check_log_dir);
                 }
             }
+
+            SinkerConfig::RedisStatistic {
+                statistic_log_dir, ..
+            } => {
+                if !statistic_log_dir.is_empty() {
+                    config_str =
+                        config_str.replace(STATISTIC_LOG_DIR_PLACEHODLER, statistic_log_dir);
+                }
+            }
+
             _ => {}
         }
 
         config_str = config_str
             .replace(CHECK_LOG_DIR_PLACEHODLER, DEFAULT_CHECK_LOG_DIR_PLACEHODLER)
+            .replace(
+                STATISTIC_LOG_DIR_PLACEHODLER,
+                DEFAULT_STATISTIC_LOG_DIR_PLACEHODLER,
+            )
             .replace(LOG_DIR_PLACEHODLER, &self.config.runtime.log_dir)
             .replace(LOG_LEVEL_PLACEHODLER, &self.config.runtime.log_level);
 

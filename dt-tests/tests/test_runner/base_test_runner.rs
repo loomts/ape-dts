@@ -5,7 +5,6 @@ use dt_common::{
 };
 use dt_task::task_runner::TaskRunner;
 use std::{
-    collections::HashMap,
     fs::{self, File},
     io::{BufRead, BufReader},
 };
@@ -22,7 +21,6 @@ pub struct BaseTestRunner {
     pub dst_ddl_sqls: Vec<String>,
     pub src_clean_sqls: Vec<String>,
     pub dst_clean_sqls: Vec<String>,
-    pub updated_config_fields: HashMap<String, String>,
 }
 
 static mut LOG4RS_INITED: bool = false;
@@ -48,7 +46,7 @@ impl BaseTestRunner {
         let dst_task_config_file = format!("{}/task_config.ini", tmp_dir);
 
         // update relative path to absolute path in task_config.ini
-        let updated_config_fields = TestConfigUtil::update_task_config_log_dir(
+        TestConfigUtil::update_task_config_log_dir(
             &src_task_config_file,
             &dst_task_config_file,
             &project_root,
@@ -85,8 +83,11 @@ impl BaseTestRunner {
             dst_ddl_sqls,
             src_clean_sqls,
             dst_clean_sqls,
-            updated_config_fields,
         })
+    }
+
+    pub fn get_config(&self) -> TaskConfig {
+        TaskConfig::new(&self.task_config_file)
     }
 
     pub async fn start_task(&self) -> Result<(), Error> {

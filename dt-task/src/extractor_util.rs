@@ -33,6 +33,7 @@ use dt_connector::{
         redis::{
             redis_cdc_extractor::RedisCdcExtractor, redis_client::RedisClient,
             redis_snapshot_extractor::RedisSnapshotExtractor,
+            redis_snapshot_file_extractor::RedisSnapshotFileExtractor,
         },
         snapshot_resumer::SnapshotResumer,
     },
@@ -428,6 +429,18 @@ impl ExtractorUtil {
         Ok(RedisSnapshotExtractor {
             conn,
             repl_port,
+            filter,
+            base_extractor,
+        })
+    }
+
+    pub async fn create_redis_snapshot_file_extractor(
+        base_extractor: BaseExtractor,
+        file_path: &str,
+        filter: RdbFilter,
+    ) -> Result<RedisSnapshotFileExtractor, Error> {
+        Ok(RedisSnapshotFileExtractor {
+            file_path: file_path.to_string(),
             filter,
             base_extractor,
         })

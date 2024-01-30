@@ -8,9 +8,11 @@ use dt_meta::redis::redis_entry::RedisEntry;
 use dt_meta::redis::redis_object::RedisCmd;
 
 use crate::extractor::base_extractor::BaseExtractor;
-use crate::extractor::redis::rdb::rdb_loader::RdbLoader;
+use crate::extractor::redis::rdb::rdb_parser::RdbParser;
 use crate::extractor::redis::rdb::reader::rdb_reader::RdbReader;
 use crate::extractor::redis::redis_resp_types::Value;
+
+use crate::extractor::redis::StreamReader;
 use crate::Extractor;
 
 use super::redis_client::RedisClient;
@@ -87,9 +89,10 @@ impl RedisPsyncExtractor<'_> {
     }
 
     async fn receive_rdb(&mut self) -> Result<(), Error> {
+        let mut stream_reader: Box<&mut (dyn StreamReader + Send)> = Box::new(self.conn);
         // format: \n\n\n$<length>\r\n<rdb>
         loop {
-            let buf = self.conn.read_raw(1).await.unwrap();
+            let buf = stream_reader.read_bytes(1).unwrap();
             if buf[0] == b'\n' {
                 continue;
             }
@@ -102,7 +105,7 @@ impl RedisPsyncExtractor<'_> {
         // length of rdb data
         let mut rdb_length_str = String::new();
         loop {
-            let buf = self.conn.read_raw(1).await.unwrap();
+            let buf = stream_reader.read_bytes(1).unwrap();
             if buf[0] == b'\n' {
                 break;
             }
@@ -113,14 +116,14 @@ impl RedisPsyncExtractor<'_> {
         let rdb_length = rdb_length_str.parse::<usize>().unwrap();
 
         let reader = RdbReader {
-            conn: &mut self.conn,
+            conn: &mut stream_reader,
             rdb_length,
             position: 0,
             copy_raw: false,
             raw_bytes: Vec::new(),
         };
 
-        let mut loader = RdbLoader {
+        let mut parser = RdbParser {
             reader,
             repl_stream_db_id: 0,
             now_db_id: self.now_db_id,
@@ -130,11 +133,11 @@ impl RedisPsyncExtractor<'_> {
             is_end: false,
         };
 
-        let version = loader.load_meta()?;
+        let version = parser.load_meta()?;
         log_info!("source redis version: {:?}", version);
 
         loop {
-            if let Some(entry) = loader.load_entry()? {
+            if let Some(entry) = parser.load_entry()? {
                 self.now_db_id = entry.db_id;
                 Self::push_to_buf(
                     &mut self.base_extractor,
@@ -145,7 +148,7 @@ impl RedisPsyncExtractor<'_> {
                 .await?;
             }
 
-            if loader.is_end {
+            if parser.is_end {
                 log_info!(
                     "end extracting data from rdb, all count: {}",
                     self.base_extractor.monitor.counters.record_count
@@ -165,7 +168,6 @@ impl RedisPsyncExtractor<'_> {
                 self.repl_port
             )
         );
-
         Ok(())
     }
 

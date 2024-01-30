@@ -94,6 +94,10 @@ pub enum ExtractorConfig {
         now_db_id: i64,
     },
 
+    RedisSnapshotFile {
+        file_path: String,
+    },
+
     Kafka {
         url: String,
         group: String,

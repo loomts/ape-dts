@@ -1,7 +1,7 @@
 use dt_common::error::Error;
 use dt_meta::redis::redis_object::RedisString;
 
-use crate::extractor::redis::RawByteReader;
+use crate::extractor::redis::StreamReader;
 
 use super::rdb_reader::RdbReader;
 
@@ -24,7 +24,7 @@ impl RdbReader<'_> {
                 RDB_ENC_LZF => {
                     let in_len = self.read_length()?;
                     let out_len = self.read_length()?;
-                    let in_buf = self.read_raw(in_len as usize)?;
+                    let in_buf = self.read_bytes(in_len as usize)?;
                     self.lzf_decompress(&in_buf, out_len as usize)?
                 }
 
@@ -36,7 +36,7 @@ impl RdbReader<'_> {
                 }
             }
         } else {
-            self.read_raw(len as usize)?
+            self.read_bytes(len as usize)?
         };
         Ok(RedisString { bytes })
     }

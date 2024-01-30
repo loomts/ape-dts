@@ -85,6 +85,12 @@ mod test {
 
     #[tokio::test]
     #[serial]
+    async fn snapshot_statistic_test() {
+        TestBase::run_redis_statistic_test("redis_to_redis/snapshot/7_0/statistic_test").await;
+    }
+
+    #[tokio::test]
+    #[serial]
     async fn snapshot_to_cluster_test() {
         TestBase::run_redis_snapshot_test("redis_to_redis/snapshot/7_0/to_cluster_test").await;
     }

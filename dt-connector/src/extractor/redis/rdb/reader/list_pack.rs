@@ -4,7 +4,7 @@ use byteorder::{LittleEndian, ReadBytesExt};
 use dt_common::error::Error;
 use dt_meta::redis::redis_object::RedisString;
 
-use crate::extractor::redis::RawByteReader;
+use crate::extractor::redis::StreamReader;
 
 use super::rdb_reader::RdbReader;
 
@@ -71,12 +71,12 @@ impl RdbReader<'_> {
             uval = u64::from(first_byte & 0x7f); // 0x7f is 01111111
             negmax = 0;
             negstart = u64::MAX; // 7 bit ints are always positive
-            let _ = reader.read_raw(Self::lp_encode_backlen(1))?; // encode: 1 byte
+            let _ = reader.read_bytes(Self::lp_encode_backlen(1))?; // encode: 1 byte
         } else if (first_byte & LP_ENCODING_6BIT_STR_MASK) == LP_ENCODING_6BIT_STR {
             // 6bit length str
             let length = usize::from(first_byte & 0x3f); // 0x3f is 00111111
-            let ele = reader.read_raw(length)?;
-            let _ = reader.read_raw(Self::lp_encode_backlen(1 + length)); // encode: 1byte, str: length
+            let ele = reader.read_bytes(length)?;
+            let _ = reader.read_bytes(Self::lp_encode_backlen(1 + length)); // encode: 1byte, str: length
 
             let ele = RedisString::from(ele);
             return Ok(ele);
@@ -87,43 +87,43 @@ impl RdbReader<'_> {
             uval = (u64::from(first_byte & 0x1f) << 8) | u64::from(second_byte); // 5bit + 8bit, 0x1f is 00011111
             negstart = (1 as u64) << 12;
             negmax = 8191; // uint13_max
-            let _ = reader.read_raw(Self::lp_encode_backlen(2));
+            let _ = reader.read_bytes(Self::lp_encode_backlen(2));
         } else if (first_byte & LP_ENCODING_16BIT_INT_MASK) == LP_ENCODING_16BIT_INT {
             // 16bit int
             uval = reader.read_u16::<LittleEndian>()? as u64;
             negstart = (1 as u64) << 15;
             negmax = u16::MAX as u64;
-            let _ = reader.read_raw(Self::lp_encode_backlen(2)); // encode: 1byte, int: 2
+            let _ = reader.read_bytes(Self::lp_encode_backlen(2)); // encode: 1byte, int: 2
         } else if (first_byte & LP_ENCODING_24BIT_INT_MASK) == LP_ENCODING_24BIT_INT {
             // 24bit int
             uval = reader.read_u24::<LittleEndian>()? as u64;
             negstart = (1 as u64) << 23;
             negmax = (u32::MAX >> 8) as u64; // uint24_max
-            let _ = reader.read_raw(Self::lp_encode_backlen(1 + 3)); // encode: 1byte, int: 3byte
+            let _ = reader.read_bytes(Self::lp_encode_backlen(1 + 3)); // encode: 1byte, int: 3byte
         } else if (first_byte & LP_ENCODING_32BIT_INT_MASK) == LP_ENCODING_32BIT_INT {
             // 32bit int
             uval = reader.read_u32::<LittleEndian>()? as u64;
             negstart = (1 as u64) << 31;
             negmax = u32::MAX as u64; // uint32_max
-            let _ = reader.read_raw(Self::lp_encode_backlen(1 + 4)); // encode: 1byte, int: 4byte
+            let _ = reader.read_bytes(Self::lp_encode_backlen(1 + 4)); // encode: 1byte, int: 4byte
         } else if (first_byte & LP_ENCODING_64BIT_INT_MASK) == LP_ENCODING_64BIT_INT {
             // 64bit int
             uval = reader.read_u64::<LittleEndian>()?;
             negstart = (1 as u64) << 63;
             negmax = u64::MAX; // uint64_max
-            let _ = reader.read_raw(Self::lp_encode_backlen(1 + 8)); // encode: 1byte, int: 8byte
+            let _ = reader.read_bytes(Self::lp_encode_backlen(1 + 8)); // encode: 1byte, int: 8byte
         } else if (first_byte & LP_ENCODING_12BIT_STR_MASK) == LP_ENCODING_12BIT_STR {
             // 12bit length str
             let second_byte = reader.read_u8()?;
             let length = (((first_byte as usize) & 0x0f) << 8) + second_byte as usize; // 4bit + 8bit
-            let ele = reader.read_raw(length)?;
-            let _ = reader.read_raw(Self::lp_encode_backlen(2 + length)); // encode: 2byte, str: length
+            let ele = reader.read_bytes(length)?;
+            let _ = reader.read_bytes(Self::lp_encode_backlen(2 + length)); // encode: 2byte, str: length
             return Ok(RedisString::from(ele));
         } else if (first_byte & LP_ENCODING_32BIT_STR_MASK) == LP_ENCODING_32BIT_STR {
             // 32bit length str
             let length = reader.read_u32::<LittleEndian>()? as usize;
-            let ele = reader.read_raw(length)?;
-            let _ = reader.read_raw(Self::lp_encode_backlen(5 + length)); // encode: 1byte, length: 4byte, str: length
+            let ele = reader.read_bytes(length)?;
+            let _ = reader.read_bytes(Self::lp_encode_backlen(5 + length)); // encode: 1byte, length: 4byte, str: length
             return Ok(RedisString::from(ele));
         } else {
             // redis use this value, don't know why

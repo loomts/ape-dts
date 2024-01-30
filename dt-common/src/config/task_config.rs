@@ -82,12 +82,17 @@ impl TaskConfig {
         let db_type = DbType::from_str(&ini.get(EXTRACTOR, DB_TYPE).unwrap()).unwrap();
         let extract_type =
             ExtractType::from_str(&ini.get(EXTRACTOR, "extract_type").unwrap()).unwrap();
-        let url = ini.get(EXTRACTOR, URL).unwrap();
+        let url: String = Self::get_value(ini, EXTRACTOR, URL).unwrap();
         let basic = ExtractorBasicConfig {
             db_type: db_type.clone(),
             extract_type: extract_type.clone(),
             url: url.clone(),
         };
+
+        let not_supported_err = Err(Error::ConfigError(format!(
+            "extract type: {} not supported",
+            extract_type
+        )));
 
         let sinker = match db_type {
             DbType::Mysql => match extract_type {
@@ -130,6 +135,8 @@ impl TaskConfig {
                     url,
                     db: String::new(),
                 },
+
+                _ => return not_supported_err,
             },
 
             DbType::Pg => match extract_type {
@@ -179,6 +186,8 @@ impl TaskConfig {
                     url,
                     db: String::new(),
                 },
+
+                _ => return not_supported_err,
             },
 
             DbType::Mongo => match extract_type {
@@ -201,18 +210,17 @@ impl TaskConfig {
                     batch_size: ini.getuint(EXTRACTOR, BATCH_SIZE).unwrap().unwrap() as usize,
                 },
 
-                extract_type => {
-                    return Err(Error::ConfigError(format!(
-                        "extract type: {} not supported",
-                        extract_type
-                    )))
-                }
+                _ => return not_supported_err,
             },
 
             DbType::Redis => {
                 let repl_port = ini.getuint(EXTRACTOR, "repl_port").unwrap().unwrap();
                 match extract_type {
                     ExtractType::Snapshot => ExtractorConfig::RedisSnapshot { url, repl_port },
+
+                    ExtractType::SnapshotFile => ExtractorConfig::RedisSnapshotFile {
+                        file_path: ini.get(EXTRACTOR, "file_path").unwrap(),
+                    },
 
                     ExtractType::Cdc => ExtractorConfig::RedisCdc {
                         url,
@@ -237,12 +245,7 @@ impl TaskConfig {
                         now_db_id: ini.getint(EXTRACTOR, "now_db_id").unwrap().unwrap(),
                     },
 
-                    extract_type => {
-                        return Err(Error::ConfigError(format!(
-                            "extract type: {} not supported",
-                            extract_type
-                        )))
-                    }
+                    _ => return not_supported_err,
                 }
             }
 
@@ -268,7 +271,7 @@ impl TaskConfig {
     fn load_sinker_config(ini: &Ini) -> Result<(SinkerBasicConfig, SinkerConfig), Error> {
         let db_type = DbType::from_str(&ini.get(SINKER, DB_TYPE).unwrap()).unwrap();
         let sink_type = SinkType::from_str(&ini.get(SINKER, "sink_type").unwrap()).unwrap();
-        let url = ini.get(SINKER, URL).unwrap();
+        let url: String = Self::get_value(ini, SINKER, URL).unwrap();
         let batch_size: usize = Self::get_value(ini, SINKER, BATCH_SIZE).unwrap();
 
         let basic = SinkerBasicConfig {
@@ -280,6 +283,11 @@ impl TaskConfig {
         let conflict_policy_str: String = Self::get_value(ini, SINKER, "conflict_policy").unwrap();
         let conflict_policy = ConflictPolicyEnum::from_str(&conflict_policy_str).unwrap();
 
+        let not_supported_err = Err(Error::ConfigError(format!(
+            "sinker db type: {} not supported",
+            db_type
+        )));
+
         let sinker = match db_type {
             DbType::Mysql => match sink_type {
                 SinkType::Write => SinkerConfig::Mysql { url, batch_size },
@@ -287,13 +295,15 @@ impl TaskConfig {
                 SinkType::Check => SinkerConfig::MysqlCheck {
                     url,
                     batch_size,
-                    check_log_dir: ini.get(SINKER, CHECK_LOG_DIR),
+                    check_log_dir: Self::get_value(ini, SINKER, CHECK_LOG_DIR).unwrap(),
                 },
 
                 SinkType::Struct => SinkerConfig::MysqlStruct {
                     url,
                     conflict_policy,
                 },
+
+                _ => return not_supported_err,
             },
 
             DbType::Pg => match sink_type {
@@ -302,13 +312,15 @@ impl TaskConfig {
                 SinkType::Check => SinkerConfig::PgCheck {
                     url,
                     batch_size,
-                    check_log_dir: ini.get(SINKER, CHECK_LOG_DIR),
+                    check_log_dir: Self::get_value(ini, SINKER, CHECK_LOG_DIR).unwrap(),
                 },
 
                 SinkType::Struct => SinkerConfig::PgStruct {
                     url,
                     conflict_policy,
                 },
+
+                _ => return not_supported_err,
             },
 
             DbType::Mongo => match sink_type {
@@ -317,15 +329,10 @@ impl TaskConfig {
                 SinkType::Check => SinkerConfig::MongoCheck {
                     url,
                     batch_size,
-                    check_log_dir: ini.get(SINKER, CHECK_LOG_DIR),
+                    check_log_dir: Self::get_value(ini, SINKER, CHECK_LOG_DIR).unwrap(),
                 },
 
-                _ => {
-                    return Err(Error::ConfigError(format!(
-                        "sinker db type: {} not supported",
-                        db_type
-                    )))
-                }
+                _ => return not_supported_err,
             },
 
             DbType::Kafka => SinkerConfig::Kafka {
@@ -350,11 +357,21 @@ impl TaskConfig {
                 root_dir: ini.get(SINKER, "root_dir").unwrap(),
             },
 
-            DbType::Redis => SinkerConfig::Redis {
-                url,
-                batch_size,
-                method: Self::get_value(ini, SINKER, "method").unwrap(),
-                is_cluster: Self::get_value(ini, SINKER, "is_cluster").unwrap(),
+            DbType::Redis => match sink_type {
+                SinkType::Write => SinkerConfig::Redis {
+                    url,
+                    batch_size,
+                    method: Self::get_value(ini, SINKER, "method").unwrap(),
+                    is_cluster: Self::get_value(ini, SINKER, "is_cluster").unwrap(),
+                },
+
+                SinkType::Statistic => SinkerConfig::RedisStatistic {
+                    data_size_threshold: Self::get_value(ini, SINKER, "data_size_threshold")
+                        .unwrap(),
+                    statistic_log_dir: Self::get_value(ini, SINKER, "statistic_log_dir").unwrap(),
+                },
+
+                _ => return not_supported_err,
             },
 
             DbType::StarRocks => SinkerConfig::Starrocks {
@@ -503,7 +520,9 @@ impl TaskConfig {
         <T as FromStr>::Err: Debug,
     {
         if let Some(value) = ini.get(section, key) {
-            return value.parse::<T>();
+            if !value.is_empty() {
+                return value.parse::<T>();
+            }
         }
         Ok(default)
     }

@@ -20,19 +20,19 @@ pub enum SinkerConfig {
     MysqlCheck {
         url: String,
         batch_size: usize,
-        check_log_dir: Option<String>,
+        check_log_dir: String,
     },
 
     PgCheck {
         url: String,
         batch_size: usize,
-        check_log_dir: Option<String>,
+        check_log_dir: String,
     },
 
     MongoCheck {
         url: String,
         batch_size: usize,
-        check_log_dir: Option<String>,
+        check_log_dir: String,
     },
 
     MysqlStruct {
@@ -72,6 +72,11 @@ pub enum SinkerConfig {
         batch_size: usize,
         method: String,
         is_cluster: bool,
+    },
+
+    RedisStatistic {
+        data_size_threshold: usize,
+        statistic_log_dir: String,
     },
 
     Starrocks {

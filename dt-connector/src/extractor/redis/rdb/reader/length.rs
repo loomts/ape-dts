@@ -1,4 +1,4 @@
-use crate::extractor::redis::RawByteReader;
+use crate::extractor::redis::StreamReader;
 
 use super::rdb_reader::RdbReader;
 use byteorder::{BigEndian, ByteOrder};
@@ -38,13 +38,13 @@ impl RdbReader<'_> {
 
             RDB_32_OR_64_BIT_LEN => match first_byte {
                 RDB_32_BIT_LEN => {
-                    let next_bytes = self.read_raw(4)?;
+                    let next_bytes = self.read_bytes(4)?;
                     let len = BigEndian::read_u32(&next_bytes) as u64;
                     Ok((len, false))
                 }
 
                 RDB_64_BIT_LEN => {
-                    let next_bytes = self.read_raw(8)?;
+                    let next_bytes = self.read_bytes(8)?;
                     let len = BigEndian::read_u64(&next_bytes) as u64;
                     Ok((len, false))
                 }
