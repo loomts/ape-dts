@@ -19,6 +19,7 @@ pub struct RedisStatisticSinker {
 #[derive(Serialize)]
 struct StatisticInfo {
     db_id: i64,
+    entry_type: String,
     key: String,
     data_size: usize,
 }
@@ -31,6 +32,7 @@ impl Sinker for RedisStatisticSinker {
                 if entry.get_data_malloc_size() >= self.data_size_threshold {
                     let info = StatisticInfo {
                         db_id: entry.db_id,
+                        entry_type: entry.get_type(),
                         key: entry.key.to_string(),
                         data_size: entry.get_data_malloc_size(),
                     };
