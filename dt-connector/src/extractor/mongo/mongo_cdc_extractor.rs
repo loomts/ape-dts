@@ -1,19 +1,29 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 
 use async_trait::async_trait;
 use chrono::Utc;
-use dt_common::{error::Error, log_error, log_info, utils::rdb_filter::RdbFilter};
+use dt_common::{
+    config::config_enums::DbType,
+    error::Error,
+    log_error, log_info,
+    utils::{rdb_filter::RdbFilter, time_util::TimeUtil},
+};
 use dt_meta::{
     col_value::ColValue,
     mongo::{mongo_cdc_source::MongoCdcSource, mongo_constant::MongoConstants},
     position::Position,
     row_data::RowData,
     row_type::RowType,
+    syncer::Syncer,
 };
 use mongodb::{
     bson::{doc, Bson, Document, Timestamp},
     change_stream::event::{OperationType, ResumeToken},
-    options::{ChangeStreamOptions, FullDocumentBeforeChangeType, FullDocumentType},
+    options::{ChangeStreamOptions, FullDocumentBeforeChangeType, FullDocumentType, UpdateOptions},
     Client,
 };
 use serde_json::json;
@@ -29,6 +39,10 @@ pub struct MongoCdcExtractor {
     pub start_timestamp: u32,
     pub source: MongoCdcSource,
     pub mongo_client: Client,
+    pub app_name: String,
+    pub heartbeat_interval_secs: u64,
+    pub heartbeat_tb: String,
+    pub syncer: Arc<Mutex<Syncer>>,
 }
 
 #[async_trait]
@@ -40,6 +54,9 @@ impl Extractor for MongoCdcExtractor {
             self.start_timestamp,
             self.source,
         );
+
+        // start heartbeat
+        self.start_heartbeat().unwrap();
 
         match self.source {
             MongoCdcSource::OpLog => self.extract_oplog().await,
@@ -404,5 +421,98 @@ impl MongoCdcExtractor {
             Utc::now().timestamp() as u32
         };
         Timestamp { time, increment: 0 }
+    }
+
+    fn start_heartbeat(&self) -> Result<(), Error> {
+        let db_tb = self.base_extractor.precheck_heartbeat(
+            self.heartbeat_interval_secs,
+            &self.heartbeat_tb,
+            DbType::Mongo,
+        );
+        if db_tb.len() != 2 {
+            return Ok(());
+        }
+
+        let (app_name, heartbeat_interval_secs, syncer, mongo_client) = (
+            self.app_name.clone(),
+            self.heartbeat_interval_secs,
+            self.syncer.clone(),
+            self.mongo_client.clone(),
+        );
+
+        let _ = tokio::spawn(async move {
+            let mut start_time = Instant::now();
+            loop {
+                if start_time.elapsed().as_secs() >= heartbeat_interval_secs {
+                    Self::heartbeat(&app_name, &db_tb[0], &db_tb[1], &syncer, &mongo_client)
+                        .await
+                        .unwrap();
+                    start_time = Instant::now();
+                }
+                TimeUtil::sleep_millis(1000 * heartbeat_interval_secs).await;
+            }
+        });
+        log_info!("heartbeat started");
+        Ok(())
+    }
+
+    async fn heartbeat(
+        app_name: &str,
+        db: &str,
+        tb: &str,
+        syncer: &Arc<Mutex<Syncer>>,
+        client: &Client,
+    ) -> Result<(), Error> {
+        let (received_resume_token, received_operation_time, received_timestamp) =
+            if let Position::MongoCdc {
+                resume_token,
+                operation_time,
+                timestamp,
+            } = &syncer.lock().unwrap().received_position
+            {
+                (
+                    resume_token.to_owned(),
+                    *operation_time,
+                    timestamp.to_owned(),
+                )
+            } else {
+                (String::new(), 0, String::new())
+            };
+        let (committed_resume_token, committed_operation_time, committed_timestamp) =
+            if let Position::MongoCdc {
+                resume_token,
+                operation_time,
+                timestamp,
+            } = &syncer.lock().unwrap().committed_position
+            {
+                (
+                    resume_token.to_owned(),
+                    *operation_time,
+                    timestamp.to_owned(),
+                )
+            } else {
+                (String::new(), 0, String::new())
+            };
+
+        let query_doc = doc! {MongoConstants::ID: app_name };
+        let update_doc = doc! {MongoConstants::SET: doc! {MongoConstants::ID: app_name,
+            "update_timestamp": Position::format_timestamp_millis(Utc::now().timestamp() * 1000),
+            "received_resume_token": received_resume_token,
+            "received_operation_time": received_operation_time,
+            "received_timestamp": received_timestamp,
+            "committed_resume_token": committed_resume_token,
+            "committed_operation_time": committed_operation_time,
+            "committed_timestamp": committed_timestamp,
+        }};
+
+        let collection = client.database(db).collection::<Document>(tb);
+        let options = UpdateOptions::builder().upsert(true).build();
+        if let Err(err) = collection
+            .update_one(query_doc, update_doc, Some(options))
+            .await
+        {
+            log_error!("heartbeat failed: {:?}", err);
+        }
+        Ok(())
     }
 }

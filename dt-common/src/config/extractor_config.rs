@@ -60,20 +60,25 @@ pub enum ExtractorConfig {
 
     MongoSnapshot {
         url: String,
+        app_name: String,
         db: String,
         tb: String,
     },
 
     MongoCdc {
         url: String,
+        app_name: String,
         resume_token: String,
         start_timestamp: u32,
         // op_log, change_stream
         source: String,
+        heartbeat_interval_secs: u64,
+        heartbeat_tb: String,
     },
 
     MongoCheck {
         url: String,
+        app_name: String,
         check_log_dir: String,
         batch_size: usize,
     },

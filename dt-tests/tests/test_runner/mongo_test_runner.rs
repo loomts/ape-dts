@@ -43,17 +43,26 @@ impl MongoTestRunner {
 
         let config = TaskConfig::new(&base.task_config_file);
         match config.extractor {
-            ExtractorConfig::MongoSnapshot { url, .. }
-            | ExtractorConfig::MongoCdc { url, .. }
-            | ExtractorConfig::MongoCheck { url, .. } => {
-                src_mongo_client = Some(TaskUtil::create_mongo_client(&url).await.unwrap());
+            ExtractorConfig::MongoSnapshot { url, app_name, .. }
+            | ExtractorConfig::MongoCdc { url, app_name, .. }
+            | ExtractorConfig::MongoCheck { url, app_name, .. } => {
+                src_mongo_client = Some(
+                    TaskUtil::create_mongo_client(&url, &app_name)
+                        .await
+                        .unwrap(),
+                );
             }
             _ => {}
         }
 
         match config.sinker {
-            SinkerConfig::Mongo { url, .. } | SinkerConfig::MongoCheck { url, .. } => {
-                dst_mongo_client = Some(TaskUtil::create_mongo_client(&url).await.unwrap());
+            SinkerConfig::Mongo { url, app_name, .. }
+            | SinkerConfig::MongoCheck { url, app_name, .. } => {
+                dst_mongo_client = Some(
+                    TaskUtil::create_mongo_client(&url, &app_name)
+                        .await
+                        .unwrap(),
+                );
             }
             _ => {}
         }
@@ -180,6 +189,34 @@ impl MongoTestRunner {
         Ok(())
     }
 
+    pub async fn run_heartbeat_test(
+        &self,
+        start_millis: u64,
+        _parse_millis: u64,
+    ) -> Result<(), Error> {
+        self.execute_prepare_sqls().await?;
+
+        let config = TaskConfig::new(&self.base.task_config_file);
+        let (db, tb) = match config.extractor {
+            ExtractorConfig::MongoCdc { heartbeat_tb, .. } => {
+                let tokens: Vec<&str> = heartbeat_tb.split(".").collect();
+                (tokens[0].to_string(), tokens[1].to_string())
+            }
+            _ => (String::new(), String::new()),
+        };
+
+        let src_data = self.fetch_data(&db, &tb, SRC).await;
+        assert!(src_data.is_empty());
+
+        let task = self.base.spawn_task().await?;
+        TimeUtil::sleep_millis(start_millis).await;
+
+        let src_data = self.fetch_data(&db, &tb, SRC).await;
+        assert_eq!(src_data.len(), 1);
+
+        self.base.wait_task_finish(&task).await
+    }
+
     pub async fn execute_prepare_sqls(&self) -> Result<(), Error> {
         let src_mongo_client = self.src_mongo_client.as_ref().unwrap();
         let dst_mongo_client = self.dst_mongo_client.as_ref().unwrap();
@@ -222,10 +259,11 @@ impl MongoTestRunner {
         sqls: &Vec<String>,
     ) -> Result<(), Error> {
         for sql in sqls.iter() {
-            if sql.contains("drop") {
+            if sql.contains("dropDatabase") {
+                self.execute_drop_database(client, &db).await.unwrap();
+            } else if sql.contains("drop") {
                 self.execute_drop(client, &db, sql).await.unwrap();
-            }
-            if sql.contains("createCollection") {
+            } else if sql.contains("createCollection") {
                 self.execute_create(client, &db, sql).await.unwrap();
             }
         }
@@ -269,6 +307,11 @@ impl MongoTestRunner {
             .drop(None)
             .await
             .unwrap();
+        Ok(())
+    }
+
+    async fn execute_drop_database(&self, client: &Client, db: &str) -> Result<(), Error> {
+        client.database(db).drop(None).await.unwrap();
         Ok(())
     }
 

@@ -39,4 +39,10 @@ mod test {
     async fn cdc_route_test() {
         TestBase::run_mongo_cdc_test("mongo_to_mongo/cdc/route_test", 3000, 3000).await;
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn cdc_heartbeat_test() {
+        TestBase::run_mongo_heartbeat_test("mongo_to_mongo/cdc/heartbeat_test", 3000, 3000).await;
+    }
 }

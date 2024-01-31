@@ -1,7 +1,6 @@
 use test_db_1
 
-db.tb_1.drop()
-db.tb_2.drop()
+db.dropDatabase();
 
 db.createCollection("tb_1");
 db.createCollection("tb_2");

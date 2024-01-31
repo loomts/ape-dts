@@ -8,7 +8,12 @@ use std::{
 
 use concurrent_queue::ConcurrentQueue;
 
-use dt_common::{error::Error, log_error, utils::time_util::TimeUtil};
+use dt_common::{
+    config::{config_enums::DbType, config_token_parser::ConfigTokenParser},
+    error::Error,
+    log_error, log_info, log_warn,
+    utils::{sql_util::SqlUtil, time_util::TimeUtil},
+};
 use dt_meta::{
     col_value::ColValue,
     ddl_data::DdlData,
@@ -121,6 +126,36 @@ impl BaseExtractor {
         }
 
         Ok(ddl_data)
+    }
+
+    pub fn precheck_heartbeat(
+        &self,
+        heartbeat_interval_secs: u64,
+        heartbeat_tb: &str,
+        db_type: DbType,
+    ) -> Vec<String> {
+        log_info!(
+            "try starting heartbeat, heartbeat_interval_secs: {}, heartbeat_tb: {}, ",
+            heartbeat_interval_secs,
+            heartbeat_tb
+        );
+
+        if heartbeat_interval_secs == 0 || heartbeat_tb.is_empty() {
+            log_warn!("heartbeat disabled, heartbeat_tb is empty");
+            return vec![];
+        }
+
+        let db_tb = ConfigTokenParser::parse(
+            heartbeat_tb,
+            &vec!['.'],
+            &SqlUtil::get_escape_pairs(&db_type),
+        );
+
+        if db_tb.len() < 2 {
+            log_warn!("heartbeat disabled, heartbeat_tb should be like db.tb or schema.tb");
+            return vec![];
+        }
+        db_tb
     }
 
     pub async fn wait_task_finish(&mut self) -> Result<(), Error> {

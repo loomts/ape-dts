@@ -50,6 +50,8 @@ const ASTRISK: &str = "*";
 const HEARTBEAT_INTERVAL_SECS: &str = "heartbeat_interval_secs";
 const KEEPALIVE_INTERVAL_SECS: &str = "keepalive_interval_secs";
 const HEARTBEAT_TB: &str = "heartbeat_tb";
+const APP_NAME: &str = "app_name";
+const APE_DTS: &str = "APE_DTS";
 
 impl TaskConfig {
     pub fn new(task_config_file: &str) -> Self {
@@ -83,6 +85,12 @@ impl TaskConfig {
         let extract_type =
             ExtractType::from_str(&ini.get(EXTRACTOR, "extract_type").unwrap()).unwrap();
         let url: String = Self::get_value(ini, EXTRACTOR, URL).unwrap();
+        let heartbeat_interval_secs: u64 =
+            Self::get_value_with_default(ini, EXTRACTOR, HEARTBEAT_INTERVAL_SECS, 10).unwrap();
+        let keepalive_interval_secs: u64 =
+            Self::get_value_with_default(ini, EXTRACTOR, KEEPALIVE_INTERVAL_SECS, 10).unwrap();
+        let heartbeat_tb = Self::get_value(ini, EXTRACTOR, HEARTBEAT_TB).unwrap();
+
         let basic = ExtractorBasicConfig {
             db_type: db_type.clone(),
             extract_type: extract_type.clone(),
@@ -115,14 +123,8 @@ impl TaskConfig {
                     binlog_position: ini.getuint(EXTRACTOR, "binlog_position").unwrap().unwrap()
                         as u32,
                     server_id: ini.getuint(EXTRACTOR, "server_id").unwrap().unwrap(),
-                    heartbeat_interval_secs: Self::get_value_with_default(
-                        ini,
-                        EXTRACTOR,
-                        HEARTBEAT_INTERVAL_SECS,
-                        10,
-                    )
-                    .unwrap(),
-                    heartbeat_tb: Self::get_value(ini, EXTRACTOR, HEARTBEAT_TB).unwrap(),
+                    heartbeat_interval_secs,
+                    heartbeat_tb,
                 },
 
                 ExtractType::CheckLog => ExtractorConfig::MysqlCheck {
@@ -158,21 +160,9 @@ impl TaskConfig {
                     slot_name: ini.get(EXTRACTOR, "slot_name").unwrap(),
                     pub_name: Self::get_value(ini, EXTRACTOR, "pub_name").unwrap(),
                     start_lsn: ini.get(EXTRACTOR, "start_lsn").unwrap(),
-                    keepalive_interval_secs: Self::get_value_with_default(
-                        ini,
-                        EXTRACTOR,
-                        KEEPALIVE_INTERVAL_SECS,
-                        10,
-                    )
-                    .unwrap(),
-                    heartbeat_interval_secs: Self::get_value_with_default(
-                        ini,
-                        EXTRACTOR,
-                        HEARTBEAT_INTERVAL_SECS,
-                        10,
-                    )
-                    .unwrap(),
-                    heartbeat_tb: Self::get_value(ini, EXTRACTOR, HEARTBEAT_TB).unwrap(),
+                    keepalive_interval_secs,
+                    heartbeat_interval_secs,
+                    heartbeat_tb,
                     ddl_command_tb: Self::get_value(ini, EXTRACTOR, "ddl_command_tb").unwrap(),
                 },
 
@@ -190,28 +180,39 @@ impl TaskConfig {
                 _ => return not_supported_err,
             },
 
-            DbType::Mongo => match extract_type {
-                ExtractType::Snapshot => ExtractorConfig::MongoSnapshot {
-                    url,
-                    db: String::new(),
-                    tb: String::new(),
-                },
+            DbType::Mongo => {
+                let app_name: String =
+                    Self::get_value_with_default(ini, EXTRACTOR, APP_NAME, APE_DTS.to_string())
+                        .unwrap();
+                match extract_type {
+                    ExtractType::Snapshot => ExtractorConfig::MongoSnapshot {
+                        url,
+                        app_name,
+                        db: String::new(),
+                        tb: String::new(),
+                    },
 
-                ExtractType::Cdc => ExtractorConfig::MongoCdc {
-                    url,
-                    resume_token: Self::get_value(ini, EXTRACTOR, "resume_token").unwrap(),
-                    start_timestamp: Self::get_value(ini, EXTRACTOR, "start_timestamp").unwrap(),
-                    source: Self::get_value(ini, EXTRACTOR, "source").unwrap(),
-                },
+                    ExtractType::Cdc => ExtractorConfig::MongoCdc {
+                        url,
+                        app_name,
+                        resume_token: Self::get_value(ini, EXTRACTOR, "resume_token").unwrap(),
+                        start_timestamp: Self::get_value(ini, EXTRACTOR, "start_timestamp")
+                            .unwrap(),
+                        source: Self::get_value(ini, EXTRACTOR, "source").unwrap(),
+                        heartbeat_interval_secs,
+                        heartbeat_tb,
+                    },
 
-                ExtractType::CheckLog => ExtractorConfig::MongoCheck {
-                    url,
-                    check_log_dir: ini.get(EXTRACTOR, CHECK_LOG_DIR).unwrap(),
-                    batch_size: ini.getuint(EXTRACTOR, BATCH_SIZE).unwrap().unwrap() as usize,
-                },
+                    ExtractType::CheckLog => ExtractorConfig::MongoCheck {
+                        url,
+                        app_name,
+                        check_log_dir: ini.get(EXTRACTOR, CHECK_LOG_DIR).unwrap(),
+                        batch_size: ini.getuint(EXTRACTOR, BATCH_SIZE).unwrap().unwrap() as usize,
+                    },
 
-                _ => return not_supported_err,
-            },
+                    _ => return not_supported_err,
+                }
+            }
 
             DbType::Redis => {
                 let repl_port = ini.getuint(EXTRACTOR, "repl_port").unwrap().unwrap();
@@ -227,20 +228,8 @@ impl TaskConfig {
                         repl_port,
                         run_id: ini.get(EXTRACTOR, "run_id").unwrap(),
                         repl_offset: ini.getuint(EXTRACTOR, "repl_offset").unwrap().unwrap(),
-                        keepalive_interval_secs: Self::get_value_with_default(
-                            ini,
-                            EXTRACTOR,
-                            KEEPALIVE_INTERVAL_SECS,
-                            10,
-                        )
-                        .unwrap(),
-                        heartbeat_interval_secs: Self::get_value_with_default(
-                            ini,
-                            EXTRACTOR,
-                            HEARTBEAT_INTERVAL_SECS,
-                            10,
-                        )
-                        .unwrap(),
+                        keepalive_interval_secs,
+                        heartbeat_interval_secs,
                         heartbeat_key: Self::get_value(ini, EXTRACTOR, "heartbeat_key").unwrap(),
                         now_db_id: ini.getint(EXTRACTOR, "now_db_id").unwrap().unwrap(),
                     },
@@ -323,17 +312,27 @@ impl TaskConfig {
                 _ => return not_supported_err,
             },
 
-            DbType::Mongo => match sink_type {
-                SinkType::Write => SinkerConfig::Mongo { url, batch_size },
+            DbType::Mongo => {
+                let app_name: String =
+                    Self::get_value_with_default(ini, SINKER, APP_NAME, APE_DTS.to_string())
+                        .unwrap();
+                match sink_type {
+                    SinkType::Write => SinkerConfig::Mongo {
+                        url,
+                        app_name,
+                        batch_size,
+                    },
 
-                SinkType::Check => SinkerConfig::MongoCheck {
-                    url,
-                    batch_size,
-                    check_log_dir: Self::get_value(ini, SINKER, CHECK_LOG_DIR).unwrap(),
-                },
+                    SinkType::Check => SinkerConfig::MongoCheck {
+                        url,
+                        app_name,
+                        batch_size,
+                        check_log_dir: Self::get_value(ini, SINKER, CHECK_LOG_DIR).unwrap(),
+                    },
 
-                _ => return not_supported_err,
-            },
+                    _ => return not_supported_err,
+                }
+            }
 
             DbType::Kafka => SinkerConfig::Kafka {
                 url,

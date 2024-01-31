@@ -130,6 +130,14 @@ impl TestBase {
             .unwrap();
     }
 
+    pub async fn run_mongo_heartbeat_test(test_dir: &str, start_millis: u64, parse_millis: u64) {
+        let runner = MongoTestRunner::new(test_dir).await.unwrap();
+        runner
+            .run_heartbeat_test(start_millis, parse_millis)
+            .await
+            .unwrap();
+    }
+
     pub async fn run_mongo_check_test(test_dir: &str) {
         let runner = MongoCheckTestRunner::new(test_dir).await.unwrap();
         runner.run_check_test().await.unwrap();

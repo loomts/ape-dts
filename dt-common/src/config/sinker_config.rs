@@ -14,6 +14,7 @@ pub enum SinkerConfig {
 
     Mongo {
         url: String,
+        app_name: String,
         batch_size: usize,
     },
 
@@ -31,6 +32,7 @@ pub enum SinkerConfig {
 
     MongoCheck {
         url: String,
+        app_name: String,
         batch_size: usize,
         check_log_dir: String,
     },

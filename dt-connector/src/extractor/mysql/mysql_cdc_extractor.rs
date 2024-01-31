@@ -21,10 +21,10 @@ use mysql_binlog_connector_rust::{
 };
 
 use dt_common::{
-    config::{config_enums::DbType, config_token_parser::ConfigTokenParser},
+    config::config_enums::DbType,
     error::Error,
-    log_error, log_info, log_warn,
-    utils::{rdb_filter::RdbFilter, sql_util::SqlUtil, time_util::TimeUtil},
+    log_error, log_info,
+    utils::{rdb_filter::RdbFilter, time_util::TimeUtil},
 };
 
 use crate::{
@@ -313,24 +313,12 @@ impl MysqlCdcExtractor {
     }
 
     fn start_heartbeat(&self) -> Result<(), Error> {
-        log_info!(
-            "try starting heartbeat, heartbeat_interval_secs: {}, heartbeat_tb: {}, ",
+        let db_tb = self.base_extractor.precheck_heartbeat(
             self.heartbeat_interval_secs,
-            self.heartbeat_tb
-        );
-
-        if self.heartbeat_interval_secs == 0 || self.heartbeat_tb.is_empty() {
-            log_warn!("heartbeat disabled, heartbeat_tb is empty");
-            return Ok(());
-        }
-
-        let db_tb = ConfigTokenParser::parse(
             &self.heartbeat_tb,
-            &vec!['.'],
-            &SqlUtil::get_escape_pairs(&DbType::Mysql),
+            DbType::Pg,
         );
-        if db_tb.len() < 2 {
-            log_warn!("heartbeat disabled, heartbeat_tb should be like db.tb");
+        if db_tb.len() != 2 {
             return Ok(());
         }
 
