@@ -5,8 +5,8 @@ use dt_common::{
     error::Error,
 };
 use dt_meta::{
-    mongo::mongo_constant::MongoConstants, mysql::mysql_meta_manager::MysqlMetaManager,
-    pg::pg_meta_manager::PgMetaManager, rdb_meta_manager::RdbMetaManager,
+    mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
+    rdb_meta_manager::RdbMetaManager,
 };
 use mongodb::options::ClientOptions;
 use sqlx::{
@@ -121,10 +121,10 @@ impl TaskUtil {
         PgMetaManager::new(conn_pool.clone()).init().await
     }
 
-    pub async fn create_mongo_client(url: &str) -> Result<mongodb::Client, Error> {
+    pub async fn create_mongo_client(url: &str, app_name: &str) -> Result<mongodb::Client, Error> {
         let mut client_options = ClientOptions::parse_async(url).await.unwrap();
         // app_name only for debug usage
-        client_options.app_name = Some(MongoConstants::APP_NAME.to_string());
+        client_options.app_name = Some(app_name.to_string());
         client_options.direct_connection = Some(true);
         Ok(mongodb::Client::with_options(client_options).unwrap())
     }

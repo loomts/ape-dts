@@ -147,13 +147,13 @@ impl ExtractorUtil {
     }
 
     async fn list_mongo_dbs(url: &str) -> Result<Vec<String>, Error> {
-        let client = TaskUtil::create_mongo_client(url).await.unwrap();
+        let client = TaskUtil::create_mongo_client(url, "").await.unwrap();
         let dbs = client.list_database_names(None, None).await.unwrap();
         Ok(dbs)
     }
 
     async fn list_mongo_tbs(url: &str, db: &str) -> Result<Vec<String>, Error> {
-        let client = TaskUtil::create_mongo_client(url).await.unwrap();
+        let client = TaskUtil::create_mongo_client(url, "").await.unwrap();
         let tbs = client
             .database(db)
             .list_collection_names(None)
@@ -332,11 +332,12 @@ impl ExtractorUtil {
     pub async fn create_mongo_snapshot_extractor(
         base_extractor: BaseExtractor,
         url: &str,
+        app_name: &str,
         db: &str,
         tb: &str,
         resumer: SnapshotResumer,
     ) -> Result<MongoSnapshotExtractor, Error> {
-        let mongo_client = TaskUtil::create_mongo_client(url).await.unwrap();
+        let mongo_client = TaskUtil::create_mongo_client(url, app_name).await.unwrap();
         Ok(MongoSnapshotExtractor {
             resumer,
             db: db.to_string(),
@@ -349,29 +350,38 @@ impl ExtractorUtil {
     pub async fn create_mongo_cdc_extractor(
         base_extractor: BaseExtractor,
         url: &str,
+        app_name: &str,
         resume_token: &str,
         start_timestamp: &u32,
         source: &str,
         filter: RdbFilter,
+        heartbeat_interval_secs: u64,
+        heartbeat_tb: &str,
+        syncer: Arc<Mutex<Syncer>>,
     ) -> Result<MongoCdcExtractor, Error> {
-        let mongo_client = TaskUtil::create_mongo_client(url).await.unwrap();
+        let mongo_client = TaskUtil::create_mongo_client(url, app_name).await.unwrap();
         Ok(MongoCdcExtractor {
             filter,
             resume_token: resume_token.to_string(),
             start_timestamp: *start_timestamp,
             source: MongoCdcSource::from_str(source)?,
             mongo_client,
+            app_name: app_name.to_string(),
             base_extractor,
+            heartbeat_interval_secs,
+            heartbeat_tb: heartbeat_tb.to_string(),
+            syncer,
         })
     }
 
     pub async fn create_mongo_check_extractor(
         base_extractor: BaseExtractor,
         url: &str,
+        app_name: &str,
         check_log_dir: &str,
         batch_size: usize,
     ) -> Result<MongoCheckExtractor, Error> {
-        let mongo_client = TaskUtil::create_mongo_client(url).await.unwrap();
+        let mongo_client = TaskUtil::create_mongo_client(url, app_name).await.unwrap();
         Ok(MongoCheckExtractor {
             mongo_client,
             check_log_dir: check_log_dir.to_string(),

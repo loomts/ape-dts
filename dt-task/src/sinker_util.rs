@@ -122,10 +122,15 @@ impl SinkerUtil {
                 .await?
             }
 
-            SinkerConfig::Mongo { url, batch_size } => {
+            SinkerConfig::Mongo {
+                url,
+                app_name,
+                batch_size,
+            } => {
                 let router = RdbRouter::from_config(&task_config.router, &DbType::Mongo)?;
                 SinkerUtil::create_mongo_sinker(
                     url,
+                    app_name,
                     &router,
                     task_config.parallelizer.parallel_size,
                     *batch_size,
@@ -135,11 +140,15 @@ impl SinkerUtil {
             }
 
             SinkerConfig::MongoCheck {
-                url, batch_size, ..
+                url,
+                app_name,
+                batch_size,
+                ..
             } => {
                 let router = RdbRouter::from_config(&task_config.router, &DbType::Mongo)?.reverse();
                 SinkerUtil::create_mongo_checker(
                     url,
+                    app_name,
                     &router,
                     task_config.parallelizer.parallel_size,
                     *batch_size,
@@ -508,6 +517,7 @@ impl SinkerUtil {
 
     async fn create_mongo_sinker<'a>(
         url: &str,
+        app_name: &str,
         router: &RdbRouter,
         parallel_size: usize,
         batch_size: usize,
@@ -515,7 +525,7 @@ impl SinkerUtil {
     ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
         let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
         for _ in 0..parallel_size {
-            let mongo_client = TaskUtil::create_mongo_client(url).await.unwrap();
+            let mongo_client = TaskUtil::create_mongo_client(url, app_name).await.unwrap();
             let sinker = MongoSinker {
                 batch_size,
                 router: router.clone(),
@@ -529,6 +539,7 @@ impl SinkerUtil {
 
     async fn create_mongo_checker<'a>(
         url: &str,
+        app_name: &str,
         router: &RdbRouter,
         parallel_size: usize,
         batch_size: usize,
@@ -536,7 +547,7 @@ impl SinkerUtil {
     ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
         let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
         for _ in 0..parallel_size {
-            let mongo_client = TaskUtil::create_mongo_client(url).await.unwrap();
+            let mongo_client = TaskUtil::create_mongo_client(url, app_name).await.unwrap();
             let sinker = MongoChecker {
                 batch_size,
                 router: router.clone(),

@@ -134,11 +134,14 @@ impl TaskRunner {
                         sample_interval: *sample_interval,
                     },
 
-                    ExtractorConfig::MongoSnapshot { url, .. } => ExtractorConfig::MongoSnapshot {
-                        url: url.clone(),
-                        db: db.clone(),
-                        tb: tb.clone(),
-                    },
+                    ExtractorConfig::MongoSnapshot { url, app_name, .. } => {
+                        ExtractorConfig::MongoSnapshot {
+                            url: url.clone(),
+                            app_name: app_name.clone(),
+                            db: db.clone(),
+                            tb: tb.clone(),
+                        }
+                    }
 
                     _ => {
                         return Err(Error::ConfigError("unsupported extractor config".into()));
@@ -436,10 +439,16 @@ impl TaskRunner {
                 Box::new(extractor)
             }
 
-            ExtractorConfig::MongoSnapshot { url, db, tb } => {
+            ExtractorConfig::MongoSnapshot {
+                url,
+                app_name,
+                db,
+                tb,
+            } => {
                 let extractor = ExtractorUtil::create_mongo_snapshot_extractor(
                     base_extractor,
                     url,
+                    app_name,
                     db,
                     tb,
                     resumer.clone(),
@@ -450,18 +459,25 @@ impl TaskRunner {
 
             ExtractorConfig::MongoCdc {
                 url,
+                app_name,
                 resume_token,
                 start_timestamp,
                 source,
+                heartbeat_interval_secs,
+                heartbeat_tb,
             } => {
                 let filter = RdbFilter::from_config(&self.config.filter, DbType::Mongo)?;
                 let extractor = ExtractorUtil::create_mongo_cdc_extractor(
                     base_extractor,
                     url,
+                    app_name,
                     resume_token,
                     start_timestamp,
                     source,
                     filter,
+                    *heartbeat_interval_secs,
+                    heartbeat_tb,
+                    syncer,
                 )
                 .await?;
                 Box::new(extractor)
@@ -469,12 +485,14 @@ impl TaskRunner {
 
             ExtractorConfig::MongoCheck {
                 url,
+                app_name,
                 check_log_dir,
                 batch_size,
             } => {
                 let extractor = ExtractorUtil::create_mongo_check_extractor(
                     base_extractor,
                     url,
+                    app_name,
                     check_log_dir,
                     *batch_size,
                 )
