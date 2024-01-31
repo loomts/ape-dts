@@ -54,6 +54,20 @@ impl RedisEntry {
         }
     }
 
+    pub fn get_type(&self) -> String {
+        match self.value {
+            RedisObject::String(_) => "String",
+            RedisObject::List(_) => "List",
+            RedisObject::Hash(_) => "Hash",
+            RedisObject::Set(_) => "Set",
+            RedisObject::Zset(_) => "Zset",
+            RedisObject::Module(_) => "Module",
+            RedisObject::Stream(_) => "Stream",
+            RedisObject::Unknown => "Unkown",
+        }
+        .to_string()
+    }
+
     pub fn cal_slots(&mut self, key_parser: &KeyParser) -> Vec<u16> {
         if self.is_base {
             vec![KeyParser::calc_slot(self.key.as_bytes())]
