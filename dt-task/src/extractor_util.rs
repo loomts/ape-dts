@@ -3,40 +3,29 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use dt_common::{
-    config::{
-        config_enums::DbType, datamarker_config::DataMarkerConfig,
-        extractor_config::ExtractorConfig,
+use dt_common::{config::config_enums::DbType, error::Error, utils::rdb_filter::RdbFilter};
+use dt_connector::extractor::{
+    base_extractor::BaseExtractor,
+    kafka::kafka_extractor::KafkaExtractor,
+    mongo::{
+        mongo_cdc_extractor::MongoCdcExtractor, mongo_check_extractor::MongoCheckExtractor,
+        mongo_snapshot_extractor::MongoSnapshotExtractor,
     },
-    datamarker::transaction_control::TransactionWorker,
-    error::Error,
-    utils::rdb_filter::RdbFilter,
-};
-use dt_connector::{
-    datamarker::{basic_transaction_marker::BasicTransactionMarker, traits::DataMarkerFilter},
-    extractor::{
-        base_extractor::BaseExtractor,
-        kafka::kafka_extractor::KafkaExtractor,
-        mongo::{
-            mongo_cdc_extractor::MongoCdcExtractor, mongo_check_extractor::MongoCheckExtractor,
-            mongo_snapshot_extractor::MongoSnapshotExtractor,
-        },
-        mysql::{
-            mysql_cdc_extractor::MysqlCdcExtractor, mysql_check_extractor::MysqlCheckExtractor,
-            mysql_snapshot_extractor::MysqlSnapshotExtractor,
-            mysql_struct_extractor::MysqlStructExtractor,
-        },
-        pg::{
-            pg_cdc_extractor::PgCdcExtractor, pg_check_extractor::PgCheckExtractor,
-            pg_snapshot_extractor::PgSnapshotExtractor, pg_struct_extractor::PgStructExtractor,
-        },
-        redis::{
-            redis_cdc_extractor::RedisCdcExtractor, redis_client::RedisClient,
-            redis_snapshot_extractor::RedisSnapshotExtractor,
-            redis_snapshot_file_extractor::RedisSnapshotFileExtractor,
-        },
-        snapshot_resumer::SnapshotResumer,
+    mysql::{
+        mysql_cdc_extractor::MysqlCdcExtractor, mysql_check_extractor::MysqlCheckExtractor,
+        mysql_snapshot_extractor::MysqlSnapshotExtractor,
+        mysql_struct_extractor::MysqlStructExtractor,
     },
+    pg::{
+        pg_cdc_extractor::PgCdcExtractor, pg_check_extractor::PgCheckExtractor,
+        pg_snapshot_extractor::PgSnapshotExtractor, pg_struct_extractor::PgStructExtractor,
+    },
+    redis::{
+        redis_cdc_extractor::RedisCdcExtractor, redis_client::RedisClient,
+        redis_snapshot_extractor::RedisSnapshotExtractor,
+        redis_snapshot_file_extractor::RedisSnapshotFileExtractor,
+    },
+    snapshot_resumer::SnapshotResumer,
 };
 use dt_meta::{
     avro::avro_converter::AvroConverter, mongo::mongo_cdc_source::MongoCdcSource,
@@ -174,7 +163,6 @@ impl ExtractorUtil {
         filter: RdbFilter,
         log_level: &str,
         syncer: Arc<Mutex<Syncer>>,
-        datamarker_filter: Option<Box<dyn DataMarkerFilter + Send>>,
     ) -> Result<MysqlCdcExtractor, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool = TaskUtil::create_mysql_conn_pool(url, 2, enable_sqlx_log).await?;
@@ -190,7 +178,6 @@ impl ExtractorUtil {
             server_id,
             heartbeat_interval_secs,
             heartbeat_tb: heartbeat_tb.to_string(),
-            datamarker_filter,
             syncer,
             base_extractor,
         })
@@ -210,7 +197,6 @@ impl ExtractorUtil {
         log_level: &str,
         ddl_command_tb: &str,
         syncer: Arc<Mutex<Syncer>>,
-        datamarker_filter: Option<Box<dyn DataMarkerFilter + Send>>,
     ) -> Result<PgCdcExtractor, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool = TaskUtil::create_pg_conn_pool(url, 2, enable_sqlx_log).await?;
@@ -230,7 +216,6 @@ impl ExtractorUtil {
             heartbeat_tb: heartbeat_tb.to_string(),
             ddl_command_tb: ddl_command_tb.to_string(),
             base_extractor,
-            datamarker_filter,
         })
     }
 
@@ -509,34 +494,5 @@ impl ExtractorUtil {
             syncer,
             base_extractor,
         })
-    }
-
-    pub fn datamarker_filter_builder(
-        extractor_config: &ExtractorConfig,
-        datamarker_config: &DataMarkerConfig,
-    ) -> Result<Option<Box<dyn DataMarkerFilter + Send>>, Error> {
-        let transaction_worker = TransactionWorker::from(datamarker_config);
-
-        if !transaction_worker.is_validate() {
-            return Ok(None);
-        }
-
-        let result = transaction_worker.pick_infos(
-            &transaction_worker.transaction_db,
-            &transaction_worker.transaction_table,
-        );
-        let current_topology = result.unwrap().unwrap();
-        if current_topology.is_empty() {
-            return Ok(None);
-        }
-
-        match extractor_config {
-            ExtractorConfig::MysqlCdc { .. } | ExtractorConfig::PgCdc { .. } => Ok(Some(Box::new(
-                BasicTransactionMarker::new(transaction_worker, current_topology),
-            ))),
-            _ => Err(Error::ConfigError(String::from(
-                "extractor type not support transaction filter yet.",
-            ))),
-        }
     }
 }

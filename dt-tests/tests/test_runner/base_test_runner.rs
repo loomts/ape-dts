@@ -205,6 +205,7 @@ impl BaseTestRunner {
             "delete ",
             "comment ",
             "truncate ",
+            "select ",
         ];
         let mut lines = Self::load_file(&sql_file);
         for line in lines.drain(..) {

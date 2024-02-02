@@ -30,7 +30,6 @@ use dt_common::{
 };
 
 use crate::{
-    datamarker::traits::DataMarkerFilter,
     extractor::{base_extractor::BaseExtractor, pg::pg_cdc_client::PgCdcClient},
     Extractor,
 };
@@ -60,7 +59,6 @@ pub struct PgCdcExtractor {
     pub heartbeat_tb: String,
     pub ddl_command_tb: String,
     pub syncer: Arc<Mutex<Syncer>>,
-    pub datamarker_filter: Option<Box<dyn DataMarkerFilter + Send>>,
 }
 
 const SECS_FROM_1970_TO_2000: i64 = 946_684_800;
@@ -134,12 +132,6 @@ impl PgCdcExtractor {
                             last_tx_end_lsn = PgLsn::from(commit.end_lsn()).to_string();
                             position = get_position(&last_tx_end_lsn, commit.timestamp());
                             let commit = DtData::Commit { xid: xid.clone() };
-
-                            match &mut self.datamarker_filter {
-                                Some(f) => f.filter_dtdata(&commit)?,
-                                _ => false,
-                            };
-
                             self.base_extractor
                                 .push_dt_data(commit, position.clone())
                                 .await?;
@@ -226,7 +218,8 @@ impl PgCdcExtractor {
         // if the tb is filtered, we won't try to get the tb_meta since we may get privilege errors,
         // but we need to keep the oid —— tb_meta map which may be used for decoding events,
         // the built-in object used by datamarker, although it is not in filter config, still needs to get tb_meta.
-        if self.filter.filter_tb(schema, tb) && !self.is_datamarker_object(schema, tb) {
+        if self.filter.filter_tb(schema, tb) && !self.base_extractor.is_data_marker_info(schema, tb)
+        {
             let tb_meta = Self::mock_pg_tb_meta(schema, tb, event.rel_id() as i32);
             self.meta_manager
                 .update_tb_meta_by_oid(event.rel_id() as i32, tb_meta)?;
@@ -447,23 +440,17 @@ impl PgCdcExtractor {
         row_data: RowData,
         position: Position,
     ) -> Result<(), Error> {
-        if match &mut self.datamarker_filter {
-            // update the 'do_transaction_filter' flag in a transaction with DataMarkerFilter
-            Some(f) => f.filter_rowdata(&row_data)?,
-            None => false,
-        } {
-            return Ok(());
-        }
-
         self.base_extractor.push_row(row_data, position).await
     }
 
     fn filter_event(&mut self, tb_meta: &PgTbMeta, row_type: RowType) -> bool {
-        self.filter.filter_event(
-            &tb_meta.basic.schema,
-            &tb_meta.basic.tb,
-            &row_type.to_string(),
-        )
+        let db: &String = &tb_meta.basic.schema;
+        let tb = &tb_meta.basic.tb;
+        let filtered = self.filter.filter_event(db, tb, &row_type.to_string());
+        if filtered {
+            return !self.base_extractor.is_data_marker_info(db, tb);
+        }
+        filtered
     }
 
     fn mock_pg_tb_meta(schema: &str, tb: &str, oid: i32) -> PgTbMeta {
@@ -475,13 +462,6 @@ impl PgCdcExtractor {
             },
             oid,
             col_type_map: HashMap::new(),
-        }
-    }
-
-    fn is_datamarker_object(&self, schema: &str, tb: &str) -> bool {
-        match &self.datamarker_filter {
-            Some(f) => f.is_buildin_object(schema, tb),
-            None => false,
         }
     }
 

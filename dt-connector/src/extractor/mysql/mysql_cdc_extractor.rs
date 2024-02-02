@@ -27,9 +27,7 @@ use dt_common::{
     utils::{rdb_filter::RdbFilter, time_util::TimeUtil},
 };
 
-use crate::{
-    datamarker::traits::DataMarkerFilter, extractor::base_extractor::BaseExtractor, Extractor,
-};
+use crate::{extractor::base_extractor::BaseExtractor, Extractor};
 
 pub struct MysqlCdcExtractor {
     pub base_extractor: BaseExtractor,
@@ -42,7 +40,6 @@ pub struct MysqlCdcExtractor {
     pub server_id: u64,
     pub heartbeat_interval_secs: u64,
     pub heartbeat_tb: String,
-    pub datamarker_filter: Option<Box<dyn DataMarkerFilter + Send>>,
     pub syncer: Arc<Mutex<Syncer>>,
 }
 
@@ -197,14 +194,6 @@ impl MysqlCdcExtractor {
                 let commit = DtData::Commit {
                     xid: xid.xid.to_string(),
                 };
-
-                if match &mut self.datamarker_filter {
-                    Some(f) => f.filter_dtdata(&commit)?,
-                    _ => false,
-                } {
-                    return Ok(());
-                }
-
                 self.base_extractor
                     .push_dt_data(commit, position.clone())
                     .await?;
@@ -221,14 +210,6 @@ impl MysqlCdcExtractor {
         row_data: RowData,
         position: Position,
     ) -> Result<(), Error> {
-        if match &mut self.datamarker_filter {
-            // update the 'do_transaction_filter' flag in a transaction with DataMarkerFilter
-            Some(f) => f.filter_rowdata(&row_data)?,
-            None => false,
-        } {
-            return Ok(());
-        }
-
         self.base_extractor.push_row(row_data, position).await
     }
 
@@ -305,11 +286,13 @@ impl MysqlCdcExtractor {
     }
 
     fn filter_event(&mut self, table_map_event: &TableMapEvent, row_type: RowType) -> bool {
-        self.filter.filter_event(
-            &table_map_event.database_name,
-            &table_map_event.table_name,
-            &row_type.to_string(),
-        )
+        let db = &table_map_event.database_name;
+        let tb = &table_map_event.table_name;
+        let filtered = self.filter.filter_event(db, tb, &row_type.to_string());
+        if filtered {
+            return !self.base_extractor.is_data_marker_info(db, tb);
+        }
+        filtered
     }
 
     fn start_heartbeat(&self) -> Result<(), Error> {

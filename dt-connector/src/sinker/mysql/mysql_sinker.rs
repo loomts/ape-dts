@@ -1,12 +1,12 @@
 use std::{
     str::FromStr,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, RwLock},
     time::Instant,
 };
 
 use crate::{
-    call_batch_fn, close_conn_pool, rdb_query_builder::RdbQueryBuilder, rdb_router::RdbRouter,
-    sinker::base_sinker::BaseSinker, Sinker,
+    call_batch_fn, close_conn_pool, data_marker::DataMarker, rdb_query_builder::RdbQueryBuilder,
+    rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker,
 };
 
 use dt_common::{error::Error, log_error, log_info, monitor::monitor::Monitor};
@@ -18,7 +18,7 @@ use dt_meta::{
 
 use sqlx::{
     mysql::{MySqlConnectOptions, MySqlPoolOptions},
-    MySql, Pool, Transaction,
+    MySql, Pool,
 };
 
 use async_trait::async_trait;
@@ -31,16 +31,12 @@ pub struct MysqlSinker {
     pub router: RdbRouter,
     pub batch_size: usize,
     pub monitor: Arc<Mutex<Monitor>>,
-    pub transaction_command: String,
+    pub data_marker: Option<Arc<RwLock<DataMarker>>>,
 }
 
 #[async_trait]
 impl Sinker for MysqlSinker {
     async fn sink_dml(&mut self, mut data: Vec<RowData>, batch: bool) -> Result<(), Error> {
-        if data.is_empty() {
-            return Ok(());
-        }
-
         if !batch {
             self.serial_sink(data).await.unwrap();
         } else {
@@ -56,10 +52,6 @@ impl Sinker for MysqlSinker {
         }
 
         Ok(())
-    }
-
-    async fn close(&mut self) -> Result<(), Error> {
-        return close_conn_pool!(self);
     }
 
     async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> Result<(), Error> {
@@ -83,6 +75,10 @@ impl Sinker for MysqlSinker {
         Ok(())
     }
 
+    async fn close(&mut self) -> Result<(), Error> {
+        return close_conn_pool!(self);
+    }
+
     async fn refresh_meta(&mut self, data: Vec<DdlData>) -> Result<(), Error> {
         for ddl_data in data.iter() {
             self.meta_manager
@@ -94,49 +90,24 @@ impl Sinker for MysqlSinker {
 
 impl MysqlSinker {
     async fn serial_sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
-        if self.is_transaction_enable() {
-            return self.transaction_serial_sink(data).await;
-        }
-
         let start_time = Instant::now();
         let mut data_size = 0;
 
+        let mut tx = self.conn_pool.begin().await.unwrap();
+        if let Some(sql) = self.get_data_marker_sql() {
+            sqlx::query(&sql).execute(&mut tx).await.unwrap();
+        }
         for row_data in data.iter() {
             data_size += row_data.data_size;
-
             let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&row_data).await?;
             let query_builder = RdbQueryBuilder::new_for_mysql(tb_meta);
 
             let mut query_info = query_builder.get_query_info(row_data)?;
             query_info.sql = Self::handle_dialect(&query_info.sql);
             let query = query_builder.create_mysql_query(&query_info);
-            query.execute(&self.conn_pool).await.unwrap();
+            query.execute(&mut tx).await.unwrap();
         }
-
-        BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
-            .await
-    }
-
-    async fn transaction_serial_sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
-        let start_time = Instant::now();
-        let mut data_size = 0;
-
-        let mut transaction = self.conn_pool.begin().await.unwrap();
-        self.execute_transaction_command(&mut transaction).await;
-
-        for row_data in data.iter() {
-            data_size += row_data.data_size;
-
-            let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&row_data).await?;
-            let query_builder = RdbQueryBuilder::new_for_mysql(tb_meta);
-
-            let mut query_info = query_builder.get_query_info(row_data)?;
-            query_info.sql = Self::handle_dialect(&query_info.sql);
-            let query = query_builder.create_mysql_query(&query_info);
-            query.execute(&mut transaction).await.unwrap();
-        }
-
-        transaction.commit().await.unwrap();
+        tx.commit().await.unwrap();
 
         BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
             .await
@@ -160,11 +131,11 @@ impl MysqlSinker {
             query_builder.get_batch_delete_query(data, start_index, batch_size)?;
         let query = query_builder.create_mysql_query(&query_info);
 
-        if self.is_transaction_enable() {
-            let mut transaction = self.conn_pool.begin().await.unwrap();
-            self.execute_transaction_command(&mut transaction).await;
-            query.execute(&mut transaction).await.unwrap();
-            transaction.commit().await.unwrap();
+        if let Some(sql) = self.get_data_marker_sql() {
+            let mut tx = self.conn_pool.begin().await.unwrap();
+            sqlx::query(&sql).execute(&mut tx).await.unwrap();
+            query.execute(&mut tx).await.unwrap();
+            tx.commit().await.unwrap();
         } else {
             query.execute(&self.conn_pool).await.unwrap();
         }
@@ -192,11 +163,11 @@ impl MysqlSinker {
         query_info.sql = Self::handle_dialect(&query_info.sql);
         let query = query_builder.create_mysql_query(&query_info);
 
-        let execute_error = if self.is_transaction_enable() {
-            let mut transaction = self.conn_pool.begin().await.unwrap();
-            self.execute_transaction_command(&mut transaction).await;
-            query.execute(&mut transaction).await.unwrap();
-            match transaction.commit().await {
+        let exec_error = if let Some(sql) = self.get_data_marker_sql() {
+            let mut tx = self.conn_pool.begin().await.unwrap();
+            sqlx::query(&sql).execute(&mut tx).await.unwrap();
+            query.execute(&mut tx).await.unwrap();
+            match tx.commit().await {
                 Err(e) => Some(e),
                 _ => None,
             }
@@ -207,7 +178,7 @@ impl MysqlSinker {
             }
         };
 
-        if let Some(error) = execute_error {
+        if let Some(error) = exec_error {
             log_error!(
                 "batch insert failed, will insert one by one, schema: {}, tb: {}, error: {}",
                 tb_meta.basic.schema,
@@ -227,14 +198,23 @@ impl MysqlSinker {
         sql.replace("INSERT", "REPLACE")
     }
 
-    async fn execute_transaction_command(&self, transaction: &mut Transaction<'_, MySql>) {
-        sqlx::query(&self.transaction_command)
-            .execute(transaction)
-            .await
-            .unwrap();
-    }
-
-    fn is_transaction_enable(&self) -> bool {
-        !self.transaction_command.is_empty()
+    fn get_data_marker_sql(&self) -> Option<String> {
+        if let Some(data_marker) = &self.data_marker {
+            let data_marker = data_marker.read().unwrap();
+            // CREATE TABLE `topo1` (
+            //     `data_origin_node` varchar(255) NOT NULL,
+            //     `n` bigint DEFAULT NULL,
+            //     PRIMARY KEY (`data_origin_node`)
+            //   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3
+            let sql = format!(
+                "INSERT INTO `{}`.`{}`(data_origin_node, n) 
+                VALUES('{}', 1) 
+                ON DUPLICATE KEY UPDATE n=n+1",
+                data_marker.marker_db, data_marker.marker_tb, data_marker.data_origin_node
+            );
+            Some(sql)
+        } else {
+            None
+        }
     }
 }

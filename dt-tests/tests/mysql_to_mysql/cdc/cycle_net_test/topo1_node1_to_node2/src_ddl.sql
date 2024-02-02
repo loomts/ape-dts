@@ -9,8 +9,8 @@ TRUNCATE TABLE twoway_test_db_1.one_pk_no_uk;
 DROP DATABASE IF EXISTS ape_trans_mysql;
 CREATE DATABASE ape_trans_mysql;
 
-CREATE TABLE ape_trans_mysql.topo1_node2_to_node1 (n int) ENGINE=InnoDB;
-insert into ape_trans_mysql.topo1_node2_to_node1 set n = 0;
-
-CREATE TABLE ape_trans_mysql.topo1_node3_to_node1 (n int) ENGINE=InnoDB;
-insert into ape_trans_mysql.topo1_node3_to_node1 set n = 0;
+CREATE TABLE `ape_trans_mysql`.`topo1` (
+    `data_origin_node` varchar(255) NOT NULL,
+    `n` bigint DEFAULT NULL,
+    PRIMARY KEY (`data_origin_node`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3

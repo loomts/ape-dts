@@ -28,7 +28,10 @@ impl BaseParallelizer {
         let mut record_size_counter = Counter::new(0, 0);
         // ddls and dmls should be drained seperately
         while let Ok(item) = self.pop(buffer, &mut record_size_counter) {
-            if data.is_empty() || data[0].is_ddl() == item.is_ddl() {
+            if data.is_empty()
+                || (data[0].is_ddl() == item.is_ddl()
+                    && data[0].data_origin_node == item.data_origin_node)
+            {
                 data.push(item);
             } else {
                 self.poped_data.push_back(item);

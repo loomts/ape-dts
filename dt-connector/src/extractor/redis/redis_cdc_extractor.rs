@@ -13,6 +13,7 @@ use dt_common::log_warn;
 use dt_common::utils::rdb_filter::RdbFilter;
 use dt_common::utils::sql_util::SqlUtil;
 use dt_common::utils::time_util::TimeUtil;
+use dt_meta::dt_data::DtData;
 use dt_meta::position::Position;
 use dt_meta::redis::redis_entry::RedisEntry;
 use dt_meta::redis::redis_object::RedisCmd;
@@ -110,8 +111,10 @@ impl RedisCdcExtractor {
             let cmd = self.handle_redis_value(value).await.unwrap();
 
             if !cmd.args.is_empty() {
+                let cmd_name = cmd.get_name().to_ascii_lowercase();
+
                 // switch db
-                if cmd.get_name().eq_ignore_ascii_case("select") {
+                if cmd_name == "select" {
                     self.now_db_id = String::from_utf8(cmd.args[1].clone())
                         .unwrap()
                         .parse::<i64>()
@@ -129,16 +132,44 @@ impl RedisCdcExtractor {
                     continue;
                 }
 
-                // build entry and push it to buffer
-                let mut entry = RedisEntry::new();
-                entry.cmd = cmd;
-                entry.db_id = self.now_db_id;
                 let position = Position::Redis {
                     run_id: self.run_id.clone(),
                     repl_offset: self.repl_offset,
                     now_db_id: self.now_db_id,
                     timestamp: heartbeat_timestamp.clone(),
                 };
+
+                // transaction begin
+                // if there is only 1 command in a transaction, MULTI/EXEC won't be saved in aof.
+                // but in our two-way sync scenario, it is OK since we will always add an additional
+                // SET command as data marker following MULTI
+                if cmd_name == "multi" {
+                    // since not all commands are wrapped by MULTI and EXEC,
+                    // in two-way sync scenario, we must push both DtData::Begin and DtData::Commit
+                    // to buf to make sure:
+                    // 1, only the first command following MULTI be considered as data marker info.
+                    // 2, data_marker will be reset follwing EXEC.
+                    self.base_extractor
+                        .push_dt_data(DtData::Begin {}, position)
+                        .await
+                        .unwrap();
+                    // ignore MULTI & EXEC, otherwise we may get error: "MULTI calls can not be nested"
+                    continue;
+                }
+
+                // transaction end
+                if cmd_name == "exec" {
+                    self.base_extractor
+                        .push_dt_data(DtData::Commit { xid: String::new() }, position)
+                        .await
+                        .unwrap();
+                    continue;
+                }
+
+                // build entry and push it to buffer
+                let mut entry = RedisEntry::new();
+                entry.cmd = cmd;
+                entry.db_id = self.now_db_id;
 
                 RedisPsyncExtractor::push_to_buf(
                     &mut self.base_extractor,

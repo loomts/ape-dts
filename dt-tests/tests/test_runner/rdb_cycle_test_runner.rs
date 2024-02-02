@@ -1,4 +1,5 @@
 use dt_common::{error::Error, utils::time_util::TimeUtil};
+use dt_connector::data_marker::DataMarker;
 use std::collections::HashMap;
 
 use crate::test_config_util::TestConfigUtil;
@@ -10,7 +11,6 @@ pub struct RdbCycleTestRunner {
 }
 
 const DST: &str = "dst";
-const TRANSACTION_TABLE_COUNT_COL: &str = "n";
 
 impl RdbCycleTestRunner {
     pub async fn new(
@@ -21,6 +21,7 @@ impl RdbCycleTestRunner {
             rdb_test_runner: RdbTestRunner::new_internal(
                 relative_test_dir,
                 config_tmp_relative_dir,
+                false,
             )
             .await?,
         })
@@ -72,7 +73,6 @@ impl RdbCycleTestRunner {
         // do check
         for sub_path in &sub_paths {
             let runner = runner_map.get(sub_path.1.as_str()).unwrap();
-            let transaction_full_name = format!("{}.{}", transaction_database, sub_path.1);
 
             let expect_num = if expect_num_map.contains_key(sub_path.1.as_str()) {
                 Some(expect_num_map.get(sub_path.1.as_str()).unwrap().clone())
@@ -81,11 +81,7 @@ impl RdbCycleTestRunner {
             };
 
             runner
-                .check_cycle_cdc_data(
-                    String::from(transaction_database),
-                    transaction_full_name,
-                    expect_num,
-                )
+                .check_cycle_cdc_data(String::from(transaction_database), expect_num)
                 .await
                 .unwrap();
         }
@@ -105,7 +101,6 @@ impl RdbCycleTestRunner {
     async fn check_cycle_cdc_data(
         &self,
         transaction_database: String,
-        transaction_table_full_name: String,
         expect_num: Option<u8>,
     ) -> Result<(), Error> {
         let dml_count = match expect_num {
@@ -126,40 +121,47 @@ impl RdbCycleTestRunner {
                 .await?
         );
 
-        self.check_transaction_table_data(
-            DST,
-            transaction_table_full_name.as_str(),
-            dml_count as u8,
-        )
-        .await
+        self.check_transaction_table_data(DST, dml_count as u8)
+            .await
     }
 
-    async fn check_transaction_table_data(
-        &self,
-        from: &str,
-        full_tb_name: &str,
-        expect_num: u8,
-    ) -> Result<(), Error> {
-        let db_tb: Vec<&str> = full_tb_name.split(".").collect();
-        assert_eq!(db_tb.len(), 2);
+    async fn check_transaction_table_data(&self, from: &str, expect_num: u8) -> Result<(), Error> {
+        let config = self.rdb_test_runner.base.get_config();
+        let data_marker_config = config.data_marker.unwrap();
+        let data_marker =
+            DataMarker::from_config(&data_marker_config, &config.extractor_basic.db_type).unwrap();
 
         let result = self
             .rdb_test_runner
-            .fetch_data(&(db_tb[0].to_string(), db_tb[1].to_string()), from)
+            .fetch_data(
+                &(
+                    data_marker.marker_db.to_string(),
+                    data_marker.marker_tb.to_string(),
+                ),
+                from,
+            )
             .await?;
 
-        assert!(result.len() == 1);
-        let row_data = result.get(0).unwrap();
-        let transaction_count = row_data
-            .after
-            .as_ref()
-            .unwrap()
-            .get(TRANSACTION_TABLE_COUNT_COL)
-            .unwrap();
-        assert_eq!(
-            transaction_count.to_option_string(),
-            Some(expect_num.to_string())
-        );
+        let mut checked = false;
+        for row_data in result {
+            let after = row_data.after.as_ref().unwrap();
+            let data_origin_node = after
+                .get("data_origin_node")
+                .unwrap()
+                .to_option_string()
+                .unwrap();
+            let transaction_count = after.get("n").unwrap().to_option_string().unwrap();
+
+            if data_origin_node == data_marker.src_node {
+                println!(
+                    "src_node: {}, dst_node: {}, transaction_count: {}",
+                    data_marker.src_node, data_marker.dst_node, transaction_count
+                );
+                assert_eq!(transaction_count, expect_num.to_string());
+                checked = true;
+            }
+        }
+        assert!(checked);
         Ok(())
     }
 

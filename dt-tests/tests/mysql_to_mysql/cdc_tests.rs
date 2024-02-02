@@ -81,8 +81,8 @@ mod test {
             2000,
             "ape_trans_mysql",
             vec![
-                ("topo1_node1_to_node2".to_string(), 20 as u8),
-                ("topo1_node1_to_node3".to_string(), 20 as u8),
+                ("topo1_node1_to_node2".to_string(), 10 as u8),
+                ("topo1_node1_to_node3".to_string(), 10 as u8),
                 ("topo1_node2_to_node1".to_string(), 10 as u8),
                 ("topo1_node3_to_node1".to_string(), 10 as u8),
             ]

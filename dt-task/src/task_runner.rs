@@ -3,7 +3,7 @@ use std::{
     io::Read,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
+        Arc, Mutex, RwLock,
     },
     time::Duration,
 };
@@ -11,14 +11,15 @@ use std::{
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
     config::{
-        config_enums::DbType, datamarker_config::DataMarkerSettingEnum,
-        extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
+        config_enums::DbType, extractor_config::ExtractorConfig, sinker_config::SinkerConfig,
+        task_config::TaskConfig,
     },
     error::Error,
     monitor::monitor::Monitor,
     utils::{rdb_filter::RdbFilter, time_util::TimeUtil},
 };
 use dt_connector::{
+    data_marker::DataMarker,
     extractor::{
         base_extractor::BaseExtractor, extractor_monitor::ExtractorMonitor,
         snapshot_resumer::SnapshotResumer,
@@ -165,6 +166,23 @@ impl TaskRunner {
         let monitor_time_window_secs = self.config.pipeline.checkpoint_interval_secs as usize;
         let monitor_count_window = self.config.pipeline.buffer_size;
 
+        let (extractor_data_marker, sinker_data_marker) = if let Some(data_marker_config) =
+            &self.config.data_marker
+        {
+            let extractor_data_marker =
+                DataMarker::from_config(data_marker_config, &self.config.extractor_basic.db_type)
+                    .unwrap();
+            let sinker_data_marker =
+                DataMarker::from_config(data_marker_config, &self.config.sinker_basic.db_type)
+                    .unwrap();
+            (
+                Some(extractor_data_marker),
+                Some(Arc::new(RwLock::new(sinker_data_marker))),
+            )
+        } else {
+            (None, None)
+        };
+
         // extractor
         let extractor_monitor = Arc::new(Mutex::new(Monitor::new(
             "extractor",
@@ -178,6 +196,7 @@ impl TaskRunner {
                 shut_down.clone(),
                 syncer.clone(),
                 extractor_monitor.clone(),
+                extractor_data_marker,
             )
             .await?;
 
@@ -187,10 +206,12 @@ impl TaskRunner {
             monitor_time_window_secs,
             monitor_count_window,
         )));
-        let transaction_command = self.fetch_transaction_command();
-        let sinkers =
-            SinkerUtil::create_sinkers(&self.config, transaction_command, sinker_monitor.clone())
-                .await?;
+        let sinkers = SinkerUtil::create_sinkers(
+            &self.config,
+            sinker_monitor.clone(),
+            sinker_data_marker.clone(),
+        )
+        .await?;
 
         // pipeline
         let pipeline_monitor = Arc::new(Mutex::new(Monitor::new(
@@ -205,6 +226,7 @@ impl TaskRunner {
                 syncer,
                 sinkers,
                 pipeline_monitor.clone(),
+                sinker_data_marker.clone(),
             )
             .await?;
 
@@ -241,6 +263,7 @@ impl TaskRunner {
         syncer: Arc<Mutex<Syncer>>,
         sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
         monitor: Arc<Mutex<Monitor>>,
+        data_marker: Option<Arc<RwLock<DataMarker>>>,
     ) -> Result<Box<dyn Pipeline + Send>, Error> {
         let rps_limiter = if self.config.pipeline.max_rps > 0 {
             Some(
@@ -266,6 +289,7 @@ impl TaskRunner {
             batch_sink_interval_secs: self.config.pipeline.batch_sink_interval_secs,
             syncer,
             monitor,
+            data_marker,
         };
 
         Ok(Box::new(pipeline))
@@ -278,16 +302,19 @@ impl TaskRunner {
         shut_down: Arc<AtomicBool>,
         syncer: Arc<Mutex<Syncer>>,
         monitor: Arc<Mutex<Monitor>>,
+        data_marker: Option<DataMarker>,
     ) -> Result<Box<dyn Extractor + Send>, Error> {
         let resumer =
             SnapshotResumer::new(&self.config.extractor_basic.db_type, &self.config.resumer)?;
         let router =
             RdbRouter::from_config(&self.config.router, &self.config.extractor_basic.db_type)?;
+
         let base_extractor = BaseExtractor {
             buffer,
             router,
             shut_down,
             monitor: ExtractorMonitor::new(monitor),
+            data_marker,
         };
 
         let extractor: Box<dyn Extractor + Send> = match extractor_config {
@@ -335,17 +362,7 @@ impl TaskRunner {
                 heartbeat_interval_secs,
                 heartbeat_tb,
             } => {
-                let filter = RdbFilter::from_config_with_transaction(
-                    &self.config.filter,
-                    DbType::Mysql,
-                    &self.config.datamarker,
-                )?;
-
-                let datamarker_filter = ExtractorUtil::datamarker_filter_builder(
-                    &self.config.extractor,
-                    &self.config.datamarker,
-                )?;
-
+                let filter = RdbFilter::from_config(&self.config.filter, DbType::Mysql)?;
                 let extractor = ExtractorUtil::create_mysql_cdc_extractor(
                     base_extractor,
                     url,
@@ -357,7 +374,6 @@ impl TaskRunner {
                     filter,
                     &self.config.runtime.log_level,
                     syncer,
-                    datamarker_filter,
                 )
                 .await?;
                 Box::new(extractor)
@@ -409,17 +425,7 @@ impl TaskRunner {
                 heartbeat_tb,
                 ddl_command_tb,
             } => {
-                let filter = RdbFilter::from_config_with_transaction(
-                    &self.config.filter,
-                    DbType::Pg,
-                    &self.config.datamarker,
-                )?;
-
-                let datamarker_filter = ExtractorUtil::datamarker_filter_builder(
-                    &self.config.extractor,
-                    &self.config.datamarker,
-                )?;
-
+                let filter = RdbFilter::from_config(&self.config.filter, DbType::Pg)?;
                 let extractor = ExtractorUtil::create_pg_cdc_extractor(
                     base_extractor,
                     url,
@@ -433,7 +439,6 @@ impl TaskRunner {
                     &self.config.runtime.log_level,
                     &ddl_command_tb,
                     syncer,
-                    datamarker_filter,
                 )
                 .await?;
                 Box::new(extractor)
@@ -602,18 +607,6 @@ impl TaskRunner {
             }
         };
         Ok(extractor)
-    }
-
-    fn fetch_transaction_command(&self) -> String {
-        match &self.config.datamarker.setting {
-            Some(s) => match s {
-                DataMarkerSettingEnum::Transaction {
-                    transaction_command,
-                    ..
-                } => transaction_command.to_owned(),
-            },
-            None => String::from(""),
-        }
     }
 
     fn init_log4rs(&self) -> Result<(), Error> {

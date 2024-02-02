@@ -24,7 +24,7 @@ use dt_meta::{
     sql_parser::ddl_parser::DdlParser,
 };
 
-use crate::rdb_router::RdbRouter;
+use crate::{data_marker::DataMarker, rdb_router::RdbRouter};
 
 use super::extractor_monitor::ExtractorMonitor;
 
@@ -33,19 +33,60 @@ pub struct BaseExtractor {
     pub router: RdbRouter,
     pub shut_down: Arc<AtomicBool>,
     pub monitor: ExtractorMonitor,
+    pub data_marker: Option<DataMarker>,
 }
 
 impl BaseExtractor {
+    pub fn is_data_marker_info(&self, db: &str, tb: &str) -> bool {
+        if let Some(data_marker) = &self.data_marker {
+            return data_marker.is_marker_info_2(db, tb);
+        }
+        false
+    }
+
     pub async fn push_dt_data(&mut self, dt_data: DtData, position: Position) -> Result<(), Error> {
         while self.buffer.is_full() {
             TimeUtil::sleep_millis(1).await;
+        }
+
+        if let Some(data_marker) = &mut self.data_marker {
+            if dt_data.is_begin() || dt_data.is_commit() {
+                data_marker.reset();
+            } else if data_marker.reseted {
+                if data_marker.is_marker_info(&dt_data) {
+                    data_marker.refresh(&dt_data);
+                    // after data_marker refreshed, discard the marker data itself
+                    return Ok(());
+                } else {
+                    // the first dml/ddl after the last transaction commit is NOT marker_info,
+                    // then current transaction should NOT be filtered by default.
+                    // set reseted = false, just to make sure is_marker_info won't be called again
+                    // in current transaction
+                    data_marker.reseted = false;
+                }
+            }
+
+            // data from origin node are filtered
+            if data_marker.filter {
+                return Ok(());
+            }
         }
 
         self.monitor.counters.record_count += 1;
         self.monitor.counters.data_size += dt_data.get_data_size();
         self.monitor.try_flush(false);
 
-        let item = DtItem { dt_data, position };
+        let data_origin_node = if let Some(data_marker) = &mut self.data_marker {
+            data_marker.data_origin_node.clone()
+        } else {
+            String::new()
+        };
+
+        let item = DtItem {
+            dt_data,
+            position,
+            data_origin_node,
+        };
         self.buffer.push(item).unwrap();
         Ok(())
     }

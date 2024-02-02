@@ -38,12 +38,13 @@ pub const PUBLIC: &str = "public";
 #[allow(dead_code)]
 impl RdbTestRunner {
     pub async fn new(relative_test_dir: &str) -> Result<Self, Error> {
-        Self::new_internal(relative_test_dir, "").await
+        Self::new_internal(relative_test_dir, "", true).await
     }
 
     pub async fn new_internal(
         relative_test_dir: &str,
         config_tmp_relative_dir: &str,
+        recreate_pub_and_slot: bool,
     ) -> Result<Self, Error> {
         let mut base = BaseTestRunner::new_internal(relative_test_dir, config_tmp_relative_dir)
             .await
@@ -78,15 +79,17 @@ impl RdbTestRunner {
             ..
         } = config.extractor
         {
-            let pub_name = if pub_name.is_empty() {
-                format!("{}_publication_for_all_tables", slot_name)
-            } else {
-                pub_name.clone()
-            };
-            let drop_pub_sql = format!("DROP PUBLICATION IF EXISTS {}", pub_name);
-            let drop_slot_sql= format!("SELECT pg_drop_replication_slot(slot_name) FROM pg_replication_slots WHERE slot_name = '{}'", slot_name);
-            base.src_ddl_sqls.push(drop_pub_sql);
-            base.src_ddl_sqls.push(drop_slot_sql);
+            if recreate_pub_and_slot {
+                let pub_name = if pub_name.is_empty() {
+                    format!("{}_publication_for_all_tables", slot_name)
+                } else {
+                    pub_name.clone()
+                };
+                let drop_pub_sql = format!("DROP PUBLICATION IF EXISTS {}", pub_name);
+                let drop_slot_sql= format!("SELECT pg_drop_replication_slot(slot_name) FROM pg_replication_slots WHERE slot_name = '{}'", slot_name);
+                base.src_ddl_sqls.push(drop_pub_sql);
+                base.src_ddl_sqls.push(drop_slot_sql);
+            }
         }
 
         Ok(Self {
@@ -541,9 +544,11 @@ impl RdbTestRunner {
 
         for sql in sqls.iter() {
             let sql = sql.to_lowercase().trim().to_string();
-            if !sql.starts_with("create") || !sql.contains("table") {
+            let tokens: Vec<&str> = sql.split(" ").collect();
+            if tokens[0].trim() != "create" || tokens[1].trim() != "table" {
                 continue;
             }
+
             let ddl = DdlParser::parse(&sql).unwrap();
             if ddl.0 == DdlType::CreateTable {
                 let db = if let Some(db) = ddl.1 {

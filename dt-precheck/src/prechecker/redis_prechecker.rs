@@ -83,6 +83,7 @@ impl Prechecker for RedisPrechecker {
             router: RdbRouter::from_config(&self.task_config.router, &DbType::Redis)?,
             shut_down: Arc::new(AtomicBool::new(false)),
             monitor: ExtractorMonitor::new(monitor),
+            data_marker: None,
         };
 
         let mut psyncer = RedisPsyncExtractor {

@@ -2,10 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     config::{
-        config_enums::DbType, config_token_parser::ConfigTokenParser,
-        datamarker_config::DataMarkerConfig, filter_config::FilterConfig,
+        config_enums::DbType, config_token_parser::ConfigTokenParser, filter_config::FilterConfig,
     },
-    datamarker::transaction_control::TransactionWorker,
     error::Error,
     utils::sql_util::SqlUtil,
 };
@@ -23,8 +21,6 @@ pub struct RdbFilter {
     pub do_structures: HashSet<String>,
     pub do_ddls: HashSet<String>,
     pub cache: HashMap<(String, String), bool>,
-
-    pub transaction_worker: TransactionWorker,
 }
 
 impl RdbFilter {
@@ -39,20 +35,7 @@ impl RdbFilter {
             do_structures: Self::parse_individual_tokens(&config.do_structures, &db_type)?,
             do_ddls: Self::parse_individual_tokens(&config.do_ddls, &db_type)?,
             cache: HashMap::new(),
-            transaction_worker: TransactionWorker::default(),
         })
-    }
-
-    pub fn from_config_with_transaction(
-        config: &FilterConfig,
-        db_type: DbType,
-        datamarker_config: &DataMarkerConfig,
-    ) -> Result<Self, Error> {
-        let mut filter = Self::from_config(config, db_type)?;
-
-        filter.transaction_worker = TransactionWorker::from(datamarker_config);
-
-        Ok(filter)
     }
 
     pub fn filter_db(&mut self, db: &str) -> bool {
@@ -66,10 +49,9 @@ impl RdbFilter {
         }
 
         let do_tb_db: HashSet<String> = self.do_tbs.iter().map(|(d, _)| d.clone()).collect();
-        let keep_with_white = Self::contain_db(&self.do_dbs, db, &escape_pairs)
+        let keep = Self::contain_db(&self.do_dbs, db, &escape_pairs)
             || Self::contain_db(&do_tb_db, db, &escape_pairs);
-
-        !keep_with_white
+        !keep
     }
 
     pub fn filter_tb(&mut self, db: &str, tb: &str) -> bool {
@@ -89,27 +71,11 @@ impl RdbFilter {
         filter
     }
 
-    pub fn filter_transaction_tb(&mut self, db: &str, tb: &str) -> bool {
-        if !self.filter_tb(db, tb) {
-            return false;
-        }
-
-        if !self.transaction_worker.is_validate() {
-            // not enable transaction
-            return true;
-        }
-
-        self.transaction_worker
-            .pick_infos(db, tb)
-            .unwrap()
-            .is_none()
-    }
-
     pub fn filter_event(&mut self, db: &str, tb: &str, row_type: &str) -> bool {
         if !Self::match_all(&self.do_events) && !self.do_events.contains(row_type) {
             return true;
         }
-        self.filter_transaction_tb(db, tb)
+        self.filter_tb(db, tb)
     }
 
     pub fn filter_all_ddl(&self) -> bool {
