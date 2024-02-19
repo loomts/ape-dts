@@ -1,87 +1,97 @@
 use dt_common::{error::Error, utils::time_util::TimeUtil};
 use dt_connector::data_marker::DataMarker;
 use std::collections::HashMap;
+use tokio::task::JoinHandle;
 
 use crate::test_config_util::TestConfigUtil;
 
 use super::rdb_test_runner::RdbTestRunner;
 
 pub struct RdbCycleTestRunner {
-    rdb_test_runner: RdbTestRunner,
+    base: RdbTestRunner,
 }
 
 const DST: &str = "dst";
 
 impl RdbCycleTestRunner {
-    pub async fn new(
-        relative_test_dir: &str,
-        config_tmp_relative_dir: &str,
-    ) -> Result<Self, Error> {
+    pub async fn new(relative_test_dir: &str) -> Result<Self, Error> {
         Ok(Self {
-            rdb_test_runner: RdbTestRunner::new_internal(
-                relative_test_dir,
-                config_tmp_relative_dir,
-                false,
-            )
-            .await?,
+            base: RdbTestRunner::new(relative_test_dir, false).await?,
         })
     }
 
     pub async fn close(&self) -> Result<(), Error> {
-        self.rdb_test_runner.close().await
+        self.base.close().await
+    }
+
+    pub fn build_expect_tx_count_map(
+        tx_check_data: &Vec<(&str, &str, &str, &str)>,
+    ) -> HashMap<(String, String, String), u8> {
+        let mut expect_tx_count_map = HashMap::new();
+        for (src_node, dst_node, data_origin_node, expect_tx_count) in tx_check_data {
+            let expect_tx_count: u8 = expect_tx_count.parse().unwrap();
+            expect_tx_count_map.insert(
+                (
+                    src_node.to_string(),
+                    dst_node.to_string(),
+                    data_origin_node.to_string(),
+                ),
+                expect_tx_count,
+            );
+        }
+        expect_tx_count_map
     }
 
     pub async fn run_cycle_cdc_test(
         test_dir: &str,
         start_millis: u64,
         parse_millis: u64,
-        transaction_database: &str,
-        expect_num_map: HashMap<String, u8>,
+        tx_check_data: &Vec<(&str, &str, &str, &str)>,
     ) {
+        // HashMap<(src_node, dst_node, data_origin_node), expect_tx_count>
+        let expect_tx_count_map = Self::build_expect_tx_count_map(tx_check_data);
+
         let sub_paths = TestConfigUtil::get_absolute_sub_dir(test_dir);
-        let mut handlers: Vec<tokio::task::JoinHandle<()>> = vec![];
+        let mut handlers: Vec<JoinHandle<()>> = vec![];
         let mut runner_map: HashMap<String, RdbCycleTestRunner> = HashMap::new();
 
         // init all ddls
         for sub_path in &sub_paths {
-            let runner = RdbCycleTestRunner::new(
-                format!("{}/{}", test_dir, sub_path.1).as_str(),
-                sub_path.1.as_str(),
-            )
-            .await
-            .unwrap();
-
-            runner.initialize_ddl().await.unwrap();
-
+            let runner = Self::new(format!("{}/{}", test_dir, sub_path.1).as_str())
+                .await
+                .unwrap();
+            runner.base.execute_test_ddl_sqls().await.unwrap();
             runner_map.insert(sub_path.1.to_owned(), runner);
         }
 
-        // start task
+        // start all sub tasks
         for sub_path in &sub_paths {
             let runner = runner_map.get(sub_path.1.as_str()).unwrap();
-            handlers.push(runner.rdb_test_runner.base.spawn_task().await.unwrap());
+            handlers.push(runner.base.base.spawn_task().await.unwrap());
         }
         TimeUtil::sleep_millis(start_millis).await;
 
-        // init all datas
+        // execute dmls
         for sub_path in &sub_paths {
             let runner = runner_map.get(sub_path.1.as_str()).unwrap();
-            runner.initialize_data().await.unwrap();
+            runner.init_data().await.unwrap();
         }
         TimeUtil::sleep_millis(parse_millis).await;
 
         // do check
         for sub_path in &sub_paths {
             let runner = runner_map.get(sub_path.1.as_str()).unwrap();
+            let data_marker = runner.get_data_marker();
 
-            let expect_num = if expect_num_map.contains_key(sub_path.1.as_str()) {
-                Some(expect_num_map.get(sub_path.1.as_str()).unwrap().clone())
-            } else {
-                None
-            };
+            let tmp_expect_tx_count_map: HashMap<(String, String, String), u8> =
+                expect_tx_count_map
+                    .clone()
+                    .into_iter()
+                    .filter(|i| i.0 .0 == data_marker.src_node && i.0 .1 == data_marker.dst_node)
+                    .collect();
 
             runner
-                .check_cycle_cdc_data(String::from(transaction_database), expect_num)
+                .check_cycle_cdc_data(&tmp_expect_tx_count_map)
                 .await
                 .unwrap();
         }
@@ -100,84 +110,73 @@ impl RdbCycleTestRunner {
 
     async fn check_cycle_cdc_data(
         &self,
-        transaction_database: String,
-        expect_num: Option<u8>,
+        // HashMap<(src_node, dst_node, data_origin_node), expect_tx_count>
+        expect_tx_count_map: &HashMap<(String, String, String), u8>,
     ) -> Result<(), Error> {
-        let dml_count = match expect_num {
-            Some(num) => num,
-            None => self.rdb_test_runner.base.src_dml_sqls.len() as u8,
-        };
+        let data_marker = self.get_data_marker();
+        let mut db_tbs = RdbTestRunner::get_compare_db_tbs_from_sqls(&self.base.base.src_ddl_sqls)?;
+        for i in 0..db_tbs.len() {
+            if db_tbs[i].0 == data_marker.marker_db && db_tbs[i].1 == data_marker.marker_tb {
+                db_tbs.remove(i);
+                break;
+            }
+        }
 
-        let db_tbs =
-            RdbTestRunner::get_compare_db_tbs_from_sqls(&self.rdb_test_runner.base.src_ddl_sqls)?;
-        let db_tbs_without_transaction: Vec<(String, String)> = db_tbs
-            .iter()
-            .filter(|s| !transaction_database.eq(s.0.as_str()))
-            .map(|s| (s.0.clone(), s.1.clone()))
-            .collect();
-        assert!(
-            self.rdb_test_runner
-                .compare_data_for_tbs(&db_tbs_without_transaction, &db_tbs_without_transaction)
-                .await?
-        );
+        assert!(self.base.compare_data_for_tbs(&db_tbs, &db_tbs).await?);
 
-        self.check_transaction_table_data(DST, dml_count as u8)
-            .await
+        self.check_data_marker_data(expect_tx_count_map).await
     }
 
-    async fn check_transaction_table_data(&self, from: &str, expect_num: u8) -> Result<(), Error> {
-        let config = self.rdb_test_runner.base.get_config();
-        let data_marker_config = config.data_marker.unwrap();
-        let data_marker =
-            DataMarker::from_config(&data_marker_config, &config.extractor_basic.db_type).unwrap();
-
+    async fn check_data_marker_data(
+        &self,
+        // HashMap<(src_node, dst_node, data_origin_node), expect_tx_count>
+        expect_tx_count_map: &HashMap<(String, String, String), u8>,
+    ) -> Result<(), Error> {
+        let data_marker = self.get_data_marker();
         let result = self
-            .rdb_test_runner
+            .base
             .fetch_data(
                 &(
                     data_marker.marker_db.to_string(),
                     data_marker.marker_tb.to_string(),
                 ),
-                from,
+                DST,
             )
             .await?;
 
-        let mut checked = false;
         for row_data in result {
             let after = row_data.after.as_ref().unwrap();
-            let data_origin_node = after
-                .get("data_origin_node")
-                .unwrap()
-                .to_option_string()
-                .unwrap();
-            let transaction_count = after.get("n").unwrap().to_option_string().unwrap();
 
-            if data_origin_node == data_marker.src_node {
-                println!(
-                    "src_node: {}, dst_node: {}, transaction_count: {}",
-                    data_marker.src_node, data_marker.dst_node, transaction_count
-                );
-                assert_eq!(transaction_count, expect_num.to_string());
-                checked = true;
+            let src_node = after.get("src_node").unwrap().to_string();
+            let dst_node = after.get("dst_node").unwrap().to_string();
+            let data_origin_node = after.get("data_origin_node").unwrap().to_string();
+            let tx_count: u8 = after.get("n").unwrap().to_string().parse().unwrap();
+
+            if src_node != data_marker.src_node || dst_node != data_marker.dst_node {
+                continue;
             }
+
+            println!(
+                "src_node: {}, dst_node: {}, data_origin_node: {}, tx_count: {}",
+                src_node, dst_node, data_origin_node, tx_count
+            );
+
+            assert_eq!(
+                tx_count,
+                *expect_tx_count_map
+                    .get(&(src_node, dst_node, data_origin_node))
+                    .unwrap()
+            );
         }
-        assert!(checked);
         Ok(())
     }
 
-    async fn initialize_ddl(&self) -> Result<(), Error> {
-        // prepare src and dst tables
-        self.rdb_test_runner.execute_test_ddl_sqls().await?;
-
-        Ok(())
-    }
-
-    async fn initialize_data(&self) -> Result<(), Error> {
+    async fn init_data(&self) -> Result<(), Error> {
         let mut src_insert_sqls = Vec::new();
         let mut src_update_sqls = Vec::new();
         let mut src_delete_sqls = Vec::new();
 
-        for sql in self.rdb_test_runner.base.src_dml_sqls.iter() {
+        for sql in self.base.base.src_dml_sqls.iter() {
             if sql.to_lowercase().starts_with("insert") {
                 src_insert_sqls.push(sql.clone());
             } else if sql.to_lowercase().starts_with("update") {
@@ -188,20 +187,18 @@ impl RdbCycleTestRunner {
         }
 
         // insert src data
-        self.rdb_test_runner
-            .execute_src_sqls(&src_insert_sqls)
-            .await?;
+        self.base.execute_src_sqls(&src_insert_sqls).await?;
 
         // update src data
-        self.rdb_test_runner
-            .execute_src_sqls(&src_update_sqls)
-            .await?;
+        self.base.execute_src_sqls(&src_update_sqls).await?;
 
         // delete src data
-        self.rdb_test_runner
-            .execute_src_sqls(&src_delete_sqls)
-            .await?;
+        self.base.execute_src_sqls(&src_delete_sqls).await?;
 
         Ok(())
+    }
+
+    fn get_data_marker(&self) -> DataMarker {
+        self.base.base.get_data_marker().unwrap()
     }
 }

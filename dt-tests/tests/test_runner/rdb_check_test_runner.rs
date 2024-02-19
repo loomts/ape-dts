@@ -10,7 +10,7 @@ pub struct RdbCheckTestRunner {
 
 impl RdbCheckTestRunner {
     pub async fn new(relative_test_dir: &str) -> Result<Self, Error> {
-        let base = RdbTestRunner::new(relative_test_dir).await.unwrap();
+        let base = RdbTestRunner::new_default(relative_test_dir).await.unwrap();
         let version = base.get_dst_mysql_version().await;
         let (expect_check_log_dir, dst_check_log_dir) =
             CheckUtil::get_check_log_dir(&base.base, &version);

@@ -67,8 +67,7 @@ impl RedisTestRunner {
 
         self.print_version_info();
 
-        self.redis_util
-            .execute_cmds(&mut self.src_conn, &self.base.src_dml_sqls.clone());
+        self.execute_test_dml_sqls()?;
         self.base.start_task().await?;
         self.compare_all_data()
     }
@@ -85,8 +84,7 @@ impl RedisTestRunner {
 
         self.print_version_info();
 
-        self.redis_util
-            .execute_cmds(&mut self.src_conn, &self.base.src_dml_sqls.clone());
+        self.execute_test_dml_sqls()?;
         TimeUtil::sleep_millis(parse_millis).await;
         self.compare_all_data()?;
 
@@ -138,7 +136,13 @@ impl RedisTestRunner {
         Ok(())
     }
 
-    fn compare_all_data(&mut self) -> Result<(), Error> {
+    pub fn execute_test_dml_sqls(&mut self) -> Result<(), Error> {
+        self.redis_util
+            .execute_cmds(&mut self.src_conn, &self.base.src_dml_sqls.clone());
+        Ok(())
+    }
+
+    pub fn compare_all_data(&mut self) -> Result<(), Error> {
         let dbs = self.redis_util.list_dbs(&mut self.src_conn);
         for db in dbs.iter() {
             println!("compare data for db: {}", db);
@@ -152,6 +156,12 @@ impl RedisTestRunner {
             .execute_cmd(&mut self.src_conn, &format!("SELECT {}", db));
         self.redis_util
             .execute_cmd_in_cluster(&mut self.dst_conn, &format!("SELECT {}", db));
+
+        let data_marker_key = if let Some(data_marker) = self.base.get_data_marker() {
+            data_marker.marker
+        } else {
+            String::new()
+        };
 
         let mut string_keys = Vec::new();
         let mut hash_keys = Vec::new();
@@ -167,6 +177,11 @@ impl RedisTestRunner {
         let keys = self.redis_util.list_keys(&mut self.src_conn, "*");
         for i in keys.iter() {
             let key = i.clone();
+
+            if key == data_marker_key {
+                continue;
+            }
+
             let key_type = self.redis_util.get_key_type(&mut self.src_conn, &key);
             match key_type.to_lowercase().as_str() {
                 "string" => string_keys.push(key),

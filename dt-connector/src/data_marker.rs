@@ -4,9 +4,7 @@ use dt_common::{
     config::{config_enums::DbType, data_marker_config::DataMarkerConfig},
     error::Error,
 };
-use dt_meta::{
-    col_value::ColValue, dt_data::DtData, redis::redis_object::RedisObject, row_data::RowData,
-};
+use dt_meta::{col_value::ColValue, dt_data::DtData};
 
 #[derive(Debug, Clone, Default)]
 pub struct DataMarker {
@@ -95,6 +93,7 @@ impl DataMarker {
     pub fn refresh(&mut self, dt_data: &DtData) {
         match dt_data {
             DtData::Dml { row_data } => {
+                // refresh should be only called when dt_data is a data marker
                 // update data_origin_node
                 if let Some(ColValue::String(data_origin_node)) =
                     row_data.after.as_ref().unwrap().get(DATA_ORIGIN_NODE)
@@ -104,7 +103,6 @@ impl DataMarker {
             }
 
             DtData::Redis { entry } => {
-                // refresh should be only called when dt_data is a data marker
                 self.data_origin_node = entry.cmd.get_str_arg(2);
             }
 
@@ -115,12 +113,6 @@ impl DataMarker {
         self.filter = self.ignore_nodes.contains(&self.data_origin_node)
             || !self.do_nodes.contains(&self.data_origin_node);
         self.reseted = false;
-    }
-
-    pub fn refresh_2(&mut self, row_data: &RowData) {
-        self.refresh(&DtData::Dml {
-            row_data: row_data.clone(),
-        })
     }
 
     pub fn filter(&self) -> bool {

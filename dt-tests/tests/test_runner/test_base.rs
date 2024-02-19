@@ -19,7 +19,7 @@ pub struct TestBase {}
 #[allow(dead_code)]
 impl TestBase {
     pub async fn run_snapshot_test(test_dir: &str) {
-        let runner = RdbTestRunner::new(test_dir).await.unwrap();
+        let runner = RdbTestRunner::new_default(test_dir).await.unwrap();
         runner.run_snapshot_test(true).await.unwrap();
         runner.close().await.unwrap();
     }
@@ -29,7 +29,7 @@ impl TestBase {
         db_type: &DbType,
         dst_expected_counts: HashMap<&str, usize>,
     ) {
-        let runner = RdbTestRunner::new(test_dir).await.unwrap();
+        let runner = RdbTestRunner::new_default(test_dir).await.unwrap();
         runner.run_snapshot_test(false).await.unwrap();
 
         let assert_dst_count = |db_tb: &(String, String), count: usize| {
@@ -49,7 +49,7 @@ impl TestBase {
     }
 
     pub async fn run_cdc_test(test_dir: &str, start_millis: u64, parse_millis: u64) {
-        let runner = RdbTestRunner::new(test_dir).await.unwrap();
+        let runner = RdbTestRunner::new_default(test_dir).await.unwrap();
         runner
             .run_cdc_test(start_millis, parse_millis)
             .await
@@ -60,7 +60,7 @@ impl TestBase {
     }
 
     pub async fn run_heartbeat_test(test_dir: &str, start_millis: u64, parse_millis: u64) {
-        let runner = RdbTestRunner::new(test_dir).await.unwrap();
+        let runner = RdbTestRunner::new_default(test_dir).await.unwrap();
         runner
             .run_heartbeat_test(start_millis, parse_millis)
             .await
@@ -69,7 +69,7 @@ impl TestBase {
     }
 
     pub async fn run_ddl_test(test_dir: &str, start_millis: u64, parse_millis: u64) {
-        let runner = RdbTestRunner::new(test_dir).await.unwrap();
+        let runner = RdbTestRunner::new_default(test_dir).await.unwrap();
         runner
             .run_ddl_test(start_millis, parse_millis)
             .await

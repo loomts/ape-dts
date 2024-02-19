@@ -17,7 +17,7 @@ mod test {
     async fn cdc_basic_test() {
         let test_dir = "mysql_to_foxlake/cdc_basic_test";
 
-        let runner = RdbTestRunner::new(test_dir).await.unwrap();
+        let runner = RdbTestRunner::new_default(test_dir).await.unwrap();
         let (s3_client, bucket, root_dir) = init_s3_client(&runner.base.task_config_file).await;
         let s3_client = s3_client.unwrap();
 

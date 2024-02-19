@@ -11,8 +11,10 @@ CREATE SCHEMA ape_trans_pg;
 
 CREATE TABLE ape_trans_pg.topo1 (
   data_origin_node varchar(255) NOT NULL,
+  src_node varchar(255) NOT NULL,
+  dst_node varchar(255) NOT NULL,
   n bigint DEFAULT NULL,
-  PRIMARY KEY (data_origin_node)
+  PRIMARY KEY (data_origin_node, src_node, dst_node)
 );
 
 SELECT pg_drop_replication_slot('ape_test') FROM pg_replication_slots WHERE slot_name = 'ape_test';

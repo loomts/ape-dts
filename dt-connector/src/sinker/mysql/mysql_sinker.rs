@@ -201,16 +201,22 @@ impl MysqlSinker {
     fn get_data_marker_sql(&self) -> Option<String> {
         if let Some(data_marker) = &self.data_marker {
             let data_marker = data_marker.read().unwrap();
-            // CREATE TABLE `topo1` (
+            // CREATE TABLE `ape_trans_mysql`.`topo1` (
             //     `data_origin_node` varchar(255) NOT NULL,
+            //     `src_node` varchar(255) NOT NULL,
+            //     `dst_node` varchar(255) NOT NULL,
             //     `n` bigint DEFAULT NULL,
-            //     PRIMARY KEY (`data_origin_node`)
-            //   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3
+            //     PRIMARY KEY (`data_origin_node`, `src_node`, `dst_node`)
+            // ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;
             let sql = format!(
-                "INSERT INTO `{}`.`{}`(data_origin_node, n) 
-                VALUES('{}', 1) 
+                "INSERT INTO `{}`.`{}`(data_origin_node, src_node, dst_node, n) 
+                VALUES('{}', '{}', '{}', 1) 
                 ON DUPLICATE KEY UPDATE n=n+1",
-                data_marker.marker_db, data_marker.marker_tb, data_marker.data_origin_node
+                data_marker.marker_db,
+                data_marker.marker_tb,
+                data_marker.data_origin_node,
+                data_marker.src_node,
+                data_marker.dst_node
             );
             Some(sql)
         } else {

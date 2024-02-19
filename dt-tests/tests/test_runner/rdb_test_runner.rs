@@ -37,18 +37,12 @@ pub const PUBLIC: &str = "public";
 
 #[allow(dead_code)]
 impl RdbTestRunner {
-    pub async fn new(relative_test_dir: &str) -> Result<Self, Error> {
-        Self::new_internal(relative_test_dir, "", true).await
+    pub async fn new_default(relative_test_dir: &str) -> Result<Self, Error> {
+        Self::new(relative_test_dir, true).await
     }
 
-    pub async fn new_internal(
-        relative_test_dir: &str,
-        config_tmp_relative_dir: &str,
-        recreate_pub_and_slot: bool,
-    ) -> Result<Self, Error> {
-        let mut base = BaseTestRunner::new_internal(relative_test_dir, config_tmp_relative_dir)
-            .await
-            .unwrap();
+    pub async fn new(relative_test_dir: &str, recreate_pub_and_slot: bool) -> Result<Self, Error> {
+        let mut base = BaseTestRunner::new(relative_test_dir).await.unwrap();
 
         // prepare conn pools
         let mut src_conn_pool_mysql = None;

@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
 
     use serial_test::serial;
 
@@ -61,55 +60,59 @@ mod test {
 
     #[tokio::test]
     #[serial]
-    async fn circle_basic_test() {
+    async fn cycle_basic_test() {
+        let tx_check_data = vec![
+            ("node1", "node2", "node1", "10"),
+            ("node2", "node1", "node2", "10"),
+        ];
+
         RdbCycleTestRunner::run_cycle_cdc_test(
             "mysql_to_mysql/cdc/cycle_basic_test",
             3000,
             2000,
-            "ape_trans_mysql",
-            HashMap::new(),
+            &tx_check_data,
         )
         .await;
     }
 
     #[tokio::test]
     #[serial]
-    async fn circle_star_test() {
+    async fn cycle_star_test() {
+        let tx_check_data = vec![
+            ("node1", "node2", "node1", "10"),
+            ("node1", "node2", "node3", "10"),
+            ("node1", "node3", "node1", "10"),
+            ("node1", "node3", "node2", "10"),
+            ("node2", "node1", "node2", "10"),
+            ("node3", "node1", "node3", "10"),
+        ];
+
         RdbCycleTestRunner::run_cycle_cdc_test(
             "mysql_to_mysql/cdc/cycle_star_test",
             3000,
             2000,
-            "ape_trans_mysql",
-            vec![
-                ("topo1_node1_to_node2".to_string(), 10 as u8),
-                ("topo1_node1_to_node3".to_string(), 10 as u8),
-                ("topo1_node2_to_node1".to_string(), 10 as u8),
-                ("topo1_node3_to_node1".to_string(), 10 as u8),
-            ]
-            .into_iter()
-            .collect::<HashMap<String, u8>>(),
+            &tx_check_data,
         )
         .await;
     }
 
     #[tokio::test]
     #[serial]
-    async fn circle_net_test() {
+    async fn cycle_net_test() {
+        let tx_check_data = vec![
+            ("node1", "node2", "node1", "10"),
+            ("node1", "node3", "node1", "10"),
+            ("node2", "node1", "node2", "10"),
+            ("node2", "node3", "node2", "10"),
+            ("node3", "node1", "node3", "10"),
+            ("node3", "node2", "node3", "10"),
+        ];
+
         RdbCycleTestRunner::run_cycle_cdc_test(
             "mysql_to_mysql/cdc/cycle_net_test",
             3000,
             2000,
-            "ape_trans_mysql",
-            vec![
-                ("topo1_node1_to_node2".to_string(), 10 as u8),
-                ("topo1_node1_to_node3".to_string(), 10 as u8),
-                ("topo1_node2_to_node1".to_string(), 10 as u8),
-                ("topo1_node2_to_node3".to_string(), 10 as u8),
-                ("topo1_node3_to_node1".to_string(), 10 as u8),
-                ("topo1_node3_to_node2".to_string(), 10 as u8),
-            ]
-            .into_iter()
-            .collect::<HashMap<String, u8>>(),
+            &tx_check_data,
         )
         .await;
     }
