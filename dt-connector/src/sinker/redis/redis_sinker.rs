@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::RwLock;
 use std::time::Instant;
 
 use async_trait::async_trait;
@@ -16,6 +17,7 @@ use redis::Connection;
 use redis::ConnectionLike;
 
 use crate::call_batch_fn;
+use crate::data_marker::DataMarker;
 use crate::sinker::base_sinker::BaseSinker;
 use crate::Sinker;
 
@@ -31,6 +33,7 @@ pub struct RedisSinker {
     pub method: RedisWriteMethod,
     pub meta_manager: Option<RdbMetaManager>,
     pub monitor: Arc<Mutex<Monitor>>,
+    pub data_marker: Option<Arc<RwLock<DataMarker>>>,
 }
 
 #[async_trait]
@@ -246,8 +249,19 @@ impl RedisSinker {
         }
 
         let mut packed_cmds = Vec::new();
+        if let Some(data_marker_cmd) = self.get_data_marker_cmd() {
+            let multi_cmd = self.get_multi_cmd();
+            packed_cmds.extend_from_slice(&CmdEncoder::encode(&multi_cmd));
+            packed_cmds.extend_from_slice(&CmdEncoder::encode(&data_marker_cmd));
+        }
+
         for cmd in cmds {
             packed_cmds.extend_from_slice(&CmdEncoder::encode(&cmd));
+        }
+
+        if self.data_marker.is_some() {
+            let exec_cmd = self.get_exec_cmd();
+            packed_cmds.extend_from_slice(&CmdEncoder::encode(&exec_cmd));
         }
 
         let result = self.conn.req_packed_commands(&packed_cmds, 0, batch_size);
@@ -261,6 +275,14 @@ impl RedisSinker {
     }
 
     async fn serial_sink(&mut self, cmds: Vec<RedisCmd>) -> Result<(), Error> {
+        if let Some(data_marker_cmd) = self.get_data_marker_cmd() {
+            let multi_cmd = self.get_multi_cmd();
+            let mut packed_cmds = Vec::new();
+            packed_cmds.extend_from_slice(&CmdEncoder::encode(&multi_cmd));
+            packed_cmds.extend_from_slice(&CmdEncoder::encode(&data_marker_cmd));
+            self.conn.req_packed_commands(&packed_cmds, 0, 2).unwrap();
+        }
+
         for cmd in cmds {
             let result = self.conn.req_packed_command(&CmdEncoder::encode(&cmd));
             if let Err(error) = result {
@@ -271,6 +293,34 @@ impl RedisSinker {
                 )));
             }
         }
+
+        if self.data_marker.is_some() {
+            let exec_cmd = self.get_exec_cmd();
+            self.conn
+                .req_packed_command(&CmdEncoder::encode(&exec_cmd))
+                .unwrap();
+        }
         Ok(())
+    }
+
+    fn get_multi_cmd(&self) -> RedisCmd {
+        RedisCmd::from_str_args(&vec!["MULTI"])
+    }
+
+    fn get_exec_cmd(&self) -> RedisCmd {
+        RedisCmd::from_str_args(&vec!["EXEC"])
+    }
+
+    fn get_data_marker_cmd(&self) -> Option<RedisCmd> {
+        if let Some(data_marker) = &self.data_marker {
+            let data_marker = data_marker.read().unwrap();
+            let cmd = RedisCmd::from_str_args(&vec![
+                "SET",
+                &data_marker.marker,
+                &data_marker.data_origin_node,
+            ]);
+            return Some(cmd);
+        }
+        None
     }
 }

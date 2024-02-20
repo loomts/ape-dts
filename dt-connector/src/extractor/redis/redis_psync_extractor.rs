@@ -49,6 +49,8 @@ impl RedisPsyncExtractor<'_> {
         // replconf listening-port [port]
         let repl_port = self.repl_port.to_string();
         let repl_cmd = RedisCmd::from_str_args(&vec!["replconf", "listening-port", &repl_port]);
+        log_info!("repl command: {}", repl_cmd.to_string());
+
         self.conn.send(&repl_cmd).await.unwrap();
         if let Value::Okay = self.conn.read().await.unwrap() {
         } else {
@@ -66,6 +68,7 @@ impl RedisPsyncExtractor<'_> {
 
         // PSYNC [run_id] [offset]
         let psync_cmd = RedisCmd::from_str_args(&vec!["PSYNC", &run_id, &repl_offset]);
+        log_info!("PSYNC command: {}", psync_cmd.to_string());
         self.conn.send(&psync_cmd).await.unwrap();
         let value = self.conn.read().await.unwrap();
 

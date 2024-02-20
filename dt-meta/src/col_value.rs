@@ -91,6 +91,10 @@ impl ColValue {
         }
     }
 
+    pub fn to_string(&self) -> String {
+        self.to_option_string().unwrap()
+    }
+
     pub fn is_nan(&self) -> bool {
         match &self {
             ColValue::Float(v) => v.is_nan(),

@@ -1,11 +1,12 @@
 use std::{
     str::FromStr,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, RwLock},
     time::Instant,
 };
 
 use crate::{
     call_batch_fn, close_conn_pool,
+    data_marker::DataMarker,
     rdb_query_builder::{RdbQueryBuilder, RdbQueryInfo},
     rdb_router::RdbRouter,
     sinker::base_sinker::BaseSinker,
@@ -18,7 +19,7 @@ use dt_common::{
 };
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
-    Executor, Pool, Postgres, Transaction,
+    Executor, Pool, Postgres,
 };
 
 use dt_meta::{
@@ -39,7 +40,7 @@ pub struct PgSinker {
     pub router: RdbRouter,
     pub batch_size: usize,
     pub monitor: Arc<Mutex<Monitor>>,
-    pub transaction_command: String,
+    pub data_marker: Option<Arc<RwLock<DataMarker>>>,
 }
 
 #[async_trait]
@@ -105,13 +106,13 @@ impl Sinker for PgSinker {
 
 impl PgSinker {
     async fn serial_sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
-        if self.is_transaction_enable() {
-            return self.transaction_serial_sink(data).await;
-        }
-
         let start_time = Instant::now();
         let mut data_size = 0;
 
+        let mut tx = self.conn_pool.begin().await.unwrap();
+        if let Some(sql) = self.get_data_marker_sql() {
+            sqlx::query(&sql).execute(&mut tx).await.unwrap();
+        }
         for row_data in data.iter() {
             data_size += row_data.data_size;
 
@@ -124,8 +125,9 @@ impl PgSinker {
                 query_builder.get_query_info(row_data)?
             };
             let query = query_builder.create_pg_query(&query_info);
-            query.execute(&self.conn_pool).await.unwrap();
+            query.execute(&mut tx).await.unwrap();
         }
+        tx.commit().await.unwrap();
 
         BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
             .await
@@ -146,11 +148,11 @@ impl PgSinker {
             query_builder.get_batch_delete_query(data, start_index, batch_size)?;
         let query = query_builder.create_pg_query(&query_info);
 
-        if self.is_transaction_enable() {
-            let mut transaction = self.conn_pool.begin().await.unwrap();
-            self.execute_transaction_command(&mut transaction).await;
-            query.execute(&mut transaction).await.unwrap();
-            transaction.commit().await.unwrap();
+        if let Some(sql) = self.get_data_marker_sql() {
+            let mut tx = self.conn_pool.begin().await.unwrap();
+            sqlx::query(&sql).execute(&mut tx).await.unwrap();
+            query.execute(&mut tx).await.unwrap();
+            tx.commit().await.unwrap();
         } else {
             query.execute(&self.conn_pool).await.unwrap();
         }
@@ -177,11 +179,11 @@ impl PgSinker {
             query_builder.get_batch_insert_query(data, start_index, batch_size)?;
         let query = query_builder.create_pg_query(&query_info);
 
-        let result = if self.is_transaction_enable() {
-            let mut transaction = self.conn_pool.begin().await.unwrap();
-            self.execute_transaction_command(&mut transaction).await;
-            query.execute(&mut transaction).await.unwrap();
-            transaction.commit().await
+        let exec_error = if let Some(sql) = self.get_data_marker_sql() {
+            let mut tx = self.conn_pool.begin().await.unwrap();
+            sqlx::query(&sql).execute(&mut tx).await.unwrap();
+            query.execute(&mut tx).await.unwrap();
+            tx.commit().await
         } else {
             match query.execute(&self.conn_pool).await {
                 Err(e) => Err(e),
@@ -189,7 +191,7 @@ impl PgSinker {
             }
         };
 
-        if let Err(error) = result {
+        if let Err(error) = exec_error {
             log_error!(
                 "batch insert failed, will insert one by one, schema: {}, tb: {}, error: {}",
                 tb_meta.basic.schema,
@@ -235,42 +237,32 @@ impl PgSinker {
         Ok(query_info)
     }
 
-    async fn transaction_serial_sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
-        let start_time = Instant::now();
-        let mut data_size = 0;
-
-        let mut transaction = self.conn_pool.begin().await.unwrap();
-        self.execute_transaction_command(&mut transaction).await;
-
-        for row_data in data.iter() {
-            data_size += row_data.data_size;
-
-            let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&row_data).await?;
-            let query_builder = RdbQueryBuilder::new_for_pg(tb_meta);
-
-            let query_info = if row_data.row_type == RowType::Insert {
-                Self::get_insert_query(&query_builder, tb_meta, row_data)?
-            } else {
-                query_builder.get_query_info(row_data)?
-            };
-            let query = query_builder.create_pg_query(&query_info);
-            query.execute(&mut transaction).await.unwrap();
+    fn get_data_marker_sql(&self) -> Option<String> {
+        if let Some(data_marker) = &self.data_marker {
+            let data_marker = data_marker.read().unwrap();
+            // CREATE TABLE ape_trans_pg.topo1 (
+            //     data_origin_node varchar(255) NOT NULL,
+            //     src_node varchar(255) NOT NULL,
+            //     dst_node varchar(255) NOT NULL,
+            //     n bigint DEFAULT NULL,
+            //     PRIMARY KEY (data_origin_node, src_node, dst_node)
+            //   );
+            let sql = format!(
+                r#"INSERT INTO "{}"."{}"(data_origin_node, src_node, dst_node, n)
+                VALUES('{}', '{}', '{}', 1) 
+                ON CONFLICT (data_origin_node, src_node, dst_node) 
+                DO UPDATE SET n="{}"."{}".n+1"#,
+                data_marker.marker_db,
+                data_marker.marker_tb,
+                data_marker.data_origin_node,
+                data_marker.src_node,
+                data_marker.dst_node,
+                data_marker.marker_db,
+                data_marker.marker_tb,
+            );
+            Some(sql)
+        } else {
+            None
         }
-
-        transaction.commit().await.unwrap();
-
-        BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
-            .await
-    }
-
-    async fn execute_transaction_command(&self, transaction: &mut Transaction<'_, Postgres>) {
-        sqlx::query(&self.transaction_command)
-            .execute(transaction)
-            .await
-            .unwrap();
-    }
-
-    fn is_transaction_enable(&self) -> bool {
-        !self.transaction_command.is_empty()
     }
 }

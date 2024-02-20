@@ -64,4 +64,7 @@ pub enum Error {
 
     #[error("http request error: {0}")]
     HttpError(String),
+
+    #[error("data marker error: {0}")]
+    DataMarkerError(String),
 }

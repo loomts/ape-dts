@@ -1,7 +1,7 @@
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
+        Arc, Mutex, RwLock,
     },
     time::Instant,
 };
@@ -15,7 +15,7 @@ use dt_common::{
     monitor::{counter_type::CounterType, monitor::Monitor},
     utils::time_util::TimeUtil,
 };
-use dt_connector::Sinker;
+use dt_connector::{data_marker::DataMarker, Sinker};
 use dt_meta::{
     ddl_data::DdlData,
     dt_data::{DtData, DtItem},
@@ -37,6 +37,7 @@ pub struct BasePipeline {
     pub batch_sink_interval_secs: u64,
     pub syncer: Arc<Mutex<Syncer>>,
     pub monitor: Arc<Mutex<Monitor>>,
+    pub data_marker: Option<Arc<RwLock<DataMarker>>>,
 }
 
 enum SinkMethod {
@@ -85,6 +86,13 @@ impl Pipeline for BasePipeline {
                 last_sink_time = Instant::now();
                 self.parallelizer.drain(self.buffer.as_ref()).await.unwrap()
             };
+
+            if let Some(data_marker) = &mut self.data_marker {
+                if !data.is_empty() {
+                    data_marker.write().unwrap().data_origin_node =
+                        data[0].data_origin_node.clone();
+                }
+            }
 
             // process all row_datas in buffer at a time
             let (count, last_received, last_commit) = match Self::get_sink_method(&data) {
@@ -194,6 +202,10 @@ impl BasePipeline {
                         continue;
                     }
                     raw_data.push(i.dt_data);
+                }
+
+                DtData::Begin {} => {
+                    continue;
                 }
 
                 _ => {

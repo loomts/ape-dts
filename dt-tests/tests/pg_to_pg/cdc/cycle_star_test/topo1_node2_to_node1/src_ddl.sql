@@ -9,5 +9,13 @@ TRUNCATE TABLE twoway_test_db_1.default_table;
 DROP SCHEMA IF EXISTS ape_trans_pg CASCADE;
 CREATE SCHEMA ape_trans_pg;
 
-CREATE TABLE ape_trans_pg.topo1_node1_to_node2 (n integer PRIMARY KEY);
-insert into ape_trans_pg.topo1_node1_to_node2 (n) values (0);
+CREATE TABLE ape_trans_pg.topo1 (
+  data_origin_node varchar(255) NOT NULL,
+  src_node varchar(255) NOT NULL,
+  dst_node varchar(255) NOT NULL,
+  n bigint DEFAULT NULL,
+  PRIMARY KEY (data_origin_node, src_node, dst_node)
+);
+
+SELECT pg_drop_replication_slot('ape_test') FROM pg_replication_slots WHERE slot_name = 'ape_test';
+SELECT * FROM pg_create_logical_replication_slot('ape_test', 'pgoutput');

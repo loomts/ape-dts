@@ -6,7 +6,7 @@ use crate::error::Error;
 
 use super::{
     config_enums::{ConflictPolicyEnum, DbType, ExtractType, ParallelType, SinkType},
-    datamarker_config::{DataMarkerConfig, DataMarkerSettingEnum, DataMarkerTypeEnum},
+    data_marker_config::DataMarkerConfig,
     extractor_config::{ExtractorBasicConfig, ExtractorConfig},
     filter_config::FilterConfig,
     parallelizer_config::ParallelizerConfig,
@@ -29,7 +29,7 @@ pub struct TaskConfig {
     pub filter: FilterConfig,
     pub router: RouterConfig,
     pub resumer: ResumerConfig,
-    pub datamarker: DataMarkerConfig,
+    pub data_marker: Option<DataMarkerConfig>,
 }
 
 const EXTRACTOR: &str = "extractor";
@@ -43,7 +43,7 @@ const RUNTIME: &str = "runtime";
 const FILTER: &str = "filter";
 const ROUTER: &str = "router";
 const RESUMER: &str = "resumer";
-const DATAMARKER_SECTION: &str = "datamarker";
+const DATA_MARKER: &str = "data_marker";
 const BATCH_SIZE: &str = "batch_size";
 const SAMPLE_INTERVAL: &str = "sample_interval";
 const ASTRISK: &str = "*";
@@ -76,7 +76,7 @@ impl TaskConfig {
             filter: Self::load_filter_config(&ini).unwrap(),
             router: Self::load_router_config(&ini).unwrap(),
             resumer: Self::load_resumer_config(&ini).unwrap(),
-            datamarker: Self::load_datamarker_config(&ini),
+            data_marker: Self::load_data_marker_config(&ini).unwrap(),
         }
     }
 
@@ -470,42 +470,20 @@ impl TaskConfig {
         Ok(ResumerConfig { resume_values })
     }
 
-    fn load_datamarker_config(ini: &Ini) -> DataMarkerConfig {
-        let datamarker_sections: Vec<String> = ini
-            .sections()
-            .iter()
-            .filter(|&s| *s == DATAMARKER_SECTION)
-            .cloned()
-            .collect();
-
-        if datamarker_sections.is_empty() {
-            return DataMarkerConfig { setting: None };
+    fn load_data_marker_config(ini: &Ini) -> Result<Option<DataMarkerConfig>, Error> {
+        if !ini.sections().contains(&DATA_MARKER.to_string()) {
+            return Ok(None);
         }
 
-        let datamarker_type = ini
-            .get(DATAMARKER_SECTION, "type")
-            .unwrap_or(DataMarkerTypeEnum::Transaction.to_string());
-        match DataMarkerTypeEnum::from_str(&datamarker_type) {
-            Ok(e) => match e {
-                DataMarkerTypeEnum::Transaction => DataMarkerConfig {
-                    setting: Some(DataMarkerSettingEnum::Transaction {
-                        transaction_db: ini.get(DATAMARKER_SECTION, "transaction_db").unwrap(),
-                        transaction_table: ini
-                            .get(DATAMARKER_SECTION, "transaction_table")
-                            .unwrap(),
-                        transaction_express: ini
-                            .get(DATAMARKER_SECTION, "transaction_express")
-                            .unwrap(),
-                        transaction_command: ini
-                            .get(DATAMARKER_SECTION, "transaction_command")
-                            .unwrap(),
-                        white_nodes: ini.get(DATAMARKER_SECTION, "white_nodes").unwrap(),
-                        black_nodes: ini.get(DATAMARKER_SECTION, "black_nodes").unwrap(),
-                    }),
-                },
-            },
-            _ => DataMarkerConfig { setting: None },
-        }
+        Ok(Some(DataMarkerConfig {
+            topo_name: ini.get(DATA_MARKER, "topo_name").unwrap(),
+            topo_nodes: ini.get(DATA_MARKER, "topo_nodes").unwrap(),
+            src_node: ini.get(DATA_MARKER, "src_node").unwrap(),
+            dst_node: ini.get(DATA_MARKER, "dst_node").unwrap(),
+            do_nodes: ini.get(DATA_MARKER, "do_nodes").unwrap(),
+            ignore_nodes: Self::get_value(ini, DATA_MARKER, "ignore_nodes").unwrap(),
+            marker: Self::get_value(ini, DATA_MARKER, "marker").unwrap(),
+        }))
     }
 
     fn get_value_with_default<T>(
@@ -533,67 +511,5 @@ impl TaskConfig {
         <T as FromStr>::Err: Debug,
     {
         Self::get_value_with_default(ini, section, key, T::default())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-
-    fn mock_props(confs: &str) -> DataMarkerConfig {
-        let mut inis = Ini::new();
-        inis.read(String::from(confs)).unwrap();
-        TaskConfig::load_datamarker_config(&inis)
-    }
-
-    #[test]
-    fn load_datamarker_config_test() {
-        let mut conf: &str = "
-        [datamarker]
-        type=hehe
-        ";
-        let mut config = mock_props(conf);
-        assert!(config.setting.is_none());
-
-        conf = "
-        [datamarker]
-
-        transaction_db=ape_dt
-        transaction_table=ape_dt_topo1_node1_node2
-        transaction_express=ape_dt_(?<topology>.*)_(?<source>.*)_(?<sink>.*)
-        transaction_command=update ape_dt_topo1_node1_node2 set n = n + 1
-        white_nodes=4,5,6
-        black_nodes=1,2,3
-        ";
-        config = mock_props(conf);
-
-        match config.setting {
-            Some(s) => match s {
-                DataMarkerSettingEnum::Transaction {
-                    transaction_db,
-                    transaction_table,
-                    transaction_express,
-                    transaction_command,
-                    white_nodes,
-                    black_nodes,
-                } => {
-                    assert_eq!(transaction_db, "ape_dt");
-                    assert_eq!(transaction_table, "ape_dt_topo1_node1_node2");
-                    assert_eq!(
-                        transaction_express,
-                        "ape_dt_(?<topology>.*)_(?<source>.*)_(?<sink>.*)"
-                    );
-                    assert_eq!(
-                        transaction_command,
-                        "update ape_dt_topo1_node1_node2 set n = n + 1"
-                    );
-
-                    assert_eq!(white_nodes, "4,5,6");
-                    assert_eq!(black_nodes, "1,2,3");
-                }
-            },
-            None => assert!(false),
-        }
     }
 }

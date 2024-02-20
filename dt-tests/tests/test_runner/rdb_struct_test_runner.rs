@@ -14,7 +14,7 @@ pub struct RdbStructTestRunner {
 
 impl RdbStructTestRunner {
     pub async fn new(relative_test_dir: &str) -> Result<Self, Error> {
-        let base = RdbTestRunner::new(relative_test_dir).await.unwrap();
+        let base = RdbTestRunner::new_default(relative_test_dir).await.unwrap();
         Ok(Self { base })
     }
 

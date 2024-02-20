@@ -9,6 +9,7 @@ use super::{ddl_data::DdlData, row_data::RowData};
 pub struct DtItem {
     pub dt_data: DtData,
     pub position: Position,
+    pub data_origin_node: String,
 }
 
 impl DtItem {
@@ -36,6 +37,14 @@ pub enum DtData {
 }
 
 impl DtData {
+    pub fn is_begin(&self) -> bool {
+        matches!(self, DtData::Begin { .. })
+    }
+
+    pub fn is_commit(&self) -> bool {
+        matches!(self, DtData::Commit { .. })
+    }
+
     pub fn is_ddl(&self) -> bool {
         matches!(self, DtData::Ddl { .. })
     }

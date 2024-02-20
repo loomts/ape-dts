@@ -80,7 +80,7 @@ impl PrecheckTestRunner {
     async fn before_check(&self) -> Result<(), Error> {
         match self.db_type {
             DbType::Mysql | DbType::Pg => {
-                let base = RdbTestRunner::new(&self.test_dir).await?;
+                let base = RdbTestRunner::new_default(&self.test_dir).await?;
                 base.execute_test_ddl_sqls().await?;
             }
 

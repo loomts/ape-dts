@@ -1,6 +1,6 @@
 use std::{
     str::FromStr,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, RwLock},
     time::Duration,
 };
 
@@ -15,6 +15,7 @@ use dt_common::{
     utils::rdb_filter::RdbFilter,
 };
 use dt_connector::{
+    data_marker::DataMarker,
     rdb_router::RdbRouter,
     sinker::{
         foxlake_sinker::FoxlakeSinker,
@@ -50,8 +51,8 @@ pub struct SinkerUtil {}
 impl SinkerUtil {
     pub async fn create_sinkers(
         task_config: &TaskConfig,
-        transaction_command: String,
         monitor: Arc<Mutex<Monitor>>,
+        data_marker: Option<Arc<RwLock<DataMarker>>>,
     ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
         let sinkers = match &task_config.sinker {
             SinkerConfig::Mysql { url, batch_size } => {
@@ -62,8 +63,8 @@ impl SinkerUtil {
                     &task_config.runtime.log_level,
                     task_config.parallelizer.parallel_size,
                     *batch_size,
-                    transaction_command,
                     monitor,
+                    data_marker,
                 )
                 .await?
             }
@@ -96,8 +97,8 @@ impl SinkerUtil {
                     &task_config.runtime.log_level,
                     task_config.parallelizer.parallel_size,
                     *batch_size,
-                    transaction_command,
                     monitor,
+                    data_marker,
                 )
                 .await?
             }
@@ -263,6 +264,7 @@ impl SinkerUtil {
                     method,
                     meta_manager,
                     monitor,
+                    data_marker,
                     *is_cluster,
                 )
                 .await?
@@ -303,8 +305,8 @@ impl SinkerUtil {
         log_level: &str,
         parallel_size: usize,
         batch_size: usize,
-        transaction_command: String,
         monitor: Arc<Mutex<Monitor>>,
+        data_marker: Option<Arc<RwLock<DataMarker>>>,
     ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool =
@@ -323,8 +325,8 @@ impl SinkerUtil {
                 meta_manager: meta_manager.clone(),
                 router: router.clone(),
                 batch_size,
-                transaction_command: transaction_command.to_owned(),
                 monitor: monitor.clone(),
+                data_marker: data_marker.clone(),
             };
             sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
         }
@@ -369,8 +371,8 @@ impl SinkerUtil {
         log_level: &str,
         parallel_size: usize,
         batch_size: usize,
-        transaction_command: String,
         monitor: Arc<Mutex<Monitor>>,
+        data_marker: Option<Arc<RwLock<DataMarker>>>,
     ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool =
@@ -386,7 +388,7 @@ impl SinkerUtil {
                 router: router.clone(),
                 batch_size,
                 monitor: monitor.clone(),
-                transaction_command: transaction_command.to_owned(),
+                data_marker: data_marker.clone(),
             };
             sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
         }
@@ -613,6 +615,7 @@ impl SinkerUtil {
         method: &str,
         meta_manager: Option<RdbMetaManager>,
         monitor: Arc<Mutex<Monitor>>,
+        data_marker: Option<Arc<RwLock<DataMarker>>>,
         is_cluster: bool,
     ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
         let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
@@ -643,6 +646,7 @@ impl SinkerUtil {
                     method: method.clone(),
                     meta_manager: meta_manager.clone(),
                     monitor: monitor.clone(),
+                    data_marker: data_marker.clone(),
                 };
                 sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
             }
@@ -650,7 +654,7 @@ impl SinkerUtil {
             for _ in 0..parallel_size {
                 let conn = RedisUtil::create_redis_conn(url).await?;
                 let sinker = RedisSinker {
-                    id: String::new(),
+                    id: url.to_string(),
                     conn,
                     batch_size,
                     now_db_id: -1,
@@ -658,6 +662,7 @@ impl SinkerUtil {
                     method: method.clone(),
                     meta_manager: meta_manager.clone(),
                     monitor: monitor.clone(),
+                    data_marker: data_marker.clone(),
                 };
                 sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
             }
