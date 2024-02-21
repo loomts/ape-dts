@@ -71,11 +71,6 @@ pub enum ParallelType {
     Redis,
 }
 
-pub enum RouteType {
-    Db,
-    Tb,
-}
-
 #[derive(Clone, Debug, IntoStaticStr)]
 pub enum ConflictPolicyEnum {
     #[strum(serialize = "ignore")]

@@ -9,7 +9,7 @@ use std::{
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
-    config::sinker_config::SinkerBasicConfig,
+    config::sinker_config::BasicSinkerConfig,
     error::Error,
     log_info, log_position,
     monitor::{counter_type::CounterType, monitor::Monitor},
@@ -30,7 +30,7 @@ use crate::Pipeline;
 pub struct BasePipeline {
     pub buffer: Arc<ConcurrentQueue<DtItem>>,
     pub parallelizer: Box<dyn Parallelizer + Send>,
-    pub sinker_basic_config: SinkerBasicConfig,
+    pub sinker_basic_config: BasicSinkerConfig,
     pub sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
     pub shut_down: Arc<AtomicBool>,
     pub checkpoint_interval_secs: u64,
@@ -281,7 +281,6 @@ impl BasePipeline {
         SinkMethod::Raw
     }
 
-    #[inline(always)]
     fn record_checkpoint(
         &self,
         last_checkpoint_time: Instant,

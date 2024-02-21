@@ -2,7 +2,7 @@ use std::{cmp, sync::Arc};
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
-use dt_common::{config::sinker_config::SinkerBasicConfig, error::Error};
+use dt_common::{config::sinker_config::BasicSinkerConfig, error::Error};
 use dt_connector::Sinker;
 use dt_meta::{
     ddl_data::DdlData, dt_data::DtItem, rdb_meta_manager::RdbMetaManager, row_data::RowData,
@@ -18,7 +18,7 @@ pub struct MergeParallelizer {
     pub merger: Box<dyn Merger + Send + Sync>,
     pub meta_manager: Option<RdbMetaManager>,
     pub parallel_size: usize,
-    pub sinker_basic_config: SinkerBasicConfig,
+    pub sinker_basic_config: BasicSinkerConfig,
 }
 
 enum MergeType {

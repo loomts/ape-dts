@@ -138,17 +138,14 @@ struct AvroData {
     pub after: Option<Vec<Option<AvroFieldValue>>>,
 }
 
-#[inline(always)]
 fn default_avrodata_fields() -> Option<Vec<AvroFieldDef>> {
     None
 }
 
-#[inline(always)]
 fn default_avrodata_before() -> Option<Vec<Option<AvroFieldValue>>> {
     None
 }
 
-#[inline(always)]
 fn default_avrodata_after() -> Option<Vec<Option<AvroFieldValue>>> {
     None
 }

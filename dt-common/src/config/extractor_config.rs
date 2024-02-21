@@ -9,7 +9,7 @@ pub enum ExtractorConfig {
 
     PgStruct {
         url: String,
-        db: String,
+        schema: String,
     },
 
     MysqlSnapshot {
@@ -36,7 +36,7 @@ pub enum ExtractorConfig {
 
     PgSnapshot {
         url: String,
-        db: String,
+        schema: String,
         tb: String,
         sample_interval: usize,
     },
@@ -114,7 +114,7 @@ pub enum ExtractorConfig {
 }
 
 #[derive(Clone, Debug)]
-pub struct ExtractorBasicConfig {
+pub struct BasicExtractorConfig {
     pub db_type: DbType,
     pub extract_type: ExtractType,
     pub url: String,

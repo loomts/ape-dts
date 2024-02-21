@@ -1,10 +1,10 @@
 use dt_common::utils::rdb_filter::RdbFilter;
 
-use crate::struct_meta::structure::{database::Database, structure_type::StructureType};
+use crate::struct_meta::structure::{schema::Schema, structure_type::StructureType};
 
 #[derive(Debug, Clone)]
 pub struct PgCreateSchemaStatement {
-    pub database: Database,
+    pub schema: Schema,
 }
 
 impl PgCreateSchemaStatement {
@@ -14,8 +14,8 @@ impl PgCreateSchemaStatement {
             return sqls;
         }
 
-        let key = format!("schema.{}", self.database.name.clone());
-        let sql = format!(r#"CREATE SCHEMA IF NOT EXISTS "{}""#, self.database.name);
+        let key = format!("schema.{}", self.schema.name);
+        let sql = format!(r#"CREATE SCHEMA IF NOT EXISTS "{}""#, self.schema.name);
         sqls.push((key, sql));
         sqls
     }

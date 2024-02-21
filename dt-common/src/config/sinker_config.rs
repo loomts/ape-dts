@@ -89,7 +89,7 @@ pub enum SinkerConfig {
 }
 
 #[derive(Clone, Debug)]
-pub struct SinkerBasicConfig {
+pub struct BasicSinkerConfig {
     pub db_type: DbType,
     pub url: String,
     pub batch_size: usize,

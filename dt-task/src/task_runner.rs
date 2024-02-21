@@ -94,7 +94,7 @@ impl TaskRunner {
 
                 ExtractorConfig::PgStruct { url, .. } => Some(ExtractorConfig::PgStruct {
                     url: url.clone(),
-                    db: db.clone(),
+                    schema: db.clone(),
                 }),
 
                 _ => None,
@@ -130,7 +130,7 @@ impl TaskRunner {
                         ..
                     } => ExtractorConfig::PgSnapshot {
                         url: url.clone(),
-                        db: db.clone(),
+                        schema: db.clone(),
                         tb: tb.clone(),
                         sample_interval: *sample_interval,
                     },
@@ -381,7 +381,7 @@ impl TaskRunner {
 
             ExtractorConfig::PgSnapshot {
                 url,
-                db,
+                schema: db,
                 tb,
                 sample_interval,
             } => {
@@ -518,12 +518,12 @@ impl TaskRunner {
                 Box::new(extractor)
             }
 
-            ExtractorConfig::PgStruct { url, db } => {
+            ExtractorConfig::PgStruct { url, schema } => {
                 let filter = RdbFilter::from_config(&self.config.filter, DbType::Pg)?;
                 let extractor = ExtractorUtil::create_pg_struct_extractor(
                     base_extractor,
                     url,
-                    db,
+                    schema,
                     filter,
                     &self.config.runtime.log_level,
                 )

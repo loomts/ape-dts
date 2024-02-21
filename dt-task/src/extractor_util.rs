@@ -397,7 +397,7 @@ impl ExtractorUtil {
     pub async fn create_pg_struct_extractor(
         base_extractor: BaseExtractor,
         url: &str,
-        db: &str,
+        schema: &str,
         filter: RdbFilter,
         log_level: &str,
     ) -> Result<PgStructExtractor, Error> {
@@ -407,7 +407,7 @@ impl ExtractorUtil {
 
         Ok(PgStructExtractor {
             conn_pool,
-            schema: db.to_string(),
+            schema: schema.to_string(),
             filter,
             base_extractor,
         })

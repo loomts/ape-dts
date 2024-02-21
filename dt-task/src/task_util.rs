@@ -129,7 +129,6 @@ impl TaskUtil {
         Ok(mongodb::Client::with_options(client_options).unwrap())
     }
 
-    #[inline(always)]
     pub fn check_enable_sqlx_log(log_level: &str) -> bool {
         log_level == "debug" || log_level == "trace"
     }

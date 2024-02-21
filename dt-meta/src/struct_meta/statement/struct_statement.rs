@@ -12,7 +12,7 @@ pub enum StructStatement {
     MysqlCreateDatabase {
         statement: MysqlCreateDatabaseStatement,
     },
-    PgCreateDatabase {
+    PgCreateSchema {
         statement: PgCreateSchemaStatement,
     },
     MysqlCreateTable {
@@ -27,7 +27,7 @@ impl StructStatement {
     pub fn to_sqls(&mut self, filter: &RdbFilter) -> Vec<(String, String)> {
         match self {
             Self::MysqlCreateDatabase { statement } => statement.to_sqls(filter),
-            Self::PgCreateDatabase { statement } => statement.to_sqls(filter),
+            Self::PgCreateSchema { statement } => statement.to_sqls(filter),
             Self::MysqlCreateTable { statement } => statement.to_sqls(filter),
             Self::PgCreateTable { statement } => statement.to_sqls(filter),
         }

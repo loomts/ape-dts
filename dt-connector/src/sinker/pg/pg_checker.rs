@@ -141,7 +141,7 @@ impl PgChecker {
 
             let mut src_statement = data_src.statement.as_mut().unwrap();
             let schema = match src_statement {
-                StructStatement::PgCreateDatabase { statement } => statement.database.name.clone(),
+                StructStatement::PgCreateSchema { statement } => statement.schema.name.clone(),
                 StructStatement::PgCreateTable { statement } => statement.table.schema_name.clone(),
                 _ => String::new(),
             };
@@ -153,12 +153,9 @@ impl PgChecker {
             };
 
             let mut dst_statement = match &src_statement {
-                StructStatement::PgCreateDatabase { statement: _ } => {
-                    let dst_statement = struct_fetcher
-                        .get_create_database_statement()
-                        .await
-                        .unwrap();
-                    Some(StructStatement::PgCreateDatabase {
+                StructStatement::PgCreateSchema { statement: _ } => {
+                    let dst_statement = struct_fetcher.get_create_schema_statement().await.unwrap();
+                    Some(StructStatement::PgCreateSchema {
                         statement: dst_statement,
                     })
                 }
