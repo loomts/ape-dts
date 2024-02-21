@@ -39,6 +39,10 @@ pub struct RedisSinker {
 #[async_trait]
 impl Sinker for RedisSinker {
     async fn sink_raw(&mut self, mut data: Vec<DtData>, _batch: bool) -> Result<(), Error> {
+        if data.is_empty() {
+            return Ok(());
+        }
+
         if self.batch_size > 1 {
             call_batch_fn!(self, data, Self::batch_sink_raw);
         } else {
@@ -48,6 +52,10 @@ impl Sinker for RedisSinker {
     }
 
     async fn sink_dml(&mut self, mut data: Vec<RowData>, _batch: bool) -> Result<(), Error> {
+        if data.is_empty() {
+            return Ok(());
+        }
+
         if self.batch_size > 1 {
             call_batch_fn!(self, data, Self::batch_sink_dml);
         } else {

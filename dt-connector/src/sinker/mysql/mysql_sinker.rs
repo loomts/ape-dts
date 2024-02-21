@@ -37,6 +37,10 @@ pub struct MysqlSinker {
 #[async_trait]
 impl Sinker for MysqlSinker {
     async fn sink_dml(&mut self, mut data: Vec<RowData>, batch: bool) -> Result<(), Error> {
+        if data.is_empty() {
+            return Ok(());
+        }
+
         if !batch {
             self.serial_sink(data).await.unwrap();
         } else {
