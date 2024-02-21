@@ -28,7 +28,7 @@ impl RedisCycleTestRunner {
             let mut runner = Self::new(format!("{}/{}", test_dir, sub_path.1).as_str())
                 .await
                 .unwrap();
-            runner.base.execute_test_ddl_sqls().unwrap();
+            runner.base.execute_prepare_sqls().unwrap();
             runner_map.insert(sub_path.1.to_owned(), runner);
         }
 
@@ -45,7 +45,7 @@ impl RedisCycleTestRunner {
         // execute dmls for all sub tasks
         for sub_path in &sub_paths {
             let runner = runner_map.get_mut(sub_path.1.as_str()).unwrap();
-            runner.base.execute_test_dml_sqls().unwrap();
+            runner.base.execute_test_sqls().unwrap();
         }
         TimeUtil::sleep_millis(parse_millis).await;
 

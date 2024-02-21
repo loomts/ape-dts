@@ -55,12 +55,12 @@ impl RdbCycleTestRunner {
         let mut handlers: Vec<JoinHandle<()>> = vec![];
         let mut runner_map: HashMap<String, RdbCycleTestRunner> = HashMap::new();
 
-        // init all ddls
+        // execute all prepare sqls
         for sub_path in &sub_paths {
             let runner = Self::new(format!("{}/{}", test_dir, sub_path.1).as_str())
                 .await
                 .unwrap();
-            runner.base.execute_test_ddl_sqls().await.unwrap();
+            runner.base.execute_prepare_sqls().await.unwrap();
             runner_map.insert(sub_path.1.to_owned(), runner);
         }
 
@@ -71,7 +71,7 @@ impl RdbCycleTestRunner {
         }
         TimeUtil::sleep_millis(start_millis).await;
 
-        // execute dmls
+        // execute all test sqls
         for sub_path in &sub_paths {
             let runner = runner_map.get(sub_path.1.as_str()).unwrap();
             runner.init_data().await.unwrap();
@@ -114,7 +114,8 @@ impl RdbCycleTestRunner {
         expect_tx_count_map: &HashMap<(String, String, String), u8>,
     ) -> Result<(), Error> {
         let data_marker = self.get_data_marker();
-        let mut db_tbs = RdbTestRunner::get_compare_db_tbs_from_sqls(&self.base.base.src_ddl_sqls)?;
+        let mut db_tbs =
+            RdbTestRunner::get_compare_db_tbs_from_sqls(&self.base.base.src_prepare_sqls)?;
         for i in 0..db_tbs.len() {
             if db_tbs[i].0 == data_marker.marker_db && db_tbs[i].1 == data_marker.marker_tb {
                 db_tbs.remove(i);
@@ -176,7 +177,7 @@ impl RdbCycleTestRunner {
         let mut src_update_sqls = Vec::new();
         let mut src_delete_sqls = Vec::new();
 
-        for sql in self.base.base.src_dml_sqls.iter() {
+        for sql in self.base.base.src_test_sqls.iter() {
             if sql.to_lowercase().starts_with("insert") {
                 src_insert_sqls.push(sql.clone());
             } else if sql.to_lowercase().starts_with("update") {

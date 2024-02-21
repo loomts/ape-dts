@@ -81,7 +81,7 @@ impl PrecheckTestRunner {
         match self.db_type {
             DbType::Mysql | DbType::Pg => {
                 let base = RdbTestRunner::new_default(&self.test_dir).await?;
-                base.execute_test_ddl_sqls().await?;
+                base.execute_prepare_sqls().await?;
             }
 
             DbType::Mongo => {
@@ -91,7 +91,7 @@ impl PrecheckTestRunner {
 
             DbType::Redis => {
                 let mut base = RedisTestRunner::new_default(&self.test_dir).await?;
-                base.execute_test_ddl_sqls()?;
+                base.execute_prepare_sqls()?;
             }
 
             _ => {}

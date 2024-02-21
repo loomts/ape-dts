@@ -98,7 +98,7 @@ impl MongoTestRunner {
 
         // execute sqls in src before cdc task starts
         let src_mongo_client = self.src_mongo_client.as_ref().unwrap();
-        let src_sqls = Self::slice_sqls_by_db(&self.base.src_dml_sqls);
+        let src_sqls = Self::slice_sqls_by_db(&self.base.src_test_sqls);
         for (db, sqls) in src_sqls.iter() {
             let (src_insert_sqls, src_update_sqls, src_delete_sqls) =
                 Self::slice_sqls_by_type(sqls);
@@ -146,7 +146,7 @@ impl MongoTestRunner {
 
         let src_mongo_client = self.src_mongo_client.as_ref().unwrap();
 
-        let src_sqls = Self::slice_sqls_by_db(&self.base.src_dml_sqls);
+        let src_sqls = Self::slice_sqls_by_db(&self.base.src_test_sqls);
         for (db, sqls) in src_sqls.iter() {
             let (src_insert_sqls, src_update_sqls, src_delete_sqls) =
                 Self::slice_sqls_by_type(sqls);
@@ -180,7 +180,7 @@ impl MongoTestRunner {
 
         self.base.start_task().await?;
 
-        let src_sqls = Self::slice_sqls_by_db(&self.base.src_dml_sqls);
+        let src_sqls = Self::slice_sqls_by_db(&self.base.src_test_sqls);
         if compare_data {
             for (db, _) in src_sqls.iter() {
                 self.compare_db_data(db).await;
@@ -221,8 +221,8 @@ impl MongoTestRunner {
         let src_mongo_client = self.src_mongo_client.as_ref().unwrap();
         let dst_mongo_client = self.dst_mongo_client.as_ref().unwrap();
 
-        let src_sqls = Self::slice_sqls_by_db(&self.base.src_ddl_sqls);
-        let dst_sqls = Self::slice_sqls_by_db(&self.base.dst_ddl_sqls);
+        let src_sqls = Self::slice_sqls_by_db(&self.base.src_prepare_sqls);
+        let dst_sqls = Self::slice_sqls_by_db(&self.base.dst_prepare_sqls);
 
         for (db, sqls) in src_sqls.iter() {
             self.execute_ddls(src_mongo_client, db, sqls).await?;
@@ -236,14 +236,14 @@ impl MongoTestRunner {
     }
 
     pub async fn execute_test_sqls(&self) -> Result<(), Error> {
-        let sqls = MongoTestRunner::slice_sqls_by_db(&self.base.src_dml_sqls);
+        let sqls = MongoTestRunner::slice_sqls_by_db(&self.base.src_test_sqls);
         for (db, sqls) in sqls.iter() {
             self.execute_dmls(&self.src_mongo_client.as_ref().unwrap(), db, sqls)
                 .await
                 .unwrap();
         }
 
-        let sqls = MongoTestRunner::slice_sqls_by_db(&self.base.dst_dml_sqls);
+        let sqls = MongoTestRunner::slice_sqls_by_db(&self.base.dst_test_sqls);
         for (db, sqls) in sqls.iter() {
             self.execute_dmls(&self.dst_mongo_client.as_ref().unwrap(), db, sqls)
                 .await

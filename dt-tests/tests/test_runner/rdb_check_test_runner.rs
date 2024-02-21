@@ -26,8 +26,8 @@ impl RdbCheckTestRunner {
         CheckUtil::clear_check_log(&self.dst_check_log_dir);
 
         // prepare src and dst tables
-        self.base.execute_test_ddl_sqls().await?;
-        self.base.execute_test_dml_sqls().await?;
+        self.base.execute_prepare_sqls().await?;
+        self.base.execute_test_sqls().await?;
 
         // start task
         self.base.base.start_task().await?;

@@ -19,7 +19,7 @@ impl RdbStructTestRunner {
     }
 
     pub async fn run_mysql_struct_test(&mut self) -> Result<(), Error> {
-        self.base.execute_test_ddl_sqls().await?;
+        self.base.execute_prepare_sqls().await?;
         self.base.base.start_task().await?;
 
         let expect_ddl_sqls = self.load_expect_ddl_sqls().await;
@@ -94,7 +94,7 @@ impl RdbStructTestRunner {
     }
 
     pub async fn run_pg_struct_test(&mut self) -> Result<(), Error> {
-        self.base.execute_test_ddl_sqls().await?;
+        self.base.execute_prepare_sqls().await?;
         self.base.base.start_task().await?;
 
         let src_check_fetcher = PgStructCheckFetcher {
@@ -127,7 +127,7 @@ impl RdbStructTestRunner {
     }
 
     pub async fn run_struct_test_without_check(&mut self) -> Result<(), Error> {
-        self.base.execute_test_ddl_sqls().await?;
+        self.base.execute_prepare_sqls().await?;
         self.base.base.start_task().await
     }
 

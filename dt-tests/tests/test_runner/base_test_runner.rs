@@ -16,10 +16,10 @@ use crate::test_config_util::TestConfigUtil;
 pub struct BaseTestRunner {
     pub test_dir: String,
     pub task_config_file: String,
-    pub src_dml_sqls: Vec<String>,
-    pub dst_dml_sqls: Vec<String>,
-    pub src_ddl_sqls: Vec<String>,
-    pub dst_ddl_sqls: Vec<String>,
+    pub src_test_sqls: Vec<String>,
+    pub dst_test_sqls: Vec<String>,
+    pub src_prepare_sqls: Vec<String>,
+    pub dst_prepare_sqls: Vec<String>,
     pub src_clean_sqls: Vec<String>,
     pub dst_clean_sqls: Vec<String>,
 }
@@ -52,10 +52,10 @@ impl BaseTestRunner {
         let config = TaskConfig::new(&dst_task_config_file);
 
         let (
-            src_dml_sqls,
-            dst_dml_sqls,
-            src_ddl_sqls,
-            dst_ddl_sqls,
+            src_test_sqls,
+            dst_test_sqls,
+            src_prepare_sqls,
+            dst_prepare_sqls,
             src_clean_sqls,
             dst_clean_sqls,
         ) = Self::load_sqls(
@@ -67,10 +67,10 @@ impl BaseTestRunner {
         Ok(Self {
             task_config_file: dst_task_config_file,
             test_dir,
-            src_dml_sqls,
-            dst_dml_sqls,
-            src_ddl_sqls,
-            dst_ddl_sqls,
+            src_test_sqls,
+            dst_test_sqls,
+            src_prepare_sqls,
+            dst_prepare_sqls,
             src_clean_sqls,
             dst_clean_sqls,
         })
@@ -162,10 +162,10 @@ impl BaseTestRunner {
         };
 
         (
-            load("src_dml.sql", src_db_type),
-            load("dst_dml.sql", dst_db_type),
-            load("src_ddl.sql", src_db_type),
-            load("dst_ddl.sql", dst_db_type),
+            load("src_test.sql", src_db_type),
+            load("dst_test.sql", dst_db_type),
+            load("src_prepare.sql", src_db_type),
+            load("dst_prepare.sql", dst_db_type),
             load("src_clean.sql", src_db_type),
             load("dst_clean.sql", dst_db_type),
         )

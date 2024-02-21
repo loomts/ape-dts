@@ -317,11 +317,6 @@ impl TestConfigUtil {
         ini.write(dst_task_config_file).unwrap();
     }
 
-    pub fn should_do_clean_or_not() -> bool {
-        let opt = env::var("do_clean_after_test");
-        opt.is_ok_and(|x| x == "true")
-    }
-
     fn load_ini(task_config_file: &str) -> Ini {
         let mut config_str = String::new();
         File::open(task_config_file)

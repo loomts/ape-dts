@@ -55,13 +55,13 @@ impl RdbKafkaRdbTestRunner {
         start_millis: u64,
         parse_millis: u64,
     ) -> Result<(), Error> {
-        self.src_to_dst_runner.execute_test_ddl_sqls().await?;
+        self.src_to_dst_runner.execute_prepare_sqls().await?;
         self.prepare_kafka().await?;
         // wait for topic creation
         TimeUtil::sleep_millis(start_millis).await;
 
         // prepare src data
-        self.src_to_dst_runner.execute_test_dml_sqls().await?;
+        self.src_to_dst_runner.execute_test_sqls().await?;
 
         // kafka -> dst
         let mut kafka_to_dst_tasks = Vec::new();
@@ -93,7 +93,7 @@ impl RdbKafkaRdbTestRunner {
     }
 
     pub async fn run_cdc_test(&self, start_millis: u64, parse_millis: u64) -> Result<(), Error> {
-        self.src_to_dst_runner.execute_test_ddl_sqls().await?;
+        self.src_to_dst_runner.execute_prepare_sqls().await?;
         self.prepare_kafka().await?;
         TimeUtil::sleep_millis(start_millis).await;
 
@@ -127,7 +127,7 @@ impl RdbKafkaRdbTestRunner {
 
     async fn prepare_kafka(&self) -> Result<(), Error> {
         let mut topics: Vec<String> = vec![];
-        for sql in self.src_to_kafka_runner.dst_ddl_sqls.iter() {
+        for sql in self.src_to_kafka_runner.dst_prepare_sqls.iter() {
             let re = Regex::new(r"create topic ([\w\W]+)").unwrap();
             let cap = re.captures(sql).unwrap();
             topics.push(cap.get(1).unwrap().as_str().into());

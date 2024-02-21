@@ -18,8 +18,6 @@ use dt_task::task_util::TaskUtil;
 
 use sqlx::{MySql, Pool, Postgres};
 
-use crate::test_config_util::TestConfigUtil;
-
 use super::{base_test_runner::BaseTestRunner, rdb_util::RdbUtil};
 
 pub struct RdbTestRunner {
@@ -81,8 +79,8 @@ impl RdbTestRunner {
                 };
                 let drop_pub_sql = format!("DROP PUBLICATION IF EXISTS {}", pub_name);
                 let drop_slot_sql= format!("SELECT pg_drop_replication_slot(slot_name) FROM pg_replication_slots WHERE slot_name = '{}'", slot_name);
-                base.src_ddl_sqls.push(drop_pub_sql);
-                base.src_ddl_sqls.push(drop_slot_sql);
+                base.src_prepare_sqls.push(drop_pub_sql);
+                base.src_prepare_sqls.push(drop_slot_sql);
             }
         }
 
@@ -172,8 +170,8 @@ impl RdbTestRunner {
 
     pub async fn run_snapshot_test(&self, compare_data: bool) -> Result<(), Error> {
         // prepare src and dst tables
-        self.execute_test_ddl_sqls().await?;
-        self.execute_test_dml_sqls().await?;
+        self.execute_prepare_sqls().await?;
+        self.execute_test_sqls().await?;
 
         // start task
         self.base.start_task().await?;
@@ -187,11 +185,11 @@ impl RdbTestRunner {
     }
 
     pub async fn run_ddl_test(&self, start_millis: u64, parse_millis: u64) -> Result<(), Error> {
-        self.execute_test_ddl_sqls().await?;
+        self.execute_prepare_sqls().await?;
         let task = self.base.spawn_task().await?;
         TimeUtil::sleep_millis(start_millis).await;
 
-        self.execute_src_sqls(&self.base.src_dml_sqls).await?;
+        self.execute_src_sqls(&self.base.src_test_sqls).await?;
         TimeUtil::sleep_millis(parse_millis).await;
 
         let (mut src_db_tbs, mut dst_db_tbs) = self.get_compare_db_tbs().await?;
@@ -210,7 +208,7 @@ impl RdbTestRunner {
 
     pub async fn run_cdc_test(&self, start_millis: u64, parse_millis: u64) -> Result<(), Error> {
         // prepare src and dst tables
-        self.execute_test_ddl_sqls().await?;
+        self.execute_prepare_sqls().await?;
 
         // start task
         let task = self.base.spawn_task().await?;
@@ -241,7 +239,7 @@ impl RdbTestRunner {
         let db_tb = (tokens[0].clone(), tokens[1].clone());
 
         // recreate heartbeat table
-        self.execute_test_ddl_sqls().await?;
+        self.execute_prepare_sqls().await?;
         TimeUtil::sleep_millis(start_millis).await;
 
         let src_data = self.fetch_data(&db_tb, SRC).await?;
@@ -263,7 +261,7 @@ impl RdbTestRunner {
         let mut src_update_sqls = Vec::new();
         let mut src_delete_sqls = Vec::new();
 
-        for sql in self.base.src_dml_sqls.iter() {
+        for sql in self.base.src_test_sqls.iter() {
             if sql.to_lowercase().starts_with("insert") {
                 src_insert_sqls.push(sql.clone());
             } else if sql.to_lowercase().starts_with("update") {
@@ -298,60 +296,19 @@ impl RdbTestRunner {
         Ok(())
     }
 
-    pub async fn run_cdc_test_with_different_configs(
-        &self,
-        start_millis: u64,
-        parse_millis: u64,
-    ) -> Result<(), Error> {
-        let configs = TestConfigUtil::get_default_configs();
-        for config in configs {
-            TestConfigUtil::update_task_config(
-                &self.base.task_config_file,
-                &self.base.task_config_file,
-                &config,
-            );
-            println!("----------------------------------------");
-            println!("running cdc test with config: {:?}", config);
-            self.run_cdc_test(start_millis, parse_millis).await.unwrap();
-        }
-        Ok(())
+    pub async fn execute_test_sqls(&self) -> Result<(), Error> {
+        self.execute_src_sqls(&self.base.src_test_sqls).await?;
+        self.execute_dst_sqls(&self.base.dst_test_sqls).await
     }
 
-    pub async fn run_foxlake_test(
-        &self,
-        start_millis: u64,
-        parse_millis: u64,
-    ) -> Result<(), Error> {
-        // execute src ddl sqls
-        self.execute_test_ddl_sqls().await?;
-
-        let task = self.base.spawn_task().await?;
-        TimeUtil::sleep_millis(start_millis).await;
-
-        // execute src dml sqls
-        self.execute_src_sqls(&self.base.src_dml_sqls).await?;
-        TimeUtil::sleep_millis(parse_millis).await;
-
-        self.base.wait_task_finish(&task).await
-    }
-
-    pub async fn execute_test_dml_sqls(&self) -> Result<(), Error> {
-        self.execute_src_sqls(&self.base.src_dml_sqls).await?;
-        self.execute_dst_sqls(&self.base.dst_dml_sqls).await
-    }
-
-    pub async fn execute_test_ddl_sqls(&self) -> Result<(), Error> {
-        self.execute_src_sqls(&self.base.src_ddl_sqls).await?;
-        self.execute_dst_sqls(&self.base.dst_ddl_sqls).await
+    pub async fn execute_prepare_sqls(&self) -> Result<(), Error> {
+        self.execute_src_sqls(&self.base.src_prepare_sqls).await?;
+        self.execute_dst_sqls(&self.base.dst_prepare_sqls).await
     }
 
     pub async fn execute_clean_sqls(&self) -> Result<(), Error> {
-        if TestConfigUtil::should_do_clean_or_not() {
-            self.execute_src_sqls(&self.base.src_clean_sqls).await?;
-            self.execute_dst_sqls(&self.base.dst_clean_sqls).await
-        } else {
-            Ok(())
-        }
+        self.execute_src_sqls(&self.base.src_clean_sqls).await?;
+        self.execute_dst_sqls(&self.base.dst_clean_sqls).await
     }
 
     pub async fn execute_src_sqls(&self, sqls: &Vec<String>) -> Result<(), Error> {
@@ -515,11 +472,11 @@ impl RdbTestRunner {
     pub async fn get_compare_db_tbs(
         &self,
     ) -> Result<(Vec<(String, String)>, Vec<(String, String)>), Error> {
-        let mut src_db_tbs = Self::get_compare_db_tbs_from_sqls(&self.base.src_ddl_sqls)?;
-        // since tables may be created/dropped in src_dml.sql for ddl tests,
-        // we also need to parse src_dml.sql.
+        let mut src_db_tbs = Self::get_compare_db_tbs_from_sqls(&self.base.src_prepare_sqls)?;
+        // since tables may be created/dropped in src_test.sql for ddl tests,
+        // we also need to parse src_test.sql.
         src_db_tbs.extend_from_slice(&Self::get_compare_db_tbs_from_sqls(
-            &self.base.src_dml_sqls,
+            &self.base.src_test_sqls,
         )?);
 
         let mut dst_db_tbs = vec![];
