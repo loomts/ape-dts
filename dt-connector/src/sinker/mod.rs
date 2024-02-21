@@ -1,11 +1,9 @@
 pub mod base_checker;
 pub mod base_sinker;
 pub mod base_struct_sinker;
-pub mod foxlake_sinker;
 pub mod kafka;
 pub mod mongo;
 pub mod mysql;
-pub mod open_faas_sinker;
 pub mod pg;
 pub mod redis;
 pub mod starrocks;

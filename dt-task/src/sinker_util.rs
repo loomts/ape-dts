@@ -1,7 +1,6 @@
 use std::{
     str::FromStr,
     sync::{Arc, Mutex, RwLock},
-    time::Duration,
 };
 
 use dt_common::{
@@ -18,14 +17,12 @@ use dt_connector::{
     data_marker::DataMarker,
     rdb_router::RdbRouter,
     sinker::{
-        foxlake_sinker::FoxlakeSinker,
         kafka::kafka_sinker::KafkaSinker,
         mongo::{mongo_checker::MongoChecker, mongo_sinker::MongoSinker},
         mysql::{
             mysql_checker::MysqlChecker, mysql_sinker::MysqlSinker,
             mysql_struct_sinker::MysqlStructSinker,
         },
-        open_faas_sinker::OpenFaasSinker,
         pg::{pg_checker::PgChecker, pg_sinker::PgSinker, pg_struct_sinker::PgStructSinker},
         redis::{redis_sinker::RedisSinker, redis_statistic_sinker::RedisStatisticSinker},
         starrocks::starrocks_sinker::StarRocksSinker,
@@ -38,9 +35,7 @@ use dt_meta::{
     redis::redis_write_method::RedisWriteMethod,
 };
 use kafka::producer::{Producer, RequiredAcks};
-use reqwest::{redirect::Policy, Client, Url};
-use rusoto_core::Region;
-use rusoto_s3::S3Client;
+use reqwest::{redirect::Policy, Url};
 
 use crate::redis_util::RedisUtil;
 
@@ -181,40 +176,6 @@ impl SinkerUtil {
                     required_acks,
                     &avro_converter,
                     monitor,
-                )
-                .await?
-            }
-
-            SinkerConfig::OpenFaas {
-                url,
-                batch_size,
-                timeout_secs,
-            } => {
-                SinkerUtil::create_open_faas_sinker(
-                    url,
-                    task_config.parallelizer.parallel_size,
-                    *batch_size,
-                    *timeout_secs,
-                )
-                .await?
-            }
-
-            SinkerConfig::Foxlake {
-                batch_size,
-                bucket,
-                access_key,
-                secret_key,
-                region,
-                root_dir,
-            } => {
-                SinkerUtil::create_foxlake_sinker(
-                    task_config.parallelizer.parallel_size,
-                    *batch_size,
-                    bucket,
-                    root_dir,
-                    access_key,
-                    secret_key,
-                    region,
                 )
                 .await?
             }
@@ -459,58 +420,6 @@ impl SinkerUtil {
                 producer,
                 avro_converter: avro_converter.clone(),
                 monitor: monitor.clone(),
-            };
-            sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
-        }
-        Ok(sub_sinkers)
-    }
-
-    async fn create_open_faas_sinker<'a>(
-        url: &str,
-        parallel_size: usize,
-        batch_size: usize,
-        timeout_secs: u64,
-    ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
-        let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
-        for _ in 0..parallel_size {
-            let http_client = Client::builder()
-                .connect_timeout(Duration::from_secs(timeout_secs))
-                .build()
-                .unwrap();
-            let sinker = OpenFaasSinker {
-                batch_size,
-                http_client,
-                gateway_url: url.to_string(),
-            };
-            sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
-        }
-        Ok(sub_sinkers)
-    }
-
-    async fn create_foxlake_sinker<'a>(
-        parallel_size: usize,
-        batch_size: usize,
-        bucket: &str,
-        root_dir: &str,
-        access_key: &str,
-        secret_key: &str,
-        region: &str,
-    ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
-        let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
-        for _ in 0..parallel_size {
-            let region = Region::from_str(region).unwrap();
-            let credentials = rusoto_credential::StaticProvider::new_minimal(
-                access_key.to_owned(),
-                secret_key.to_owned(),
-            );
-            let s3_client =
-                S3Client::new_with(rusoto_core::HttpClient::new().unwrap(), credentials, region);
-
-            let sinker = FoxlakeSinker {
-                batch_size,
-                bucket: bucket.to_string(),
-                root_dir: root_dir.to_string(),
-                s3_client,
             };
             sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
         }

@@ -341,21 +341,6 @@ impl TaskConfig {
                 required_acks: ini.get(SINKER, "required_acks").unwrap(),
             },
 
-            DbType::OpenFaas => SinkerConfig::OpenFaas {
-                url,
-                batch_size,
-                timeout_secs: ini.getuint(SINKER, "timeout_secs").unwrap().unwrap(),
-            },
-
-            DbType::Foxlake => SinkerConfig::Foxlake {
-                batch_size,
-                bucket: ini.get(SINKER, "bucket").unwrap(),
-                access_key: ini.get(SINKER, "access_key").unwrap(),
-                secret_key: ini.get(SINKER, "secret_key").unwrap(),
-                region: ini.get(SINKER, "region").unwrap(),
-                root_dir: ini.get(SINKER, "root_dir").unwrap(),
-            },
-
             DbType::Redis => match sink_type {
                 SinkType::Write => SinkerConfig::Redis {
                     url,

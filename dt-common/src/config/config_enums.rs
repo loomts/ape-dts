@@ -13,10 +13,6 @@ pub enum DbType {
     Pg,
     #[strum(serialize = "kafka")]
     Kafka,
-    #[strum(serialize = "open_faas")]
-    OpenFaas,
-    #[strum(serialize = "foxlake")]
-    Foxlake,
     #[strum(serialize = "mongo")]
     Mongo,
     #[strum(serialize = "redis")]
