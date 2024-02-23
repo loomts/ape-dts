@@ -113,7 +113,7 @@ pub struct AvroFieldDef {
 
 #[inline(always)]
 fn default_avrofielddef_type_name() -> String {
-    "".to_owned()
+    String::new()
 }
 
 #[derive(Debug, PartialEq, Clone, serde::Deserialize, serde::Serialize)]

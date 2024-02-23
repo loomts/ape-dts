@@ -2,16 +2,9 @@ use std::{
     fs::{self, File},
     io::{BufRead, BufReader, Lines},
     path::PathBuf,
-    time::SystemTime,
 };
 
-use super::log_type::LogType;
-
-const MISS_LOG: &str = "miss.log";
-const DIFF_LOG: &str = "diff.log";
-
 pub struct LogReader {
-    pub log_type: LogType,
     files: Vec<PathBuf>,
     file_index: usize,
     lines: Option<Lines<BufReader<File>>>,
@@ -24,7 +17,6 @@ impl LogReader {
             files,
             file_index: 0,
             lines: Option::None,
-            log_type: LogType::Unknown,
         }
     }
 
@@ -35,17 +27,7 @@ impl LogReader {
 
         if self.lines.is_none() {
             let path = &self.files[self.file_index];
-
-            let path_str = path.to_str().unwrap();
-            self.log_type = if path_str.contains(MISS_LOG) {
-                LogType::Miss
-            } else if path_str.contains(DIFF_LOG) {
-                LogType::Diff
-            } else {
-                LogType::Unknown
-            };
-
-            let file = File::open(path).unwrap();
+            let file = File::open(path.to_str().unwrap()).unwrap();
             self.lines = Some(BufReader::new(file).lines());
         }
 
@@ -64,16 +46,16 @@ impl LogReader {
     fn list_files(dir_path: &str) -> Vec<PathBuf> {
         let mut files = fs::read_dir(dir_path)
             .unwrap()
-            .map(|res| res.map(|e| e.path()))
-            .collect::<Result<Vec<_>, std::io::Error>>()
-            .unwrap();
-
-        files.sort_by_key(|f| {
-            fs::metadata(f)
-                .unwrap()
-                .created()
-                .unwrap_or(SystemTime::UNIX_EPOCH)
-        });
+            .filter_map(|entry| {
+                let path = entry.unwrap().path();
+                if path.is_file() {
+                    Some(path)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        files.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
         files
     }
 }

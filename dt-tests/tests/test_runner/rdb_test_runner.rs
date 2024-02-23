@@ -459,7 +459,7 @@ impl RdbTestRunner {
         let (db, tb) = if tokens.len() > 1 {
             (tokens[0].to_string(), tokens[1].to_string())
         } else {
-            ("".to_string(), full_tb_name.to_string())
+            (String::new(), full_tb_name.to_string())
         };
 
         (

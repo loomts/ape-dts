@@ -84,9 +84,7 @@ impl MysqlCheckExtractor {
         let mut result = Vec::new();
         for check_log in check_logs.iter() {
             let mut after = HashMap::new();
-            for i in 0..check_log.cols.len() {
-                let col = &check_log.cols[i];
-                let value = &check_log.col_values[i];
+            for (col, value) in check_log.id_col_values.iter() {
                 let col_type = tb_meta.col_type_map.get(col).unwrap();
                 let col_value = if let Some(str) = value {
                     MysqlColValueConvertor::from_str(col_type, str)?

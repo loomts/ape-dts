@@ -87,6 +87,7 @@ impl ColValue {
                     Some(format!("{:?}", v))
                 }
             }
+            ColValue::MongoDoc(v) => Some(v.to_string()),
             _ => Option::None,
         }
     }

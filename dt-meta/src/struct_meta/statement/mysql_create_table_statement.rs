@@ -96,7 +96,7 @@ impl MysqlCreateTableStatement {
     }
 
     fn columns_to_sql(columns: &mut Vec<Column>) -> Result<(String, Vec<String>), Error> {
-        let (mut sql, mut pks) = (String::from(""), Vec::new());
+        let (mut sql, mut pks) = (String::new(), Vec::new());
 
         columns.sort_by(|c1, c2| c1.order_position.cmp(&c2.order_position));
         for i in columns {

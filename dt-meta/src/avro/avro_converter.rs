@@ -91,7 +91,7 @@ impl AvroConverter {
             for col in cols {
                 fields.push(AvroFieldDef {
                     name: col,
-                    type_name: "".into(),
+                    type_name: String::new(),
                 });
             }
             Value::Union(1, Box::new(apache_avro::to_value(fields).unwrap()))

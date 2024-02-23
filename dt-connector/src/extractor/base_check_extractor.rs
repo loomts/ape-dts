@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use dt_common::{error::Error, log_info};
 
 use crate::{
@@ -28,8 +30,8 @@ impl BaseCheckExtractor {
             if log.trim().is_empty() {
                 continue;
             }
-            let check_log = CheckLog::from_str(&log, log_reader.log_type.clone());
 
+            let check_log = CheckLog::from_str(&log).unwrap();
             if Self::can_in_same_batch(&batch, &check_log) {
                 batch.push(check_log);
             } else {
@@ -71,7 +73,7 @@ impl BaseCheckExtractor {
     }
 
     fn is_any_col_none(check_log: &CheckLog) -> bool {
-        for i in check_log.col_values.iter() {
+        for i in check_log.id_col_values.values() {
             if i.is_none() {
                 return true;
             }

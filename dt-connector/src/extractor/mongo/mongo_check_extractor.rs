@@ -56,9 +56,11 @@ impl BatchCheckExtractor for MongoCheckExtractor {
         let mut ids = Vec::new();
         for check_log in check_logs.iter() {
             // check log has only one col: _id
-            if let Some(key_str) = &check_log.col_values[0] {
-                let key: MongoKey = serde_json::from_str(key_str).unwrap();
-                ids.push(key.to_mongo_id());
+            if let Some(option_col_value) = check_log.id_col_values.get(MongoConstants::ID) {
+                if let Some(col_value) = option_col_value {
+                    let key: MongoKey = serde_json::from_str(col_value).unwrap();
+                    ids.push(key.to_mongo_id());
+                }
             }
         }
 
