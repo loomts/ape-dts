@@ -36,10 +36,6 @@ impl MongoKey {
         None
     }
 
-    pub fn to_string(&self) -> String {
-        json!(self).to_string()
-    }
-
     pub fn to_mongo_id(&self) -> Bson {
         match self {
             MongoKey::ObjectId(v) => Bson::ObjectId(v.clone()),
@@ -51,5 +47,11 @@ impl MongoKey {
             MongoKey::DateTime(v) => Bson::DateTime(v.clone()),
             MongoKey::Symbol(v) => Bson::Symbol(v.clone()),
         }
+    }
+}
+
+impl ToString for MongoKey {
+    fn to_string(&self) -> String {
+        json!(self).to_string()
     }
 }

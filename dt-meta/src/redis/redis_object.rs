@@ -133,8 +133,10 @@ impl RedisString {
     pub fn as_bytes(&self) -> &[u8] {
         &self.bytes
     }
+}
 
-    pub fn to_string(&self) -> String {
+impl ToString for RedisString {
+    fn to_string(&self) -> String {
         String::from_utf8_lossy(&self.bytes).to_string()
     }
 }
@@ -216,11 +218,6 @@ impl RedisCmd {
         }
     }
 
-    pub fn to_string(&self) -> String {
-        let str_args = self.args_to_string();
-        str_args.join(" ")
-    }
-
     pub fn args_to_string(&self) -> Vec<String> {
         let mut str_args = Vec::new();
         for arg in self.args.iter() {
@@ -244,6 +241,13 @@ impl RedisCmd {
         self.group = group;
         self.keys = keys;
         self.key_indexes = keys_indexes;
+    }
+}
+
+impl ToString for RedisCmd {
+    fn to_string(&self) -> String {
+        let str_args = self.args_to_string();
+        str_args.join(" ")
     }
 }
 

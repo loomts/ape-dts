@@ -49,10 +49,6 @@ impl DtData {
         matches!(self, DtData::Ddl { .. })
     }
 
-    pub fn to_string(&self) -> String {
-        json!(self).to_string()
-    }
-
     pub fn get_data_size(&self) -> usize {
         match &self {
             DtData::Dml { row_data } => row_data.data_size,
@@ -60,5 +56,11 @@ impl DtData {
             // ignore other item types
             _ => 0,
         }
+    }
+}
+
+impl ToString for DtData {
+    fn to_string(&self) -> String {
+        json!(self).to_string()
     }
 }

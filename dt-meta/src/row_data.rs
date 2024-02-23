@@ -24,6 +24,12 @@ pub struct RowData {
     pub data_size: usize,
 }
 
+impl ToString for RowData {
+    fn to_string(&self) -> String {
+        json!(self).to_string()
+    }
+}
+
 impl RowData {
     pub fn new(
         schema: String,
@@ -80,11 +86,6 @@ impl RowData {
             None,
             Some(after),
         )
-    }
-
-    #[allow(clippy::inherent_to_string)]
-    pub fn to_string(&self) -> String {
-        json!(self).to_string()
     }
 
     pub fn get_hash_code(&self, tb_meta: &RdbTbMeta) -> u128 {

@@ -1,4 +1,7 @@
+use std::str::FromStr;
+
 use chrono::NaiveDateTime;
+use dt_common::error::Error;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -41,20 +44,26 @@ pub enum Position {
 }
 
 impl Position {
-    pub fn to_string(&self) -> String {
-        json!(self).to_string()
-    }
-
-    pub fn from_str(str: &str) -> Position {
-        serde_json::from_str(str).unwrap()
-    }
-
     pub fn format_timestamp_millis(millis: i64) -> String {
         let naive_datetime = NaiveDateTime::from_timestamp_millis(millis);
         naive_datetime
             .unwrap()
             .format("%Y-%m-%d %H:%M:%S%.3f UTC-0000")
             .to_string()
+    }
+}
+
+impl ToString for Position {
+    fn to_string(&self) -> String {
+        json!(self).to_string()
+    }
+}
+
+impl FromStr for Position {
+    type Err = Error;
+    fn from_str(str: &str) -> Result<Self, Self::Err> {
+        let me: Self = serde_json::from_str(str).unwrap();
+        Ok(me)
     }
 }
 

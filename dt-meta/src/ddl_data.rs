@@ -16,9 +16,8 @@ pub struct DdlData {
     pub ddl_type: DdlType,
 }
 
-impl DdlData {
-    #[allow(clippy::inherent_to_string)]
-    pub fn to_string(&self) -> String {
+impl ToString for DdlData {
+    fn to_string(&self) -> String {
         json!(self).to_string()
     }
 }

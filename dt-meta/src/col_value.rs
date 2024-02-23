@@ -41,6 +41,12 @@ pub enum ColValue {
     MongoDoc(Document),
 }
 
+impl ToString for ColValue {
+    fn to_string(&self) -> String {
+        self.to_option_string().unwrap()
+    }
+}
+
 impl ColValue {
     pub fn hash_code(&self) -> u64 {
         match self {
@@ -90,10 +96,6 @@ impl ColValue {
             ColValue::MongoDoc(v) => Some(v.to_string()),
             _ => Option::None,
         }
-    }
-
-    pub fn to_string(&self) -> String {
-        self.to_option_string().unwrap()
     }
 
     pub fn is_nan(&self) -> bool {
