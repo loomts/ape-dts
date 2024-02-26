@@ -11,12 +11,12 @@ use std::{
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
     config::{
-        config_enums::DbType, extractor_config::ExtractorConfig, sinker_config::SinkerConfig,
-        task_config::TaskConfig,
+        config_enums::DbType, config_token_parser::ConfigTokenParser,
+        extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
     },
     error::Error,
     monitor::monitor::Monitor,
-    utils::{rdb_filter::RdbFilter, time_util::TimeUtil},
+    utils::{rdb_filter::RdbFilter, sql_util::SqlUtil, time_util::TimeUtil},
 };
 use dt_connector::{
     data_marker::DataMarker,
@@ -163,9 +163,6 @@ impl TaskRunner {
             committed_position: Position::None,
         }));
 
-        let monitor_time_window_secs = self.config.pipeline.checkpoint_interval_secs as usize;
-        let monitor_count_window = self.config.pipeline.buffer_size;
-
         let (extractor_data_marker, sinker_data_marker) = if let Some(data_marker_config) =
             &self.config.data_marker
         {
@@ -175,15 +172,17 @@ impl TaskRunner {
             let sinker_data_marker =
                 DataMarker::from_config(data_marker_config, &self.config.sinker_basic.db_type)
                     .unwrap();
-            (
-                Some(extractor_data_marker),
-                Some(Arc::new(RwLock::new(sinker_data_marker))),
-            )
+            (Some(extractor_data_marker), Some(sinker_data_marker))
         } else {
             (None, None)
         };
+        let rw_sinker_data_marker = sinker_data_marker
+            .clone()
+            .map(|data_marker| Arc::new(RwLock::new(data_marker)));
 
         // extractor
+        let monitor_time_window_secs = self.config.pipeline.checkpoint_interval_secs as usize;
+        let monitor_count_window = self.config.pipeline.buffer_size;
         let extractor_monitor = Arc::new(Mutex::new(Monitor::new(
             "extractor",
             monitor_time_window_secs,
@@ -209,7 +208,7 @@ impl TaskRunner {
         let sinkers = SinkerUtil::create_sinkers(
             &self.config,
             sinker_monitor.clone(),
-            sinker_data_marker.clone(),
+            rw_sinker_data_marker.clone(),
         )
         .await?;
 
@@ -226,9 +225,12 @@ impl TaskRunner {
                 syncer,
                 sinkers,
                 pipeline_monitor.clone(),
-                sinker_data_marker.clone(),
+                rw_sinker_data_marker.clone(),
             )
             .await?;
+
+        // do pre operations before task starts
+        self.pre_single_task(sinker_data_marker).await.unwrap();
 
         // start threads
         let f1 = tokio::spawn(async move {
@@ -674,5 +676,124 @@ impl TaskRunner {
                 break;
             }
         }
+    }
+
+    async fn pre_single_task(&self, sinker_data_marker: Option<DataMarker>) -> Result<(), Error> {
+        // create heartbeat table
+        let db_tb = match &self.config.extractor {
+            ExtractorConfig::MysqlCdc { heartbeat_tb, .. }
+            | ExtractorConfig::PgCdc { heartbeat_tb, .. } => ConfigTokenParser::parse(
+                heartbeat_tb,
+                &['.'],
+                &SqlUtil::get_escape_pairs(&self.config.extractor_basic.db_type),
+            ),
+            _ => vec![],
+        };
+
+        if db_tb.len() == 2 {
+            match &self.config.extractor {
+                ExtractorConfig::MysqlCdc { url, .. } => {
+                    let db_sql = format!("CREATE DATABASE IF NOT EXISTS `{}`", db_tb[0]);
+                    let tb_sql = format!(
+                        "CREATE TABLE IF NOT EXISTS `{}`.`{}`(
+                        server_id INT UNSIGNED,
+                        update_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        received_binlog_filename VARCHAR(255),
+                        received_next_event_position INT UNSIGNED,
+                        received_timestamp VARCHAR(255),
+                        flushed_binlog_filename VARCHAR(255),
+                        flushed_next_event_position INT UNSIGNED,
+                        flushed_timestamp VARCHAR(255),
+                        PRIMARY KEY(server_id)
+                    )",
+                        db_tb[0], db_tb[1]
+                    );
+
+                    let conn_pool = TaskUtil::create_mysql_conn_pool(url, 1, true)
+                        .await
+                        .unwrap();
+                    let db_query = sqlx::query(&db_sql);
+                    db_query.execute(&conn_pool).await.unwrap();
+                    let tb_query = sqlx::query(&tb_sql);
+                    tb_query.execute(&conn_pool).await.unwrap();
+                }
+
+                ExtractorConfig::PgCdc { url, .. } => {
+                    let schema_sql = format!(r#"CREATE SCHEMA IF NOT EXISTS "{}""#, db_tb[0]);
+                    let tb_sql = format!(
+                        r#"CREATE TABLE IF NOT EXISTS "{}"."{}"(
+                        slot_name character varying(64) not null,
+                        update_timestamp timestamp without time zone default (now() at time zone 'utc'),
+                        received_lsn character varying(64),
+                        received_timestamp character varying(64),
+                        flushed_lsn character varying(64),
+                        flushed_timestamp character varying(64),
+                        primary key(slot_name)
+                    )"#,
+                        db_tb[0], db_tb[1]
+                    );
+
+                    let conn_pool = TaskUtil::create_pg_conn_pool(url, 1, true).await.unwrap();
+                    let schema_query = sqlx::query(&schema_sql);
+                    schema_query.execute(&conn_pool).await.unwrap();
+                    let tb_query = sqlx::query(&tb_sql);
+                    tb_query.execute(&conn_pool).await.unwrap();
+                }
+
+                _ => {}
+            }
+        }
+
+        // create data marker table
+        if let Some(data_marker) = sinker_data_marker {
+            match &self.config.sinker {
+                SinkerConfig::Mysql { url, .. } => {
+                    let db_sql =
+                        format!("CREATE DATABASE IF NOT EXISTS `{}`", data_marker.marker_db);
+                    let tb_sql = format!(
+                        "CREATE TABLE IF NOT EXISTS `{}`.`{}` (
+                            data_origin_node varchar(255) NOT NULL,
+                            src_node varchar(255) NOT NULL,
+                            dst_node varchar(255) NOT NULL,
+                            n bigint DEFAULT NULL,
+                            PRIMARY KEY (data_origin_node, src_node, dst_node)
+                        )",
+                        data_marker.marker_db, data_marker.marker_tb
+                    );
+
+                    let conn_pool = TaskUtil::create_mysql_conn_pool(url, 1, true)
+                        .await
+                        .unwrap();
+                    let db_query = sqlx::query(&db_sql);
+                    db_query.execute(&conn_pool).await.unwrap();
+                    let tb_query = sqlx::query(&tb_sql);
+                    tb_query.execute(&conn_pool).await.unwrap();
+                }
+
+                SinkerConfig::Pg { url, .. } => {
+                    let schema_sql =
+                        format!(r#"CREATE SCHEMA IF NOT EXISTS "{}""#, data_marker.marker_db);
+                    let tb_sql = format!(
+                        r#"CREATE TABLE IF NOT EXISTS "{}"."{}" (
+                            data_origin_node varchar(255) NOT NULL,
+                            src_node varchar(255) NOT NULL,
+                            dst_node varchar(255) NOT NULL,
+                            n bigint DEFAULT NULL,
+                            PRIMARY KEY (data_origin_node, src_node, dst_node)
+                        )"#,
+                        data_marker.marker_db, data_marker.marker_tb
+                    );
+
+                    let conn_pool = TaskUtil::create_pg_conn_pool(url, 1, true).await.unwrap();
+                    let schema_query = sqlx::query(&schema_sql);
+                    schema_query.execute(&conn_pool).await.unwrap();
+                    let tb_query = sqlx::query(&tb_sql);
+                    tb_query.execute(&conn_pool).await.unwrap();
+                }
+
+                _ => {}
+            }
+        }
+        Ok(())
     }
 }

@@ -68,8 +68,8 @@ impl RdbCycleTestRunner {
         for sub_path in &sub_paths {
             let runner = runner_map.get(sub_path.1.as_str()).unwrap();
             handlers.push(runner.base.base.spawn_task().await.unwrap());
+            TimeUtil::sleep_millis(start_millis).await;
         }
-        TimeUtil::sleep_millis(start_millis).await;
 
         // execute all test sqls
         for sub_path in &sub_paths {

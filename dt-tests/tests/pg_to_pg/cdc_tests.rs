@@ -81,7 +81,7 @@ mod test {
 
         RdbCycleTestRunner::run_cycle_cdc_test(
             "pg_to_pg/cdc/cycle_basic_test",
-            3000,
+            2000,
             2000,
             &tx_check_data,
         )
@@ -102,7 +102,7 @@ mod test {
 
         RdbCycleTestRunner::run_cycle_cdc_test(
             "pg_to_pg/cdc/cycle_star_test",
-            3000,
+            2000,
             2000,
             &tx_check_data,
         )
@@ -123,7 +123,7 @@ mod test {
 
         RdbCycleTestRunner::run_cycle_cdc_test(
             "pg_to_pg/cdc/cycle_net_test",
-            3000,
+            2000,
             2000,
             &tx_check_data,
         )
@@ -133,6 +133,6 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn cdc_heartbeat_test() {
-        TestBase::run_heartbeat_test("pg_to_pg/cdc/heartbeat_test", 3000, 2000).await;
+        TestBase::run_heartbeat_test("pg_to_pg/cdc/heartbeat_test", 3000, 4000).await;
     }
 }

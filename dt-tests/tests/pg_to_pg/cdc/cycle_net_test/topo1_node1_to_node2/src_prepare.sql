@@ -9,14 +9,6 @@ TRUNCATE TABLE twoway_test_db_1.default_table;
 DROP SCHEMA IF EXISTS ape_trans_pg CASCADE;
 CREATE SCHEMA ape_trans_pg;
 
-CREATE TABLE ape_trans_pg.topo1 (
-  data_origin_node varchar(255) NOT NULL,
-  src_node varchar(255) NOT NULL,
-  dst_node varchar(255) NOT NULL,
-  n bigint DEFAULT NULL,
-  PRIMARY KEY (data_origin_node, src_node, dst_node)
-);
-
 DROP PUBLICATION IF EXISTS apecloud_migrate_pub_for_all_tables;
 CREATE PUBLICATION apecloud_migrate_pub_for_all_tables FOR ALL TABLES;
 

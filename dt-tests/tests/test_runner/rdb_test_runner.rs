@@ -221,7 +221,7 @@ impl RdbTestRunner {
 
     pub async fn run_heartbeat_test(
         &self,
-        start_millis: u64,
+        _start_millis: u64,
         parse_millis: u64,
     ) -> Result<(), Error> {
         let config = TaskConfig::new(&self.base.task_config_file);
@@ -235,12 +235,7 @@ impl RdbTestRunner {
             ConfigTokenParser::parse(&heartbeat_tb, &['.'], &SqlUtil::get_escape_pairs(&db_type));
         let db_tb = (tokens[0].clone(), tokens[1].clone());
 
-        // recreate heartbeat table
         self.execute_prepare_sqls().await?;
-        TimeUtil::sleep_millis(start_millis).await;
-
-        let src_data = self.fetch_data(&db_tb, SRC).await?;
-        assert!(src_data.is_empty());
 
         // start task
         let task = self.base.spawn_task().await?;
