@@ -151,7 +151,6 @@ impl ExtractorUtil {
         Ok(tbs)
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub async fn create_mysql_cdc_extractor(
         base_extractor: BaseExtractor,
         url: &str,
@@ -183,7 +182,6 @@ impl ExtractorUtil {
         })
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub async fn create_pg_cdc_extractor(
         base_extractor: BaseExtractor,
         url: &str,
@@ -219,7 +217,6 @@ impl ExtractorUtil {
         })
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub async fn create_mysql_snapshot_extractor(
         base_extractor: BaseExtractor,
         url: &str,
@@ -287,7 +284,6 @@ impl ExtractorUtil {
         })
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub async fn create_pg_snapshot_extractor(
         base_extractor: BaseExtractor,
         url: &str,

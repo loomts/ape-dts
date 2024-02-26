@@ -18,7 +18,7 @@ impl RedisUtil {
     pub fn get_cluster_nodes(
         conn: &mut redis::Connection,
     ) -> Result<(Vec<String>, Vec<Vec<u16>>), Error> {
-        let cmd = RedisCmd::from_str_args(&vec!["cluster", "nodes"]);
+        let cmd = RedisCmd::from_str_args(&["cluster", "nodes"]);
         let value = conn.req_packed_command(&CmdEncoder::encode(&cmd)).unwrap();
         if let redis::Value::Data(data) = value {
             let cluster_nodes = String::from_utf8(data).unwrap();
@@ -29,7 +29,7 @@ impl RedisUtil {
     }
 
     pub fn get_redis_version(conn: &mut redis::Connection) -> Result<f32, Error> {
-        let cmd = RedisCmd::from_str_args(&vec!["INFO"]);
+        let cmd = RedisCmd::from_str_args(&["INFO"]);
         let value = conn.req_packed_command(&CmdEncoder::encode(&cmd)).unwrap();
         if let redis::Value::Data(data) = value {
             let info = String::from_utf8(data).unwrap();
@@ -37,7 +37,7 @@ impl RedisUtil {
             let cap = re.captures(&info).unwrap();
 
             let version_str = cap[1].to_string();
-            let tokens: Vec<&str> = version_str.split(".").collect();
+            let tokens: Vec<&str> = version_str.split('.').collect();
             if tokens.is_empty() {
                 return Err(Error::Unexpected(
                     "can not get redis version by INFO".into(),
@@ -93,9 +93,7 @@ impl RedisUtil {
             addresses.push(address);
 
             let mut slot = Vec::new();
-            for i in 8..words.len() {
-                let word = words[i].trim();
-
+            for word in words.iter().skip(8) {
                 if word.starts_with('[') {
                     break;
                 }

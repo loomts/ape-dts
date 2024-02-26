@@ -1,3 +1,5 @@
+#![allow(clippy::manual_range_contains)]
+
 pub mod check_log;
 pub mod data_marker;
 pub mod extractor;

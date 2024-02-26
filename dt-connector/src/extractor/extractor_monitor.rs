@@ -5,7 +5,7 @@ use std::{
 
 use dt_common::monitor::{counter_type::CounterType, monitor::Monitor};
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct ExtractorCounters {
     pub record_count: usize,
     pub data_size: usize,

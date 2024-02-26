@@ -92,10 +92,10 @@ impl PgStructFetcher {
             return Ok(schema);
         }
 
-        return Err(Error::StructError(format!(
+        Err(Error::StructError(format!(
             "schema: {} not found",
             self.schema
-        )));
+        )))
     }
 
     async fn get_sequences(&mut self, tb: &str) -> Result<HashMap<String, Vec<Sequence>>, Error> {
@@ -160,7 +160,7 @@ impl PgStructFetcher {
 
     async fn get_independent_sequences(
         &mut self,
-        sequence_names: &Vec<String>,
+        sequence_names: &[String],
     ) -> Result<Vec<Sequence>, Error> {
         let filter_names: Vec<String> = sequence_names.iter().map(|i| format!("'{}'", i)).collect();
         let filter = format!("AND sequence_name IN ({})", filter_names.join(","));
@@ -207,7 +207,7 @@ impl PgStructFetcher {
         for column in table.columns.iter() {
             if let Some(default_value) = &column.default_value {
                 let (schema, sequence_name) =
-                    Self::get_sequence_name_by_default_value(&default_value);
+                    Self::get_sequence_name_by_default_value(default_value);
                 // example, default_value is 'Standard'::text
                 if sequence_name.is_empty() {
                     log_warn!(
@@ -666,11 +666,11 @@ impl PgStructFetcher {
 
         value = value
             .trim_start_matches("nextval(")
-            .trim_start_matches("'")
-            .trim_end_matches(")")
+            .trim_start_matches('\'')
+            .trim_end_matches(')')
             // ::regclass may not exists
             .trim_end_matches("::regclass")
-            .trim_end_matches("'");
+            .trim_end_matches('\'');
 
         let escape_pair = SqlUtil::get_escape_pairs(&DbType::Pg)[0];
         if let Ok(tokens) = ConfigTokenParser::parse_config(value, &DbType::Pg, &['.']) {
@@ -688,7 +688,7 @@ impl PgStructFetcher {
 
     fn filter_tb(&mut self, tb: &str) -> bool {
         if let Some(filter) = &mut self.filter {
-            return filter.filter_tb(&self.schema, &tb);
+            return filter.filter_tb(&self.schema, tb);
         }
         false
     }
@@ -699,7 +699,7 @@ impl PgStructFetcher {
         table_name: &str,
         item: T,
     ) {
-        if self.filter_tb(&table_name) {
+        if self.filter_tb(table_name) {
             return;
         }
 

@@ -125,7 +125,7 @@ impl ParallelizerUtil {
         Ok(parallelizer)
     }
 
-    pub async fn create_rdb_merger(
+    async fn create_rdb_merger(
         config: &TaskConfig,
     ) -> Result<Box<dyn Merger + Send + Sync>, Error> {
         let meta_manager = TaskUtil::create_rdb_meta_manager(config).await?.unwrap();
@@ -133,12 +133,12 @@ impl ParallelizerUtil {
         Ok(Box::new(rdb_merger))
     }
 
-    pub async fn create_mongo_merger() -> Result<Box<dyn Merger + Send + Sync>, Error> {
+    async fn create_mongo_merger() -> Result<Box<dyn Merger + Send + Sync>, Error> {
         let mongo_merger = MongoMerger {};
         Ok(Box::new(mongo_merger))
     }
 
-    pub async fn create_rdb_partitioner(config: &TaskConfig) -> Result<RdbPartitioner, Error> {
+    async fn create_rdb_partitioner(config: &TaskConfig) -> Result<RdbPartitioner, Error> {
         let meta_manager = TaskUtil::create_rdb_meta_manager(config).await?.unwrap();
         Ok(RdbPartitioner { meta_manager })
     }

@@ -52,7 +52,7 @@ impl SinkerUtil {
         let sinkers = match &task_config.sinker {
             SinkerConfig::Mysql { url, batch_size } => {
                 let router = RdbRouter::from_config(&task_config.router, &DbType::Mysql)?;
-                SinkerUtil::create_mysql_sinker(
+                Self::create_mysql_sinker(
                     url,
                     &router,
                     &task_config.runtime.log_level,
@@ -70,8 +70,8 @@ impl SinkerUtil {
                 // checker needs the reverse router
                 let router = RdbRouter::from_config(&task_config.router, &DbType::Mysql)?.reverse();
                 let filter = RdbFilter::from_config(&task_config.filter, DbType::Mysql)?;
-                let extractor_meta_manager = Self::get_extractor_meta_manager(&task_config).await?;
-                SinkerUtil::create_mysql_checker(
+                let extractor_meta_manager = Self::get_extractor_meta_manager(task_config).await?;
+                Self::create_mysql_checker(
                     url,
                     &router,
                     &filter,
@@ -86,7 +86,7 @@ impl SinkerUtil {
 
             SinkerConfig::Pg { url, batch_size } => {
                 let router = RdbRouter::from_config(&task_config.router, &DbType::Pg)?;
-                SinkerUtil::create_pg_sinker(
+                Self::create_pg_sinker(
                     url,
                     &router,
                     &task_config.runtime.log_level,
@@ -104,8 +104,8 @@ impl SinkerUtil {
                 // checker needs the reverse router
                 let router = RdbRouter::from_config(&task_config.router, &DbType::Pg)?.reverse();
                 let filter = RdbFilter::from_config(&task_config.filter, DbType::Pg)?;
-                let extractor_meta_manager = Self::get_extractor_meta_manager(&task_config).await?;
-                SinkerUtil::create_pg_checker(
+                let extractor_meta_manager = Self::get_extractor_meta_manager(task_config).await?;
+                Self::create_pg_checker(
                     url,
                     &router,
                     &filter,
@@ -124,7 +124,7 @@ impl SinkerUtil {
                 batch_size,
             } => {
                 let router = RdbRouter::from_config(&task_config.router, &DbType::Mongo)?;
-                SinkerUtil::create_mongo_sinker(
+                Self::create_mongo_sinker(
                     url,
                     app_name,
                     &router,
@@ -142,7 +142,7 @@ impl SinkerUtil {
                 ..
             } => {
                 let router = RdbRouter::from_config(&task_config.router, &DbType::Mongo)?.reverse();
-                SinkerUtil::create_mongo_checker(
+                Self::create_mongo_checker(
                     url,
                     app_name,
                     &router,
@@ -165,9 +165,9 @@ impl SinkerUtil {
                     &task_config.extractor_basic.db_type,
                 )?;
                 // kafka sinker may need meta data from RDB extractor
-                let meta_manager = Self::get_extractor_meta_manager(&task_config).await?;
+                let meta_manager = Self::get_extractor_meta_manager(task_config).await?;
                 let avro_converter = AvroConverter::new(meta_manager);
-                SinkerUtil::create_kafka_sinker(
+                Self::create_kafka_sinker(
                     url,
                     &router,
                     task_config.parallelizer.parallel_size,
@@ -185,7 +185,7 @@ impl SinkerUtil {
                 conflict_policy,
             } => {
                 let filter = RdbFilter::from_config(&task_config.filter, DbType::Mysql)?;
-                SinkerUtil::create_mysql_struct_sinker(
+                Self::create_mysql_struct_sinker(
                     url,
                     &task_config.runtime.log_level,
                     task_config.parallelizer.parallel_size,
@@ -200,7 +200,7 @@ impl SinkerUtil {
                 conflict_policy,
             } => {
                 let filter = RdbFilter::from_config(&task_config.filter, DbType::Pg)?;
-                SinkerUtil::create_pg_struct_sinker(
+                Self::create_pg_struct_sinker(
                     url,
                     &task_config.runtime.log_level,
                     task_config.parallelizer.parallel_size,
@@ -217,8 +217,8 @@ impl SinkerUtil {
                 is_cluster,
             } => {
                 // redis sinker may need meta data from RDB extractor
-                let meta_manager = Self::get_extractor_meta_manager(&task_config).await?;
-                SinkerUtil::create_redis_sinker(
+                let meta_manager = Self::get_extractor_meta_manager(task_config).await?;
+                Self::create_redis_sinker(
                     url,
                     task_config.parallelizer.parallel_size,
                     *batch_size,
@@ -235,7 +235,7 @@ impl SinkerUtil {
                 data_size_threshold,
                 ..
             } => {
-                SinkerUtil::create_redis_statistic_sinker(
+                Self::create_redis_statistic_sinker(
                     task_config.parallelizer.parallel_size,
                     *data_size_threshold,
                     monitor,
@@ -248,7 +248,7 @@ impl SinkerUtil {
                 stream_load_url,
                 ..
             } => {
-                SinkerUtil::create_starrocks_sinker(
+                Self::create_starrocks_sinker(
                     stream_load_url,
                     task_config.parallelizer.parallel_size,
                     *batch_size,

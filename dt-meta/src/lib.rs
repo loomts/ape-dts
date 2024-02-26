@@ -1,3 +1,5 @@
+#![allow(clippy::new_without_default)]
+
 pub mod adaptor;
 pub mod avro;
 pub mod col_value;

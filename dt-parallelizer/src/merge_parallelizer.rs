@@ -94,7 +94,7 @@ impl Parallelizer for MergeParallelizer {
 impl MergeParallelizer {
     async fn sink_dml_internal(
         &self,
-        tb_merged_datas: &mut Vec<TbMergedData>,
+        tb_merged_datas: &mut [TbMergedData],
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
         merge_type: MergeType,
     ) -> Result<(), Error> {

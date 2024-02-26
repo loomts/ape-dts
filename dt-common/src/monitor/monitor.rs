@@ -30,7 +30,7 @@ impl Monitor {
     pub fn flush(&mut self) {
         for (counter_type, counter) in self.time_window_counters.iter_mut() {
             let statistics = counter.statistics();
-            let mut log = format!("{} | {}", self.name, counter_type.to_string());
+            let mut log = format!("{} | {}", self.name, counter_type);
             for aggregate_type in counter_type.get_aggregate_types() {
                 let aggregate_value = match aggregate_type {
                     AggregateType::AvgByCount => statistics.avg_by_count,
@@ -41,30 +41,20 @@ impl Monitor {
                     AggregateType::Count => statistics.count,
                     _ => continue,
                 };
-                log = format!(
-                    "{} | {}={}",
-                    log,
-                    aggregate_type.to_string(),
-                    aggregate_value
-                );
+                log = format!("{} | {}={}", log, aggregate_type, aggregate_value);
             }
             log_monitor!("{}", log);
         }
 
         for (counter_type, counter) in self.no_window_counters.iter() {
-            let mut log = format!("{} | {}", self.name, counter_type.to_string());
+            let mut log = format!("{} | {}", self.name, counter_type);
             for aggregate_type in counter_type.get_aggregate_types() {
                 let aggregate_value = match aggregate_type {
                     AggregateType::Latest => counter.value,
                     AggregateType::AvgByCount => counter.avg_by_count(),
                     _ => continue,
                 };
-                log = format!(
-                    "{} | {}={}",
-                    log,
-                    aggregate_type.to_string(),
-                    aggregate_value
-                );
+                log = format!("{} | {}={}", log, aggregate_type, aggregate_value);
             }
             log_monitor!("{}", log);
         }

@@ -15,7 +15,7 @@ impl ConfigTokenParser {
         }
 
         let escape_pairs = SqlUtil::get_escape_pairs(db_type);
-        let tokens = Self::parse(config_str, &delimiters, &escape_pairs);
+        let tokens = Self::parse(config_str, delimiters, &escape_pairs);
         for token in tokens.iter() {
             if !SqlUtil::is_valid_token(token, db_type, &escape_pairs) {
                 return Err(Error::ConfigError(format!(

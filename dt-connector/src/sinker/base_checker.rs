@@ -145,7 +145,7 @@ impl BaseChecker {
             .get_tb_meta(&reverse_src_row_data.schema, &reverse_src_row_data.tb)
             .await?;
 
-        let id_col_values = Self::build_id_col_values(&reverse_src_row_data, &src_tb_meta);
+        let id_col_values = Self::build_id_col_values(&reverse_src_row_data, src_tb_meta);
         let miss_log = CheckLog {
             log_type: LogType::Miss,
             schema: reverse_src_row_data.schema.clone(),
@@ -198,8 +198,8 @@ impl BaseChecker {
         let id_col_values = Self::build_id_col_values(&reverse_src_row_data, tb_meta);
         CheckLog {
             log_type: LogType::Miss,
-            schema: reverse_src_row_data.schema.clone(),
-            tb: reverse_src_row_data.tb.clone(),
+            schema: reverse_src_row_data.schema,
+            tb: reverse_src_row_data.tb,
             id_col_values,
             diff_col_values: HashMap::new(),
         }
@@ -211,8 +211,7 @@ impl BaseChecker {
         tb_meta: &RdbTbMeta,
         reverse_router: &RdbRouter,
     ) -> CheckLog {
-        let mut diff_log =
-            Self::build_mongo_miss_log(src_row_data.clone(), tb_meta, reverse_router);
+        let mut diff_log = Self::build_mongo_miss_log(src_row_data, tb_meta, reverse_router);
         diff_log.diff_col_values = diff_col_values;
         diff_log.log_type = LogType::Diff;
         // no col map in mongo

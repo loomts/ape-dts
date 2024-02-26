@@ -212,7 +212,7 @@ impl MysqlMetaManager {
                 let length = Self::get_col_length(db_type, version, row).await?;
                 let mut charset = String::new();
                 let unchecked: Option<Vec<u8>> = row.get_unchecked(CHARACTER_SET_NAME);
-                if let Some(_) = unchecked {
+                if unchecked.is_some() {
                     charset = row.try_get(CHARACTER_SET_NAME)?;
                 }
                 MysqlColType::String { length, charset }

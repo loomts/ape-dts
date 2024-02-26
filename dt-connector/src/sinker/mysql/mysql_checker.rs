@@ -77,13 +77,13 @@ impl MysqlChecker {
         let mut miss = Vec::new();
         let mut diff = Vec::new();
         for src_row_data in data.iter() {
-            let query_builder = RdbQueryBuilder::new_for_mysql(&tb_meta);
+            let query_builder = RdbQueryBuilder::new_for_mysql(tb_meta);
             let query_info = query_builder.get_select_query(src_row_data)?;
             let query = query_builder.create_mysql_query(&query_info);
 
             let mut rows = query.fetch(&self.conn_pool);
             if let Some(row) = rows.try_next().await.unwrap() {
-                let dst_row_data = RowData::from_mysql_row(&row, &tb_meta);
+                let dst_row_data = RowData::from_mysql_row(&row, tb_meta);
                 let diff_col_values = BaseChecker::compare_row_data(src_row_data, &dst_row_data);
                 if !diff_col_values.is_empty() {
                     let diff_log = BaseChecker::build_diff_log(
@@ -119,7 +119,7 @@ impl MysqlChecker {
         let start_time = Instant::now();
 
         let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&data[0]).await?;
-        let query_builder = RdbQueryBuilder::new_for_mysql(&tb_meta);
+        let query_builder = RdbQueryBuilder::new_for_mysql(tb_meta);
 
         // build fetch dst sql
         let query_info = query_builder.get_batch_select_query(data, start_index, batch_size)?;
@@ -129,7 +129,7 @@ impl MysqlChecker {
         let mut dst_row_data_map = HashMap::new();
         let mut rows = query.fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
-            let row_data = RowData::from_mysql_row(&row, &tb_meta);
+            let row_data = RowData::from_mysql_row(&row, tb_meta);
             let hash_code = row_data.get_hash_code(&tb_meta.basic);
             dst_row_data_map.insert(hash_code, row_data);
         }
@@ -155,7 +155,7 @@ impl MysqlChecker {
                 continue;
             }
 
-            let mut src_statement = src_data.statement.as_mut().unwrap();
+            let src_statement = src_data.statement.as_mut().unwrap();
             let db = match src_statement {
                 StructStatement::MysqlCreateDatabase { statement } => {
                     statement.database.name.clone()
@@ -168,7 +168,7 @@ impl MysqlChecker {
 
             let mut struct_fetcher = MysqlStructFetcher {
                 conn_pool: self.conn_pool.to_owned(),
-                db: db.into(),
+                db,
                 filter: None,
                 meta_manager: self.meta_manager.clone(),
             };
@@ -189,7 +189,7 @@ impl MysqlChecker {
                         .get_create_table_statements(&statement.table.table_name)
                         .await
                         .unwrap();
-                    if dst_statement.len() == 0 {
+                    if dst_statement.is_empty() {
                         None
                     } else {
                         Some(StructStatement::MysqlCreateTable {
@@ -201,8 +201,7 @@ impl MysqlChecker {
                 _ => None,
             };
 
-            BaseChecker::compare_struct(&mut src_statement, &mut dst_statement, &self.filter)
-                .unwrap();
+            BaseChecker::compare_struct(src_statement, &mut dst_statement, &self.filter).unwrap();
         }
         Ok(())
     }

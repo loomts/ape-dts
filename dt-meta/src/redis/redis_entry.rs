@@ -78,7 +78,7 @@ impl RedisEntry {
 
             let mut slots = Vec::new();
             for key in self.cmd.keys.iter() {
-                slots.push(KeyParser::calc_slot(&key.as_bytes()))
+                slots.push(KeyParser::calc_slot(key.as_bytes()))
             }
             slots
         }

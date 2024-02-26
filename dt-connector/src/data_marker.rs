@@ -32,13 +32,13 @@ impl DataMarker {
     pub fn from_config(config: &DataMarkerConfig, db_type: &DbType) -> Result<Self, Error> {
         let topo_nodes: Vec<String> = config
             .topo_nodes
-            .split(",")
+            .split(',')
             .map(|i| i.to_string())
             .collect();
-        let do_nodes: HashSet<String> = config.do_nodes.split(",").map(|i| i.to_string()).collect();
+        let do_nodes: HashSet<String> = config.do_nodes.split(',').map(|i| i.to_string()).collect();
         let ignore_nodes: HashSet<String> = config
             .ignore_nodes
-            .split(",")
+            .split(',')
             .map(|i| i.to_string())
             .collect();
 
@@ -55,7 +55,7 @@ impl DataMarker {
 
         match *db_type {
             DbType::Mysql | DbType::Pg | DbType::Mongo => {
-                let marker_info: Vec<&str> = config.marker.split(".").collect();
+                let marker_info: Vec<&str> = config.marker.split('.').collect();
                 me.marker_db = marker_info[0].to_string();
                 me.marker_tb = marker_info[1].to_string();
             }
@@ -87,7 +87,7 @@ impl DataMarker {
     }
 
     pub fn is_marker_info_2(&self, db: &str, tb: &str) -> bool {
-        &self.marker_db == db && &self.marker_tb == tb
+        self.marker_db == db && self.marker_tb == tb
     }
 
     pub fn refresh(&mut self, dt_data: &DtData) {

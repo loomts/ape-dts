@@ -19,8 +19,8 @@ impl Fetcher for RedisFetcher {
     }
 
     async fn fetch_version(&mut self) -> Result<String, Error> {
-        let mut conn = self.conn.as_mut().unwrap();
-        let version = TaskUtil::get_redis_version(&mut conn)?;
+        let conn = self.conn.as_mut().unwrap();
+        let version = TaskUtil::get_redis_version(conn)?;
         Ok(version.to_string())
     }
 }

@@ -434,10 +434,10 @@ impl TaskRunner {
                     start_lsn,
                     *keepalive_interval_secs,
                     *heartbeat_interval_secs,
-                    &heartbeat_tb,
+                    heartbeat_tb,
                     filter,
                     &self.config.runtime.log_level,
-                    &ddl_command_tb,
+                    ddl_command_tb,
                     syncer,
                 )
                 .await?;

@@ -44,7 +44,7 @@ impl PgCdcClient {
 
         // set extra_float_digits to max so no precision will lose
         let query = "SET extra_float_digits=3";
-        client.simple_query(&query).await.unwrap();
+        client.simple_query(query).await.unwrap();
 
         // create publication for all tables if not exists
         let pub_name = if self.pub_name.is_empty() {
@@ -88,18 +88,16 @@ impl PgCdcClient {
                 // should never happen
                 create_slot = true;
                 log_warn!("slot exists but confirmed_flush_lsn is empty, will recreate slot");
+            } else if start_lsn.is_empty() {
+                log_warn!("start_lsn is empty, will use confirmed_flush_lsn");
+                start_lsn = confirmed_flush_lsn;
             } else {
-                if start_lsn.is_empty() {
-                    log_warn!("start_lsn is empty, will use confirmed_flush_lsn");
-                    start_lsn = confirmed_flush_lsn;
-                } else {
-                    let actual_lsn: PgLsn = confirmed_flush_lsn.parse().unwrap();
-                    let input_lsn: PgLsn = start_lsn.parse().unwrap();
-                    if input_lsn < actual_lsn {
-                        log_warn!("start_lsn: {} is order than confirmed_flush_lsn: {}, will use confirmed_flush_lsn", 
+                let actual_lsn: PgLsn = confirmed_flush_lsn.parse().unwrap();
+                let input_lsn: PgLsn = start_lsn.parse().unwrap();
+                if input_lsn < actual_lsn {
+                    log_warn!("start_lsn: {} is order than confirmed_flush_lsn: {}, will use confirmed_flush_lsn", 
                         start_lsn, confirmed_flush_lsn);
-                        start_lsn = confirmed_flush_lsn;
-                    }
+                    start_lsn = confirmed_flush_lsn;
                 }
             }
         }

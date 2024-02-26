@@ -1,3 +1,4 @@
+#[allow(clippy::module_inception)]
 pub mod entry_parser;
 pub mod hash_parser;
 pub mod list_parser;
@@ -30,7 +31,7 @@ const RDB_TYPE_STREAM_LISTPACKS_2: u8 = 19;
 const RDB_TYPE_SET_LISTPACK: u8 = 20;
 const RDB_TYPE_STREAM_LISTPACKS_3: u8 = 21;
 
-const MODULE_TYPE_NAME_CHAR_SET: &'static str =
+const MODULE_TYPE_NAME_CHAR_SET: &str =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
 const RDB_MODULE_OPCODE_EOF: u8 = 0;

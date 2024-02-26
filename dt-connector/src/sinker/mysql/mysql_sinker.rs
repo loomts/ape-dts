@@ -103,7 +103,7 @@ impl MysqlSinker {
         }
         for row_data in data.iter() {
             data_size += row_data.data_size;
-            let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&row_data).await?;
+            let tb_meta = self.meta_manager.get_tb_meta_by_row_data(row_data).await?;
             let query_builder = RdbQueryBuilder::new_for_mysql(tb_meta);
 
             let mut query_info = query_builder.get_query_info(row_data)?;

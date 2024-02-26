@@ -48,9 +48,9 @@ impl BatchCheckExtractor for MysqlCheckExtractor {
             .meta_manager
             .get_tb_meta(&check_logs[0].schema, &check_logs[0].tb)
             .await?;
-        let check_row_datas = Self::build_check_row_datas(check_logs, &tb_meta)?;
+        let check_row_datas = Self::build_check_row_datas(check_logs, tb_meta)?;
 
-        let query_builder = RdbQueryBuilder::new_for_mysql(&tb_meta);
+        let query_builder = RdbQueryBuilder::new_for_mysql(tb_meta);
         let query_info = if check_logs.len() == 1 {
             query_builder.get_select_query(&check_row_datas[0])?
         } else {
@@ -60,7 +60,7 @@ impl BatchCheckExtractor for MysqlCheckExtractor {
 
         let mut rows = query.fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
-            let mut row_data = RowData::from_mysql_row(&row, &tb_meta);
+            let mut row_data = RowData::from_mysql_row(&row, tb_meta);
 
             if log_type == &LogType::Diff {
                 row_data.row_type = RowType::Update;

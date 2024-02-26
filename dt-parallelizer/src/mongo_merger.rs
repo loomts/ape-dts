@@ -43,6 +43,7 @@ impl Merger for MongoMerger {
 
 impl MongoMerger {
     /// partition dmls of the same table into insert vec and delete vec
+    #[allow(clippy::type_complexity)]
     pub fn merge_row_data(
         mut data: Vec<RowData>,
     ) -> Result<(Vec<RowData>, Vec<RowData>, Vec<RowData>), Error> {
@@ -124,6 +125,6 @@ impl MongoMerger {
                 }
             }
         }
-        return None;
+        None
     }
 }

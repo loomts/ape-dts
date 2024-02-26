@@ -99,7 +99,7 @@ impl RdbFilter {
     }
 
     fn match_all(set: &HashSet<String>) -> bool {
-        return set.len() == 1 && set.contains("*");
+        set.len() == 1 && set.contains("*")
     }
 
     fn contain_tb(

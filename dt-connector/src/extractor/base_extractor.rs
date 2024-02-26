@@ -1,9 +1,6 @@
-use std::{
-    collections::HashMap,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
 };
 
 use concurrent_queue::ConcurrentQueue;
@@ -15,7 +12,6 @@ use dt_common::{
     utils::{sql_util::SqlUtil, time_util::TimeUtil},
 };
 use dt_meta::{
-    col_value::ColValue,
     ddl_data::DdlData,
     ddl_type::DdlType,
     dt_data::{DtData, DtItem},
@@ -92,47 +88,9 @@ impl BaseExtractor {
     }
 
     pub async fn push_row(&mut self, row_data: RowData, position: Position) -> Result<(), Error> {
-        let row_data = self.route_row(row_data);
+        let row_data = self.router.route_row(row_data);
         let dt_data = DtData::Dml { row_data };
         self.push_dt_data(dt_data, position).await
-    }
-
-    fn route_row(&self, mut row_data: RowData) -> RowData {
-        // tb map
-        let (schema, tb) = (row_data.schema.clone(), row_data.tb.clone());
-        let (dst_schema, dst_tb) = self.router.get_tb_map(&schema, &tb);
-        row_data.schema = dst_schema.to_string();
-        row_data.tb = dst_tb.to_string();
-
-        // col map
-        let col_map = self.router.get_col_map(&schema, &tb);
-        if col_map.is_none() {
-            return row_data;
-        }
-        let col_map = col_map.unwrap();
-
-        let route_col_values =
-            |col_values: HashMap<String, ColValue>| -> HashMap<String, ColValue> {
-                let mut new_col_values = HashMap::new();
-                for (col, col_value) in col_values {
-                    if let Some(dst_col) = col_map.get(&col) {
-                        new_col_values.insert(dst_col.to_owned(), col_value);
-                    } else {
-                        new_col_values.insert(col, col_value);
-                    }
-                }
-                new_col_values
-            };
-
-        if let Some(before) = row_data.before {
-            row_data.before = Some(route_col_values(before));
-        }
-
-        if let Some(after) = row_data.after {
-            row_data.after = Some(route_col_values(after));
-        }
-
-        return row_data;
     }
 
     pub async fn parse_ddl(&self, schema: &str, query: &str) -> Result<DdlData, Error> {
@@ -186,11 +144,8 @@ impl BaseExtractor {
             return vec![];
         }
 
-        let db_tb = ConfigTokenParser::parse(
-            heartbeat_tb,
-            &vec!['.'],
-            &SqlUtil::get_escape_pairs(&db_type),
-        );
+        let db_tb =
+            ConfigTokenParser::parse(heartbeat_tb, &['.'], &SqlUtil::get_escape_pairs(&db_type));
 
         if db_tb.len() < 2 {
             log_warn!("heartbeat disabled, heartbeat_tb should be like db.tb or schema.tb");

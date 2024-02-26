@@ -45,8 +45,8 @@ impl AvroConverter {
             };
 
             if let Some(key) = match row_data.row_type {
-                RowType::Insert => convert(&row_data.after.as_ref().unwrap()),
-                RowType::Update | RowType::Delete => convert(&row_data.before.as_ref().unwrap()),
+                RowType::Insert => convert(row_data.after.as_ref().unwrap()),
+                RowType::Update | RowType::Delete => convert(row_data.before.as_ref().unwrap()),
             } {
                 return Ok(key);
             }
@@ -98,8 +98,8 @@ impl AvroConverter {
         };
 
         let value = Value::Record(vec![
-            (SCHEMA.into(), Value::String(row_data.schema.into())),
-            (TB.into(), Value::String(row_data.tb.into())),
+            (SCHEMA.into(), Value::String(row_data.schema)),
+            (TB.into(), Value::String(row_data.tb)),
             (
                 OPERATION.into(),
                 Value::String(row_data.row_type.to_string()),
@@ -117,10 +117,8 @@ impl AvroConverter {
         let mut avro_map = Self::avro_to_map(value);
 
         let avro_to_string = |value: Option<Value>| {
-            if let Some(v) = value {
-                if let Value::String(string_v) = v {
-                    return string_v;
-                }
+            if let Some(Value::String(v)) = value {
+                return v;
             }
             String::new()
         };
@@ -149,9 +147,7 @@ impl AvroConverter {
     }
 
     fn avro_to_col_values(&self, value: Option<Value>) -> Option<HashMap<String, ColValue>> {
-        if value.is_none() {
-            return None;
-        }
+        value.as_ref()?;
 
         // Some(Union(1, Map({
         //     "bytes_col": Union(4, Bytes([5, 6, 7, 8])),
@@ -166,7 +162,7 @@ impl AvroConverter {
             if let Value::Map(map_v) = *v {
                 let mut col_values = HashMap::new();
                 for (col, value) in map_v {
-                    col_values.insert(col.into(), Self::avro_to_col_value(value));
+                    col_values.insert(col, Self::avro_to_col_value(value));
                 }
                 return Some(col_values);
             }

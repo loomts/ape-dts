@@ -231,11 +231,8 @@ impl RdbTestRunner {
             _ => (String::new(), DbType::Mysql),
         };
 
-        let tokens = ConfigTokenParser::parse(
-            &heartbeat_tb,
-            &vec!['.'],
-            &SqlUtil::get_escape_pairs(&db_type),
-        );
+        let tokens =
+            ConfigTokenParser::parse(&heartbeat_tb, &['.'], &SqlUtil::get_escape_pairs(&db_type));
         let db_tb = (tokens[0].clone(), tokens[1].clone());
 
         // recreate heartbeat table
@@ -455,7 +452,7 @@ impl RdbTestRunner {
 
     pub fn parse_full_tb_name(full_tb_name: &str, db_type: &DbType) -> (String, String) {
         let escape_pairs = SqlUtil::get_escape_pairs(&db_type);
-        let tokens = ConfigTokenParser::parse(full_tb_name, &vec!['.'], &escape_pairs);
+        let tokens = ConfigTokenParser::parse(full_tb_name, &['.'], &escape_pairs);
         let (db, tb) = if tokens.len() > 1 {
             (tokens[0].to_string(), tokens[1].to_string())
         } else {

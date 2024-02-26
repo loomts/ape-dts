@@ -17,10 +17,8 @@ const RDB_SNAPSHOT_POSITIONS: &str = "rdb_snapshot_positions";
 impl SnapshotResumer {
     pub fn new(db_type: &DbType, config: &ResumerConfig) -> Result<Self, Error> {
         let mut resume_values: HashMap<String, String> = HashMap::new();
-        if let Some(positions) = config.resume_values.get(RDB_SNAPSHOT_POSITIONS) {
-            if let Some(positions) = positions {
-                resume_values = serde_json::from_str(positions).unwrap();
-            }
+        if let Some(Some(positions)) = config.resume_values.get(RDB_SNAPSHOT_POSITIONS) {
+            resume_values = serde_json::from_str(positions).unwrap();
         }
         Ok(Self {
             resume_values,

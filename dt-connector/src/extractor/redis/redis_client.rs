@@ -47,10 +47,8 @@ impl RedisClient {
             cmd.add_str_arg(password);
 
             me.send(&cmd).await?;
-            if let Ok(value) = me.read().await {
-                if let Value::Okay = value {
-                    return Ok(me);
-                }
+            if let Ok(Value::Okay) = me.read().await {
+                return Ok(me);
             }
             return Err(Error::Unexpected(format!("can't cnnect redis: {}", url)));
         }

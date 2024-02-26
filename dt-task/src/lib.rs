@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+
 pub mod extractor_util;
 pub mod parallelizer_util;
 pub mod redis_util;
