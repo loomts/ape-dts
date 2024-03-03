@@ -68,7 +68,7 @@ impl TaskConfig {
         Self {
             extractor_basic,
             extractor,
-            parallelizer: Self::load_paralleizer_config(&ini),
+            parallelizer: Self::load_parallelizer_config(&ini),
             pipeline: Self::load_pipeline_config(&ini),
             sinker_basic,
             sinker,
@@ -367,30 +367,12 @@ impl TaskConfig {
         Ok((basic, sinker))
     }
 
-    fn load_paralleizer_config(ini: &Ini) -> ParallelizerConfig {
+    fn load_parallelizer_config(ini: &Ini) -> ParallelizerConfig {
         // compatible with older versions, Paralleizer settings are set under the pipeline section
-        let parallel_sections: Vec<String> = ini
-            .sections()
-            .iter()
-            .filter(|&s| *s == PARALLELIZER)
-            .cloned()
-            .collect();
-
-        if parallel_sections.is_empty() {
-            ParallelizerConfig {
-                parallel_size: ini.getuint(PIPELINE, "parallel_size").unwrap().unwrap() as usize,
-                parallel_type: ParallelType::from_str(&ini.get(PIPELINE, "parallel_type").unwrap())
-                    .unwrap(),
-            }
-        } else {
-            ParallelizerConfig {
-                parallel_size: ini.getuint(PARALLELIZER, "parallel_size").unwrap().unwrap()
-                    as usize,
-                parallel_type: ParallelType::from_str(
-                    &ini.get(PARALLELIZER, "parallel_type").unwrap(),
-                )
+        ParallelizerConfig {
+            parallel_size: ini.getuint(PARALLELIZER, "parallel_size").unwrap().unwrap() as usize,
+            parallel_type: ParallelType::from_str(&ini.get(PARALLELIZER, "parallel_type").unwrap())
                 .unwrap(),
-            }
         }
     }
 

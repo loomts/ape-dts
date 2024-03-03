@@ -31,7 +31,7 @@ impl BaseTestRunner {
     pub async fn new(relative_test_dir: &str) -> Result<Self, Error> {
         let project_root = TestConfigUtil::get_project_root();
         let tmp_dir = format!("{}/tmp/{}", project_root, relative_test_dir);
-        let test_dir = TestConfigUtil::get_absolute_dir(relative_test_dir);
+        let test_dir = TestConfigUtil::get_absolute_path(relative_test_dir);
         let src_task_config_file = format!("{}/task_config.ini", test_dir);
         let dst_task_config_file = format!("{}/task_config.ini", tmp_dir);
 
@@ -43,11 +43,7 @@ impl BaseTestRunner {
         );
 
         // update extractor / sinker urls from .env
-        TestConfigUtil::update_task_config_from_env(
-            &dst_task_config_file,
-            &dst_task_config_file,
-            &test_dir,
-        );
+        TestConfigUtil::update_task_config_from_env(&dst_task_config_file, &dst_task_config_file);
 
         let config = TaskConfig::new(&dst_task_config_file);
 
