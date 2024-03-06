@@ -1,8 +1,7 @@
-# 简介
-- 结构迁移后，我们提供两种校验方式，一种是我们自带的，一种是第三方的 [liquibase](./check_liquibase.md)
-- 本文介绍我们自带的
+# Introduction
+- After structure migration, we provide two verification methods, one is our own and the other is an open source tool [liquibase](./check_liquibase.md)
 
-# 配置
+# Example: mysql_to_mysql
 ```
 [extractor]
 db_type=mysql
@@ -41,9 +40,11 @@ log4rs_file=./log4rs.yaml
 log_dir=./logs
 ```
 
-# 校验结果
-- 以源端结构为基准，校验结果包括 miss，diff，extra（目标多出）
-- 校验结果会以 sql 的方式呈现，miss.log 中包含 src_sql，extra.log 中包含 dst_sql，diff.log 中包含 src_sql 和 dst_sql
+# Results
+- The verification results include miss, diff, extra
+- The verification results will be presented in sqls, miss.log contains src_sqls, extra.log contains dst_sqls, and diff.log contains src_sqls and dst_sqls.
+
+<br/>
 
 - miss.log
 ```

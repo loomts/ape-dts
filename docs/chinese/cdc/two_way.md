@@ -105,7 +105,7 @@ marker=ape_trans_mysql.topo1
 
 
 # 示例: mysql_to_mysql
-- 以下皆以拓扑中包含两个节点（node1，node2）的双向同步为例
+- 以拓扑中包含两个节点（node1，node2）的双向同步为例
 
 ## node1 -> node2
 ```

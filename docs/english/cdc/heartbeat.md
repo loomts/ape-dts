@@ -1,11 +1,12 @@
-# 简介
-- 增量任务通过位点来记录延迟情况，如 mysql 增量任务将已同步的源库 binlog 位置作为位点
-- 如果增量任务当前是追平状态，那么位点应该和源库一致，且位点的 timestamp（如果有的话）应该和当前时间一致
-- 但如果源库本身长时间没有更新，或者有更新但更新的表不在任务的订阅范围，此时，增量任务的位点就不会朝前推进
-- 因此，我们可通过在源库预建心跳表，增量任务定时更新该表，以推动任务位点前进
+# Introduction
+- Cdc task calculates delay by position, for example, mysql cdc tasks use the synced source binlog offset as position
+- The position should be consistent with the source database if the cdc task catches up, and the timestamp of the position(if any) should be current time
+- But if the source database has not been updated for a long time, or there are updates but the updated tables are not subscribed by cdc task, then the task position won't change, and it is considered as a delay
+- We can pre-create a heartbeat table in the source database and update the table periodically by cdc task to push the task position forward
+- Heartbeat if optional
 
-# 配置
-- mysql/pg/mongo，参考 ：
+# Config
+- mysql/pg/mongo, refer to:
     - dt-tests/tests/mysql_to_mysql/cdc/heartbeat_test
     - dt-tests/tests/pg_to_pg/cdc/heartbeat_test
     - dt-tests/tests/mongo_to_mongo/cdc/heartbeat_test
@@ -19,14 +20,14 @@ heartbeat_tb=test_db_1.ape_dts_heartbeat
 ignore_tbs=test_db_1.ape_dts_heartbeat
 ```
 
-- redis，参考：dt-tests/tests/redis_to_redis/cdc/heartbeat_test
+- redis，refer to: dt-tests/tests/redis_to_redis/cdc/heartbeat_test
 ```
 [extractor]
 heartbeat_interval_secs=10
 heartbeat_key=5.ape_dts_heartbeat_key
 ```
 
-# 心跳表
+# Heartbeat table
 - mysql
 ```
 CREATE TABLE IF NOT EXISTS `{}`.`{}`(
@@ -55,7 +56,7 @@ CREATE TABLE IF NOT EXISTS "{}"."{}"(
 )
 ```
 
-- 库名 & 表名 需和 task_config.ini 中 heartbeat_tb 一致
-- mongo 和 redis 不需要预建心跳表
-- 如果不需要任务触发心跳，则不配置 heartbeat_tb
-- 如果配置了 heartbeat_tb，但用户并未手动预建心跳表，任务会尝试建表，但这需要 extractor 使用的账户有相应权限
+- Database & table should keep the same with heartbeat_tb in task_config.ini
+- No need to pre-create anything for mongo & redis
+- Keep heartbeat_tb empty if not needed
+- If heartbeat_tb configured but table not created, cdc task will try to create it, which needs the extractor account to have create privileges

@@ -6,7 +6,7 @@
 - 对于 cdc 任务，由于我们只保证目标库与源库的最终一致性，而不保证源库事务在目标库重放时的完整性，position.log 中会记录 current_position 和 checkpoint_position 两份信息
 - current_position：已同步的数据的位点信息，可能处在源库某个大事务 binlog 的中间位置
 - checkpoint_position：已同步的完整的事务的位点信息
-- 如果任务终端，要使用 position.log 中的位点信息做断点续传，优先使用 checkpoint_position 作为新 cdc 任务的起点，使用 current_position 可能导致 extractor 解析 cdc 数据失败
+- 如果任务中断，要使用 position.log 中的位点信息做断点续传，优先使用 checkpoint_position 作为新 cdc 任务的起点，使用 current_position 可能导致 extractor 解析 cdc 数据失败
 
 ## mysql
 - 可使用 binlog_filename + next_event_position（即 binlog_position）做断点续传

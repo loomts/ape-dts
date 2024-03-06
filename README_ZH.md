@@ -1,3 +1,5 @@
+# [English](README.md) | 中文
+
 # 简介
 - ape-dts 是一款旨在实现 any-to-any 的数据迁移工具
 - 简单，不依赖第三方组件和额外存储
@@ -29,7 +31,7 @@
 ```
 docker run -it \
 --entrypoint sh \
--v /Users/xushicai/Documents/projects/ape-dts2/ape-dts/dt-tests/tests/mysql_to_mysql/snapshot/route_test/task_config.ini:/task_config.ini \
+-v [absolute-path]/task_config.ini:/task_config.ini \
 apecloud/ape-dts:0.1.13.hotfix4 \
 -c "/ape-dts /task_config.ini"
 ```
@@ -66,7 +68,8 @@ apecloud/ape-dts:0.1.13.hotfix4 \
 - dt-task：根据配置创建 extractor，sinker，pipeline，parallelizer 以组装任务
 - dt-meta：元数据管理及基础数据结构
 - dt-common：通用基础模块
-- dt-task：集成测试
+- dt-tests：集成测试
+- dt-precheck: 任务预检查，**这部分将被移除**
 
 ## 写代码
 ```
@@ -75,4 +78,6 @@ cargo clippy --workspace
 ```
 
 # 技术交流
-![微信交流](docs/pics/WechatIMG.jpg)
+<div align=center>
+<img src="docs/pics/WechatIMG.jpg" width="40%" />
+</div>
