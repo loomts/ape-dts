@@ -65,6 +65,22 @@ apecloud/ape-dts:0.1.13.hotfix4 \
 cargo build
 cargo clippy --workspace
 ```
+
+## Build docker image
+- arm64
+```
+docker buildx build \
+--platform linux/arm64 --tag ape-dts:0.1.0-test-arm64 \
+--build-arg MODULE_NAME=dt-main --load . 
+```
+
+- amd64
+```
+docker buildx build \
+--platform linux/amd64 --tag ape-dts:0.1.0-test-amd64 \
+--build-arg MODULE_NAME=dt-main --load . 
+```
+
 # Wechat
 <div align=center>
 <img src="docs/pics/WechatIMG.jpg" width="40%" />

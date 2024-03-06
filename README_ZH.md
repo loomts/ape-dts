@@ -77,6 +77,21 @@ cargo build
 cargo clippy --workspace
 ```
 
+## 创建 docker 镜像
+- arm64
+```
+docker buildx build \
+--platform linux/arm64 --tag ape-dts:0.1.0-test-arm64 \
+--build-arg MODULE_NAME=dt-main --load . 
+```
+
+- amd64
+```
+docker buildx build \
+--platform linux/amd64 --tag ape-dts:0.1.0-test-amd64 \
+--build-arg MODULE_NAME=dt-main --load . 
+```
+
 # 技术交流
 <div align=center>
 <img src="docs/pics/WechatIMG.jpg" width="40%" />
