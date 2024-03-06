@@ -79,7 +79,7 @@ impl TaskRunner {
     async fn start_multi_task(&self, url: &str) -> Result<(), Error> {
         let db_type = self.config.extractor_basic.db_type.clone();
         let mut filter = RdbFilter::from_config(&self.config.filter, db_type.clone())?;
-        let dbs = ExtractorUtil::list_dbs(url, &db_type).await?;
+        let dbs = TaskUtil::list_dbs(url, &db_type).await?;
         for db in dbs.iter() {
             if filter.filter_db(db) {
                 continue;
@@ -106,7 +106,7 @@ impl TaskRunner {
             }
 
             // start a task for each tb
-            let tbs = ExtractorUtil::list_tbs(url, db, &db_type).await?;
+            let tbs = TaskUtil::list_tbs(url, db, &db_type).await?;
             for tb in tbs.iter() {
                 if filter.filter_event(db, tb, &RowType::Insert.to_string()) {
                     continue;
@@ -709,13 +709,16 @@ impl TaskRunner {
                         db_tb[0], db_tb[1]
                     );
 
-                    let conn_pool = TaskUtil::create_mysql_conn_pool(url, 1, true)
-                        .await
-                        .unwrap();
-                    let db_query = sqlx::query(&db_sql);
-                    db_query.execute(&conn_pool).await.unwrap();
-                    let tb_query = sqlx::query(&tb_sql);
-                    tb_query.execute(&conn_pool).await.unwrap();
+                    let tbs = TaskUtil::list_tbs(url, &db_tb[0], &DbType::Mysql).await?;
+                    if !tbs.contains(&db_tb[1]) {
+                        let conn_pool = TaskUtil::create_mysql_conn_pool(url, 1, true)
+                            .await
+                            .unwrap();
+                        let db_query = sqlx::query(&db_sql);
+                        db_query.execute(&conn_pool).await.unwrap();
+                        let tb_query = sqlx::query(&tb_sql);
+                        tb_query.execute(&conn_pool).await.unwrap();
+                    }
                 }
 
                 ExtractorConfig::PgCdc { url, .. } => {
@@ -733,11 +736,14 @@ impl TaskRunner {
                         db_tb[0], db_tb[1]
                     );
 
-                    let conn_pool = TaskUtil::create_pg_conn_pool(url, 1, true).await.unwrap();
-                    let schema_query = sqlx::query(&schema_sql);
-                    schema_query.execute(&conn_pool).await.unwrap();
-                    let tb_query = sqlx::query(&tb_sql);
-                    tb_query.execute(&conn_pool).await.unwrap();
+                    let tbs = TaskUtil::list_tbs(url, &db_tb[0], &DbType::Pg).await?;
+                    if !tbs.contains(&db_tb[1]) {
+                        let conn_pool = TaskUtil::create_pg_conn_pool(url, 1, true).await.unwrap();
+                        let schema_query = sqlx::query(&schema_sql);
+                        schema_query.execute(&conn_pool).await.unwrap();
+                        let tb_query = sqlx::query(&tb_sql);
+                        tb_query.execute(&conn_pool).await.unwrap();
+                    }
                 }
 
                 _ => {}
@@ -761,13 +767,17 @@ impl TaskRunner {
                         data_marker.marker_db, data_marker.marker_tb
                     );
 
-                    let conn_pool = TaskUtil::create_mysql_conn_pool(url, 1, true)
-                        .await
-                        .unwrap();
-                    let db_query = sqlx::query(&db_sql);
-                    db_query.execute(&conn_pool).await.unwrap();
-                    let tb_query = sqlx::query(&tb_sql);
-                    tb_query.execute(&conn_pool).await.unwrap();
+                    let tbs =
+                        TaskUtil::list_tbs(url, &data_marker.marker_db, &DbType::Mysql).await?;
+                    if !tbs.contains(&data_marker.marker_tb) {
+                        let conn_pool = TaskUtil::create_mysql_conn_pool(url, 1, true)
+                            .await
+                            .unwrap();
+                        let db_query = sqlx::query(&db_sql);
+                        db_query.execute(&conn_pool).await.unwrap();
+                        let tb_query = sqlx::query(&tb_sql);
+                        tb_query.execute(&conn_pool).await.unwrap();
+                    }
                 }
 
                 SinkerConfig::Pg { url, .. } => {
@@ -784,11 +794,14 @@ impl TaskRunner {
                         data_marker.marker_db, data_marker.marker_tb
                     );
 
-                    let conn_pool = TaskUtil::create_pg_conn_pool(url, 1, true).await.unwrap();
-                    let schema_query = sqlx::query(&schema_sql);
-                    schema_query.execute(&conn_pool).await.unwrap();
-                    let tb_query = sqlx::query(&tb_sql);
-                    tb_query.execute(&conn_pool).await.unwrap();
+                    let tbs = TaskUtil::list_tbs(url, &data_marker.marker_db, &DbType::Pg).await?;
+                    if !tbs.contains(&data_marker.marker_tb) {
+                        let conn_pool = TaskUtil::create_pg_conn_pool(url, 1, true).await.unwrap();
+                        let schema_query = sqlx::query(&schema_sql);
+                        schema_query.execute(&conn_pool).await.unwrap();
+                        let tb_query = sqlx::query(&tb_sql);
+                        tb_query.execute(&conn_pool).await.unwrap();
+                    }
                 }
 
                 _ => {}
