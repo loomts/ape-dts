@@ -75,11 +75,9 @@ FROM ${DIST_IMG} as dist
 
 #TARGETOS - OS component from --platform, e.g. linux
 #TARGETARCH - Architecture from --platform, e.g. arm64
-ARG LOCAL_CONFIG_PATH="./images/example/mysql_snapshot_sample.yaml"
 ARG MODULE_NAME="dt-main"
 ARG APT_MIRROR=mirrors.ustc.edu.cn
 
-COPY ${LOCAL_CONFIG_PATH} /config_example
 COPY log4rs.yaml /log4rs.yaml
 COPY --from=builder /app/bin/${MODULE_NAME} /ape-dts
 
