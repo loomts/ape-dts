@@ -44,8 +44,8 @@ impl Parallelizer for RedisParallelizer {
         }
 
         let mut node_sinker_index_map = HashMap::new();
-        for i in 0..sinkers.len() {
-            node_sinker_index_map.insert(sinkers[i].lock().await.get_id(), i);
+        for (i, sinker) in sinkers.iter().enumerate() {
+            node_sinker_index_map.insert(sinker.lock().await.get_id(), i);
         }
 
         let mut node_datas = Vec::new();
@@ -91,9 +91,9 @@ impl Parallelizer for RedisParallelizer {
         }
 
         let mut futures = Vec::new();
-        for i in 0..node_datas.len() {
+        for sinker in sinkers.iter().take(node_datas.len()) {
             let node_data = node_datas.remove(0);
-            let sinker = sinkers[i].clone();
+            let sinker = sinker.clone();
             let future = tokio::spawn(async move {
                 sinker
                     .lock()

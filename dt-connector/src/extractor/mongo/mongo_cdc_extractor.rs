@@ -128,14 +128,12 @@ impl MongoCdcExtractor {
                         } else {
                             doc! {}
                         }
+                    } else if let Some(set_doc) = after_doc.get(MongoConstants::SET) {
+                        doc! {MongoConstants::SET: set_doc.as_document().unwrap()}
+                    } else if let Some(unset_doc) = after_doc.get(MongoConstants::UNSET) {
+                        doc! {MongoConstants::UNSET: unset_doc.as_document().unwrap()}
                     } else {
-                        if let Some(set_doc) = after_doc.get(MongoConstants::SET) {
-                            doc! {MongoConstants::SET: set_doc.as_document().unwrap()}
-                        } else if let Some(unset_doc) = after_doc.get(MongoConstants::UNSET) {
-                            doc! {MongoConstants::UNSET: unset_doc.as_document().unwrap()}
-                        } else {
-                            doc! {}
-                        }
+                        doc! {}
                     };
 
                     if diff_doc.is_empty() {
@@ -269,8 +267,7 @@ impl MongoCdcExtractor {
                 HashMap::new(),
             ));
         }
-
-        return data;
+        data
     }
 
     fn build_oplog_row_data(
@@ -284,7 +281,7 @@ impl MongoCdcExtractor {
         let ns = ns.unwrap().as_str().unwrap();
 
         // get db & tb
-        let tokens: Vec<&str> = ns.split(".").collect();
+        let tokens: Vec<&str> = ns.split('.').collect();
         let db: String = tokens[0].into();
         let tb: String = ns[db.len() + 1..].into();
         let before = if before.is_empty() {
@@ -440,7 +437,7 @@ impl MongoCdcExtractor {
             self.mongo_client.clone(),
         );
 
-        let _ = tokio::spawn(async move {
+        tokio::spawn(async move {
             let mut start_time = Instant::now();
             loop {
                 if start_time.elapsed().as_secs() >= heartbeat_interval_secs {

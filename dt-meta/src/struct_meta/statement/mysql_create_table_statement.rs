@@ -96,7 +96,7 @@ impl MysqlCreateTableStatement {
     }
 
     fn columns_to_sql(columns: &mut Vec<Column>) -> Result<(String, Vec<String>), Error> {
-        let (mut sql, mut pks) = (String::from(""), Vec::new());
+        let (mut sql, mut pks) = (String::new(), Vec::new());
 
         columns.sort_by(|c1, c2| c1.order_position.cmp(&c2.order_position));
         for i in columns {
@@ -167,11 +167,7 @@ impl MysqlCreateTableStatement {
             // since only BETREE supported in both InnoDB and MyISAM
             // refer: https://dev.mysql.com/doc/refman/8.0/en/create-index.html
             "CREATE {} INDEX `{}` ON `{}`.`{}` ({}) ",
-            index.index_kind.to_string(),
-            index.index_name,
-            index.database_name,
-            index.table_name,
-            columns_sql
+            index.index_kind, index.index_name, index.database_name, index.table_name, columns_sql
         );
 
         if !index.comment.is_empty() {

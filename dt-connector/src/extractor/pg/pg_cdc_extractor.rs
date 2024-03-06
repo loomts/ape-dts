@@ -275,7 +275,7 @@ impl PgCdcExtractor {
         );
 
         if row_data.tb == self.ddl_command_tb {
-            return self.decode_ddl(&row_data, &position).await;
+            return self.decode_ddl(&row_data, position).await;
         }
 
         self.push_row_to_buf(row_data, position.clone()).await
@@ -481,7 +481,7 @@ impl PgCdcExtractor {
             self.syncer.clone(),
             self.conn_pool.clone(),
         );
-        let _ = tokio::spawn(async move {
+        tokio::spawn(async move {
             let mut start_time = Instant::now();
             loop {
                 if start_time.elapsed().as_secs() >= heartbeat_interval_secs {

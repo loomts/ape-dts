@@ -107,7 +107,7 @@ impl PgCreateTableStatement {
         )
     }
 
-    fn columns_to_sql(columns: &mut Vec<Column>) -> String {
+    fn columns_to_sql(columns: &mut [Column]) -> String {
         let mut sql = String::new();
 
         columns.sort_by(|a, b| a.order_position.cmp(&b.order_position));

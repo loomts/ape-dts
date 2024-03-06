@@ -24,6 +24,10 @@ pub struct KafkaSinker {
 #[async_trait]
 impl Sinker for KafkaSinker {
     async fn sink_dml(&mut self, mut data: Vec<RowData>, _batch: bool) -> Result<(), Error> {
+        if data.is_empty() {
+            return Ok(());
+        }
+
         call_batch_fn!(self, data, Self::send_avro);
         Ok(())
     }

@@ -39,6 +39,10 @@ pub struct RedisSinker {
 #[async_trait]
 impl Sinker for RedisSinker {
     async fn sink_raw(&mut self, mut data: Vec<DtData>, _batch: bool) -> Result<(), Error> {
+        if data.is_empty() {
+            return Ok(());
+        }
+
         if self.batch_size > 1 {
             call_batch_fn!(self, data, Self::batch_sink_raw);
         } else {
@@ -48,6 +52,10 @@ impl Sinker for RedisSinker {
     }
 
     async fn sink_dml(&mut self, mut data: Vec<RowData>, _batch: bool) -> Result<(), Error> {
+        if data.is_empty() {
+            return Ok(());
+        }
+
         if self.batch_size > 1 {
             call_batch_fn!(self, data, Self::batch_sink_dml);
         } else {
@@ -98,48 +106,45 @@ impl RedisSinker {
 
     fn rewrite_entry(&mut self, dt_data: &mut DtData) -> Result<Vec<RedisCmd>, Error> {
         let mut cmds = Vec::new();
-        match dt_data {
-            DtData::Redis { ref mut entry } => {
-                if entry.db_id != self.now_db_id {
-                    let db_id = &entry.db_id.to_string();
-                    let args = vec!["SELECT", db_id];
-                    let cmd = RedisCmd::from_str_args(&args);
-                    cmds.push(cmd);
-                    self.now_db_id = entry.db_id;
+        if let DtData::Redis { entry } = dt_data {
+            if entry.db_id != self.now_db_id {
+                let db_id = &entry.db_id.to_string();
+                let args = vec!["SELECT", db_id];
+                let cmd = RedisCmd::from_str_args(&args);
+                cmds.push(cmd);
+                self.now_db_id = entry.db_id;
+            }
+
+            match self.method {
+                RedisWriteMethod::Restore => {
+                    if entry.is_raw() {
+                        let cmd = EntryRewriter::rewrite_as_restore(entry, self.version)?;
+                        cmds.push(cmd);
+                    } else {
+                        cmds.push(entry.cmd.clone());
+                    }
                 }
 
-                match self.method {
-                    RedisWriteMethod::Restore => {
-                        if entry.is_raw() {
-                            let cmd = EntryRewriter::rewrite_as_restore(&entry, self.version)?;
-                            cmds.push(cmd);
-                        } else {
-                            cmds.push(entry.cmd.clone());
+                RedisWriteMethod::Rewrite => {
+                    let mut rewrite_cmds = match entry.value {
+                        RedisObject::String(ref mut obj) => EntryRewriter::rewrite_string(obj),
+                        RedisObject::List(ref mut obj) => EntryRewriter::rewrite_list(obj),
+                        RedisObject::Set(ref mut obj) => EntryRewriter::rewrite_set(obj),
+                        RedisObject::Hash(ref mut obj) => EntryRewriter::rewrite_hash(obj),
+                        RedisObject::Zset(ref mut obj) => EntryRewriter::rewrite_zset(obj),
+                        RedisObject::Stream(ref mut obj) => Ok(obj.cmds.drain(..).collect()),
+                        RedisObject::Module(_) => {
+                            let cmd = EntryRewriter::rewrite_as_restore(entry, self.version)?;
+                            Ok(vec![cmd])
                         }
+                        _ => return Err(Error::SinkerError("rewrite not implemented".into())),
+                    }?;
+                    if let Some(expire_cmd) = EntryRewriter::rewrite_expire(entry)? {
+                        rewrite_cmds.push(expire_cmd)
                     }
-
-                    RedisWriteMethod::Rewrite => {
-                        let mut rewrite_cmds = match entry.value {
-                            RedisObject::String(ref mut obj) => EntryRewriter::rewrite_string(obj),
-                            RedisObject::List(ref mut obj) => EntryRewriter::rewrite_list(obj),
-                            RedisObject::Set(ref mut obj) => EntryRewriter::rewrite_set(obj),
-                            RedisObject::Hash(ref mut obj) => EntryRewriter::rewrite_hash(obj),
-                            RedisObject::Zset(ref mut obj) => EntryRewriter::rewrite_zset(obj),
-                            RedisObject::Stream(ref mut obj) => Ok(obj.cmds.drain(..).collect()),
-                            RedisObject::Module(_) => {
-                                let cmd = EntryRewriter::rewrite_as_restore(&entry, self.version)?;
-                                Ok(vec![cmd])
-                            }
-                            _ => return Err(Error::SinkerError("rewrite not implemented".into())),
-                        }?;
-                        if let Some(expire_cmd) = EntryRewriter::rewrite_expire(&entry)? {
-                            rewrite_cmds.push(expire_cmd)
-                        }
-                        cmds.extend(rewrite_cmds);
-                    }
+                    cmds.extend(rewrite_cmds);
                 }
             }
-            _ => {}
         }
         Ok(cmds)
     }
@@ -225,11 +230,11 @@ impl RedisSinker {
                 cmd.add_str_arg("hset");
                 cmd.add_str_arg(&key);
                 for (col, col_value) in row_data.after.as_ref().unwrap() {
-                    cmd.add_str_arg(&col);
+                    cmd.add_str_arg(col);
                     if let Some(v) = col_value.to_option_string() {
                         cmd.add_str_arg(&v);
                     } else {
-                        cmd.add_str_arg(&String::new());
+                        cmd.add_str_arg("");
                     }
                 }
             }
@@ -304,17 +309,17 @@ impl RedisSinker {
     }
 
     fn get_multi_cmd(&self) -> RedisCmd {
-        RedisCmd::from_str_args(&vec!["MULTI"])
+        RedisCmd::from_str_args(&["MULTI"])
     }
 
     fn get_exec_cmd(&self) -> RedisCmd {
-        RedisCmd::from_str_args(&vec!["EXEC"])
+        RedisCmd::from_str_args(&["EXEC"])
     }
 
     fn get_data_marker_cmd(&self) -> Option<RedisCmd> {
         if let Some(data_marker) = &self.data_marker {
             let data_marker = data_marker.read().unwrap();
-            let cmd = RedisCmd::from_str_args(&vec![
+            let cmd = RedisCmd::from_str_args(&[
                 "SET",
                 &data_marker.marker,
                 &data_marker.data_origin_node,

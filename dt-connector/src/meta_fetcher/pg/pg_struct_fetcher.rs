@@ -15,8 +15,8 @@ use dt_meta::struct_meta::{
         column::Column,
         comment::{Comment, CommentType},
         constraint::{Constraint, ConstraintType},
-        database::Database,
         index::{Index, IndexKind},
+        schema::Schema,
         sequence::Sequence,
         sequence_owner::SequenceOwner,
         table::Table,
@@ -39,11 +39,9 @@ enum ColType {
 }
 
 impl PgStructFetcher {
-    pub async fn get_create_database_statement(
-        &mut self,
-    ) -> Result<PgCreateSchemaStatement, Error> {
-        let database = self.get_database().await.unwrap();
-        Ok(PgCreateSchemaStatement { database })
+    pub async fn get_create_schema_statement(&mut self) -> Result<PgCreateSchemaStatement, Error> {
+        let schema = self.get_schema().await.unwrap();
+        Ok(PgCreateSchemaStatement { schema })
     }
 
     pub async fn get_create_table_statements(
@@ -79,7 +77,7 @@ impl PgStructFetcher {
         Ok(results)
     }
 
-    async fn get_database(&mut self) -> Result<Database, Error> {
+    async fn get_schema(&mut self) -> Result<Schema, Error> {
         let sql = format!(
             "SELECT schema_name 
             FROM information_schema.schemata
@@ -90,17 +88,14 @@ impl PgStructFetcher {
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         if let Some(row) = rows.try_next().await.unwrap() {
             let schema_name = Self::get_str_with_null(&row, "schema_name").unwrap();
-            let database = Database {
-                name: schema_name,
-                ..Default::default()
-            };
-            return Ok(database);
+            let schema = Schema { name: schema_name };
+            return Ok(schema);
         }
 
-        return Err(Error::StructError(format!(
+        Err(Error::StructError(format!(
             "schema: {} not found",
             self.schema
-        )));
+        )))
     }
 
     async fn get_sequences(&mut self, tb: &str) -> Result<HashMap<String, Vec<Sequence>>, Error> {
@@ -165,7 +160,7 @@ impl PgStructFetcher {
 
     async fn get_independent_sequences(
         &mut self,
-        sequence_names: &Vec<String>,
+        sequence_names: &[String],
     ) -> Result<Vec<Sequence>, Error> {
         let filter_names: Vec<String> = sequence_names.iter().map(|i| format!("'{}'", i)).collect();
         let filter = format!("AND sequence_name IN ({})", filter_names.join(","));
@@ -212,7 +207,7 @@ impl PgStructFetcher {
         for column in table.columns.iter() {
             if let Some(default_value) = &column.default_value {
                 let (schema, sequence_name) =
-                    Self::get_sequence_name_by_default_value(&default_value);
+                    Self::get_sequence_name_by_default_value(default_value);
                 // example, default_value is 'Standard'::text
                 if sequence_name.is_empty() {
                     log_warn!(
@@ -671,11 +666,11 @@ impl PgStructFetcher {
 
         value = value
             .trim_start_matches("nextval(")
-            .trim_start_matches("'")
-            .trim_end_matches(")")
+            .trim_start_matches('\'')
+            .trim_end_matches(')')
             // ::regclass may not exists
             .trim_end_matches("::regclass")
-            .trim_end_matches("'");
+            .trim_end_matches('\'');
 
         let escape_pair = SqlUtil::get_escape_pairs(&DbType::Pg)[0];
         if let Ok(tokens) = ConfigTokenParser::parse_config(value, &DbType::Pg, &['.']) {
@@ -693,7 +688,7 @@ impl PgStructFetcher {
 
     fn filter_tb(&mut self, tb: &str) -> bool {
         if let Some(filter) = &mut self.filter {
-            return filter.filter_tb(&self.schema, &tb);
+            return filter.filter_tb(&self.schema, tb);
         }
         false
     }
@@ -704,7 +699,7 @@ impl PgStructFetcher {
         table_name: &str,
         item: T,
     ) {
-        if self.filter_tb(&table_name) {
+        if self.filter_tb(table_name) {
             return;
         }
 

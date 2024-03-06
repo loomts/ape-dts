@@ -103,17 +103,23 @@ impl MongoChecker {
         let mut diff = Vec::new();
         for (key, src_row_data) in src_row_data_map {
             if let Some(dst_row_data) = dst_row_data_map.remove(&key) {
-                if src_row_data != dst_row_data {
-                    diff.push(src_row_data);
+                let diff_col_values = BaseChecker::compare_row_data(&src_row_data, &dst_row_data);
+                if !diff_col_values.is_empty() {
+                    let diff_log = BaseChecker::build_mongo_diff_log(
+                        src_row_data,
+                        diff_col_values,
+                        &tb_meta,
+                        &self.router,
+                    );
+                    diff.push(diff_log);
                 }
             } else {
-                miss.push(src_row_data);
+                let miss_log =
+                    BaseChecker::build_mongo_miss_log(src_row_data, &tb_meta, &self.router);
+                miss.push(miss_log);
             };
         }
-
-        BaseChecker::log_mongo_dml(&tb_meta, &self.router, miss, diff)
-            .await
-            .unwrap();
+        BaseChecker::log_dml(miss, diff);
 
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, 0, start_time).await
     }

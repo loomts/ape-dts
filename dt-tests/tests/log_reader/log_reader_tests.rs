@@ -2,21 +2,22 @@
 mod test {
 
     use dt_connector::check_log::log_reader::LogReader;
+    use serial_test::serial;
 
     use crate::test_config_util::TestConfigUtil;
 
     #[test]
-    #[ignore]
+    #[serial]
     fn log_reader_empty_test() {
-        let dir = TestConfigUtil::get_absolute_dir("log_reader/log_reader_empty_test");
+        let dir = TestConfigUtil::get_absolute_path("log_reader/log_reader_empty_test");
         let mut reader = LogReader::new(&dir);
         assert_eq!(reader.nextval(), None);
     }
 
     #[test]
-    #[ignore]
+    #[serial]
     fn log_reader_one_log_test() {
-        let dir = TestConfigUtil::get_absolute_dir("log_reader/log_reader_one_log_test");
+        let dir = TestConfigUtil::get_absolute_path("log_reader/log_reader_one_log_test");
         let mut reader = LogReader::new(&dir);
         assert_eq!(reader.nextval().unwrap(), "log1.line1");
         assert_eq!(reader.nextval().unwrap(), "");
@@ -25,9 +26,9 @@ mod test {
     }
 
     #[test]
-    #[ignore]
+    #[serial]
     fn log_reader_multi_log_test() {
-        let dir = TestConfigUtil::get_absolute_dir("log_reader/log_reader_multi_log_test");
+        let dir = TestConfigUtil::get_absolute_path("log_reader/log_reader_multi_log_test");
         let mut reader = LogReader::new(&dir);
         assert_eq!(reader.nextval().unwrap(), "log1.line1");
         assert_eq!(reader.nextval().unwrap(), "");

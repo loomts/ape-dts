@@ -48,7 +48,7 @@ impl RedisPsyncExtractor<'_> {
     pub async fn start_psync(&mut self) -> Result<bool, Error> {
         // replconf listening-port [port]
         let repl_port = self.repl_port.to_string();
-        let repl_cmd = RedisCmd::from_str_args(&vec!["replconf", "listening-port", &repl_port]);
+        let repl_cmd = RedisCmd::from_str_args(&["replconf", "listening-port", &repl_port]);
         log_info!("repl command: {}", repl_cmd.to_string());
 
         self.conn.send(&repl_cmd).await.unwrap();
@@ -67,7 +67,7 @@ impl RedisPsyncExtractor<'_> {
         };
 
         // PSYNC [run_id] [offset]
-        let psync_cmd = RedisCmd::from_str_args(&vec!["PSYNC", &run_id, &repl_offset]);
+        let psync_cmd = RedisCmd::from_str_args(&["PSYNC", &run_id, &repl_offset]);
         log_info!("PSYNC command: {}", psync_cmd.to_string());
         self.conn.send(&psync_cmd).await.unwrap();
         let value = self.conn.read().await.unwrap();
@@ -142,13 +142,8 @@ impl RedisPsyncExtractor<'_> {
         loop {
             if let Some(entry) = parser.load_entry()? {
                 self.now_db_id = entry.db_id;
-                Self::push_to_buf(
-                    &mut self.base_extractor,
-                    &mut self.filter,
-                    entry,
-                    Position::None,
-                )
-                .await?;
+                Self::push_to_buf(self.base_extractor, &mut self.filter, entry, Position::None)
+                    .await?;
             }
 
             if parser.is_end {

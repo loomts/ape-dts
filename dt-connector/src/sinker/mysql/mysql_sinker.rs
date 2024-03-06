@@ -37,6 +37,10 @@ pub struct MysqlSinker {
 #[async_trait]
 impl Sinker for MysqlSinker {
     async fn sink_dml(&mut self, mut data: Vec<RowData>, batch: bool) -> Result<(), Error> {
+        if data.is_empty() {
+            return Ok(());
+        }
+
         if !batch {
             self.serial_sink(data).await.unwrap();
         } else {
@@ -99,7 +103,7 @@ impl MysqlSinker {
         }
         for row_data in data.iter() {
             data_size += row_data.data_size;
-            let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&row_data).await?;
+            let tb_meta = self.meta_manager.get_tb_meta_by_row_data(row_data).await?;
             let query_builder = RdbQueryBuilder::new_for_mysql(tb_meta);
 
             let mut query_info = query_builder.get_query_info(row_data)?;

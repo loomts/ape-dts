@@ -121,7 +121,7 @@ impl MysqlStructFetcher {
             return Ok(database);
         }
 
-        return Err(Error::StructError(format!("db: {} not found", self.db)));
+        Err(Error::StructError(format!("db: {} not found", self.db)))
     }
 
     async fn get_tables(&mut self, tb: &str) -> Result<HashMap<String, Table>, Error> {
@@ -414,7 +414,7 @@ impl MysqlStructFetcher {
 
     fn filter_tb(&mut self, tb: &str) -> bool {
         if let Some(filter) = &mut self.filter {
-            return filter.filter_tb(&self.db, &tb);
+            return filter.filter_tb(&self.db, tb);
         }
         false
     }
@@ -435,8 +435,8 @@ impl MysqlStructFetcher {
         // show all collation names by:
         // SELECT COLLATION_NAME FROM INFORMATION_SCHEMA.COLLATIONS;
         // latin1_german2_ci, utf8mb4_nb_0900_as_cs
-        let tokens: Vec<&str> = collation.split("_").collect();
-        if tokens.len() > 0 {
+        let tokens: Vec<&str> = collation.split('_').collect();
+        if !tokens.is_empty() {
             tokens[0].to_string()
         } else {
             String::new()
@@ -470,7 +470,7 @@ impl MysqlStructFetcher {
         table_name: &str,
         item: T,
     ) {
-        if self.filter_tb(&table_name) {
+        if self.filter_tb(table_name) {
             return;
         }
 

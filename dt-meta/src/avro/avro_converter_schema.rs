@@ -113,7 +113,7 @@ pub struct AvroFieldDef {
 
 #[inline(always)]
 fn default_avrofielddef_type_name() -> String {
-    "".to_owned()
+    String::new()
 }
 
 #[derive(Debug, PartialEq, Clone, serde::Deserialize, serde::Serialize)]
@@ -138,17 +138,14 @@ struct AvroData {
     pub after: Option<Vec<Option<AvroFieldValue>>>,
 }
 
-#[inline(always)]
 fn default_avrodata_fields() -> Option<Vec<AvroFieldDef>> {
     None
 }
 
-#[inline(always)]
 fn default_avrodata_before() -> Option<Vec<Option<AvroFieldValue>>> {
     None
 }
 
-#[inline(always)]
 fn default_avrodata_after() -> Option<Vec<Option<AvroFieldValue>>> {
     None
 }

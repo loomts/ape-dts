@@ -217,7 +217,7 @@ impl Prechecker for MySqlPrechecker {
         }
 
         if !err_msgs.is_empty() {
-            check_error = Some(Error::PreCheckError(err_msgs.join(".").into()))
+            check_error = Some(Error::PreCheckError(err_msgs.join(".")))
         }
 
         Ok(CheckResult::build_with_err(
@@ -327,7 +327,7 @@ impl Prechecker for MySqlPrechecker {
             ))
         }
         if !err_msgs.is_empty() {
-            check_error = Some(Error::PreCheckError(err_msgs.join(";").into()))
+            check_error = Some(Error::PreCheckError(err_msgs.join(";")))
         }
 
         Ok(CheckResult::build_with_err(

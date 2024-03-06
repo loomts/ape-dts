@@ -75,7 +75,7 @@ impl RedisCdcExtractor {
     async fn receive_aof(&mut self) -> Result<(), Error> {
         let heartbeat_db_key = ConfigTokenParser::parse(
             &self.heartbeat_key,
-            &vec!['.'],
+            &['.'],
             &SqlUtil::get_escape_pairs(&DbType::Redis),
         );
         let heartbeat_db_id = if heartbeat_db_key.len() == 2 {
@@ -244,9 +244,9 @@ impl RedisCdcExtractor {
         let heartbeat_interval_secs = self.heartbeat_interval_secs;
         let key = key.to_string();
 
-        let _ = tokio::spawn(async move {
+        tokio::spawn(async move {
             // set db
-            let cmd = RedisCmd::from_str_args(&vec!["SELECT", &db_id.to_string()]);
+            let cmd = RedisCmd::from_str_args(&["SELECT", &db_id.to_string()]);
             if let Err(err) = conn.send(&cmd).await {
                 log_error!(
                     "heartbeat failed, cmd: {}, error: {:?}",
@@ -275,7 +275,7 @@ impl RedisCdcExtractor {
             since_epoch.as_secs() * 1000 + since_epoch.subsec_nanos() as u64 / 1_000_000;
         let heartbeat_value = Position::format_timestamp_millis(timestamp as i64);
 
-        let cmd = RedisCmd::from_str_args(&vec!["SET", key, &heartbeat_value]);
+        let cmd = RedisCmd::from_str_args(&["SET", key, &heartbeat_value]);
         log_info!("heartbeat cmd: {}", cmd.to_string());
         if let Err(err) = conn.send(&cmd).await {
             log_error!("heartbeat failed, error: {:?}", err);

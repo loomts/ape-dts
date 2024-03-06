@@ -180,7 +180,7 @@ impl RdbMerger {
         if tb_meta.key_map.is_empty() {
             return Ok(0);
         }
-        Ok(row_data.get_hash_code(&tb_meta))
+        Ok(row_data.get_hash_code(tb_meta))
     }
 }
 

@@ -81,7 +81,6 @@ impl RdbQueryBuilder<'_> {
         query
     }
 
-    #[allow(clippy::type_complexity)]
     pub fn get_query_info<'a>(&self, row_data: &'a RowData) -> Result<RdbQueryInfo<'a>, Error> {
         match row_data.row_type {
             RowType::Insert => self.get_insert_query(row_data),
@@ -90,7 +89,6 @@ impl RdbQueryBuilder<'_> {
         }
     }
 
-    #[allow(clippy::type_complexity)]
     pub fn get_batch_delete_query<'a>(
         &self,
         data: &'a [RowData],
@@ -137,7 +135,6 @@ impl RdbQueryBuilder<'_> {
         Ok((RdbQueryInfo { sql, cols, binds }, data_size))
     }
 
-    #[allow(clippy::type_complexity)]
     pub fn get_batch_insert_query<'a>(
         &self,
         data: &'a [RowData],
@@ -177,7 +174,6 @@ impl RdbQueryBuilder<'_> {
         Ok((RdbQueryInfo { sql, cols, binds }, malloc_size))
     }
 
-    #[allow(clippy::type_complexity)]
     pub fn get_insert_query<'a>(&self, row_data: &'a RowData) -> Result<RdbQueryInfo<'a>, Error> {
         let mut col_values = Vec::new();
         for i in 0..self.rdb_tb_meta.cols.len() {
@@ -202,7 +198,6 @@ impl RdbQueryBuilder<'_> {
         Ok(RdbQueryInfo { sql, cols, binds })
     }
 
-    #[allow(clippy::type_complexity)]
     fn get_delete_query<'a>(&self, row_data: &'a RowData) -> Result<RdbQueryInfo<'a>, Error> {
         let before = row_data.before.as_ref().unwrap();
         let (where_sql, not_null_cols) = self.get_where_info(1, before)?;
@@ -225,7 +220,6 @@ impl RdbQueryBuilder<'_> {
         Ok(RdbQueryInfo { sql, cols, binds })
     }
 
-    #[allow(clippy::type_complexity)]
     fn get_update_query<'a>(&self, row_data: &'a RowData) -> Result<RdbQueryInfo<'a>, Error> {
         let before = row_data.before.as_ref().unwrap();
         let after = row_data.after.as_ref().unwrap();
@@ -274,7 +268,6 @@ impl RdbQueryBuilder<'_> {
         Ok(RdbQueryInfo { sql, cols, binds })
     }
 
-    #[allow(clippy::type_complexity)]
     pub fn get_select_query<'a>(&self, row_data: &'a RowData) -> Result<RdbQueryInfo<'a>, Error> {
         let after = row_data.after.as_ref().unwrap();
         let (where_sql, not_null_cols) = self.get_where_info(1, after)?;
@@ -299,7 +292,6 @@ impl RdbQueryBuilder<'_> {
         Ok(RdbQueryInfo { sql, cols, binds })
     }
 
-    #[allow(clippy::type_complexity)]
     pub fn get_batch_select_query<'a>(
         &self,
         data: &'a [RowData],

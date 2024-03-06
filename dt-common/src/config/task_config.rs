@@ -7,21 +7,21 @@ use crate::error::Error;
 use super::{
     config_enums::{ConflictPolicyEnum, DbType, ExtractType, ParallelType, SinkType},
     data_marker_config::DataMarkerConfig,
-    extractor_config::{ExtractorBasicConfig, ExtractorConfig},
+    extractor_config::{BasicExtractorConfig, ExtractorConfig},
     filter_config::FilterConfig,
     parallelizer_config::ParallelizerConfig,
     pipeline_config::PipelineConfig,
     resumer_config::ResumerConfig,
     router_config::RouterConfig,
     runtime_config::RuntimeConfig,
-    sinker_config::{SinkerBasicConfig, SinkerConfig},
+    sinker_config::{BasicSinkerConfig, SinkerConfig},
 };
 
 #[derive(Clone)]
 pub struct TaskConfig {
-    pub extractor_basic: ExtractorBasicConfig,
+    pub extractor_basic: BasicExtractorConfig,
     pub extractor: ExtractorConfig,
-    pub sinker_basic: SinkerBasicConfig,
+    pub sinker_basic: BasicSinkerConfig,
     pub sinker: SinkerConfig,
     pub runtime: RuntimeConfig,
     pub parallelizer: ParallelizerConfig,
@@ -68,7 +68,7 @@ impl TaskConfig {
         Self {
             extractor_basic,
             extractor,
-            parallelizer: Self::load_paralleizer_config(&ini),
+            parallelizer: Self::load_parallelizer_config(&ini),
             pipeline: Self::load_pipeline_config(&ini),
             sinker_basic,
             sinker,
@@ -80,7 +80,7 @@ impl TaskConfig {
         }
     }
 
-    fn load_extractor_config(ini: &Ini) -> Result<(ExtractorBasicConfig, ExtractorConfig), Error> {
+    fn load_extractor_config(ini: &Ini) -> Result<(BasicExtractorConfig, ExtractorConfig), Error> {
         let db_type = DbType::from_str(&ini.get(EXTRACTOR, DB_TYPE).unwrap()).unwrap();
         let extract_type =
             ExtractType::from_str(&ini.get(EXTRACTOR, "extract_type").unwrap()).unwrap();
@@ -91,7 +91,7 @@ impl TaskConfig {
             Self::get_value_with_default(ini, EXTRACTOR, KEEPALIVE_INTERVAL_SECS, 10).unwrap();
         let heartbeat_tb = Self::get_value(ini, EXTRACTOR, HEARTBEAT_TB).unwrap();
 
-        let basic = ExtractorBasicConfig {
+        let basic = BasicExtractorConfig {
             db_type: db_type.clone(),
             extract_type: extract_type.clone(),
             url: url.clone(),
@@ -144,7 +144,7 @@ impl TaskConfig {
             DbType::Pg => match extract_type {
                 ExtractType::Snapshot => ExtractorConfig::PgSnapshot {
                     url,
-                    db: String::new(),
+                    schema: String::new(),
                     tb: String::new(),
                     sample_interval: Self::get_value_with_default(
                         ini,
@@ -174,7 +174,7 @@ impl TaskConfig {
 
                 ExtractType::Struct => ExtractorConfig::PgStruct {
                     url,
-                    db: String::new(),
+                    schema: String::new(),
                 },
 
                 _ => return not_supported_err,
@@ -257,13 +257,13 @@ impl TaskConfig {
         Ok((basic, sinker))
     }
 
-    fn load_sinker_config(ini: &Ini) -> Result<(SinkerBasicConfig, SinkerConfig), Error> {
+    fn load_sinker_config(ini: &Ini) -> Result<(BasicSinkerConfig, SinkerConfig), Error> {
         let db_type = DbType::from_str(&ini.get(SINKER, DB_TYPE).unwrap()).unwrap();
         let sink_type = SinkType::from_str(&ini.get(SINKER, "sink_type").unwrap()).unwrap();
         let url: String = Self::get_value(ini, SINKER, URL).unwrap();
         let batch_size: usize = Self::get_value(ini, SINKER, BATCH_SIZE).unwrap();
 
-        let basic = SinkerBasicConfig {
+        let basic = BasicSinkerConfig {
             db_type: db_type.clone(),
             url: url.clone(),
             batch_size,
@@ -341,21 +341,6 @@ impl TaskConfig {
                 required_acks: ini.get(SINKER, "required_acks").unwrap(),
             },
 
-            DbType::OpenFaas => SinkerConfig::OpenFaas {
-                url,
-                batch_size,
-                timeout_secs: ini.getuint(SINKER, "timeout_secs").unwrap().unwrap(),
-            },
-
-            DbType::Foxlake => SinkerConfig::Foxlake {
-                batch_size,
-                bucket: ini.get(SINKER, "bucket").unwrap(),
-                access_key: ini.get(SINKER, "access_key").unwrap(),
-                secret_key: ini.get(SINKER, "secret_key").unwrap(),
-                region: ini.get(SINKER, "region").unwrap(),
-                root_dir: ini.get(SINKER, "root_dir").unwrap(),
-            },
-
             DbType::Redis => match sink_type {
                 SinkType::Write => SinkerConfig::Redis {
                     url,
@@ -382,30 +367,12 @@ impl TaskConfig {
         Ok((basic, sinker))
     }
 
-    fn load_paralleizer_config(ini: &Ini) -> ParallelizerConfig {
+    fn load_parallelizer_config(ini: &Ini) -> ParallelizerConfig {
         // compatible with older versions, Paralleizer settings are set under the pipeline section
-        let parallel_sections: Vec<String> = ini
-            .sections()
-            .iter()
-            .filter(|&s| *s == PARALLELIZER)
-            .cloned()
-            .collect();
-
-        if parallel_sections.is_empty() {
-            ParallelizerConfig {
-                parallel_size: ini.getuint(PIPELINE, "parallel_size").unwrap().unwrap() as usize,
-                parallel_type: ParallelType::from_str(&ini.get(PIPELINE, "parallel_type").unwrap())
-                    .unwrap(),
-            }
-        } else {
-            ParallelizerConfig {
-                parallel_size: ini.getuint(PARALLELIZER, "parallel_size").unwrap().unwrap()
-                    as usize,
-                parallel_type: ParallelType::from_str(
-                    &ini.get(PARALLELIZER, "parallel_type").unwrap(),
-                )
+        ParallelizerConfig {
+            parallel_size: ini.getuint(PARALLELIZER, "parallel_size").unwrap().unwrap() as usize,
+            parallel_type: ParallelType::from_str(&ini.get(PARALLELIZER, "parallel_type").unwrap())
                 .unwrap(),
-            }
         }
     }
 

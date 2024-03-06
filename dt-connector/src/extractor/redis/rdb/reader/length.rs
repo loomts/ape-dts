@@ -45,7 +45,7 @@ impl RdbReader<'_> {
 
                 RDB_64_BIT_LEN => {
                     let next_bytes = self.read_bytes(8)?;
-                    let len = BigEndian::read_u64(&next_bytes) as u64;
+                    let len = BigEndian::read_u64(&next_bytes);
                     Ok((len, false))
                 }
 

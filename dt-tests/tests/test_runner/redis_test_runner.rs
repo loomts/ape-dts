@@ -63,11 +63,11 @@ impl RedisTestRunner {
     }
 
     pub async fn run_snapshot_test(&mut self) -> Result<(), Error> {
-        self.execute_test_ddl_sqls()?;
+        self.execute_prepare_sqls()?;
 
         self.print_version_info();
 
-        self.execute_test_dml_sqls()?;
+        self.execute_test_sqls()?;
         self.base.start_task().await?;
         self.compare_all_data()
     }
@@ -77,14 +77,14 @@ impl RedisTestRunner {
         start_millis: u64,
         parse_millis: u64,
     ) -> Result<(), Error> {
-        self.execute_test_ddl_sqls()?;
+        self.execute_prepare_sqls()?;
 
         let task = self.base.spawn_task().await?;
         TimeUtil::sleep_millis(start_millis).await;
 
         self.print_version_info();
 
-        self.execute_test_dml_sqls()?;
+        self.execute_test_sqls()?;
         TimeUtil::sleep_millis(parse_millis).await;
         self.compare_all_data()?;
 
@@ -104,7 +104,7 @@ impl RedisTestRunner {
 
         let heartbeat_db_key = ConfigTokenParser::parse(
             &heartbeat_key,
-            &vec!['.'],
+            &['.'],
             &SqlUtil::get_escape_pairs(&DbType::Redis),
         );
         let db_id: i64 = heartbeat_db_key[0].parse().unwrap();
@@ -113,7 +113,7 @@ impl RedisTestRunner {
         let cmd = format!("SELECT {}", db_id);
         self.redis_util.execute_cmd(&mut self.src_conn, &cmd);
 
-        self.execute_test_ddl_sqls()?;
+        self.execute_prepare_sqls()?;
 
         let cmd = format!("GET {}", self.redis_util.escape_key(key));
         let result = self.redis_util.execute_cmd(&mut self.src_conn, &cmd);
@@ -128,17 +128,17 @@ impl RedisTestRunner {
         Ok(())
     }
 
-    pub fn execute_test_ddl_sqls(&mut self) -> Result<(), Error> {
+    pub fn execute_prepare_sqls(&mut self) -> Result<(), Error> {
         self.redis_util
-            .execute_cmds(&mut self.src_conn, &self.base.src_ddl_sqls.clone());
+            .execute_cmds(&mut self.src_conn, &self.base.src_prepare_sqls.clone());
         self.redis_util
-            .execute_cmds_in_cluster(&mut self.dst_conn, &self.base.dst_ddl_sqls.clone());
+            .execute_cmds_in_cluster(&mut self.dst_conn, &self.base.dst_prepare_sqls.clone());
         Ok(())
     }
 
-    pub fn execute_test_dml_sqls(&mut self) -> Result<(), Error> {
+    pub fn execute_test_sqls(&mut self) -> Result<(), Error> {
         self.redis_util
-            .execute_cmds(&mut self.src_conn, &self.base.src_dml_sqls.clone());
+            .execute_cmds(&mut self.src_conn, &self.base.src_test_sqls.clone());
         Ok(())
     }
 

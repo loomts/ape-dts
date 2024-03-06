@@ -7,22 +7,14 @@ use std::{
 
 use configparser::ini::Ini;
 use dt_common::config::{
-    config_enums::{DbType, ParallelType},
-    extractor_config::ExtractorConfig,
-    sinker_config::SinkerConfig,
-    task_config::TaskConfig,
+    extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
 };
 
 pub struct TestConfigUtil {}
 
-const PIPELINE: &str = "pipeline";
 const EXTRACTOR: &str = "extractor";
 const SINKER: &str = "sinker";
 const RUNTIME: &str = "runtime";
-const PARALLEL_TYPE: &str = "parallel_type";
-const PARALLEL_SIZE: &str = "parallel_size";
-const BATCH_SIZE: &str = "batch_size";
-const URL: &str = "url";
 const TEST_PROJECT: &str = "dt-tests";
 
 #[allow(dead_code)]
@@ -39,12 +31,12 @@ impl TestConfigUtil {
             .to_string()
     }
 
-    pub fn get_absolute_dir(relative_dir: &str) -> String {
+    pub fn get_absolute_path(relative_path: &str) -> String {
         format!(
             "{}/{}/tests/{}",
             project_root::get_project_root().unwrap().to_str().unwrap(),
             TEST_PROJECT,
-            relative_dir
+            relative_path
         )
     }
 
@@ -52,7 +44,7 @@ impl TestConfigUtil {
     pub fn get_absolute_sub_dir(relative_dir: &str) -> Vec<(String, String)> {
         let mut result_dir: Vec<(String, String)> = vec![];
 
-        let absolute_dir = TestConfigUtil::get_absolute_dir(relative_dir);
+        let absolute_dir = TestConfigUtil::get_absolute_path(relative_dir);
         let path = PathBuf::from(absolute_dir.as_str());
 
         let entries = fs::read_dir(path).unwrap();
@@ -68,134 +60,17 @@ impl TestConfigUtil {
         result_dir
     }
 
-    pub fn transfer_config(config: Vec<(&str, &str, &str)>) -> Vec<(String, String, String)> {
-        let mut result = Vec::new();
-        for i in config.iter() {
-            result.push((i.0.to_string(), i.1.to_string(), i.2.to_string()));
-        }
-        result
-    }
+    pub fn update_task_config_from_env(src_task_config_file: &str, dst_task_config_file: &str) {
+        let env_local_file = TestConfigUtil::get_absolute_path(".env.local");
+        let env_file = TestConfigUtil::get_absolute_path(".env");
 
-    pub fn get_default_configs() -> Vec<Vec<(String, String, String)>> {
-        vec![
-            Self::get_default_serial_config(),
-            Self::get_default_parallel_config(),
-            Self::get_default_rdb_merge_config(),
-        ]
-    }
-
-    pub fn get_default_serial_config() -> Vec<(String, String, String)> {
-        Self::transfer_config(vec![
-            (
-                PIPELINE,
-                PARALLEL_TYPE,
-                &ParallelType::RdbPartition.to_string(),
-            ),
-            (PIPELINE, PARALLEL_SIZE, "1"),
-            (SINKER, BATCH_SIZE, "1"),
-        ])
-    }
-
-    pub fn get_default_parallel_config() -> Vec<(String, String, String)> {
-        Self::transfer_config(vec![
-            (
-                PIPELINE,
-                PARALLEL_TYPE,
-                &ParallelType::RdbPartition.to_string(),
-            ),
-            (PIPELINE, PARALLEL_SIZE, "2"),
-            (SINKER, BATCH_SIZE, "1"),
-        ])
-    }
-
-    pub fn get_default_rdb_merge_config() -> Vec<(String, String, String)> {
-        Self::transfer_config(vec![
-            (PIPELINE, PARALLEL_TYPE, &ParallelType::RdbMerge.to_string()),
-            (PIPELINE, PARALLEL_SIZE, "2"),
-            (SINKER, BATCH_SIZE, "2"),
-        ])
-    }
-
-    pub fn load_env(test_dir: &str, env_file_name: &str) -> bool {
-        let mut env_file = String::new();
-        // recursively search .env from test dir up to parent dirs
-        let mut dir = Path::new(test_dir);
-        let final_file_name = if env_file_name == "" {
-            ".env"
-        } else {
-            env_file_name
-        };
-        loop {
-            let path = dir.join(final_file_name);
-            if fs::metadata(&path).is_ok() {
-                env_file = path.to_str().unwrap().to_string();
-                break;
-            }
-
-            if let Some(parent_dir) = dir.parent() {
-                dir = parent_dir;
-            } else {
-                break;
-            }
-        }
-
-        println!("use env file: {}", env_file);
-        if env_file.is_empty() {
-            return false;
-        }
-
-        dotenv::from_path(env_file).unwrap();
-
-        true
-    }
-
-    pub fn update_task_config_from_env(
-        src_task_config_file: &str,
-        dst_task_config_file: &str,
-        test_dir: &str,
-    ) {
         // environment variable settings in .env.local have higher priority
-        Self::load_env(test_dir, ".env.local");
-
-        if !Self::load_env(test_dir, ".env") {
-            return;
+        if fs::metadata(&env_local_file).is_ok() {
+            dotenv::from_path(&env_local_file).unwrap();
         }
-
-        match env::var("override_enable") {
-            Ok(v) => {
-                if v.eq("false") {
-                    return;
-                }
-            }
-            Err(_) => {}
-        }
+        dotenv::from_path(&env_file).unwrap();
 
         let mut update_configs = Vec::new();
-        let config = TaskConfig::new(&src_task_config_file);
-        let extractor_url = match &config.extractor_basic.db_type {
-            DbType::Mysql => env::var("mysql_extractor_url").unwrap(),
-            DbType::Pg => env::var("pg_extractor_url").unwrap(),
-            DbType::Mongo => env::var("mongo_extractor_url").unwrap(),
-            DbType::Redis => env::var("redis_extractor_url").unwrap(),
-            DbType::Kafka => env::var("kafka_extractor_url").unwrap(),
-            _ => String::new(),
-        };
-        if !extractor_url.is_empty() {
-            update_configs.push((EXTRACTOR.into(), URL.into(), extractor_url));
-        }
-
-        let sinker_url = match &config.sinker_basic.db_type {
-            DbType::Mysql => env::var("mysql_sinker_url").unwrap(),
-            DbType::Pg => env::var("pg_sinker_url").unwrap(),
-            DbType::Mongo => env::var("mongo_sinker_url").unwrap(),
-            DbType::Redis => env::var("redis_sinker_url").unwrap(),
-            DbType::Kafka => env::var("kafka_sinker_url").unwrap(),
-            _ => String::new(),
-        };
-        if !sinker_url.is_empty() {
-            update_configs.push((SINKER.into(), URL.into(), sinker_url));
-        }
-
         let ini = Self::load_ini(src_task_config_file);
         for (section, kvs) in ini.get_map().unwrap() {
             for (k, v) in kvs.iter() {
@@ -315,11 +190,6 @@ impl TestConfigUtil {
             .set_len(0)
             .unwrap();
         ini.write(dst_task_config_file).unwrap();
-    }
-
-    pub fn should_do_clean_or_not() -> bool {
-        let opt = env::var("do_clean_after_test");
-        opt.is_ok_and(|x| x == "true")
     }
 
     fn load_ini(task_config_file: &str) -> Ini {

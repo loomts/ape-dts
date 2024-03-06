@@ -60,12 +60,12 @@ impl StreamLoader {
                 let mut cmd = RedisCmd::new();
                 cmd.add_str_arg("xadd");
                 cmd.add_redis_arg(&master_key);
-                cmd.add_str_arg(&value);
+                cmd.add_str_arg(value);
 
                 if flags & 2 == 2 {
                     // same fields, get field from master entry.
-                    for j in 0..num_fields {
-                        cmd.add_redis_arg(&fields[j]);
+                    for field in fields.iter().take(num_fields) {
+                        cmd.add_redis_arg(field);
                         cmd.add_redis_arg(Self::next(&mut inx, &elements));
                     }
                 } else {
@@ -159,7 +159,7 @@ impl StreamLoader {
             }
 
             /* Load the global PEL */
-            let n_pel = u64::from(reader.read_length()?);
+            let n_pel = reader.read_length()?;
             let mut map_id_to_time = HashMap::new();
             let mut map_id_to_count = HashMap::new();
 
@@ -225,15 +225,15 @@ impl StreamLoader {
         Ok(obj)
     }
 
-    fn next_integer(inx: &mut usize, elements: &Vec<RedisString>) -> i64 {
+    fn next_integer(inx: &mut usize, elements: &[RedisString]) -> i64 {
         let ele = &elements[*inx];
         *inx += 1;
         String::from(ele.clone()).parse::<i64>().unwrap()
     }
 
-    fn next<'a>(inx: &mut usize, elements: &'a Vec<RedisString>) -> &'a RedisString {
-        let ele = &elements[*inx as usize];
+    fn next<'a>(inx: &mut usize, elements: &'a [RedisString]) -> &'a RedisString {
+        let ele = &elements[*inx];
         *inx += 1;
-        &ele
+        ele
     }
 }

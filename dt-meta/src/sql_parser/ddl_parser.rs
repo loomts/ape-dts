@@ -59,7 +59,7 @@ impl DdlParser {
 
 /// parse ddl sql and return: (ddl_type, schema, table)
 #[allow(clippy::type_complexity)]
-pub fn sql_query(i: &[u8]) -> IResult<&[u8], (DdlType, Option<Vec<u8>>, Option<Vec<u8>>)> {
+fn sql_query(i: &[u8]) -> IResult<&[u8], (DdlType, Option<Vec<u8>>, Option<Vec<u8>>)> {
     alt((
         map(create_database, |r| {
             (DdlType::CreateDatabase, Some(r), None)
@@ -77,7 +77,7 @@ pub fn sql_query(i: &[u8]) -> IResult<&[u8], (DdlType, Option<Vec<u8>>, Option<V
     ))(i)
 }
 
-pub fn create_database(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
+fn create_database(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
     let (remaining_input, (_, _, _, _, _, database, _)) = tuple((
         tag_no_case("create"),
         multispace1,
@@ -90,7 +90,7 @@ pub fn create_database(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
     Ok((remaining_input, database.to_vec()))
 }
 
-pub fn drop_database(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
+fn drop_database(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
     let (remaining_input, (_, _, _, _, _, database, _)) = tuple((
         tag_no_case("drop"),
         multispace1,
@@ -103,7 +103,7 @@ pub fn drop_database(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
     Ok((remaining_input, database.to_vec()))
 }
 
-pub fn alter_database(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
+fn alter_database(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
     let (remaining_input, (_, _, _, _, database, _)) = tuple((
         tag_no_case("alter"),
         multispace1,
@@ -115,7 +115,7 @@ pub fn alter_database(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
     Ok((remaining_input, database.to_vec()))
 }
 
-pub fn create_schema(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
+fn create_schema(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
     let (remaining_input, (_, _, _, _, _, database, _)) = tuple((
         tag_no_case("create"),
         multispace1,
@@ -128,7 +128,7 @@ pub fn create_schema(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
     Ok((remaining_input, database.to_vec()))
 }
 
-pub fn drop_schema(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
+fn drop_schema(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
     let (remaining_input, (_, _, _, _, _, database, _)) = tuple((
         tag_no_case("drop"),
         multispace1,
@@ -141,7 +141,7 @@ pub fn drop_schema(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
     Ok((remaining_input, database.to_vec()))
 }
 
-pub fn alter_schema(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
+fn alter_schema(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
     let (remaining_input, (_, _, _, _, database, _)) = tuple((
         tag_no_case("alter"),
         multispace1,
@@ -153,7 +153,9 @@ pub fn alter_schema(i: &[u8]) -> IResult<&[u8], Vec<u8>> {
     Ok((remaining_input, database.to_vec()))
 }
 
-pub fn create_table(i: &[u8]) -> IResult<&[u8], (Option<Vec<u8>>, Vec<u8>)> {
+type SchemaTable = (Option<Vec<u8>>, Vec<u8>);
+
+fn create_table(i: &[u8]) -> IResult<&[u8], SchemaTable> {
     let (remaining_input, (_, _, _, _, _, table, _)) = tuple((
         tag_no_case("create"),
         multispace1,
@@ -166,7 +168,7 @@ pub fn create_table(i: &[u8]) -> IResult<&[u8], (Option<Vec<u8>>, Vec<u8>)> {
     Ok((remaining_input, table))
 }
 
-pub fn drop_table(i: &[u8]) -> IResult<&[u8], (Option<Vec<u8>>, Vec<u8>)> {
+fn drop_table(i: &[u8]) -> IResult<&[u8], SchemaTable> {
     let (remaining_input, (_, _, _, _, _, table, _)) = tuple((
         tag_no_case("drop"),
         multispace1,
@@ -179,7 +181,7 @@ pub fn drop_table(i: &[u8]) -> IResult<&[u8], (Option<Vec<u8>>, Vec<u8>)> {
     Ok((remaining_input, table))
 }
 
-pub fn alter_table(i: &[u8]) -> IResult<&[u8], (Option<Vec<u8>>, Vec<u8>)> {
+fn alter_table(i: &[u8]) -> IResult<&[u8], SchemaTable> {
     let (remaining_input, (_, _, _, _, table, _)) = tuple((
         tag_no_case("alter"),
         multispace1,
@@ -191,7 +193,7 @@ pub fn alter_table(i: &[u8]) -> IResult<&[u8], (Option<Vec<u8>>, Vec<u8>)> {
     Ok((remaining_input, table))
 }
 
-pub fn truncate_table(i: &[u8]) -> IResult<&[u8], (Option<Vec<u8>>, Vec<u8>)> {
+fn truncate_table(i: &[u8]) -> IResult<&[u8], SchemaTable> {
     let (remaining_input, (_, _, _, _, table, _)) = tuple((
         tag_no_case("truncate"),
         multispace1,
@@ -203,7 +205,7 @@ pub fn truncate_table(i: &[u8]) -> IResult<&[u8], (Option<Vec<u8>>, Vec<u8>)> {
     Ok((remaining_input, table))
 }
 
-pub fn rename_table(i: &[u8]) -> IResult<&[u8], (Option<Vec<u8>>, Vec<u8>)> {
+fn rename_table(i: &[u8]) -> IResult<&[u8], SchemaTable> {
     let (remaining_input, (_, _, _, _, table, _)) = tuple((
         tag_no_case("rename"),
         multispace1,
@@ -215,19 +217,7 @@ pub fn rename_table(i: &[u8]) -> IResult<&[u8], (Option<Vec<u8>>, Vec<u8>)> {
     Ok((remaining_input, table))
 }
 
-pub fn create_index(i: &[u8]) -> IResult<&[u8], (Option<Vec<u8>>, Vec<u8>)> {
-    let (remaining_input, (_, _, _, _, table, _)) = tuple((
-        tag_no_case("rename"),
-        multispace1,
-        tag_no_case("table"),
-        multispace1,
-        schema_table_reference,
-        multispace0,
-    ))(i)?;
-    Ok((remaining_input, table))
-}
-
-pub fn if_not_exists(i: &[u8]) -> IResult<&[u8], ()> {
+fn if_not_exists(i: &[u8]) -> IResult<&[u8], ()> {
     let (remaining_input, _) = tuple((
         tag_no_case("if"),
         multispace1,
@@ -239,7 +229,7 @@ pub fn if_not_exists(i: &[u8]) -> IResult<&[u8], ()> {
     Ok((remaining_input, ()))
 }
 
-pub fn if_exists(i: &[u8]) -> IResult<&[u8], ()> {
+fn if_exists(i: &[u8]) -> IResult<&[u8], ()> {
     let (remaining_input, _) = tuple((
         tag_no_case("if"),
         multispace1,
@@ -250,7 +240,7 @@ pub fn if_exists(i: &[u8]) -> IResult<&[u8], ()> {
 }
 
 // Parse a reference to a named schema.table, with an optional alias
-pub fn schema_table_reference(i: &[u8]) -> IResult<&[u8], (Option<Vec<u8>>, Vec<u8>)> {
+fn schema_table_reference(i: &[u8]) -> IResult<&[u8], SchemaTable> {
     map(
         tuple((
             opt(pair(sql_identifier, pair(multispace0, tag(".")))),
@@ -266,21 +256,21 @@ pub fn schema_table_reference(i: &[u8]) -> IResult<&[u8], (Option<Vec<u8>>, Vec<
 }
 
 #[inline]
-pub fn is_sql_identifier(chr: u8) -> bool {
+fn is_sql_identifier(chr: u8) -> bool {
     is_alphanumeric(chr) || chr == b'_'
 }
 
 #[inline]
-pub fn is_escaped_sql_identifier_1(chr: u8) -> bool {
+fn is_escaped_sql_identifier_1(chr: u8) -> bool {
     chr != b'`'
 }
 
 #[inline]
-pub fn is_escaped_sql_identifier_2(chr: u8) -> bool {
+fn is_escaped_sql_identifier_2(chr: u8) -> bool {
     chr != b'"'
 }
 
-pub fn sql_identifier(i: &[u8]) -> IResult<&[u8], &[u8]> {
+fn sql_identifier(i: &[u8]) -> IResult<&[u8], &[u8]> {
     alt((
         preceded(not(peek(sql_keyword)), take_while1(is_sql_identifier)),
         delimited(tag("`"), take_while1(is_escaped_sql_identifier_1), tag("`")),
@@ -293,7 +283,7 @@ pub fn sql_identifier(i: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 // Matches any SQL reserved keyword
-pub fn sql_keyword(i: &[u8]) -> IResult<&[u8], &[u8]> {
+fn sql_keyword(i: &[u8]) -> IResult<&[u8], &[u8]> {
     alt((
         keyword_a_to_c,
         keyword_c_to_e,

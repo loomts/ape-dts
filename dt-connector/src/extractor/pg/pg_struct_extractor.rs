@@ -36,10 +36,10 @@ impl PgStructExtractor {
             filter: Some(self.filter.to_owned()),
         };
 
-        // database
-        let database = pg_fetcher.get_create_database_statement().await.unwrap();
-        let statement = StructStatement::PgCreateDatabase {
-            statement: database,
+        // schema
+        let schema_statement = pg_fetcher.get_create_schema_statement().await.unwrap();
+        let statement = StructStatement::PgCreateSchema {
+            statement: schema_statement,
         };
         self.push_dt_data(statement).await;
 

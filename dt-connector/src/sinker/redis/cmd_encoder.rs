@@ -23,17 +23,17 @@ impl CmdEncoder {
         // write arg length
         Self::write_length(buf, arg.len());
         // write arg data
-        buf.write(arg).unwrap();
+        buf.write_all(arg).unwrap();
         // write crlf
         Self::write_crlf(buf);
     }
 
     fn write_length(buf: &mut Vec<u8>, len: usize) {
-        buf.write(len.to_string().as_bytes()).unwrap();
+        buf.write_all(len.to_string().as_bytes()).unwrap();
         Self::write_crlf(buf);
     }
 
     fn write_crlf(buf: &mut Vec<u8>) {
-        buf.write(b"\r\n").unwrap();
+        buf.write_all(b"\r\n").unwrap();
     }
 }

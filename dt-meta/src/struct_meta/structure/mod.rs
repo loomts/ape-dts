@@ -3,6 +3,7 @@ pub mod comment;
 pub mod constraint;
 pub mod database;
 pub mod index;
+pub mod schema;
 pub mod sequence;
 pub mod sequence_owner;
 pub mod structure_type;

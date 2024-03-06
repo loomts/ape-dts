@@ -73,24 +73,36 @@ impl PgChecker {
 
         let mut miss = Vec::new();
         let mut diff = Vec::new();
-        for row_data_src in data.iter() {
-            let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
-            let query_info = query_builder.get_select_query(row_data_src)?;
+        for src_row_data in data.iter() {
+            let query_builder = RdbQueryBuilder::new_for_pg(tb_meta);
+            let query_info = query_builder.get_select_query(src_row_data)?;
             let query = query_builder.create_pg_query(&query_info);
 
             let mut rows = query.fetch(&self.conn_pool);
             if let Some(row) = rows.try_next().await.unwrap() {
-                let row_data_dst = RowData::from_pg_row(&row, &tb_meta);
-                if !BaseChecker::compare_row_data(row_data_src, &row_data_dst) {
-                    diff.push(row_data_src.to_owned());
+                let dst_row_data = RowData::from_pg_row(&row, tb_meta);
+                let diff_col_values = BaseChecker::compare_row_data(src_row_data, &dst_row_data);
+                if !diff_col_values.is_empty() {
+                    let diff_log = BaseChecker::build_diff_log(
+                        src_row_data,
+                        diff_col_values,
+                        &mut self.extractor_meta_manager,
+                        &self.router,
+                    )
+                    .await?;
+                    diff.push(diff_log);
                 }
             } else {
-                miss.push(row_data_src.to_owned());
+                let miss_log = BaseChecker::build_miss_log(
+                    src_row_data,
+                    &mut self.extractor_meta_manager,
+                    &self.router,
+                )
+                .await?;
+                miss.push(miss_log);
             }
         }
-        BaseChecker::log_dml(&mut self.extractor_meta_manager, &self.router, miss, diff)
-            .await
-            .unwrap();
+        BaseChecker::log_dml(miss, diff);
 
         BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), 0, start_time).await
     }
@@ -104,7 +116,7 @@ impl PgChecker {
         let start_time = Instant::now();
 
         let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&data[0]).await?;
-        let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
+        let query_builder = RdbQueryBuilder::new_for_pg(tb_meta);
 
         // build fetch dst sql
         let query_info = query_builder.get_batch_select_query(data, start_index, batch_size)?;
@@ -114,7 +126,7 @@ impl PgChecker {
         let mut dst_row_data_map = HashMap::new();
         let mut rows = query.fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
-            let row_data = RowData::from_pg_row(&row, &tb_meta);
+            let row_data = RowData::from_pg_row(&row, tb_meta);
             let hash_code = row_data.get_hash_code(&tb_meta.basic);
             dst_row_data_map.insert(hash_code, row_data);
         }
@@ -122,26 +134,27 @@ impl PgChecker {
         let (miss, diff) = BaseChecker::batch_compare_row_datas(
             data,
             &dst_row_data_map,
-            &tb_meta.basic,
             start_index,
             batch_size,
-        );
-        BaseChecker::log_dml(&mut self.extractor_meta_manager, &self.router, miss, diff)
-            .await
-            .unwrap();
+            &tb_meta.basic,
+            &mut self.extractor_meta_manager,
+            &self.router,
+        )
+        .await?;
+        BaseChecker::log_dml(miss, diff);
 
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, 0, start_time).await
     }
 
     async fn serial_ddl_check(&mut self, mut data: Vec<DdlData>) -> Result<(), Error> {
-        for data_src in data.iter_mut() {
-            if data_src.statement.is_none() {
+        for src_data in data.iter_mut() {
+            if src_data.statement.is_none() {
                 continue;
             }
 
-            let mut src_statement = data_src.statement.as_mut().unwrap();
+            let src_statement = src_data.statement.as_mut().unwrap();
             let schema = match src_statement {
-                StructStatement::PgCreateDatabase { statement } => statement.database.name.clone(),
+                StructStatement::PgCreateSchema { statement } => statement.schema.name.clone(),
                 StructStatement::PgCreateTable { statement } => statement.table.schema_name.clone(),
                 _ => String::new(),
             };
@@ -153,12 +166,9 @@ impl PgChecker {
             };
 
             let mut dst_statement = match &src_statement {
-                StructStatement::PgCreateDatabase { statement: _ } => {
-                    let dst_statement = struct_fetcher
-                        .get_create_database_statement()
-                        .await
-                        .unwrap();
-                    Some(StructStatement::PgCreateDatabase {
+                StructStatement::PgCreateSchema { statement: _ } => {
+                    let dst_statement = struct_fetcher.get_create_schema_statement().await.unwrap();
+                    Some(StructStatement::PgCreateSchema {
                         statement: dst_statement,
                     })
                 }
@@ -168,7 +178,7 @@ impl PgChecker {
                         .get_create_table_statements(&statement.table.table_name)
                         .await
                         .unwrap();
-                    if dst_statement.len() == 0 {
+                    if dst_statement.is_empty() {
                         None
                     } else {
                         Some(StructStatement::PgCreateTable {
@@ -180,8 +190,7 @@ impl PgChecker {
                 _ => None,
             };
 
-            BaseChecker::compare_struct(&mut src_statement, &mut dst_statement, &self.filter)
-                .unwrap();
+            BaseChecker::compare_struct(src_statement, &mut dst_statement, &self.filter).unwrap();
         }
         Ok(())
     }

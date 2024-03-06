@@ -54,21 +54,6 @@ pub enum SinkerConfig {
         required_acks: String,
     },
 
-    OpenFaas {
-        url: String,
-        batch_size: usize,
-        timeout_secs: u64,
-    },
-
-    Foxlake {
-        batch_size: usize,
-        bucket: String,
-        access_key: String,
-        secret_key: String,
-        region: String,
-        root_dir: String,
-    },
-
     Redis {
         url: String,
         batch_size: usize,
@@ -89,7 +74,7 @@ pub enum SinkerConfig {
 }
 
 #[derive(Clone, Debug)]
-pub struct SinkerBasicConfig {
+pub struct BasicSinkerConfig {
     pub db_type: DbType,
     pub url: String,
     pub batch_size: usize,

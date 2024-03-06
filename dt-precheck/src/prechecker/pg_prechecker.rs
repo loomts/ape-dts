@@ -140,7 +140,7 @@ impl Prechecker for PostgresqlPrechecker {
             Err(e) => return Err(e),
         }
         if !err_msgs.is_empty() {
-            check_error = Some(Error::PreCheckError(err_msgs.join(";").into()));
+            check_error = Some(Error::PreCheckError(err_msgs.join(";")));
         }
 
         if check_error.is_none() {
@@ -238,7 +238,7 @@ impl Prechecker for PostgresqlPrechecker {
         }
 
         if !err_msgs.is_empty() {
-            check_error = Some(Error::PreCheckError(err_msgs.join(".").into()))
+            check_error = Some(Error::PreCheckError(err_msgs.join(".")))
         }
 
         Ok(CheckResult::build_with_err(
@@ -343,7 +343,7 @@ impl Prechecker for PostgresqlPrechecker {
             ));
         }
         if !err_msgs.is_empty() {
-            check_error = Some(Error::PreCheckError(err_msgs.join(";").into()))
+            check_error = Some(Error::PreCheckError(err_msgs.join(";")))
         }
 
         Ok(CheckResult::build_with_err(

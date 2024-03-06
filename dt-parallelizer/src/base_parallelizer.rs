@@ -65,10 +65,7 @@ impl BaseParallelizer {
                 record_size_counter.add(item.dt_data.get_data_size(), 1);
                 Ok(item)
             }
-            Err(error) => Err(Error::PipelineError(format!(
-                "buffer pop error: {}",
-                error.to_string()
-            ))),
+            Err(error) => Err(Error::PipelineError(format!("buffer pop error: {}", error))),
         }
     }
 

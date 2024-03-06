@@ -22,7 +22,7 @@ pub struct HashObject {
 
 impl HashObject {
     pub fn new() -> Self {
-        HashObject {
+        Self {
             key: RedisString::new(),
             value: HashMap::new(),
         }
@@ -37,7 +37,7 @@ pub struct ListObject {
 
 impl ListObject {
     pub fn new() -> Self {
-        ListObject {
+        Self {
             key: RedisString::new(),
             elements: vec![],
         }
@@ -49,7 +49,7 @@ pub struct ModuleObject {}
 
 impl ModuleObject {
     pub fn new() -> Self {
-        ModuleObject {}
+        Self {}
     }
 }
 
@@ -61,7 +61,7 @@ pub struct SetObject {
 
 impl SetObject {
     pub fn new() -> Self {
-        SetObject {
+        Self {
             key: RedisString::new(),
             elements: vec![],
         }
@@ -76,7 +76,7 @@ pub struct StreamObject {
 
 impl StreamObject {
     pub fn new() -> Self {
-        StreamObject {
+        Self {
             key: RedisString::new(),
             cmds: vec![],
         }
@@ -91,7 +91,7 @@ pub struct StringObject {
 
 impl StringObject {
     pub fn new() -> Self {
-        StringObject {
+        Self {
             key: RedisString::new(),
             value: RedisString::new(),
         }
@@ -112,7 +112,7 @@ pub struct ZsetObject {
 
 impl ZsetObject {
     pub fn new() -> Self {
-        ZsetObject {
+        Self {
             key: RedisString::new(),
             elements: vec![],
         }
@@ -133,8 +133,10 @@ impl RedisString {
     pub fn as_bytes(&self) -> &[u8] {
         &self.bytes
     }
+}
 
-    pub fn to_string(&self) -> String {
+impl ToString for RedisString {
+    fn to_string(&self) -> String {
         String::from_utf8_lossy(&self.bytes).to_string()
     }
 }
@@ -216,11 +218,6 @@ impl RedisCmd {
         }
     }
 
-    pub fn to_string(&self) -> String {
-        let str_args = self.args_to_string();
-        str_args.join(" ")
-    }
-
     pub fn args_to_string(&self) -> Vec<String> {
         let mut str_args = Vec::new();
         for arg in self.args.iter() {
@@ -244,6 +241,13 @@ impl RedisCmd {
         self.group = group;
         self.keys = keys;
         self.key_indexes = keys_indexes;
+    }
+}
+
+impl ToString for RedisCmd {
+    fn to_string(&self) -> String {
+        let str_args = self.args_to_string();
+        str_args.join(" ")
     }
 }
 

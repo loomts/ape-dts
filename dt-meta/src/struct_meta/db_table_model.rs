@@ -26,7 +26,7 @@ impl DbTable {
                 modes.push(Self {
                     database_name: String::from(db_table),
                     is_all: true,
-                    table_name: String::from(""),
+                    table_name: String::new(),
                 })
             }
         }

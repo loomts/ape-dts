@@ -312,7 +312,7 @@ impl MysqlCdcExtractor {
             self.conn_pool.clone(),
         );
 
-        let _ = tokio::spawn(async move {
+        tokio::spawn(async move {
             let mut start_time = Instant::now();
             loop {
                 if start_time.elapsed().as_secs() >= heartbeat_interval_secs {

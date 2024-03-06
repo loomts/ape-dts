@@ -35,19 +35,19 @@ impl RdbRouter {
                 field_map,
                 topic_map,
             } => {
-                let db_map = Self::parse_db_map(db_map, &db_type).unwrap();
-                let mut tb_map = Self::parse_tb_map(tb_map, &db_type).unwrap();
-                let (tb_map_2, tb_col_map) = Self::parse_tb_col_map(field_map, &db_type).unwrap();
+                let db_map = Self::parse_db_map(db_map, db_type).unwrap();
+                let mut tb_map = Self::parse_tb_map(tb_map, db_type).unwrap();
+                let (tb_map_2, tb_col_map) = Self::parse_tb_col_map(field_map, db_type).unwrap();
                 for (k, v) in tb_map_2 {
                     tb_map.insert(k, v);
                 }
-                let topic_map = Self::parse_topic_map(topic_map, &db_type).unwrap();
-                return Ok(Self {
+                let topic_map = Self::parse_topic_map(topic_map, db_type).unwrap();
+                Ok(Self {
                     db_map,
                     tb_map,
                     tb_col_map,
                     topic_map,
-                });
+                })
             }
         }
     }
@@ -144,7 +144,7 @@ impl RdbRouter {
             row_data.after = Some(route_col_values(after));
         }
 
-        return row_data;
+        row_data
     }
 
     fn parse_db_map(config_str: &str, db_type: &DbType) -> Result<HashMap<String, String>, Error> {
@@ -159,6 +159,7 @@ impl RdbRouter {
         Ok(db_map)
     }
 
+    #[allow(clippy::type_complexity)]
     fn parse_tb_map(
         config_str: &str,
         db_type: &DbType,

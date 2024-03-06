@@ -7,7 +7,10 @@ use dt_meta::{
 };
 
 use crate::{
-    check_log::{check_log::CheckLog, log_type::LogType},
+    check_log::{
+        check_log::{CheckLog, DiffColValue},
+        log_type::LogType,
+    },
     rdb_router::RdbRouter,
 };
 
@@ -15,88 +18,79 @@ pub struct BaseChecker {}
 
 impl BaseChecker {
     #[inline(always)]
-    pub fn batch_compare_row_datas(
+    pub async fn batch_compare_row_datas(
         src_data: &[RowData],
         dst_row_data_map: &HashMap<u128, RowData>,
-        tb_meta: &RdbTbMeta,
         start_index: usize,
         batch_size: usize,
-    ) -> (Vec<RowData>, Vec<RowData>) {
+        dst_tb_meta: &RdbTbMeta,
+        extractor_meta_manager: &mut RdbMetaManager,
+        reverse_router: &RdbRouter,
+    ) -> Result<(Vec<CheckLog>, Vec<CheckLog>), Error> {
         let mut miss = Vec::new();
         let mut diff = Vec::new();
-        for row_data_src in src_data.iter().skip(start_index).take(batch_size) {
-            let hash_code = row_data_src.get_hash_code(tb_meta);
-            if let Some(row_data_dst) = dst_row_data_map.get(&hash_code) {
-                if !Self::compare_row_data(row_data_src, row_data_dst) {
-                    diff.push(row_data_src.to_owned());
+        for src_row_data in src_data.iter().skip(start_index).take(batch_size) {
+            // src_row_data is already routed, so here we call get_hash_code by dst_tb_meta
+            let hash_code = src_row_data.get_hash_code(dst_tb_meta);
+            if let Some(dst_row_data) = dst_row_data_map.get(&hash_code) {
+                let diff_col_values = Self::compare_row_data(src_row_data, dst_row_data);
+                if !diff_col_values.is_empty() {
+                    let diff_log = Self::build_diff_log(
+                        src_row_data,
+                        diff_col_values,
+                        extractor_meta_manager,
+                        reverse_router,
+                    )
+                    .await
+                    .unwrap();
+                    diff.push(diff_log);
                 }
             } else {
-                miss.push(row_data_src.to_owned());
+                let miss_log =
+                    Self::build_miss_log(src_row_data, extractor_meta_manager, reverse_router)
+                        .await
+                        .unwrap();
+                miss.push(miss_log);
             }
         }
-        (miss, diff)
+        Ok((miss, diff))
     }
 
     #[inline(always)]
-    pub fn compare_row_data(row_data_src: &RowData, row_data_dst: &RowData) -> bool {
-        let src = row_data_src.after.as_ref().unwrap();
-        let dst = row_data_dst.after.as_ref().unwrap();
+    pub fn compare_row_data(
+        src_row_data: &RowData,
+        dst_row_data: &RowData,
+    ) -> HashMap<String, DiffColValue> {
+        let mut diff_col_values = HashMap::new();
+        let src = src_row_data.after.as_ref().unwrap();
+        let dst = dst_row_data.after.as_ref().unwrap();
         for (col, src_col_value) in src.iter() {
             if let Some(dst_col_value) = dst.get(col) {
                 if src_col_value != dst_col_value {
-                    return false;
+                    let diff_col_value = DiffColValue {
+                        src: src_col_value.to_option_string(),
+                        dst: dst_col_value.to_option_string(),
+                    };
+                    diff_col_values.insert(col.to_owned(), diff_col_value);
                 }
             } else {
-                return false;
+                let diff_col_value = DiffColValue {
+                    src: src_col_value.to_option_string(),
+                    dst: None,
+                };
+                diff_col_values.insert(col.to_owned(), diff_col_value);
             }
         }
-        true
+        diff_col_values
     }
 
-    pub async fn log_dml(
-        extractor_meta_manager: &mut RdbMetaManager,
-        router: &RdbRouter,
-        miss: Vec<RowData>,
-        diff: Vec<RowData>,
-    ) -> Result<(), Error> {
-        for row_data in miss {
-            let src_row_data = router.route_row(row_data);
-            let tb_meta = extractor_meta_manager
-                .get_tb_meta(&src_row_data.schema, &src_row_data.tb)
-                .await?;
-            let check_log = CheckLog::from_row_data(&src_row_data, &tb_meta, LogType::Miss);
-            log_miss!("{}", check_log.to_string());
+    pub fn log_dml(miss: Vec<CheckLog>, diff: Vec<CheckLog>) {
+        for log in miss {
+            log_miss!("{}", log.to_string());
         }
-
-        for row_data in diff {
-            let src_row_data = router.route_row(row_data);
-            let tb_meta = extractor_meta_manager
-                .get_tb_meta(&src_row_data.schema, &src_row_data.tb)
-                .await?;
-            let check_log = CheckLog::from_row_data(&src_row_data, &tb_meta, LogType::Miss);
-            log_diff!("{}", check_log.to_string());
+        for log in diff {
+            log_diff!("{}", log.to_string());
         }
-        Ok(())
-    }
-
-    pub async fn log_mongo_dml(
-        tb_meta: &RdbTbMeta,
-        router: &RdbRouter,
-        miss: Vec<RowData>,
-        diff: Vec<RowData>,
-    ) -> Result<(), Error> {
-        for row_data in miss {
-            let src_row_data = router.route_row(row_data);
-            let check_log = CheckLog::from_row_data(&src_row_data, &tb_meta, LogType::Miss);
-            log_miss!("{}", check_log.to_string());
-        }
-
-        for row_data in diff {
-            let src_row_data = router.route_row(row_data);
-            let check_log = CheckLog::from_row_data(&src_row_data, &tb_meta, LogType::Miss);
-            log_diff!("{}", check_log.to_string());
-        }
-        Ok(())
     }
 
     #[inline(always)]
@@ -138,5 +132,101 @@ impl BaseChecker {
         }
 
         Ok(())
+    }
+
+    pub async fn build_miss_log(
+        src_row_data: &RowData,
+        extractor_meta_manager: &mut RdbMetaManager,
+        reverse_router: &RdbRouter,
+    ) -> Result<CheckLog, Error> {
+        // route src_row_data back since we need origin extracted row_data in check log
+        let reverse_src_row_data = reverse_router.route_row(src_row_data.clone());
+        let src_tb_meta = extractor_meta_manager
+            .get_tb_meta(&reverse_src_row_data.schema, &reverse_src_row_data.tb)
+            .await?;
+
+        let id_col_values = Self::build_id_col_values(&reverse_src_row_data, src_tb_meta);
+        let miss_log = CheckLog {
+            log_type: LogType::Miss,
+            schema: reverse_src_row_data.schema.clone(),
+            tb: reverse_src_row_data.tb.clone(),
+            id_col_values,
+            diff_col_values: HashMap::new(),
+        };
+        Ok(miss_log)
+    }
+
+    pub async fn build_diff_log(
+        src_row_data: &RowData,
+        diff_col_values: HashMap<String, DiffColValue>,
+        extractor_meta_manager: &mut RdbMetaManager,
+        reverse_router: &RdbRouter,
+    ) -> Result<CheckLog, Error> {
+        // share same logic to fill basic CheckLog fields as miss log
+        let miss_log = Self::build_miss_log(src_row_data, extractor_meta_manager, reverse_router)
+            .await
+            .unwrap();
+        let diff_col_values = if let Some(col_map) =
+            reverse_router.get_col_map(&src_row_data.schema, &src_row_data.tb)
+        {
+            let mut reverse_diff_col_values = HashMap::new();
+            for (col, diff_col_value) in diff_col_values {
+                let reverse_col = col_map.get(&col).unwrap();
+                reverse_diff_col_values.insert(reverse_col.to_owned(), diff_col_value);
+            }
+            reverse_diff_col_values
+        } else {
+            diff_col_values
+        };
+
+        let diff_log = CheckLog {
+            log_type: LogType::Diff,
+            schema: miss_log.schema,
+            tb: miss_log.tb,
+            id_col_values: miss_log.id_col_values,
+            diff_col_values,
+        };
+        Ok(diff_log)
+    }
+
+    pub fn build_mongo_miss_log(
+        src_row_data: RowData,
+        tb_meta: &RdbTbMeta,
+        reverse_router: &RdbRouter,
+    ) -> CheckLog {
+        let reverse_src_row_data = reverse_router.route_row(src_row_data);
+        let id_col_values = Self::build_id_col_values(&reverse_src_row_data, tb_meta);
+        CheckLog {
+            log_type: LogType::Miss,
+            schema: reverse_src_row_data.schema,
+            tb: reverse_src_row_data.tb,
+            id_col_values,
+            diff_col_values: HashMap::new(),
+        }
+    }
+
+    pub fn build_mongo_diff_log(
+        src_row_data: RowData,
+        diff_col_values: HashMap<String, DiffColValue>,
+        tb_meta: &RdbTbMeta,
+        reverse_router: &RdbRouter,
+    ) -> CheckLog {
+        let mut diff_log = Self::build_mongo_miss_log(src_row_data, tb_meta, reverse_router);
+        diff_log.diff_col_values = diff_col_values;
+        diff_log.log_type = LogType::Diff;
+        // no col map in mongo
+        diff_log
+    }
+
+    fn build_id_col_values(
+        row_data: &RowData,
+        tb_meta: &RdbTbMeta,
+    ) -> HashMap<String, Option<String>> {
+        let mut id_col_values = HashMap::new();
+        let after = row_data.after.as_ref().unwrap();
+        for col in tb_meta.id_cols.iter() {
+            id_col_values.insert(col.to_owned(), after.get(col).unwrap().to_option_string());
+        }
+        id_col_values
     }
 }

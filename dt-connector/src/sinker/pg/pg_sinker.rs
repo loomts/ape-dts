@@ -116,7 +116,7 @@ impl PgSinker {
         for row_data in data.iter() {
             data_size += row_data.data_size;
 
-            let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&row_data).await?;
+            let tb_meta = self.meta_manager.get_tb_meta_by_row_data(row_data).await?;
             let query_builder = RdbQueryBuilder::new_for_pg(tb_meta);
 
             let query_info = if row_data.row_type == RowType::Insert {
@@ -205,7 +205,6 @@ impl PgSinker {
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
 
-    #[allow(clippy::type_complexity)]
     fn get_insert_query<'a>(
         query_builder: &'a RdbQueryBuilder,
         tb_meta: &'a PgTbMeta,

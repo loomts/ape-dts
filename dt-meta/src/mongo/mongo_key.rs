@@ -20,13 +20,13 @@ impl MongoKey {
     pub fn from_doc(doc: &Document) -> Option<MongoKey> {
         if let Some(id) = doc.get(MongoConstants::ID) {
             let value = match id {
-                Bson::ObjectId(v) => Some(MongoKey::ObjectId(v.clone())),
+                Bson::ObjectId(v) => Some(MongoKey::ObjectId(*v)),
                 Bson::String(v) => Some(MongoKey::String(v.clone())),
-                Bson::Int32(v) => Some(MongoKey::Int32(v.clone())),
-                Bson::Int64(v) => Some(MongoKey::Int64(v.clone())),
+                Bson::Int32(v) => Some(MongoKey::Int32(*v)),
+                Bson::Int64(v) => Some(MongoKey::Int64(*v)),
                 Bson::JavaScriptCode(v) => Some(MongoKey::JavaScriptCode(v.clone())),
-                Bson::Timestamp(v) => Some(MongoKey::Timestamp(v.clone())),
-                Bson::DateTime(v) => Some(MongoKey::DateTime(v.clone())),
+                Bson::Timestamp(v) => Some(MongoKey::Timestamp(*v)),
+                Bson::DateTime(v) => Some(MongoKey::DateTime(*v)),
                 Bson::Symbol(v) => Some(MongoKey::Symbol(v.clone())),
                 // other types don't derive Hash and Eq
                 _ => None,
@@ -36,20 +36,22 @@ impl MongoKey {
         None
     }
 
-    pub fn to_string(&self) -> String {
-        json!(self).to_string()
-    }
-
     pub fn to_mongo_id(&self) -> Bson {
         match self {
-            MongoKey::ObjectId(v) => Bson::ObjectId(v.clone()),
+            MongoKey::ObjectId(v) => Bson::ObjectId(*v),
             MongoKey::String(v) => Bson::String(v.clone()),
-            MongoKey::Int32(v) => Bson::Int32(v.clone()),
-            MongoKey::Int64(v) => Bson::Int64(v.clone()),
+            MongoKey::Int32(v) => Bson::Int32(*v),
+            MongoKey::Int64(v) => Bson::Int64(*v),
             MongoKey::JavaScriptCode(v) => Bson::JavaScriptCode(v.clone()),
-            MongoKey::Timestamp(v) => Bson::Timestamp(v.clone()),
-            MongoKey::DateTime(v) => Bson::DateTime(v.clone()),
+            MongoKey::Timestamp(v) => Bson::Timestamp(*v),
+            MongoKey::DateTime(v) => Bson::DateTime(*v),
             MongoKey::Symbol(v) => Bson::Symbol(v.clone()),
         }
+    }
+}
+
+impl ToString for MongoKey {
+    fn to_string(&self) -> String {
+        json!(self).to_string()
     }
 }

@@ -212,7 +212,7 @@ impl PgStructCheckFetcher {
         col_types: &HashMap<&str, PgColType>,
     ) -> Vec<HashMap<String, String>> {
         let mut results = Vec::new();
-        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+        let mut rows = sqlx::query(sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let res = Self::parse_row(&row, col_names, col_types);
             results.push(res);

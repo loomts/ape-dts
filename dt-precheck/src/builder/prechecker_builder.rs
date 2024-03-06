@@ -58,7 +58,7 @@ impl PrecheckerBuilder {
                 is_source,
                 fetcher: MysqlFetcher {
                     pool: None,
-                    url: url.clone(),
+                    url,
                     is_source,
                     filter,
                 },
@@ -69,7 +69,7 @@ impl PrecheckerBuilder {
                 is_source,
                 fetcher: PgFetcher {
                     pool: None,
-                    url: url.clone(),
+                    url,
                     is_source,
                     filter,
                 },
@@ -77,7 +77,7 @@ impl PrecheckerBuilder {
             DbType::Mongo => Some(Box::new(MongoPrechecker {
                 fetcher: MongoFetcher {
                     pool: None,
-                    url: url.clone(),
+                    url,
                     is_source,
                     filter,
                 },
@@ -88,7 +88,7 @@ impl PrecheckerBuilder {
             DbType::Redis => Some(Box::new(RedisPrechecker {
                 fetcher: RedisFetcher {
                     conn: None,
-                    url: url.clone(),
+                    url,
                     is_source,
                     filter,
                 },

@@ -52,16 +52,16 @@ impl RdbRedisTestRunner {
     }
 
     pub async fn run_snapshot_test(&mut self) -> Result<(), Error> {
-        // src ddl
-        self.execute_sqls(&self.base.src_ddl_sqls).await?;
-        // dst ddl
+        // src prepare
+        self.execute_sqls(&self.base.src_prepare_sqls).await?;
+        // dst prepare
         self.redis_util
-            .execute_cmds(&mut self.redis_conn, &self.base.dst_ddl_sqls.clone());
+            .execute_cmds(&mut self.redis_conn, &self.base.dst_prepare_sqls.clone());
 
-        self.execute_sqls(&self.base.src_dml_sqls).await?;
+        self.execute_sqls(&self.base.src_test_sqls).await?;
         self.base.start_task().await?;
 
-        let db_tbs = RdbTestRunner::get_compare_db_tbs_from_sqls(&self.base.src_ddl_sqls)?;
+        let db_tbs = RdbTestRunner::get_compare_db_tbs_from_sqls(&self.base.src_prepare_sqls)?;
         self.compare_data_for_tbs(&db_tbs).await;
         Ok(())
     }
@@ -71,9 +71,9 @@ impl RdbRedisTestRunner {
         start_millis: u64,
         parse_millis: u64,
     ) -> Result<(), Error> {
-        self.execute_sqls(&self.base.src_ddl_sqls).await?;
+        self.execute_sqls(&self.base.src_prepare_sqls).await?;
         self.redis_util
-            .execute_cmds(&mut self.redis_conn, &self.base.dst_ddl_sqls.clone());
+            .execute_cmds(&mut self.redis_conn, &self.base.dst_prepare_sqls.clone());
 
         let task = self.base.spawn_task().await?;
         TimeUtil::sleep_millis(start_millis).await;
@@ -82,7 +82,7 @@ impl RdbRedisTestRunner {
         let mut src_insert_sqls = Vec::new();
         let mut src_update_sqls = Vec::new();
         let mut src_delete_sqls = Vec::new();
-        for sql in self.base.src_dml_sqls.iter() {
+        for sql in self.base.src_test_sqls.iter() {
             if sql.to_lowercase().starts_with("insert") {
                 src_insert_sqls.push(sql.clone());
             } else if sql.to_lowercase().starts_with("update") {
@@ -92,7 +92,7 @@ impl RdbRedisTestRunner {
             }
         }
 
-        let db_tbs = RdbTestRunner::get_compare_db_tbs_from_sqls(&self.base.src_ddl_sqls)?;
+        let db_tbs = RdbTestRunner::get_compare_db_tbs_from_sqls(&self.base.src_prepare_sqls)?;
 
         // insert
         self.execute_sqls(&src_insert_sqls).await?;
