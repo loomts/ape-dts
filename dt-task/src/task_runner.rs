@@ -254,7 +254,7 @@ impl TaskRunner {
             )
             .await
         });
-        let _ = try_join!(f1, f2, f3);
+        try_join!(f1, f2, f3).unwrap();
         Ok(())
     }
 
