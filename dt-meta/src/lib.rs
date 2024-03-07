@@ -3,7 +3,6 @@
 pub mod adaptor;
 pub mod avro;
 pub mod col_value;
-pub mod db_enums;
 pub mod ddl_data;
 pub mod ddl_type;
 pub mod dt_data;

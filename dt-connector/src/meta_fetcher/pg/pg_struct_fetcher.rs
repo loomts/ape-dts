@@ -148,9 +148,9 @@ impl PgStructFetcher {
                 data_type: Self::get_str_with_null(&row, "data_type").unwrap(),
                 start_value: row.get("start_value"),
                 increment: row.get("increment"),
-                min_value: row.get("minimum_value"),
-                max_value: row.get("maximum_value"),
-                is_circle: Self::get_str_with_null(&row, "cycle_option").unwrap(),
+                minimum_value: row.get("minimum_value"),
+                maximum_value: row.get("maximum_value"),
+                cycle_option: Self::get_str_with_null(&row, "cycle_option").unwrap(),
             };
             self.push_to_results(&mut results, &table_name, sequence);
         }
@@ -181,9 +181,9 @@ impl PgStructFetcher {
                 data_type: Self::get_str_with_null(&row, "data_type").unwrap(),
                 start_value: row.get("start_value"),
                 increment: row.get("increment"),
-                min_value: row.get("minimum_value"),
-                max_value: row.get("maximum_value"),
-                is_circle: Self::get_str_with_null(&row, "cycle_option").unwrap(),
+                minimum_value: row.get("minimum_value"),
+                maximum_value: row.get("maximum_value"),
+                cycle_option: Self::get_str_with_null(&row, "cycle_option").unwrap(),
             };
             results.push(sequence)
         }
@@ -205,7 +205,7 @@ impl PgStructFetcher {
 
         let mut independent_squence_names = Vec::new();
         for column in table.columns.iter() {
-            if let Some(default_value) = &column.default_value {
+            if let Some(default_value) = &column.column_default {
                 let (schema, sequence_name) =
                     Self::get_sequence_name_by_default_value(default_value);
                 // example, default_value is 'Standard'::text
@@ -303,8 +303,8 @@ impl PgStructFetcher {
                 sequence_name: seq_name,
                 database_name: String::new(),
                 schema_name,
-                owner_table_name: table_name.clone(),
-                owner_table_column_name: Self::get_str_with_null(&row, "column_name").unwrap(),
+                table_name: table_name.clone(),
+                column_name: Self::get_str_with_null(&row, "column_name").unwrap(),
             };
             self.push_to_results(&mut results, &table_name, sequence_owner);
         }
@@ -351,17 +351,17 @@ impl PgStructFetcher {
                 continue;
             }
 
-            let order: i32 = row.try_get("ordinal_position").unwrap();
+            let ordinal_position: i32 = row.try_get("ordinal_position").unwrap();
             let is_identity = row.get("is_identity");
             let identity_generation = row.get("identity_generation");
-            let generated = Self::get_col_generated_rule(is_identity, identity_generation);
+            let generation_rule = Self::get_col_generation_rule(is_identity, identity_generation);
 
             let column = Column {
                 column_name: Self::get_str_with_null(&row, "column_name").unwrap(),
-                order_position: order as u32,
-                default_value: row.get("column_default"),
+                ordinal_position: ordinal_position as u32,
+                column_default: row.get("column_default"),
                 is_nullable: Self::get_str_with_null(&row, "is_nullable").unwrap(),
-                generated,
+                generated: generation_rule,
                 ..Default::default()
             };
 
@@ -494,7 +494,7 @@ impl PgStructFetcher {
                 table_name: table_name.clone(),
                 index_name: Self::get_str_with_null(&row, "indexname").unwrap(),
                 index_kind: self.get_index_kind(&definition),
-                tablespace: Self::get_str_with_null(&row, "tablespace").unwrap(),
+                table_space: Self::get_str_with_null(&row, "tablespace").unwrap(),
                 definition,
                 ..Default::default()
             };
@@ -632,7 +632,7 @@ impl PgStructFetcher {
         Ok(str_val)
     }
 
-    fn get_col_generated_rule(
+    fn get_col_generation_rule(
         is_identity: Option<String>,
         identity_generation: Option<String>,
     ) -> Option<String> {

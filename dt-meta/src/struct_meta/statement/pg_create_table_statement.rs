@@ -38,7 +38,7 @@ impl PgCreateTableStatement {
             for i in self.sequence_owners.iter() {
                 let key = format!(
                     "sequence_owner.{}.{}.{}",
-                    i.schema_name, i.owner_table_name, i.sequence_name
+                    i.schema_name, i.table_name, i.sequence_name
                 );
                 sqls.push((key, Self::sequence_owner_to_sql(i)));
             }
@@ -110,13 +110,13 @@ impl PgCreateTableStatement {
     fn columns_to_sql(columns: &mut [Column]) -> String {
         let mut sql = String::new();
 
-        columns.sort_by(|a, b| a.order_position.cmp(&b.order_position));
+        columns.sort_by(|a, b| a.ordinal_position.cmp(&b.ordinal_position));
         for column in columns.iter() {
             sql.push_str(format!(r#""{}" {} "#, column.column_name, column.column_type).as_str());
             if column.is_nullable.to_lowercase() == "no" {
                 sql.push_str("NOT NULL ");
             }
-            match &column.default_value {
+            match &column.column_default {
                 Some(x) => sql.push_str(format!("DEFAULT {} ", x).as_str()),
                 None => {}
             }
@@ -147,7 +147,7 @@ impl PgCreateTableStatement {
                 .definition
                 .replace("CREATE INDEX", "CREATE INDEX IF NOT EXISTS")
                 .replace("CREATE UNIQUE INDEX", "CREATE UNIQUE INDEX IF NOT EXISTS"),
-            index.tablespace
+            index.table_space
         )
     }
 
@@ -166,7 +166,7 @@ impl PgCreateTableStatement {
     }
 
     fn sequence_to_sql(sequence: &Sequence) -> String {
-        let cycle_str = if sequence.is_circle.to_lowercase() == "yes" {
+        let cycle_str = if sequence.cycle_option.to_lowercase() == "yes" {
             "CYCLE"
         } else {
             "NO CYCLE"
@@ -179,8 +179,8 @@ impl PgCreateTableStatement {
             sequence.data_type,
             sequence.start_value,
             sequence.increment,
-            sequence.min_value,
-            sequence.max_value,
+            sequence.minimum_value,
+            sequence.maximum_value,
             cycle_str
         )
     }
@@ -191,8 +191,8 @@ impl PgCreateTableStatement {
             sequence_owner.schema_name,
             sequence_owner.sequence_name,
             sequence_owner.schema_name,
-            sequence_owner.owner_table_name,
-            sequence_owner.owner_table_column_name
+            sequence_owner.table_name,
+            sequence_owner.column_name
         )
     }
 

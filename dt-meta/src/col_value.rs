@@ -83,7 +83,6 @@ impl ColValue {
             ColValue::Set2(v) => Some(v.to_string()),
             ColValue::Enum(v) => Some(v.to_string()),
             ColValue::Enum2(v) => Some(v.to_string()),
-            // TODO: support JSON
             ColValue::Json(v) => Some(format!("{:?}", v)),
             ColValue::Json2(v) => Some(v.to_string()),
             ColValue::Blob(v) => {
@@ -172,7 +171,6 @@ impl Serialize for ColValue {
             ColValue::Set2(v) => serializer.serialize_str(v),
             ColValue::Enum(v) => serializer.serialize_u32(*v),
             ColValue::Enum2(v) => serializer.serialize_str(v),
-            // TODO: support JSON
             ColValue::Json(v) => serializer.serialize_bytes(v),
             ColValue::Json2(v) => serializer.serialize_str(v),
             _ => serializer.serialize_none(),

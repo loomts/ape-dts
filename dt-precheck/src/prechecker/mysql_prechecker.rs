@@ -5,13 +5,12 @@ use dt_common::{
     config::{config_enums::DbType, filter_config::FilterConfig},
     error::Error,
 };
-use dt_meta::struct_meta::db_table_model::DbTable;
 use regex::Regex;
 
 use crate::{
     config::precheck_config::PrecheckConfig,
     fetcher::{mysql::mysql_fetcher::MysqlFetcher, traits::Fetcher},
-    meta::{check_item::CheckItem, check_result::CheckResult},
+    meta::{check_item::CheckItem, check_result::CheckResult, db_table_model::DbTable},
 };
 
 use super::traits::Prechecker;

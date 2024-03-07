@@ -243,7 +243,6 @@ impl BasePipeline {
     }
 
     fn fetch_ddl(mut data: Vec<DtItem>) -> (Vec<DdlData>, Option<Position>, Option<Position>) {
-        // TODO, change result name
         let mut result = Vec::new();
         let mut last_received_position = Option::None;
         let mut last_commit_position = Option::None;
