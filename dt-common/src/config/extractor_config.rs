@@ -90,7 +90,7 @@ pub enum ExtractorConfig {
 
     RedisCdc {
         url: String,
-        run_id: String,
+        repl_id: String,
         repl_offset: u64,
         repl_port: u64,
         keepalive_interval_secs: u64,
