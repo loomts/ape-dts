@@ -226,7 +226,7 @@ impl TaskConfig {
                     ExtractType::Cdc => ExtractorConfig::RedisCdc {
                         url,
                         repl_port,
-                        run_id: ini.get(EXTRACTOR, "run_id").unwrap(),
+                        repl_id: ini.get(EXTRACTOR, "repl_id").unwrap(),
                         repl_offset: ini.getuint(EXTRACTOR, "repl_offset").unwrap().unwrap(),
                         keepalive_interval_secs,
                         heartbeat_interval_secs,

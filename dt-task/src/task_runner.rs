@@ -558,7 +558,7 @@ impl TaskRunner {
 
             ExtractorConfig::RedisCdc {
                 url,
-                run_id,
+                repl_id,
                 repl_offset,
                 now_db_id,
                 repl_port,
@@ -570,7 +570,7 @@ impl TaskRunner {
                 let extractor = ExtractorUtil::create_redis_cdc_extractor(
                     base_extractor,
                     url,
-                    run_id,
+                    repl_id,
                     *repl_offset,
                     *repl_port,
                     *now_db_id,

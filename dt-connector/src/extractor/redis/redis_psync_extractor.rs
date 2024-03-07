@@ -20,7 +20,7 @@ use super::redis_client::RedisClient;
 pub struct RedisPsyncExtractor<'a> {
     pub base_extractor: &'a mut BaseExtractor,
     pub conn: &'a mut RedisClient,
-    pub run_id: String,
+    pub repl_id: String,
     pub repl_offset: u64,
     pub now_db_id: i64,
     pub repl_port: u64,
@@ -31,8 +31,8 @@ pub struct RedisPsyncExtractor<'a> {
 impl Extractor for RedisPsyncExtractor<'_> {
     async fn extract(&mut self) -> Result<(), Error> {
         log_info!(
-            "RedisPsyncExtractor starts, run_id: {}, repl_offset: {}, now_db_id: {}",
-            self.run_id,
+            "RedisPsyncExtractor starts, repl_id: {}, repl_offset: {}, now_db_id: {}",
+            self.repl_id,
             self.repl_offset,
             self.now_db_id
         );
@@ -59,15 +59,15 @@ impl RedisPsyncExtractor<'_> {
             ));
         }
 
-        let full_sync = self.run_id.is_empty() && self.repl_offset == 0;
-        let (run_id, repl_offset) = if full_sync {
+        let full_sync = self.repl_id.is_empty() && self.repl_offset == 0;
+        let (repl_id, repl_offset) = if full_sync {
             ("?".to_string(), "-1".to_string())
         } else {
-            (self.run_id.clone(), self.repl_offset.to_string())
+            (self.repl_id.clone(), self.repl_offset.to_string())
         };
 
-        // PSYNC [run_id] [offset]
-        let psync_cmd = RedisCmd::from_str_args(&["PSYNC", &run_id, &repl_offset]);
+        // PSYNC [repl_id] [offset]
+        let psync_cmd = RedisCmd::from_str_args(&["PSYNC", &repl_id, &repl_offset]);
         log_info!("PSYNC command: {}", psync_cmd.to_string());
         self.conn.send(&psync_cmd).await.unwrap();
         let value = self.conn.read().await.unwrap();
@@ -76,7 +76,7 @@ impl RedisPsyncExtractor<'_> {
             log_info!("PSYNC command response status: {:?}", s);
             if full_sync {
                 let tokens: Vec<&str> = s.split_whitespace().collect();
-                self.run_id = tokens[1].to_string();
+                self.repl_id = tokens[1].to_string();
                 self.repl_offset = tokens[2].parse::<u64>().unwrap();
             } else if s != "CONTINUE" {
                 return Err(Error::ExtractorError(
@@ -159,8 +159,8 @@ impl RedisPsyncExtractor<'_> {
         log_position!(
             "current_position | {}",
             format!(
-                "run_id:{},repl_offset:{},repl_next_offset:{},repl_port:{}",
-                self.run_id,
+                "repl_id:{},repl_offset:{},repl_next_offset:{},repl_port:{}",
+                self.repl_id,
                 self.repl_offset,
                 self.repl_offset + 1,
                 self.repl_port

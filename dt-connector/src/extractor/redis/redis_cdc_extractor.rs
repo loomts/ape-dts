@@ -27,7 +27,7 @@ use std::time::UNIX_EPOCH;
 pub struct RedisCdcExtractor {
     pub base_extractor: BaseExtractor,
     pub conn: RedisClient,
-    pub run_id: String,
+    pub repl_id: String,
     pub repl_offset: u64,
     pub repl_port: u64,
     pub now_db_id: i64,
@@ -51,7 +51,7 @@ impl Extractor for RedisCdcExtractor {
         let mut psync_extractor = RedisPsyncExtractor {
             base_extractor: &mut self.base_extractor,
             conn: &mut self.conn,
-            run_id: self.run_id.clone(),
+            repl_id: self.repl_id.clone(),
             repl_offset: self.repl_offset,
             repl_port: self.repl_port,
             now_db_id: self.now_db_id,
@@ -60,7 +60,7 @@ impl Extractor for RedisCdcExtractor {
 
         // receive rdb data if needed
         psync_extractor.extract().await?;
-        self.run_id = psync_extractor.run_id;
+        self.repl_id = psync_extractor.repl_id;
         self.repl_offset = psync_extractor.repl_offset;
 
         self.receive_aof().await
@@ -133,7 +133,7 @@ impl RedisCdcExtractor {
                 }
 
                 let position = Position::Redis {
-                    run_id: self.run_id.clone(),
+                    repl_id: self.repl_id.clone(),
                     repl_offset: self.repl_offset,
                     now_db_id: self.now_db_id,
                     timestamp: heartbeat_timestamp.clone(),

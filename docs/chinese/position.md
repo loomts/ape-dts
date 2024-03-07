@@ -36,7 +36,7 @@
 ## redis
 - 位点信息如下，暂不支持断点续传
 ```
-2024-02-28 09:56:09.924714 | checkpoint_position | {"Redis":{"run_id":"66f89bb2de0701ecb115f45e46655b366d9fcac8","repl_offset":4850539,"now_db_id":0,"timestamp":""}}
+2024-02-28 09:56:09.924714 | checkpoint_position | {"Redis":{"repl_id":"66f89bb2de0701ecb115f45e46655b366d9fcac8","repl_offset":4850539,"now_db_id":0,"timestamp":""}}
 ```
 
 # 全量

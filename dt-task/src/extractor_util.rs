@@ -327,7 +327,7 @@ impl ExtractorUtil {
     pub async fn create_redis_cdc_extractor(
         base_extractor: BaseExtractor,
         url: &str,
-        run_id: &str,
+        repl_id: &str,
         repl_offset: u64,
         repl_port: u64,
         now_db_id: i64,
@@ -341,7 +341,7 @@ impl ExtractorUtil {
         let conn = RedisClient::new(url).await.unwrap();
         Ok(RedisCdcExtractor {
             conn,
-            run_id: run_id.to_string(),
+            repl_id: repl_id.to_string(),
             repl_offset,
             keepalive_interval_secs,
             heartbeat_interval_secs,

@@ -19,7 +19,7 @@ impl Extractor for RedisSnapshotExtractor {
         let mut psync_extractor = RedisPsyncExtractor {
             base_extractor: &mut self.base_extractor,
             conn: &mut self.conn,
-            run_id: String::new(),
+            repl_id: String::new(),
             repl_offset: 0,
             repl_port: self.repl_port,
             now_db_id: 0,
