@@ -9,7 +9,7 @@ pub struct Index {
     pub index_kind: IndexKind,
     pub index_type: IndexType,
     pub comment: String,
-    pub tablespace: String,
+    pub table_space: String,
     pub definition: String,
     pub columns: Vec<IndexColumn>,
 }

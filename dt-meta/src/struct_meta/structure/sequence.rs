@@ -6,7 +6,7 @@ pub struct Sequence {
     pub data_type: String,
     pub start_value: String,
     pub increment: String,
-    pub min_value: String,
-    pub max_value: String,
-    pub is_circle: String,
+    pub minimum_value: String,
+    pub maximum_value: String,
+    pub cycle_option: String,
 }

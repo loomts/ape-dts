@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use chrono::NaiveDateTime;
+use chrono::DateTime;
 use dt_common::error::Error;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -45,7 +45,7 @@ pub enum Position {
 
 impl Position {
     pub fn format_timestamp_millis(millis: i64) -> String {
-        let naive_datetime = NaiveDateTime::from_timestamp_millis(millis);
+        let naive_datetime = DateTime::from_timestamp_millis(millis);
         naive_datetime
             .unwrap()
             .format("%Y-%m-%d %H:%M:%S%.3f UTC-0000")

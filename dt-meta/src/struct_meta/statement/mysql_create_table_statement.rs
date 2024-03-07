@@ -80,12 +80,12 @@ impl MysqlCreateTableStatement {
             table.database_name, table.table_name, columns_sql, pk_str, table.engine_name
         );
 
-        if !table.charset.is_empty() {
-            sql = format!("{} DEFAULT CHARSET={}", sql, table.charset);
+        if !table.character_set.is_empty() {
+            sql = format!("{} DEFAULT CHARSET={}", sql, table.character_set);
         }
 
-        if !table.collate.is_empty() {
-            sql = format!("{} COLLATE={}", sql, table.collate);
+        if !table.table_collation.is_empty() {
+            sql = format!("{} COLLATE={}", sql, table.table_collation);
         }
 
         if !table.table_comment.is_empty() {
@@ -98,19 +98,19 @@ impl MysqlCreateTableStatement {
     fn columns_to_sql(columns: &mut Vec<Column>) -> Result<(String, Vec<String>), Error> {
         let (mut sql, mut pks) = (String::new(), Vec::new());
 
-        columns.sort_by(|c1, c2| c1.order_position.cmp(&c2.order_position));
+        columns.sort_by(|c1, c2| c1.ordinal_position.cmp(&c2.ordinal_position));
         for i in columns {
             sql.push_str(&format!("`{}` {} ", i.column_name, i.column_type));
 
-            if !i.character_set.is_empty() {
-                sql.push_str(&format!("CHARACTER SET {} ", i.character_set))
+            if !i.character_set_name.is_empty() {
+                sql.push_str(&format!("CHARACTER SET {} ", i.character_set_name))
             }
 
-            if !i.collation.is_empty() {
-                sql.push_str(&format!("COLLATE {} ", i.collation))
+            if !i.collation_name.is_empty() {
+                sql.push_str(&format!("COLLATE {} ", i.collation_name))
             }
 
-            if let Some(v) = &i.default_value {
+            if let Some(v) = &i.column_default {
                 if v.to_lowercase().starts_with("current_") {
                     sql.push_str(&format!("DEFAULT {} ", v));
                 } else {

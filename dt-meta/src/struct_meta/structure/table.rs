@@ -7,7 +7,7 @@ pub struct Table {
     pub table_name: String,
     pub engine_name: String, // innodb
     pub table_comment: String,
-    pub charset: String,
-    pub collate: String,
+    pub character_set: String,
+    pub table_collation: String,
     pub columns: Vec<Column>,
 }

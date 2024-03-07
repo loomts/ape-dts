@@ -178,15 +178,15 @@ impl MysqlStructFetcher {
             let table_comment = Self::get_str_with_null(&row, TABLE_COMMENT).unwrap();
             let column = Column {
                 column_name: Self::get_str_with_null(&row, COLUMN_NAME).unwrap(),
-                order_position: row.try_get(ORDINAL_POSITION).unwrap(),
-                default_value: row.get(COLUMN_DEFAULT),
+                ordinal_position: row.try_get(ORDINAL_POSITION).unwrap(),
+                column_default: row.get(COLUMN_DEFAULT),
                 is_nullable: Self::get_str_with_null(&row, IS_NULLABLE).unwrap(),
                 column_type: Self::get_str_with_null(&row, COLUMN_TYPE).unwrap(),
                 column_key: Self::get_str_with_null(&row, COLUMN_KEY).unwrap(),
                 extra: Self::get_str_with_null(&row, EXTRA).unwrap(),
                 column_comment: Self::get_str_with_null(&row, COLUMN_COMMENT).unwrap(),
-                character_set: Self::get_str_with_null(&row, CHARACTER_SET_NAME).unwrap(),
-                collation: Self::get_str_with_null(&row, COLLATION_NAME).unwrap(),
+                character_set_name: Self::get_str_with_null(&row, CHARACTER_SET_NAME).unwrap(),
+                collation_name: Self::get_str_with_null(&row, COLLATION_NAME).unwrap(),
                 generated: None,
             };
 
@@ -203,8 +203,8 @@ impl MysqlStructFetcher {
                         table_name: tb,
                         engine_name,
                         table_comment,
-                        charset,
-                        collate: table_collation,
+                        character_set: charset,
+                        table_collation,
                         columns: vec![column],
                     },
                 );

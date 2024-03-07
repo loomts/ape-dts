@@ -5,13 +5,14 @@ use dt_common::{
     config::{config_enums::DbType, filter_config::FilterConfig},
     error::Error,
 };
-use dt_meta::struct_meta::{db_table_model::DbTable, pg_enums::ConstraintTypeEnum};
 
 use crate::{
     config::precheck_config::PrecheckConfig,
     fetcher::{postgresql::pg_fetcher::PgFetcher, traits::Fetcher},
-    meta::check_item::CheckItem,
-    meta::check_result::CheckResult,
+    meta::{
+        check_item::CheckItem, check_result::CheckResult, db_table_model::DbTable,
+        pg_enums::ConstraintTypeEnum,
+    },
 };
 
 use super::traits::Prechecker;
