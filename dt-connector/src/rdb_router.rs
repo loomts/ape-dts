@@ -32,12 +32,12 @@ impl RdbRouter {
             RouterConfig::Rdb {
                 db_map,
                 tb_map,
-                field_map,
+                col_map,
                 topic_map,
             } => {
                 let db_map = Self::parse_db_map(db_map, db_type).unwrap();
                 let mut tb_map = Self::parse_tb_map(tb_map, db_type).unwrap();
-                let (tb_map_2, tb_col_map) = Self::parse_tb_col_map(field_map, db_type).unwrap();
+                let (tb_map_2, tb_col_map) = Self::parse_tb_col_map(col_map, db_type).unwrap();
                 for (k, v) in tb_map_2 {
                     tb_map.insert(k, v);
                 }
@@ -179,7 +179,7 @@ impl RdbRouter {
     }
 
     fn parse_tb_col_map(config_str: &str, db_type: &DbType) -> Result<(TbMap, TbColMap), Error> {
-        // field_map=src_db_1.src_tb_1.col_1:dst_db_1.dst_tb_1.dst_col_1,src_db_2.src_tb_2.dst_col_2:dst_db_2.dst_tb_2.dst_col_2
+        // col_map=src_db_1.src_tb_1.col_1:dst_db_1.dst_tb_1.dst_col_1,src_db_2.src_tb_2.dst_col_2:dst_db_2.dst_tb_2.dst_col_2
         let mut tb_map = TbMap::new();
         let mut tb_col_map = TbColMap::new();
 
@@ -389,7 +389,7 @@ mod tests {
         let config = RouterConfig::Rdb {
             db_map: db_map_str.into(),
             tb_map: tb_map_str.into(),
-            field_map: field_map_str.into(),
+            col_map: field_map_str.into(),
             topic_map: topic_map.into(),
         };
         let router = RdbRouter::from_config(&config, &DbType::Mysql).unwrap();

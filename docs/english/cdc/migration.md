@@ -32,7 +32,7 @@ url=mysql://root:123456@127.0.0.1:3308?ssl-mode=disabled
 
 [router]
 tb_map=
-field_map=
+col_map=
 db_map=
 
 [parallelizer]

@@ -22,7 +22,7 @@ do_events=insert
 [router]
 db_map=test_db_1:dst_test_db_1
 tb_map=test_db_2.one_pk_no_uk_1:dst_test_db_2.dst_one_pk_no_uk_1
-field_map=test_db_3.one_pk_no_uk_1.f_0:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_0,test_db_3.one_pk_no_uk_1.f_1:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_1
+col_map=test_db_3.one_pk_no_uk_1.f_0:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_0,test_db_3.one_pk_no_uk_1.f_1:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_1
 
 [pipeline]
 buffer_size=16000
@@ -67,7 +67,7 @@ do_events=insert,update,delete
 [router]
 db_map=test_db_1:dst_test_db_1
 tb_map=test_db_2.one_pk_no_uk_1:dst_test_db_2.dst_one_pk_no_uk_1
-field_map=test_db_3.one_pk_no_uk_1.f_0:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_0,test_db_3.one_pk_no_uk_1.f_1:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_1
+col_map=test_db_3.one_pk_no_uk_1.f_0:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_0,test_db_3.one_pk_no_uk_1.f_1:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_1
 
 [pipeline]
 buffer_size=16000
@@ -151,7 +151,7 @@ log_dir=./logs
 | :-------- | :-------- | :-------- |
 | db_map | 库级映射 | db_1:dst_db_1,db_2:dst_db_2 |
 | tb_map | 表级映射 | db_1.tb_1:dst_db_1.dst_tb_1,db_1.tb_2:dst_db_1.dst_tb_2 |
-| field_map | 列级映射 | db_1.tb_1.f_1:dst_db_1.dst_tb_1.dst_f_1,db_1.tb_1.f_2:dst_db_1.dst_tb_1.dst_f_2 |
+| col_map | 列级映射 | db_1.tb_1.f_1:dst_db_1.dst_tb_1.dst_f_1,db_1.tb_1.f_2:dst_db_1.dst_tb_1.dst_f_2 |
 
 ## 取值范围
 - 一个映射规则包括源和目标， 以 : 分隔
@@ -160,7 +160,7 @@ log_dir=./logs
 
 ## 优先级
 - tb_map > db_map
-- field_map 只专注于 列 映射，而不做 库/表 映射，也就是说，如果某张表需要 库 + 表 + 列 映射，需先配置好 tb_map 和 db_map，且 field_map 中的 库/表 映射规则需和 tb_map/db_map 的映射规则保持一致
+- col_map 只专注于 列 映射，而不做 库/表 映射，也就是说，如果某张表需要 库 + 表 + 列 映射，需先配置好 tb_map 和 db_map，且 col_map 中的 库/表 映射规则需和 tb_map/db_map 的映射规则保持一致
 
 ## 通配符
 - 不支持

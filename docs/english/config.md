@@ -22,7 +22,7 @@ do_events=insert
 [router]
 db_map=test_db_1:dst_test_db_1
 tb_map=test_db_2.one_pk_no_uk_1:dst_test_db_2.dst_one_pk_no_uk_1
-field_map=test_db_3.one_pk_no_uk_1.f_0:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_0,test_db_3.one_pk_no_uk_1.f_1:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_1
+col_map=test_db_3.one_pk_no_uk_1.f_0:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_0,test_db_3.one_pk_no_uk_1.f_1:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_1
 
 [pipeline]
 buffer_size=16000
@@ -67,7 +67,7 @@ do_events=insert,update,delete
 [router]
 db_map=test_db_1:dst_test_db_1
 tb_map=test_db_2.one_pk_no_uk_1:dst_test_db_2.dst_one_pk_no_uk_1
-field_map=test_db_3.one_pk_no_uk_1.f_0:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_0,test_db_3.one_pk_no_uk_1.f_1:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_1
+col_map=test_db_3.one_pk_no_uk_1.f_0:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_0,test_db_3.one_pk_no_uk_1.f_1:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_1
 
 [pipeline]
 buffer_size=16000
@@ -151,7 +151,7 @@ log_dir=./logs
 | :-------- | :-------- | :-------- |
 | db_map | database mapping | db_1:dst_db_1,db_2:dst_db_2 |
 | tb_map | table mapping | db_1.tb_1:dst_db_1.dst_tb_1,db_1.tb_2:dst_db_1.dst_tb_2 |
-| field_map | column mapping | db_1.tb_1.f_1:dst_db_1.dst_tb_1.dst_f_1,db_1.tb_1.f_2:dst_db_1.dst_tb_1.dst_f_2 |
+| col_map | column mapping | db_1.tb_1.f_1:dst_db_1.dst_tb_1.dst_f_1,db_1.tb_1.f_2:dst_db_1.dst_tb_1.dst_f_2 |
 
 ## Values
 - A mapping rule consists of source and target, separated by ":"
@@ -160,7 +160,7 @@ log_dir=./logs
 
 ## Priority
 - tb_map > db_map
-- field_map only works for column mapping, if a table needs database + table + column mapping, tb_map and db_map must be set, and the database/table mapping rules in field_map must be consistent with tb_map/db_map
+- col_map only works for column mapping, if a table needs database + table + column mapping, tb_map and db_map must be set, and the database/table mapping rules in col_map must be consistent with tb_map/db_map
 
 ## Wildcard
 - Not supported

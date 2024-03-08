@@ -226,7 +226,7 @@ impl TaskConfig {
                     ExtractType::Cdc => ExtractorConfig::RedisCdc {
                         url,
                         repl_port,
-                        repl_id: ini.get(EXTRACTOR, "repl_id").unwrap(),
+                        repl_id: Self::get_value(ini, EXTRACTOR, "repl_id").unwrap(),
                         repl_offset: ini.getuint(EXTRACTOR, "repl_offset").unwrap().unwrap(),
                         keepalive_interval_secs,
                         heartbeat_interval_secs,
@@ -422,9 +422,9 @@ impl TaskConfig {
 
     fn load_router_config(ini: &Ini) -> Result<RouterConfig, Error> {
         Ok(RouterConfig::Rdb {
-            db_map: ini.get(ROUTER, "db_map").unwrap(),
-            tb_map: ini.get(ROUTER, "tb_map").unwrap(),
-            field_map: ini.get(ROUTER, "field_map").unwrap(),
+            db_map: Self::get_value(ini, ROUTER, "db_map").unwrap(),
+            tb_map: Self::get_value(ini, ROUTER, "tb_map").unwrap(),
+            col_map: Self::get_value(ini, ROUTER, "col_map").unwrap(),
             topic_map: Self::get_value(ini, ROUTER, "topic_map").unwrap(),
         })
     }

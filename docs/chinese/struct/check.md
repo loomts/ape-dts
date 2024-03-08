@@ -25,7 +25,7 @@ do_events=
 [router]
 db_map=
 tb_map=
-field_map=
+col_map=
 
 [parallelizer]
 parallel_type=rdb_check

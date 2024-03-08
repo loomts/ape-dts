@@ -26,7 +26,7 @@ do_events=insert
 [router]
 db_map=
 tb_map=
-field_map=
+col_map=
 
 [parallelizer]
 parallel_type=snapshot
