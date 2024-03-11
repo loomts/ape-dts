@@ -50,7 +50,7 @@ impl RedisClient {
             if let Ok(Value::Okay) = me.read().await {
                 return Ok(me);
             }
-            return Err(Error::Unexpected(format!("can't cnnect redis: {}", url)));
+            return Err(Error::Unexpected(format!("can't connect redis: {}", url)));
         }
 
         Ok(me)
