@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Debug, fs::File, io::Read, str::FromStr};
+use std::{any::type_name, collections::HashMap, fmt::Debug, fs::File, io::Read, str::FromStr};
 
 use configparser::ini::Ini;
 
@@ -32,36 +32,40 @@ pub struct TaskConfig {
     pub data_marker: Option<DataMarkerConfig>,
 }
 
+// sections
 const EXTRACTOR: &str = "extractor";
-const CHECK_LOG_DIR: &str = "check_log_dir";
 const SINKER: &str = "sinker";
-const DB_TYPE: &str = "db_type";
-const URL: &str = "url";
-const PARALLELIZER: &str = "parallelizer";
 const PIPELINE: &str = "pipeline";
+const PARALLELIZER: &str = "parallelizer";
 const RUNTIME: &str = "runtime";
 const FILTER: &str = "filter";
 const ROUTER: &str = "router";
 const RESUMER: &str = "resumer";
 const DATA_MARKER: &str = "data_marker";
+// keys
+const CHECK_LOG_DIR: &str = "check_log_dir";
+const DB_TYPE: &str = "db_type";
+const URL: &str = "url";
 const BATCH_SIZE: &str = "batch_size";
 const SAMPLE_INTERVAL: &str = "sample_interval";
-const ASTRISK: &str = "*";
 const HEARTBEAT_INTERVAL_SECS: &str = "heartbeat_interval_secs";
 const KEEPALIVE_INTERVAL_SECS: &str = "keepalive_interval_secs";
 const HEARTBEAT_TB: &str = "heartbeat_tb";
 const APP_NAME: &str = "app_name";
+// default values
 const APE_DTS: &str = "APE_DTS";
+const ASTRISK: &str = "*";
 
 impl TaskConfig {
     pub fn new(task_config_file: &str) -> Self {
         let mut config_str = String::new();
         File::open(task_config_file)
-            .unwrap()
+            .expect("failed to open task_config file")
             .read_to_string(&mut config_str)
-            .unwrap();
+            .expect("failed to read task_config content");
         let mut ini = Ini::new();
-        ini.read(config_str).unwrap();
+        ini.read(config_str)
+            .expect("failed to read task_config content as ini");
 
         let (extractor_basic, extractor) = Self::load_extractor_config(&ini).unwrap();
         let (sinker_basic, sinker) = Self::load_sinker_config(&ini).unwrap();
@@ -81,15 +85,17 @@ impl TaskConfig {
     }
 
     fn load_extractor_config(ini: &Ini) -> Result<(BasicExtractorConfig, ExtractorConfig), Error> {
-        let db_type = DbType::from_str(&ini.get(EXTRACTOR, DB_TYPE).unwrap()).unwrap();
-        let extract_type =
-            ExtractType::from_str(&ini.get(EXTRACTOR, "extract_type").unwrap()).unwrap();
-        let url: String = Self::get_value(ini, EXTRACTOR, URL).unwrap();
+        let db_type_str: String = Self::get_required(ini, EXTRACTOR, DB_TYPE);
+        let extract_type_str: String = Self::get_required(ini, EXTRACTOR, "extract_type");
+        let db_type = DbType::from_str(&db_type_str).unwrap();
+        let extract_type = ExtractType::from_str(&extract_type_str).unwrap();
+
+        let url: String = Self::get_optional(ini, EXTRACTOR, URL);
         let heartbeat_interval_secs: u64 =
-            Self::get_value_with_default(ini, EXTRACTOR, HEARTBEAT_INTERVAL_SECS, 10).unwrap();
+            Self::get_with_default(ini, EXTRACTOR, HEARTBEAT_INTERVAL_SECS, 10);
         let keepalive_interval_secs: u64 =
-            Self::get_value_with_default(ini, EXTRACTOR, KEEPALIVE_INTERVAL_SECS, 10).unwrap();
-        let heartbeat_tb = Self::get_value(ini, EXTRACTOR, HEARTBEAT_TB).unwrap();
+            Self::get_with_default(ini, EXTRACTOR, KEEPALIVE_INTERVAL_SECS, 10);
+        let heartbeat_tb = Self::get_optional(ini, EXTRACTOR, HEARTBEAT_TB);
 
         let basic = BasicExtractorConfig {
             db_type: db_type.clone(),
@@ -108,29 +114,22 @@ impl TaskConfig {
                     url,
                     db: String::new(),
                     tb: String::new(),
-                    sample_interval: Self::get_value_with_default(
-                        ini,
-                        EXTRACTOR,
-                        SAMPLE_INTERVAL,
-                        1,
-                    )
-                    .unwrap(),
+                    sample_interval: Self::get_with_default(ini, EXTRACTOR, SAMPLE_INTERVAL, 1),
                 },
 
                 ExtractType::Cdc => ExtractorConfig::MysqlCdc {
                     url,
-                    binlog_filename: ini.get(EXTRACTOR, "binlog_filename").unwrap(),
-                    binlog_position: ini.getuint(EXTRACTOR, "binlog_position").unwrap().unwrap()
-                        as u32,
-                    server_id: ini.getuint(EXTRACTOR, "server_id").unwrap().unwrap(),
+                    binlog_filename: Self::get_optional(ini, EXTRACTOR, "binlog_filename"),
+                    binlog_position: Self::get_optional(ini, EXTRACTOR, "binlog_position"),
+                    server_id: Self::get_required(ini, EXTRACTOR, "server_id"),
                     heartbeat_interval_secs,
                     heartbeat_tb,
                 },
 
                 ExtractType::CheckLog => ExtractorConfig::MysqlCheck {
                     url,
-                    check_log_dir: ini.get(EXTRACTOR, CHECK_LOG_DIR).unwrap(),
-                    batch_size: ini.getuint(EXTRACTOR, BATCH_SIZE).unwrap().unwrap() as usize,
+                    check_log_dir: Self::get_required(ini, EXTRACTOR, CHECK_LOG_DIR),
+                    batch_size: Self::get_required(ini, EXTRACTOR, BATCH_SIZE),
                 },
 
                 ExtractType::Struct => ExtractorConfig::MysqlStruct {
@@ -146,30 +145,24 @@ impl TaskConfig {
                     url,
                     schema: String::new(),
                     tb: String::new(),
-                    sample_interval: Self::get_value_with_default(
-                        ini,
-                        EXTRACTOR,
-                        SAMPLE_INTERVAL,
-                        1,
-                    )
-                    .unwrap(),
+                    sample_interval: Self::get_with_default(ini, EXTRACTOR, SAMPLE_INTERVAL, 1),
                 },
 
                 ExtractType::Cdc => ExtractorConfig::PgCdc {
                     url,
-                    slot_name: ini.get(EXTRACTOR, "slot_name").unwrap(),
-                    pub_name: Self::get_value(ini, EXTRACTOR, "pub_name").unwrap(),
-                    start_lsn: ini.get(EXTRACTOR, "start_lsn").unwrap(),
+                    slot_name: Self::get_required(ini, EXTRACTOR, "slot_name"),
+                    pub_name: Self::get_optional(ini, EXTRACTOR, "pub_name"),
+                    start_lsn: Self::get_optional(ini, EXTRACTOR, "start_lsn"),
                     keepalive_interval_secs,
                     heartbeat_interval_secs,
                     heartbeat_tb,
-                    ddl_command_tb: Self::get_value(ini, EXTRACTOR, "ddl_command_tb").unwrap(),
+                    ddl_command_tb: Self::get_optional(ini, EXTRACTOR, "ddl_command_tb"),
                 },
 
                 ExtractType::CheckLog => ExtractorConfig::PgCheck {
                     url,
-                    check_log_dir: ini.get(EXTRACTOR, CHECK_LOG_DIR).unwrap(),
-                    batch_size: ini.getuint(EXTRACTOR, BATCH_SIZE).unwrap().unwrap() as usize,
+                    check_log_dir: Self::get_required(ini, EXTRACTOR, CHECK_LOG_DIR),
+                    batch_size: Self::get_required(ini, EXTRACTOR, BATCH_SIZE),
                 },
 
                 ExtractType::Struct => ExtractorConfig::PgStruct {
@@ -182,8 +175,7 @@ impl TaskConfig {
 
             DbType::Mongo => {
                 let app_name: String =
-                    Self::get_value_with_default(ini, EXTRACTOR, APP_NAME, APE_DTS.to_string())
-                        .unwrap();
+                    Self::get_with_default(ini, EXTRACTOR, APP_NAME, APE_DTS.to_string());
                 match extract_type {
                     ExtractType::Snapshot => ExtractorConfig::MongoSnapshot {
                         url,
@@ -195,10 +187,9 @@ impl TaskConfig {
                     ExtractType::Cdc => ExtractorConfig::MongoCdc {
                         url,
                         app_name,
-                        resume_token: Self::get_value(ini, EXTRACTOR, "resume_token").unwrap(),
-                        start_timestamp: Self::get_value(ini, EXTRACTOR, "start_timestamp")
-                            .unwrap(),
-                        source: Self::get_value(ini, EXTRACTOR, "source").unwrap(),
+                        resume_token: Self::get_optional(ini, EXTRACTOR, "resume_token"),
+                        start_timestamp: Self::get_optional(ini, EXTRACTOR, "start_timestamp"),
+                        source: Self::get_optional(ini, EXTRACTOR, "source"),
                         heartbeat_interval_secs,
                         heartbeat_tb,
                     },
@@ -206,8 +197,8 @@ impl TaskConfig {
                     ExtractType::CheckLog => ExtractorConfig::MongoCheck {
                         url,
                         app_name,
-                        check_log_dir: ini.get(EXTRACTOR, CHECK_LOG_DIR).unwrap(),
-                        batch_size: ini.getuint(EXTRACTOR, BATCH_SIZE).unwrap().unwrap() as usize,
+                        check_log_dir: Self::get_required(ini, EXTRACTOR, CHECK_LOG_DIR),
+                        batch_size: Self::get_required(ini, EXTRACTOR, BATCH_SIZE),
                     },
 
                     _ => return not_supported_err,
@@ -215,23 +206,23 @@ impl TaskConfig {
             }
 
             DbType::Redis => {
-                let repl_port = ini.getuint(EXTRACTOR, "repl_port").unwrap().unwrap();
+                let repl_port = Self::get_required(ini, EXTRACTOR, "repl_port");
                 match extract_type {
                     ExtractType::Snapshot => ExtractorConfig::RedisSnapshot { url, repl_port },
 
                     ExtractType::SnapshotFile => ExtractorConfig::RedisSnapshotFile {
-                        file_path: ini.get(EXTRACTOR, "file_path").unwrap(),
+                        file_path: Self::get_required(ini, EXTRACTOR, "file_path"),
                     },
 
                     ExtractType::Cdc => ExtractorConfig::RedisCdc {
                         url,
                         repl_port,
-                        repl_id: Self::get_value(ini, EXTRACTOR, "repl_id").unwrap(),
-                        repl_offset: ini.getuint(EXTRACTOR, "repl_offset").unwrap().unwrap(),
+                        repl_id: Self::get_optional(ini, EXTRACTOR, "repl_id"),
+                        repl_offset: Self::get_optional(ini, EXTRACTOR, "repl_offset"),
                         keepalive_interval_secs,
                         heartbeat_interval_secs,
-                        heartbeat_key: Self::get_value(ini, EXTRACTOR, "heartbeat_key").unwrap(),
-                        now_db_id: ini.getint(EXTRACTOR, "now_db_id").unwrap().unwrap(),
+                        heartbeat_key: Self::get_optional(ini, EXTRACTOR, "heartbeat_key"),
+                        now_db_id: Self::get_optional(ini, EXTRACTOR, "now_db_id"),
                     },
 
                     _ => return not_supported_err,
@@ -240,11 +231,11 @@ impl TaskConfig {
 
             DbType::Kafka => ExtractorConfig::Kafka {
                 url,
-                group: ini.get(EXTRACTOR, "group").unwrap(),
-                topic: ini.get(EXTRACTOR, "topic").unwrap(),
-                partition: Self::get_value(ini, EXTRACTOR, "partition").unwrap(),
-                offset: Self::get_value(ini, EXTRACTOR, "offset").unwrap(),
-                ack_interval_secs: Self::get_value(ini, EXTRACTOR, "ack_interval_secs").unwrap(),
+                group: Self::get_required(ini, EXTRACTOR, "group"),
+                topic: Self::get_required(ini, EXTRACTOR, "topic"),
+                partition: Self::get_optional(ini, EXTRACTOR, "partition"),
+                offset: Self::get_optional(ini, EXTRACTOR, "offset"),
+                ack_interval_secs: Self::get_optional(ini, EXTRACTOR, "ack_interval_secs"),
             },
 
             db_type => {
@@ -258,10 +249,13 @@ impl TaskConfig {
     }
 
     fn load_sinker_config(ini: &Ini) -> Result<(BasicSinkerConfig, SinkerConfig), Error> {
-        let db_type = DbType::from_str(&ini.get(SINKER, DB_TYPE).unwrap()).unwrap();
-        let sink_type = SinkType::from_str(&ini.get(SINKER, "sink_type").unwrap()).unwrap();
-        let url: String = Self::get_value(ini, SINKER, URL).unwrap();
-        let batch_size: usize = Self::get_value(ini, SINKER, BATCH_SIZE).unwrap();
+        let db_type_str: String = Self::get_required(ini, SINKER, DB_TYPE);
+        let sink_type_str: String = Self::get_required(ini, SINKER, "sink_type");
+        let db_type = DbType::from_str(&db_type_str).unwrap();
+        let sink_type = SinkType::from_str(&sink_type_str).unwrap();
+
+        let url: String = Self::get_optional(ini, SINKER, URL);
+        let batch_size: usize = Self::get_required(ini, SINKER, BATCH_SIZE);
 
         let basic = BasicSinkerConfig {
             db_type: db_type.clone(),
@@ -269,7 +263,7 @@ impl TaskConfig {
             batch_size,
         };
 
-        let conflict_policy_str: String = Self::get_value(ini, SINKER, "conflict_policy").unwrap();
+        let conflict_policy_str: String = Self::get_optional(ini, SINKER, "conflict_policy");
         let conflict_policy = ConflictPolicyEnum::from_str(&conflict_policy_str).unwrap();
 
         let not_supported_err = Err(Error::ConfigError(format!(
@@ -284,7 +278,7 @@ impl TaskConfig {
                 SinkType::Check => SinkerConfig::MysqlCheck {
                     url,
                     batch_size,
-                    check_log_dir: Self::get_value(ini, SINKER, CHECK_LOG_DIR).unwrap(),
+                    check_log_dir: Self::get_optional(ini, SINKER, CHECK_LOG_DIR),
                 },
 
                 SinkType::Struct => SinkerConfig::MysqlStruct {
@@ -301,7 +295,7 @@ impl TaskConfig {
                 SinkType::Check => SinkerConfig::PgCheck {
                     url,
                     batch_size,
-                    check_log_dir: Self::get_value(ini, SINKER, CHECK_LOG_DIR).unwrap(),
+                    check_log_dir: Self::get_optional(ini, SINKER, CHECK_LOG_DIR),
                 },
 
                 SinkType::Struct => SinkerConfig::PgStruct {
@@ -314,8 +308,7 @@ impl TaskConfig {
 
             DbType::Mongo => {
                 let app_name: String =
-                    Self::get_value_with_default(ini, SINKER, APP_NAME, APE_DTS.to_string())
-                        .unwrap();
+                    Self::get_with_default(ini, SINKER, APP_NAME, APE_DTS.to_string());
                 match sink_type {
                     SinkType::Write => SinkerConfig::Mongo {
                         url,
@@ -327,7 +320,7 @@ impl TaskConfig {
                         url,
                         app_name,
                         batch_size,
-                        check_log_dir: Self::get_value(ini, SINKER, CHECK_LOG_DIR).unwrap(),
+                        check_log_dir: Self::get_optional(ini, SINKER, CHECK_LOG_DIR),
                     },
 
                     _ => return not_supported_err,
@@ -337,22 +330,21 @@ impl TaskConfig {
             DbType::Kafka => SinkerConfig::Kafka {
                 url,
                 batch_size,
-                ack_timeout_secs: ini.getuint(SINKER, "ack_timeout_secs").unwrap().unwrap(),
-                required_acks: ini.get(SINKER, "required_acks").unwrap(),
+                ack_timeout_secs: Self::get_required(ini, SINKER, "ack_timeout_secs"),
+                required_acks: Self::get_required(ini, SINKER, "required_acks"),
             },
 
             DbType::Redis => match sink_type {
                 SinkType::Write => SinkerConfig::Redis {
                     url,
                     batch_size,
-                    method: Self::get_value(ini, SINKER, "method").unwrap(),
-                    is_cluster: Self::get_value(ini, SINKER, "is_cluster").unwrap(),
+                    method: Self::get_optional(ini, SINKER, "method"),
+                    is_cluster: Self::get_optional(ini, SINKER, "is_cluster"),
                 },
 
                 SinkType::Statistic => SinkerConfig::RedisStatistic {
-                    data_size_threshold: Self::get_value(ini, SINKER, "data_size_threshold")
-                        .unwrap(),
-                    statistic_log_dir: Self::get_value(ini, SINKER, "statistic_log_dir").unwrap(),
+                    data_size_threshold: Self::get_optional(ini, SINKER, "data_size_threshold"),
+                    statistic_log_dir: Self::get_optional(ini, SINKER, "statistic_log_dir"),
                 },
 
                 _ => return not_supported_err,
@@ -361,71 +353,65 @@ impl TaskConfig {
             DbType::StarRocks => SinkerConfig::Starrocks {
                 url,
                 batch_size,
-                stream_load_url: Self::get_value(ini, SINKER, "stream_load_url").unwrap(),
+                stream_load_url: Self::get_optional(ini, SINKER, "stream_load_url"),
             },
         };
         Ok((basic, sinker))
     }
 
     fn load_parallelizer_config(ini: &Ini) -> ParallelizerConfig {
-        // compatible with older versions, Paralleizer settings are set under the pipeline section
+        let parallel_type_str: String = Self::get_required(ini, PARALLELIZER, "parallel_type");
         ParallelizerConfig {
-            parallel_size: ini.getuint(PARALLELIZER, "parallel_size").unwrap().unwrap() as usize,
-            parallel_type: ParallelType::from_str(&ini.get(PARALLELIZER, "parallel_type").unwrap())
-                .unwrap(),
+            parallel_size: Self::get_required(ini, PARALLELIZER, "parallel_size"),
+            parallel_type: ParallelType::from_str(&parallel_type_str).unwrap(),
         }
     }
 
     fn load_pipeline_config(ini: &Ini) -> PipelineConfig {
-        let buffer_size = ini.getuint(PIPELINE, "buffer_size").unwrap().unwrap() as usize;
-        let batch_sink_interval_secs: u64 =
-            Self::get_value(ini, PIPELINE, "batch_sink_interval_secs").unwrap();
-        let checkpoint_interval_secs = ini
-            .getuint(PIPELINE, "checkpoint_interval_secs")
-            .unwrap()
-            .unwrap_or(1);
-        let max_rps = Self::get_value(ini, PIPELINE, "max_rps").unwrap();
-
         PipelineConfig {
-            buffer_size,
-            checkpoint_interval_secs,
-            batch_sink_interval_secs,
-            max_rps,
+            buffer_size: Self::get_required(ini, PIPELINE, "buffer_size"),
+            checkpoint_interval_secs: Self::get_with_default(
+                ini,
+                PIPELINE,
+                "checkpoint_interval_secs",
+                10,
+            ),
+            batch_sink_interval_secs: Self::get_optional(ini, PIPELINE, "batch_sink_interval_secs"),
+            max_rps: Self::get_optional(ini, PIPELINE, "max_rps"),
         }
     }
 
     fn load_runtime_config(ini: &Ini) -> Result<RuntimeConfig, Error> {
         Ok(RuntimeConfig {
-            log_level: ini.get(RUNTIME, "log_level").unwrap(),
-            log_dir: ini.get(RUNTIME, "log_dir").unwrap(),
-            log4rs_file: ini.get(RUNTIME, "log4rs_file").unwrap(),
+            log_level: Self::get_with_default(ini, RUNTIME, "log_level", "info".to_string()),
+            log_dir: Self::get_with_default(ini, RUNTIME, "log_dir", "./log4rs.yaml".to_string()),
+            log4rs_file: Self::get_with_default(ini, RUNTIME, "log4rs_file", "./logs".to_string()),
         })
     }
 
     fn load_filter_config(ini: &Ini) -> Result<FilterConfig, Error> {
         Ok(FilterConfig {
-            do_dbs: ini.get(FILTER, "do_dbs").unwrap(),
-            ignore_dbs: ini.get(FILTER, "ignore_dbs").unwrap(),
-            do_tbs: ini.get(FILTER, "do_tbs").unwrap(),
-            ignore_tbs: ini.get(FILTER, "ignore_tbs").unwrap(),
-            do_events: ini.get(FILTER, "do_events").unwrap(),
-            do_ddls: Self::get_value(ini, FILTER, "do_ddls").unwrap(),
-            do_structures: Self::get_value_with_default(
+            do_dbs: Self::get_optional(ini, FILTER, "do_dbs"),
+            ignore_dbs: Self::get_optional(ini, FILTER, "ignore_dbs"),
+            do_tbs: Self::get_optional(ini, FILTER, "do_tbs"),
+            ignore_tbs: Self::get_optional(ini, FILTER, "ignore_tbs"),
+            do_events: Self::get_optional(ini, FILTER, "do_events"),
+            do_ddls: Self::get_optional(ini, FILTER, "do_ddls"),
+            do_structures: Self::get_with_default(
                 ini,
                 FILTER,
                 "do_structures",
                 ASTRISK.to_string(),
-            )
-            .unwrap(),
+            ),
         })
     }
 
     fn load_router_config(ini: &Ini) -> Result<RouterConfig, Error> {
         Ok(RouterConfig::Rdb {
-            db_map: Self::get_value(ini, ROUTER, "db_map").unwrap(),
-            tb_map: Self::get_value(ini, ROUTER, "tb_map").unwrap(),
-            col_map: Self::get_value(ini, ROUTER, "col_map").unwrap(),
-            topic_map: Self::get_value(ini, ROUTER, "topic_map").unwrap(),
+            db_map: Self::get_optional(ini, ROUTER, "db_map"),
+            tb_map: Self::get_optional(ini, ROUTER, "tb_map"),
+            col_map: Self::get_optional(ini, ROUTER, "col_map"),
+            topic_map: Self::get_optional(ini, ROUTER, "topic_map"),
         })
     }
 
@@ -443,40 +429,61 @@ impl TaskConfig {
         }
 
         Ok(Some(DataMarkerConfig {
-            topo_name: ini.get(DATA_MARKER, "topo_name").unwrap(),
-            topo_nodes: ini.get(DATA_MARKER, "topo_nodes").unwrap(),
-            src_node: ini.get(DATA_MARKER, "src_node").unwrap(),
-            dst_node: ini.get(DATA_MARKER, "dst_node").unwrap(),
-            do_nodes: ini.get(DATA_MARKER, "do_nodes").unwrap(),
-            ignore_nodes: Self::get_value(ini, DATA_MARKER, "ignore_nodes").unwrap(),
-            marker: Self::get_value(ini, DATA_MARKER, "marker").unwrap(),
+            topo_name: Self::get_required(ini, DATA_MARKER, "topo_name"),
+            topo_nodes: Self::get_optional(ini, DATA_MARKER, "topo_nodes"),
+            src_node: Self::get_required(ini, DATA_MARKER, "src_node"),
+            dst_node: Self::get_required(ini, DATA_MARKER, "dst_node"),
+            do_nodes: Self::get_required(ini, DATA_MARKER, "do_nodes"),
+            ignore_nodes: Self::get_optional(ini, DATA_MARKER, "ignore_nodes"),
+            marker: Self::get_required(ini, DATA_MARKER, "marker"),
         }))
     }
 
-    fn get_value_with_default<T>(
-        ini: &Ini,
-        section: &str,
-        key: &str,
-        default: T,
-    ) -> Result<T, <T as FromStr>::Err>
+    fn get_required<T>(ini: &Ini, section: &str, key: &str) -> T
     where
         T: FromStr,
-        <T as FromStr>::Err: Debug,
     {
         if let Some(value) = ini.get(section, key) {
             if !value.is_empty() {
-                return value.parse::<T>();
+                return Self::parse_value(section, key, &value).unwrap();
             }
         }
-        Ok(default)
+        panic!("config [{}].{} does not exist or is empty", section, key);
     }
 
-    fn get_value<T>(ini: &Ini, section: &str, key: &str) -> Result<T, <T as FromStr>::Err>
+    fn get_optional<T>(ini: &Ini, section: &str, key: &str) -> T
     where
         T: Default,
         T: FromStr,
         <T as FromStr>::Err: Debug,
     {
-        Self::get_value_with_default(ini, section, key, T::default())
+        Self::get_with_default(ini, section, key, T::default())
+    }
+
+    fn get_with_default<T>(ini: &Ini, section: &str, key: &str, default: T) -> T
+    where
+        T: FromStr,
+        <T as FromStr>::Err: Debug,
+    {
+        if let Some(value) = ini.get(section, key) {
+            return Self::parse_value(section, key, &value).unwrap();
+        }
+        default
+    }
+
+    fn parse_value<T>(section: &str, key: &str, value: &str) -> Result<T, Error>
+    where
+        T: FromStr,
+    {
+        match value.parse::<T>() {
+            Ok(v) => Ok(v),
+            Err(_) => Err(Error::ConfigError(format!(
+                "config [{}].{}={}, can not be parsed as {}",
+                section,
+                key,
+                value,
+                type_name::<T>(),
+            ))),
+        }
     }
 }
