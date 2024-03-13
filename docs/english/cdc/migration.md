@@ -1,13 +1,15 @@
 # Introduction
-- Subscribe to data changes in source and sync them to target
 
-- Preconditions
-    - mysql: enables binlog in source
-    - pg: set wal_level = logical in source
-    - mongo: The source instance must be ReplicaSet
-    - Also refer to: [init test env](../../../dt-tests/README.md)
+Subscribe to data changes in the source database and sync them to the target.
 
-# Example: mysql_to_mysql
+Prerequisites
+    - MySQL: Enables binlog in the source database;
+    - PG: Sets wal_level = logical in the source database;
+    - Mongo: The source instance must be ReplicaSet;
+    - For more informaiton, refer to [init test env](../../../dt-tests/README.md).
+
+# Example: MySQL_to_MySQL
+
 ```
 [extractor]
 db_type=mysql
@@ -49,14 +51,16 @@ log_level=info
 log4rs_file=./log4rs.yaml
 ```
 
-# Parallel
+# Parallel computing
+
 - mysql/pg: parallel_type=rdb_merge
 - mongo: parallel_type=mongo
 - redis: parallel_type=redis
 
-# Other configs
-- [filter], [router]: refer to [config details](../config.md)
-- Also refer to task_config.ini in tests:
+# Other configurations
+
+- For [filter] and [router], refer to [config details](../config.md).
+- Refer to task_config.ini in tests:
     - dt-tests/tests/mysql_to_mysql/cdc
     - dt-tests/tests/pg_to_pg/cdc
     - dt-tests/tests/mongo_to_mongo/cdc
