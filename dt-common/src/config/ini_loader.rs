@@ -47,7 +47,9 @@ impl IniLoader {
         <T as FromStr>::Err: Debug,
     {
         if let Some(value) = self.ini.get(section, key) {
-            return Self::parse_value(section, key, &value).unwrap();
+            if !value.is_empty() {
+                return Self::parse_value(section, key, &value).unwrap();
+            }
         }
         default
     }
