@@ -11,7 +11,10 @@ const SLOTS_COUNT: u16 = 16384;
 
 impl RedisUtil {
     pub async fn create_redis_conn(url: &str) -> Result<redis::Connection, Error> {
-        let conn = redis::Client::open(url).unwrap().get_connection().unwrap();
+        let conn = redis::Client::open(url)
+            .unwrap()
+            .get_connection()
+            .expect(&format!("can not connect: {}", url));
         Ok(conn)
     }
 
