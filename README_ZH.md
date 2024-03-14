@@ -1,13 +1,14 @@
 # [English](README.md) | 中文
 
 # 简介
-- ape-dts 是一款旨在实现 any-to-any 的数据迁移工具
-- 简单，不依赖第三方组件和额外存储
-- rust
 
+- ape-dts 是一款旨在实现 any-to-any 的数据迁移工具。
+- 简单，不依赖第三方组件和额外存储。
+- 使用 Rust。
 
 ## 支持任务类型
-- 目前成熟的任务类型有：
+
+目前已成熟的任务类型有：
 
 <br/>
 
@@ -20,13 +21,15 @@
 
 
 # 快速上手
-- 1，运行我们已发布的 docker 镜像，快速直观感受其功能
-- 2，执行测试用例，了解更多细节
+
+1. 运行我们已发布的 docker 镜像，快速直观感受其功能。
+2. 执行测试用例，了解更多细节。
 
 
 ## 运行 demo
-- 任务配置为 ini 格式，[配置详解](./docs/chinese/config.md)，[全量迁移配置](./docs/chinese/snapshot/migration.md)，[增量迁移配置](./docs/chinese/cdc/migration.md)
-- 启动镜像并执行任务
+
+任务配置为 ini 格式，详情可参考 [配置详解](./docs/chinese/config.md)，[全量迁移配置](./docs/chinese/snapshot/migration.md)，[增量迁移配置](./docs/chinese/cdc/migration.md)。
+- 启动镜像并执行任务。
 
 ```
 docker run -it \
@@ -37,7 +40,7 @@ apecloud/ape-dts:0.1.13.hotfix4 \
 ```
 
 ## 测试用例
-- [参考](./dt-tests/README_ZH.md)
+- [参考文档](./dt-tests/README_ZH.md)
 
 # 更多文档
 - 配置
@@ -72,12 +75,14 @@ apecloud/ape-dts:0.1.13.hotfix4 \
 - dt-precheck: 任务预检查，**这部分将被移除**
 
 ## 写代码
+
 ```
 cargo build
 cargo clippy --workspace
 ```
 
 ## 创建 docker 镜像
+
 - arm64
 ```
 docker buildx build \
