@@ -1,5 +1,7 @@
-# 示例: mysql_to_mysql 
+# 示例: MySQL_to_MySQL
+
 ## 全量
+
 ```
 [extractor]
 db_type=mysql
@@ -91,7 +93,7 @@ log_dir=./logs
 | extract_type | 拉取类型（全量：snapshot，增量：cdc） | snapshot |
 | url | 源库连接信息 | mysql://root:123456@127.0.0.1:3307 |
 
-- 不同任务类型还需要不同参数，参考各个示例详情
+不同任务类型需要不同的参数，详情请参考各个示例。
 
 # [sinker]
 | 配置 | 作用 | 示例 |
@@ -101,7 +103,7 @@ log_dir=./logs
 | url | 目标库连接信息 | mysql://root:123456@127.0.0.1:3308 |
 | batch_size | 批量写入数据条数，1 代表串行 | 200 |
 
-- 不同任务类型还需要不同参数，参考各个示例详情
+不同任务类型需要不同的参数，详情请参考各个示例。
 
 # [filter]
 
@@ -111,18 +113,19 @@ log_dir=./logs
 | ignore_dbs | 需过滤的库 | db_1,db_2*,\`db*&#\` |
 | do_tbs | 需同步的表 | db_1.tb_1,db_2*.tb_2*,\`db*&#\`.\`tb*&#\` |
 | ignore_tbs | 需过滤的表 | db_1.tb_1,db_2*.tb_2*,\`db*&#\`.\`tb*&#\` |
-| do_events | 需同步的事件 | insert,update,delete |
-
+| do_events | 需同步的事件 | insert、update、delete |
 
 ## 取值范围
-- 所有配置项均支持配置多条，如 do_dbs 可包含多个库，以 , 分隔
-- 如某配置项需匹配所有，则设置成 *，如 do_dbs=\*
-- 如某配置项不匹配任何，则设置成空，如 ignore_dbs=
-- do_events 取值：insert，update，delete 中一个或多个
+
+- 所有配置项均支持多条配置，如 do_dbs 可包含多个库，以 , 分隔。
+- 如某配置项需匹配所有条目，则设置成 *，如 do_dbs=\*。
+- 如某配置项不匹配任何条目，则设置成空，如 ignore_dbs=。
+- do_events 取值：insert、update、delete 中的一个或多个。
 
 ## 优先级
-- ignore_tbs + ignore_tbs > do_tbs + do_dbs
-- 如果某张表既匹配了 ignore 项，又匹配了 do 项，该表会被过滤
+
+- ignore_tbs + ignore_tbs > do_tbs + do_dbs。
+- 如果某张表既匹配了 ignore 项，又匹配了 do 项，则该表会被过滤。
 
 ## 通配符
 
@@ -131,7 +134,7 @@ log_dir=./logs
 | * | 匹配多个字符 |
 | ? | 匹配 0 或 1 个字符 |
 
-- 适用范围：do_dbs，ignore_dbs，do_tbs，ignore_tbs
+适用范围：do_dbs，ignore_dbs，do_tbs，ignore_tbs
 
 
 ## 转义符
@@ -143,8 +146,9 @@ log_dir=./logs
 | pg | db*&# | "db*&#" |
 | pg | db*&#.tb*$# | "db*&#"."tb*$#" |
 
-- 如果表名/库名包含特殊字符，需要用相应的转义符括起来
-- 适用范围：do_dbs，ignore_dbs，do_tbs，ignore_tbs
+如果表名/库名包含特殊字符，需要用相应的转义符括起来。
+
+适用范围：do_dbs，ignore_dbs，do_tbs，ignore_tbs。
 
 # [router]
 | 配置 | 作用 | 示例 |
@@ -154,26 +158,30 @@ log_dir=./logs
 | col_map | 列级映射 | db_1.tb_1.f_1:dst_db_1.dst_tb_1.dst_f_1,db_1.tb_1.f_2:dst_db_1.dst_tb_1.dst_f_2 |
 
 ## 取值范围
-- 一个映射规则包括源和目标， 以 : 分隔
-- 所有配置项均支持配置多条，如 db_map 可包含多个库映射，以 , 分隔
-- 如果不配置，则默认 源库/表/列 与 目标库/表/列 一致，这也是大多数情况
+
+- 一个映射规则包括源和目标， 以 : 分隔。
+- 所有配置项均支持配置多条，如 db_map 可包含多个库映射，以 , 分隔。
+- 如果不配置，则默认 **源库/表/列** 与 **目标库/表/列** 一致，这也是大多数情况。
 
 ## 优先级
-- tb_map > db_map
-- col_map 只专注于 列 映射，而不做 库/表 映射，也就是说，如果某张表需要 库 + 表 + 列 映射，需先配置好 tb_map 和 db_map，且 col_map 中的 库/表 映射规则需和 tb_map/db_map 的映射规则保持一致
+
+- tb_map > db_map。
+- col_map 只专注于 **列** 映射，而不做 **库/表** 映射。也就是说，如果某张表需要 **库 + 表 + 列** 映射，需先配置好 tb_map 和 db_map，且 col_map 中的 **库/表** 映射规则需和 tb_map/db_map 的映射规则保持一致。
 
 ## 通配符
-- 不支持
+
+不支持。
 
 ## 转义符
-- 和 [filter] 的规则一致
+
+和 [filter] 的规则一致。
 
 # [pipeline]
 | 配置 | 作用 | 示例 |
 | :-------- | :-------- | :-------- |
-| buffer_size | 内存中最多缓存数据条数，数据同步采用多线程 & 批量写入，故须配置此项 | 16000 |
+| buffer_size | 内存中最多缓存数据的条数，数据同步采用多线程 & 批量写入，故须配置此项 | 16000 |
 | checkpoint_interval_secs | 任务当前状态（统计数据，同步位点信息等）写入日志的频率，单位：秒 | 10 |
-| max_rps | 可选，限制每秒最多同步数据条数，避免对数据库性能影响 | 1000 |
+| max_rps | 可选，限制每秒最多同步数据的条数，避免对数据库性能影响 | 1000 |
 
 # [parallelizer]
 | 配置 | 作用 | 示例 |
@@ -192,7 +200,8 @@ log_dir=./logs
 | rdb_check | 和 snapshot 类似，但如果源表没有主键/唯一键，则采用单线程串行写入 | mysql/pg/mongo 全量校验 |  |  |
 | redis | 单线程，批量/串行（由 sinker 的 batch_size 决定）写入 | redis 全量/增量 |  |  |
 
-- 根据不同任务类型，选择不同 parallel_type，参考各种任务示例详情页
+不同任务类型需要不同的 parallel_type，详情请参考各个示例。
+
 
 
 # [runtime]
@@ -202,4 +211,4 @@ log_dir=./logs
 | log4rs_file | log4rs 配置地点，通常不需要改 | ./log4rs.yaml |
 | log_dir | 日志输出目录 | ./logs |
 
-- 通常不需要修改
+通常不需要修改。

@@ -1,15 +1,18 @@
 # 简介
-- 在任务运行过程中，我们提供了一系列 counter 来记录当前状态
-- counter 会定时（[pipeline] 的 checkpoint_interval_secs 配置）写入到 monitor.log
+
+在任务运行过程中，我们提供了一系列 counter 来记录当前状态。counter 会定时（[pipeline] 的 checkpoint_interval_secs 配置）写入到 monitor.log。
 
 # 时间窗口 counter
-- 该类 counter 本身是一个数组容器，任务运行时，每当状态变化（如：成功写入一批数据到目标），就会往 counter 容器中推入一个新的 sub counter，用于记录该次变化产生的增量（如：该次写入的数据条数）
-- counter 具有时间窗口（如：10s），超出窗口的旧数据会被丢弃，保证只包含最近一个时间窗口的数据
-- 用于记录动态实时数据，如：最近一个时间窗口内，同步的数据条数
-- counter 上还会提供一系列聚合算法，如：最近一个时间窗口内，平均每秒同步的数据条数
+
+该类 counter 本身是一个数组容器。任务运行时，每当状态变化（如：成功写入一批数据到目标），就会往 counter 容器中推入一个新的 sub counter，用于记录该次变化产生的增量（如：该次写入的数据条数）。
+
+- counter 具有时间窗口（如：10s），超出窗口的旧数据会被丢弃，保证只包含最近一个时间窗口的数据。
+- counter 用于记录动态实时数据，如：最近一个时间窗口内，同步的数据条数。
+- counter 上还会提供一系列聚合算法，如：最近一个时间窗口内，平均每秒同步的数据条数。
 
 ## 聚合方式
-- 对于时间窗口类型的 counter，我们还提供了该 counter 在窗口内的一系列聚合算法
+
+对于时间窗口类型的 counter，我们提供了该 counter 在窗口内的一系列聚合算法。
 
 
 | 聚合方式 | 说明 | 例子 |
@@ -21,7 +24,8 @@
 | max_by_sec | 将 sub counter 按时间顺序分布到每一秒，并对属于同一秒的 sub counter 各自取和，然后找出具有最大取和的那一秒的数据 | 单秒内从源库拉取的最大数据条数 |
 
 # 无窗口 counter
-- 该类 counter 就是一个简单的计数器，用于记录累计数据，如：当前任务总共已同步数据条数。
+
+该类 counter 就是一个简单的计数器，用于记录累计数据，如：当前任务总共已同步数据条数。
 
 ## 聚合方式
 
@@ -31,7 +35,9 @@
 
 
 # 实际使用
+
 ## 时间窗口配置
+
 ```
 [pipeline]
 checkpoint_interval_secs=10
@@ -70,9 +76,10 @@ checkpoint_interval_secs=10
 | sum | 窗口内，总共拉取数据 bytes |
 | max_by_sec | 窗口内，每秒最大拉取数据 bytes |
 
-
 ## sinker
+
 ### monitor.log
+
 ```
 2024-02-29 01:25:09.554461 | sinker | rt_per_query | avg=3369 | sum=23585 | max=6408
 2024-02-29 01:25:09.554503 | sinker | record_count | avg_by_sec=13 | sum=13 | max_by_sec=13
@@ -81,6 +88,7 @@ checkpoint_interval_secs=10
 ```
 
 ### counter 说明
+
 | counter | 窗口类型 | 说明 |
 | :-------- | :-------- | :-------- |
 | rt_per_query | 时间窗口 | 单次写入耗时，单位：微秒 |

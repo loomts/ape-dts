@@ -1,11 +1,12 @@
-
 # 简介
-- liquibase 是一款管理数据库结构变更的开源软件，[官网](https://www.liquibase.org/)，[git 仓库](https://github.com/liquibase/liquibase)
-- 基于 liquibase 提供了数据库结构对比功能，我们包装了 docker 镜像 apecloud/ape-dts-structure-checker:0.0.1，用于结构迁移后的校验，相应代码改动位于 [git 仓库](https://github.com/qianyiwen2019/liquibase/tree/ape_diff_tool)
 
+Liquibase 是一款管理数据库结构变更的开源软件，点击 [Liquibase 官网](https://www.liquibase.org/) 和 [Git 仓库](https://github.com/liquibase/liquibase) 可了解详情。
+
+基于 Liquibase 提供的数据库结构对比功能，我们包装了 docker 镜像 apecloud/ape-dts-structure-checker:0.0.1，用于结构迁移后的校验，相应代码改动位于此 [Git 仓库](https://github.com/qianyiwen2019/liquibase/tree/ape_diff_tool)。
 
 # 用例
-## mysql
+
+## MySQL
 ```
 docker run \
 -e URL="jdbc:mysql://host.docker.internal:3308/test_db_1?useSSL=false" \
@@ -17,7 +18,7 @@ docker run \
 apecloud/ape-dts-structure-checker:0.0.1
 ```
 
-## pg
+## PG
 ```
 docker run \
 -e URL="jdbc:postgresql://host.docker.internal:5438/postgres?currentSchema=struct_check_test_1" \
@@ -30,15 +31,17 @@ apecloud/ape-dts-structure-checker:0.0.1
 ```
 
 # 参数说明
-- URL：目标库地址
-- USERNAME：目标库用户名
-- PASSWORD：目标库密码
-- REFERENCE_URL：源库地址
-- REFERENCE_USERNAME：源库用户名
-- REFERENCE_PASSWORD：源库密码
+
+- URL：目标库地址。
+- USERNAME：目标库用户名。
+- PASSWORD：目标库密码。
+- REFERENCE_URL：源库地址。
+- REFERENCE_USERNAME：源库用户名。
+- REFERENCE_PASSWORD：源库密码。
 
 # 校验结果
-- 类似如下：
+
+校验结果类似如下：
 ```
 Compared Schemas: test_db_1
 Product Name: EQUAL
