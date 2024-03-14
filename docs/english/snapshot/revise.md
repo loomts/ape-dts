@@ -1,6 +1,8 @@
 # Introduction
-- Revise task is based on check results
-- Check results specify which rows to be fixed, we still need to get the current data for each row from source, and then fix target with it
+
+Based on the check results, you can initiate a revision task.
+
+The check results serve as a guide for specifying the scope for revision, and you still need to get the current data for each row from the source database, to fix the data.
 
 # Example: mysql_to_mysql
 ```
@@ -43,8 +45,9 @@ log4rs_file=./log4rs.yaml
 log_dir=./logs
 ```
 
-## Explain
-- Differences with snapshot migration config:
+## Note
+
+While this configuration is similar to that of snapshot migration, the only differences are:
 
 ```
 [extractor]
@@ -52,9 +55,10 @@ extract_type=check_log
 check_log_dir=./dt-tests/tests/mysql_to_mysql/revise/basic_test/check_log
 ```
 
-# Other configs
-- [router]: refer to [config details](../config.md)
-- Also refer to task_config.ini in tests:
+# Other configurations
+
+- For [router], refer to [config details](../config.md).
+- Refer to task_config.ini in tests:
     - dt-tests/tests/mysql_to_mysql/revise
     - dt-tests/tests/pg_to_pg/revise
     - dt-tests/tests/mongo_to_mongo/revise

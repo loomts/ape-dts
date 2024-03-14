@@ -1,8 +1,10 @@
 # 简介
-- 基于校验结果，可发起订正任务
-- 校验结果起到指定订正范围的作用，每条数据仍需回查源库以获取当前值，并基于当前值对目标库订正
 
-# 示例: mysql_to_mysql
+基于校验结果，您可发起订正任务。
+
+校验结果起到指定订正范围的作用。每条数据仍需回查源库以获取当前值，并基于当前值和目标库进行订正。
+
+# 示例: MySQL_to_MySQL
 ```
 [extractor]
 db_type=mysql
@@ -44,7 +46,8 @@ log_dir=./logs
 ```
 
 ## 说明
-- 主要配置和全量同步任务一致，不同处包括：
+
+此配置和全量同步任务的基本一致，两者的不同之处是：
 
 ```
 [extractor]
@@ -53,7 +56,8 @@ check_log_dir=./dt-tests/tests/mysql_to_mysql/revise/basic_test/check_log
 ```
 
 # 其他配置
-- 支持 [router]，参考 [配置详解](../config.md)
+
+- 支持 [router]，详情请参考 [配置详解](../config.md)。
 - 参考各类型集成测试的 task_config.ini：
     - dt-tests/tests/mysql_to_mysql/revise
     - dt-tests/tests/pg_to_pg/revise

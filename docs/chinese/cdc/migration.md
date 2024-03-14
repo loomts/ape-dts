@@ -4,7 +4,7 @@
 
 前提条件
     - MySQL：源库开启 binlog；
-    - PG：源库设置 wal_level = logical；
+    - PG：源库设置 `wal_level = logical`；
     - Mongo：源库需为 ReplicaSet；
     - 详情请参考 [测试环境搭建](../../../dt-tests/README_ZH.md)。
 
@@ -53,13 +53,13 @@ log4rs_file=./log4rs.yaml
 
 # 并发算法
 
-- mysql/pg：parallel_type=rdb_merge
-- mongo：parallel_type=mongo
-- redis：parallel_type=redis
+- MySQL/PG：parallel_type=rdb_merge
+- Mongo：parallel_type=mongo
+- Redis：parallel_type=redis
 
 # 其他配置参考
 
-- [filter]、[route] 等请参考 [配置详解](../config.md)。
+- [filter]、[route] 等配置请参考 [配置详解](../config.md)。
 - 参考各类型集成测试的 task_config.ini：
     - dt-tests/tests/mysql_to_mysql/cdc
     - dt-tests/tests/pg_to_pg/cdc

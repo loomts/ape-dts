@@ -4,7 +4,7 @@ Subscribe to data changes in the source database and sync them to the target.
 
 Prerequisites
     - MySQL: Enables binlog in the source database;
-    - PG: Sets wal_level = logical in the source database;
+    - PG: Sets `wal_level = logical` in the source database;
     - Mongo: The source instance must be ReplicaSet;
     - For more informaiton, refer to [init test env](../../../dt-tests/README.md).
 
@@ -53,9 +53,9 @@ log4rs_file=./log4rs.yaml
 
 # Parallel computing
 
-- mysql/pg: parallel_type=rdb_merge
-- mongo: parallel_type=mongo
-- redis: parallel_type=redis
+- MySQL/PG: parallel_type=rdb_merge
+- Mongo: parallel_type=mongo
+- Redis: parallel_type=redis
 
 # Other configurations
 

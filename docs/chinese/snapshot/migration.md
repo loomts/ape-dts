@@ -1,9 +1,13 @@
 # 简介
-- 全量任务如果包含多个库/多张表，则会按照 **先库后表** 排序，各张表 **依次同步**，有且只有一张表处于同步中
-- 如果表具有单一主键/唯一键，则 extractor 会以此键作为排序列，并从小到大分片拉取，每批大小为 [pipeline] 的 buffer_size
-- 如果表没有排序列，则 extractor 会流式拉取该表所有数据
 
-# 示例: mysql_to_mysql
+如果全量任务包含多个库/多张表，则会按照 **先库后表** 排序，**依次同步** 各张表，每次有且只有一张表处于同步中。
+
+如果表具有单一主键/唯一键，则 extractor 会以此键作为排序列，并从小到大分片拉取每批大小为 [pipeline] 的 `buffer_size`。
+
+如果表没有排序列，则 extractor 会流式拉取该表所有数据。
+
+# 示例: MySQl_to_MySQl
+
 ```
 [extractor]
 db_type=mysql
@@ -43,18 +47,20 @@ log_dir=./logs
 ```
 
 # 并发算法
-- redis_to_redis：parallel_type=redis
+
+- Redis_to_Redis：parallel_type=redis
 - 其它：parallel_type=snapshot
 
 # 其他配置参考
-- [filter]，[router] 等配置参考 [配置详解](../config.md)
+
+- [filter]、[router] 等配置请参考 [配置详解](../config.md)。
 - 参考各类型集成测试的 task_config.ini：
     - dt-tests/tests/mysql_to_mysql/snapshot
     - dt-tests/tests/pg_to_pg/snapshot
     - dt-tests/tests/mongo_to_mongo/snapshot
     - dt-tests/tests/redis_to_redis/snapshot
 
-- 需根据需要，修改性能参数：
+- 按需修改性能参数：
 ```
 [pipeline]
 buffer_size=16000
