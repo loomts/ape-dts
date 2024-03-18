@@ -28,7 +28,7 @@
 
 ## 运行 demo
 
-任务配置为 ini 格式，详情可参考 [配置详解](./docs/chinese/config.md)，[全量迁移配置](./docs/chinese/snapshot/migration.md)，[增量迁移配置](./docs/chinese/cdc/migration.md)。
+任务配置为 ini 格式，详情可参考 [配置详解](./docs/zh/config.md)，[全量迁移配置](./docs/zh/snapshot/migration.md)，[增量迁移配置](./docs/zh/cdc/migration.md)。
 - 启动镜像并执行任务。
 
 ```
@@ -44,24 +44,24 @@ apecloud/ape-dts:0.1.13.hotfix4 \
 
 # 更多文档
 - 配置
-    - [配置详解](./docs/chinese/config.md)
+    - [配置详解](./docs/zh/config.md)
 - 全量任务
-    - [迁移](./docs/chinese/snapshot/migration.md)
-    - [校验](./docs/chinese/snapshot/check.md)
-    - [订正](./docs/chinese/snapshot/revise.md)
-    - [复查](./docs/chinese/snapshot/review.md)
-    - [断点续传](./docs/chinese/snapshot/resume.md)
+    - [迁移](./docs/zh/snapshot/migration.md)
+    - [校验](./docs/zh/snapshot/check.md)
+    - [订正](./docs/zh/snapshot/revise.md)
+    - [复查](./docs/zh/snapshot/review.md)
+    - [断点续传](./docs/zh/snapshot/resume.md)
 - 增量任务
-    - [迁移](./docs/chinese/cdc/migration.md)
-    - [心跳](./docs/chinese/cdc/heartbeat.md)
-    - [双向同步](./docs/chinese/cdc/two_way.md)
+    - [迁移](./docs/zh/cdc/migration.md)
+    - [心跳](./docs/zh/cdc/heartbeat.md)
+    - [双向同步](./docs/zh/cdc/two_way.md)
 - 监控
-    - [监控](./docs/chinese/monitor.md)
-    - [位点信息](./docs/chinese/position.md)
+    - [监控](./docs/zh/monitor.md)
+    - [位点信息](./docs/zh/position.md)
 
 # 开发
 ## 架构
-![架构](docs/pics/structure.png)
+![架构](docs/img/structure.png)
 
 ## 模块
 - dt-main：程序启动入口
@@ -98,6 +98,9 @@ docker buildx build \
 ```
 
 # 技术交流
-<div align=center>
-<img src="docs/pics/WechatIMG.jpg" width="40%" />
+[Slack社区](https://join.slack.com/t/kubeblocks/shared_invite/zt-22cx2f84x-BPZvnLRqBOGdZ_XSjELh4Q)
+
+微信交流
+<div align=left>
+<img src="docs/img/WechatIMG.jpg" width="40%" />
 </div>

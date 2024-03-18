@@ -17,17 +17,17 @@ async fn cdc_basic_test() {
   - dst_test.sql
 
 - Typical steps for running a test: 
-  - 1, execute src_prepare.sql in source database
-  - 2, execute dst_prepare.sql in target database
-  - 3, start data sync task
-  - 4, sleep some milliseconds for task initialization
-  - 5, execute src_test.sql in source database
-  - 6, execute dst_test.sql in target database
-  - 7, sleep some milliseconds for data sync
-  - 8, compare data of source and target
+  - 1, execute src_prepare.sql in source database.
+  - 2, execute dst_prepare.sql in target database.
+  - 3, start data sync task.
+  - 4, sleep some milliseconds for task initialization.
+  - 5, execute src_test.sql in source database.
+  - 6, execute dst_test.sql in target database.
+  - 7, sleep some milliseconds for data sync.
+  - 8, compare data of source and target.
 
 # Config
-- All database urls are configured in .env file and referenced in task_config.ini of tests
+- All database urls are configured in .env file and referenced in task_config.ini of tests.
 
 ```
 [extractor]
@@ -39,11 +39,11 @@ url={mysql_sinker_url}
 
 # Init test env
 
-- Examples work in docker, mac
+- Examples work in docker, mac.
 
-# postgres
+# Postgres
 
-## source
+## Source
 ```
 docker run --name some-postgres-1 \
 -p 5433:5432 \
@@ -52,7 +52,7 @@ docker run --name some-postgres-1 \
 -d postgis/postgis:latest
 ```
 
-- To run cdc test, set wal_level
+- To run cdc test, set wal_level.
 
 ```
 docker exec -it some-postgres-1 bash
@@ -62,7 +62,7 @@ psql -h 127.0.0.1 -U postgres -d postgres -p 5432 -W
 ALTER SYSTEM SET wal_level = logical;
 ```
 
-## target
+## Target
 
 ```
 docker run --name some-postgres-2 \
@@ -73,7 +73,7 @@ docker run --name some-postgres-2 \
 ```
 
 ## To run [charset tests](../dt-tests/tests/pg_to_pg/snapshot/charset_euc_cn_test)
-- create database "postgres_euc_cn" in both source and target
+- Create database "postgres_euc_cn" in both source and target.
 
 ```
 CREATE DATABASE postgres_euc_cn
@@ -83,9 +83,9 @@ CREATE DATABASE postgres_euc_cn
   TEMPLATE template0;
 ```
 
-# mysql
+# MySQL
 
-## source
+## Source
 
 ```
 docker run -d --name some-mysql-1 \
@@ -104,7 +104,7 @@ docker run -d --name some-mysql-1 \
  --default_time_zone=+08:00
 ```
 
-## target
+## Target
 
 ```
 docker run -d --name some-mysql-2 \
@@ -123,18 +123,18 @@ docker run -d --name some-mysql-2 \
  --default_time_zone=+07:00
 ```
 
-# mongo
+# Mongo
 
-## source
-- Mongo source needs to be ReplicaSet which supports cdc
+## Source
+- Mongo source needs to be ReplicaSet which supports cdc.
 
-- 1, create docker network
+- 1, Create docker network.
 
 ```
 docker network create mongo-network
 ```
 
-- 2, create mongo ReplicaSet containers
+- 2, Create mongo ReplicaSet containers.
 
 ```
 docker run -d --name mongo1 --network mongo-network -p 9042:9042 mongo:6.0 --replSet rs0  --port 9042
@@ -142,7 +142,7 @@ docker run -d --name mongo2 --network mongo-network -p 9142:9142 mongo:6.0 --rep
 docker run -d --name mongo3 --network mongo-network -p 9242:9242 mongo:6.0 --replSet rs0  --port 9242
 ```
 
-- 3, setup ReplicaSet
+- 3, Setup ReplicaSet.
 
 ```
 - enter any container
@@ -157,26 +157,26 @@ mongosh --host localhost --port 9042
 > rs.status()
 ```
 
-- 4, create user
+- 4, Create user.
 
 ```
 > use admin
 > db.createUser({user: "ape_dts", pwd: "123456", roles: ["root"]})
 ```
 
-- 5, update /etc/hosts on mac
+- 5, Update /etc/hosts on mac.
 
 ```
 127.0.0.1 mongo1 mongo2 mongo3
 ```
 
-- 6, test connecting
+- 6, Test connecting.
 
 ```
 mongo "mongodb://ape_dts:123456@mongo1:9042/?replicaSet=rs0"
 ```
 
-## target
+## Target
 
 ```
 docker run -d --name dst-mongo \
@@ -186,9 +186,9 @@ docker run -d --name dst-mongo \
 	mongo:6.0
 ```
 
-# redis
-## images
-- Data format varies in different redis versions, we support 2.8 - 7.*, rebloom, rejson
+# Redis
+## Images
+- Data format varies in different redis versions, we support 2.8 - 7.*, rebloom, rejson.
 - redis:7.0
 - redis:6.0
 - redis:6.2
@@ -197,9 +197,9 @@ docker run -d --name dst-mongo \
 - redis:2.8.22
 - redislabs/rebloom:2.6.3
 - redislabs/rejson:2.6.4
-- Can not deploy 2.8,rebloom,rejson on mac, you may deploy them in EKS(amazon)/AKS(azure)/ACK(alibaba), refer to: dt-tests/k8s/redis
+- Can not deploy 2.8,rebloom,rejson on mac, you may deploy them in EKS(amazon)/AKS(azure)/ACK(alibaba), refer to: dt-tests/k8s/redis.
 
-## source
+## Source
 
 ```
 docker run --name src-redis-7-0 \
@@ -238,7 +238,7 @@ docker run --name src-redis-4-0 \
     --loglevel warning
 ```
 
-## target
+## Target
 
 ```
 docker run --name dst-redis-7-0 \

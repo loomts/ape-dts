@@ -4,12 +4,12 @@
 
 # 增量
 
-对于 CDC 任务，因为我们只保证目标库与源库的最终一致性，而不保证源库事务在目标库重放时的完整性，position.log 中记录 current_position 和 checkpoint_position 两份信息。
+对于增量任务，因为我们只保证目标库与源库的最终一致性，而不保证源库事务在目标库重放时的完整性，position.log 中记录 current_position 和 checkpoint_position 两份信息。
 
 - current_position：已同步的数据的位点信息，可能处在源库某个大事务 binlog 的中间位置。
 - checkpoint_position：已同步的完整的事务的位点信息。
 
-如果任务中断，要使用 position.log 中的位点信息做断点续传。优先使用 checkpoint_position 作为新 CDC 任务的起点，使用 current_position 可能导致 extractor 解析 CDC 数据失败。
+如果任务中断，要使用 position.log 中的位点信息做断点续传，优先使用 checkpoint_position 作为新任务的起点，使用 current_position 可能导致 extractor 解析增量数据失败。
 
 ## MySQL
 
@@ -29,7 +29,7 @@
 
 ## Mongo
 
-Mongo CDC 任务没有记录 checkpoint_position，您可以：
+Mongo 增量任务没有记录 checkpoint_position，您可以：
 
 - 使用 operation_time 做断点续传（对应 extractor 配置 source=op_log）。
 - 使用 resume_token 做断点续传（对应 extractor 配置 source=change_stream）。

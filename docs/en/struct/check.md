@@ -43,7 +43,7 @@ log_dir=./logs
 
 # Results
 
-Based on the source structure, the check results include **miss**, **diff** and **extra**, all presented in sql. Besides, `miss.log` contains src_sqls, `diff.log` contains src_sqls and dst_sqls, and `extra.log` contains dst_sqls.
+Based on the source structures, the check results include **miss**, **diff** and **extra**, all presented in sql. `miss.log` contains src_sqls, `diff.log` contains src_sqls and dst_sqls, and `extra.log` contains dst_sqls.
 
 - `miss.log`
 ```

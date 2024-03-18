@@ -23,7 +23,7 @@ In fact, two-way or even net data sync can be considered as a topology:
 ## Examples
 
 <div align=center>
-<img src="../../pics/topo_two_way.png" width="55%" />
+<img src="../../img/topo_two_way.png" width="55%" />
 <br/>
 Two-Way Topology
 </div>
@@ -31,15 +31,15 @@ Two-Way Topology
 ***
 
 <div align=center>
-<img src="../../pics/topo_net.png"/>
+<img src="../../img/topo_net.png"/>
 <br/>
-Mesh Topology
+Net Topology
 </div>
 
 ***
 
 <div align=center>
-<img src="../../pics/topo_star.png"/>
+<img src="../../img/topo_star.png"/>
 <br/>
 Star Topology
 </div>
@@ -54,8 +54,8 @@ We use data marker to avoid cyclic replication.
 
 Assume that in a MySQL two-way topology, there are two tasks:
 
-- task1 (source: node1, target: node2)；
-- task2 (source: node2, target: node1)。
+- task1 (source: node1, target: node2).
+- task2 (source: node2, target: node1).
 
 When task1 writes data to node2, it generates a marker that identifies the original source of the data. This marker is recorded in the binlog of node2.
 
@@ -113,8 +113,8 @@ marker=ape_trans_mysql.topo1
 - topo_nodes: node names in topology, defined by the user. It should be consistent across all tasks within the topology. This field is reserved and has not been used yet.
 - src_node: source node of the current task.
 - dst_node: target node of the current task.
-- do_nodes: If the data is originated from these nodes, tasks will sync it to the target.
-- ignore_nodes: If the data is originated from these nodes, tasks will ignore it.
+- do_nodes: If the data is originated from these nodes, the task will sync it to the target.
+- ignore_nodes: If the data is originated from these nodes, the task will ignore it.
 - marker: data marker table, defined by the user. It should be consistent across all tasks within the topology.
 
 
