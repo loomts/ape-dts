@@ -1,10 +1,11 @@
 # Introduction
-- After data migration, compare the source and target data row by row and column by column
-- If there are too many records, try sampling check
-- Only supports tables with primary/unique keys
-- Support: mysql/pg/mongo
 
-# Example: mysql_to_mysql
+After data migration, you may want to compare the source data and the target data. If there are too many records, try sampling check. Before you start, please ensure that the tables to be verified have primary/unique keys.
+
+MySQL/PG/Mongo are currently supported for data check.
+
+# Example: MySQL_to_MySQL
+
 ## Full check
 ```
 [extractor]
@@ -45,14 +46,17 @@ log_dir=./logs
 ```
 
 ## Sampling check
-- Based on full check config, add sample_interval
+
+Based on full check configuration, add `sample_interval` for sampling check. The following code means that every 3 records will be sampled once.
+
 ```
 [extractor]
 sample_interval=3
 ```
 
-## Explain
-- Differences with snapshot migration config:
+## Note
+
+While this configuration is similar to that of snapshot migration, the only differences are:
 
 ```
 [sinker]
@@ -63,10 +67,12 @@ parallel_type=rdb_check
 ```
 
 # Results
-- Results are written into logs in json, including diff.log and miss.log, in log/check folder
+
+The results are written to logs in JSON format, including diff.log and miss.log. The logs are stored in the log/check subdirectory.
 
 ## diff.log
-- A diff log contains database(schema), table(tb), primary/unique keys(id_col_values), source and target values ​​of different columns(diff_col_values)
+
+The diff log includes the database (schema), table (tb), primary key/unique key (id_col_values), and the source and target values of the differing columns (diff_col_values).
 
 ```
 {"log_type":"Diff","schema":"test_db_1","tb":"one_pk_multi_uk","id_col_values":{"f_0":"5"},"diff_col_values":{"f_1":{"src":"5","dst":"5000"}}}
@@ -75,7 +81,8 @@ parallel_type=rdb_check
 ```
 
 ## miss.log
-- A miss log contains database(schema), table(tb), primary/unique key(id_col_values), diff_col_values is empty
+
+The miss log includes the database (schema), table (tb), and primary key/unique key (id_col_values), with empty diff_col_values.
 
 ```
 {"log_type":"Miss","schema":"test_db_1","tb":"no_pk_one_uk","id_col_values":{"f_1":"8","f_2":"1"},"diff_col_values":{}}
@@ -83,9 +90,10 @@ parallel_type=rdb_check
 {"log_type":"Miss","schema":"test_db_1","tb":"one_pk_multi_uk","id_col_values":{"f_0":"7"},"diff_col_values":{}}
 ```
 
-# Other configs
-- [filter], [router]: refer to [config details](../config.md)
-- Also refer to task_config.ini in tests:
+# Other configurations
+
+- For [filter] and [router], refer to [config details](../config.md).
+- Refer to task_config.ini in tests:
     - dt-tests/tests/mysql_to_mysql/check
     - dt-tests/tests/pg_to_pg/check
     - dt-tests/tests/mongo_to_mongo/check

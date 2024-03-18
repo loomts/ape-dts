@@ -1,8 +1,10 @@
 # Introduction
-- After revise task, we can review the data again based on the check results
-- Check results specify which rows to be reviewed, we still need to get the current data for each row from source, and then compare it with target
 
-# Example: mysql_to_mysql
+After data revision, you can review the data again based on the check results.
+
+The check results serve as a guide for specifying the rows/scope to be reviewed, and you still need to get the current data for each row from the source database, to compare it with the target.
+
+# Example: MySQL_to_MySQL
 ```
 [extractor]
 db_type=mysql
@@ -43,8 +45,9 @@ log4rs_file=./log4rs.yaml
 log_dir=./logs
 ```
 
-## Explain
-- Differences with snapshot migration config:
+## Note
+
+While this configuration is similar to that of snapshot migration, the only differences are:
 
 ```
 [extractor]
@@ -58,9 +61,10 @@ sink_type=check
 parallel_type=rdb_check
 ```
 
-# Other configs
-- [router]: refer to [config details](../config.md)
-- Also refer to task_config.ini in tests:
+# Other configurations
+
+- For [router], refer to [config details](../config.md).
+- Refer to task_config.ini in tests:
     - dt-tests/tests/mysql_to_mysql/review
     - dt-tests/tests/pg_to_pg/review
     - dt-tests/tests/mongo_to_mongo/review

@@ -1,11 +1,12 @@
-
 # Introduction
-- Liquibase is an open source tool to control database schema changes, [official site](https://www.liquibase.org/)，[git](https://github.com/liquibase/liquibase)
-- Since it provides comparison for database structures, we made a docker image(apecloud/ape-dts-structure-checker:0.0.1) based on liquibase, which can be used for verification after structure migration, code changes in [git](https://github.com/qianyiwen2019/liquibase/tree/ape_diff_tool)
 
+Liquibase is an open-source software used for managing database schema changes. You can learn more about it by visiting the [Liquibase official website](https://www.liquibase.org/) and exploring the [GitHub repository](https://github.com/liquibase/liquibase).
+
+Since it provides comparisons for database structures, we made a docker image(apecloud/ape-dts-structure-checker:0.0.1) based on Liquibase, which can be used for check tasks after structure migration. Refer to code changes in this [GitHub repository](https://github.com/qianyiwen2019/liquibase/tree/ape_diff_tool).
 
 # Examples
-## mysql
+
+## MySQL
 ```
 docker run \
 -e URL="jdbc:mysql://host.docker.internal:3308/test_db_1?useSSL=false" \
@@ -17,7 +18,7 @@ docker run \
 apecloud/ape-dts-structure-checker:0.0.1
 ```
 
-## pg
+## PG
 ```
 docker run \
 -e URL="jdbc:postgresql://host.docker.internal:5438/postgres?currentSchema=struct_check_test_1" \
@@ -30,14 +31,16 @@ apecloud/ape-dts-structure-checker:0.0.1
 ```
 
 # Parameters
-- URL: target database url
-- USERNAME: target username
-- PASSWORD: target password
-- REFERENCE_URL: source database url
-- REFERENCE_USERNAME: source username
-- REFERENCE_PASSWORD: source password
 
-# Result example
+- URL: Target database url.
+- USERNAME: Target username.
+- PASSWORD: Target password.
+- REFERENCE_URL: Source database url.
+- REFERENCE_USERNAME: Source username.
+- REFERENCE_PASSWORD: Source password.
+
+# Results
+
 ```
 Compared Schemas: test_db_1
 Product Name: EQUAL

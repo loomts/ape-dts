@@ -1,9 +1,12 @@
 # Introduction
-- If the snapshot task contains multiple databases/tables, tables will be sorted first by database name and then table name, then they will be migrated to target one by one
-- If the table has a single primary/unique key, the extractor will use this key as the sorting column and pull data in batches, batch size is configured by [pipeline] buffer_size
-- If the table does not have a sorting column, the extractor will pull all data in stream
 
-# Example: mysql_to_mysql
+If the snapshot task contains multiple databases/tables, tables will be sorted **first by database name and then table name**, and they will be migrated to the target **one by one**. Only one table will be in the sync process at a time.
+
+If the table has a single primary/unique key, the extractor will use this key as the sorting column and pull data in batches of size [pipeline] `buffer_size`, starting from the smallest value and moving upwards.
+
+If the table does not have a sorting column, the extractor will pull all data in stream.
+
+# Example: MySQl_to_MySQl
 ```
 [extractor]
 db_type=mysql
@@ -42,13 +45,15 @@ log4rs_file=./log4rs.yaml
 log_dir=./logs
 ```
 
-# Parallel
-- redis_to_redis: parallel_type=redis
-- others: parallel_type=snapshot
+# Parallel computing
 
-# Other configs
-- [filter]，[router]: refer to [config details](../config.md)
-- Also refer to task_config.ini in tests:
+- Redis_to_Redis: parallel_type=redis
+- Others: parallel_type=snapshot
+
+# Other configurations
+
+- For [filter] and [router], refer to [config details](../config.md).
+- Refer to task_config.ini in tests:
     - dt-tests/tests/mysql_to_mysql/snapshot
     - dt-tests/tests/pg_to_pg/snapshot
     - dt-tests/tests/mongo_to_mongo/snapshot

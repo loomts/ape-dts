@@ -1,8 +1,10 @@
 # 简介
-- 用户做了数据订正后，可基于校验结果，再次对差异数据进行复查
-- 校验结果起到指定订正范围的作用，每条数据仍需回查源库以获取当前值，并基于当前值和目标库进行校验
 
-# 示例: mysql_to_mysql
+在数据订正后，您可基于校验结果，再次对差异数据进行复查。
+
+校验结果起到指定范围的作用。每条数据仍需回查源库以获取当前值，并基于当前值和目标库进行校验。
+
+# 示例: MySQL_to_MySQL
 ```
 [extractor]
 db_type=mysql
@@ -44,7 +46,8 @@ log_dir=./logs
 ```
 
 ## 说明
-- 主要配置和全量同步任务一致，不同处包括：
+
+此配置和全量同步任务的基本一致，两者的不同之处是：
 
 ```
 [extractor]
@@ -59,7 +62,8 @@ parallel_type=rdb_check
 ```
 
 # 其他配置
-- 支持 [router]，参考 [配置详解](../config.md)
+
+- 支持 [router]，详情请参考 [配置详解](../config.md)。
 - 参考各类型集成测试的 task_config.ini：
     - dt-tests/tests/mysql_to_mysql/review
     - dt-tests/tests/pg_to_pg/review

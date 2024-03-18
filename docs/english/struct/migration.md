@@ -1,8 +1,10 @@
 # Introduction
-- Used in: mysql, pg
-- Migrate structures for: database(mysql), schema(pg), table, comment, index, sequence(pg), constraints
 
-# Config
+- Database: MySQL, PG.
+- Migrated Objects: database(mysql), schema(pg), table, comment, index, sequence(pg), constraints.
+
+# Configurations
+
 ```
 [extractor]
 extract_type=struct
@@ -42,8 +44,9 @@ checkpoint_interval_secs=10
 buffer_size=100
 ```
 
-## Explain
-- Structure migration is executed serially in single thread, specific configs:
+## Note
+
+Structure migration is executed serially in a single thread. Notice the following configurations:
 
 ```
 [extractor]
@@ -58,7 +61,11 @@ parallel_type=serial
 parallel_size=1
 ```
 
-- Failure strategy: interrupt(default), ignore 
+Failure strategy: interrupt(default), ignore.
+
+- interrupt: If a particular migration fails, the entire task will be terminated immediately.
+
+- ignore: If a migration fails, it will not affect the migration of other schemas, and the process will continue. However, the failure will be logged as an error.
 
 ```
 [sinker]
@@ -66,11 +73,13 @@ conflict_policy=interrupt
 ```
 
 # Phased migration
-- In a task with structure + data migration, in order to accelerate data migration, sometimes the task should be split into 3 steps:
-    - 1, Migrate table structures + primary/unique keys, which are necessary for data migration
-    - 2, Data migration
-    - 3, Migrate indexes + constraints
-- Thus, we offer 2 types of filtering:
+
+In a complete data migration process that includes both structure migration and data migration, the task will be divided into three stages in order to accelerate data migration:
+1. Migrate table structures + primary/unique keys ( necessities for data migration);
+2. Data migration;
+3. Migrate indexes + constraints.
+
+Thus, we offer 2 types of filtering:
 
 ## Migrate table structures + primary/unique keys
 ```
