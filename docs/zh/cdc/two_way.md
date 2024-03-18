@@ -6,7 +6,7 @@
 
 # 数据循环
 
-双向同步的主要难点是避免数据的循环复制，通常需要考虑如下场景：
+双向同步的主要难点是避免数据的循环复制，考虑如下场景：
 
 - MySQL 源端插入了一条数据 a，增量任务 “源 -> 目标” 从源端解析到 binlog，并同步到 MySQL 目标端。
 - MySQL 目标端插入数据 a 后，也产生了一条 binlog。
@@ -23,7 +23,7 @@
 ## 拓扑示例
 
 <div align=center>
-<img src="../../pics/topo_two_way.png" width="55%" />
+<img src="../../img/topo_two_way.png" width="55%" />
 <br/>
 双向拓扑
 </div>
@@ -31,7 +31,7 @@
 ***
 
 <div align=center>
-<img src="../../pics/topo_net.png"/>
+<img src="../../img/topo_net.png"/>
 <br/>
 网状拓扑
 </div>
@@ -39,7 +39,7 @@
 ***
 
 <div align=center>
-<img src="../../pics/topo_star.png"/>
+<img src="../../img/topo_star.png"/>
 <br/>
 星状拓扑
 </div>
@@ -117,8 +117,8 @@ marker=ape_trans_mysql.topo1
 - topo_nodes：拓扑包含的节点名，由用户指定，所有任务的节点名需保持一致。此字段为保留字段，暂未被使用。
 - src_node：当前任务的源节点。
 - dst_node：当前任务的目标节点。
-- do_nodes：如果数据标识显示其来源于这些节点，当前任务会将其同步到目标。
-- ignore_nodes：如果数据标识显示其来源于这些节点，当前任务会将其丢弃。
+- do_nodes：如果数据标识显示其原始来源于这些节点，当前任务会将其同步到目标。
+- ignore_nodes：如果数据标识显示其原始来源于这些节点，当前任务会将其丢弃。
 - marker：数据打标表，所有节点上的打标表需保持一致。
 
 
@@ -159,6 +159,6 @@ marker=ape_trans_mysql.topo1
 # 其他配置参考
 
 参考各类型集成测试中 cycle 相关用例的 task_config.ini：
-    - dt-tests/tests/mysql_to_mysql/cdc
-    - dt-tests/tests/pg_to_pg/cdc
-    - dt-tests/tests/redis_to_redis/cdc
+- dt-tests/tests/mysql_to_mysql/cdc
+- dt-tests/tests/pg_to_pg/cdc
+- dt-tests/tests/redis_to_redis/cdc

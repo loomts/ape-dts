@@ -1,8 +1,8 @@
 # Introduction
 
-CDC tasks record delays by positions. For example, MySQL CDC tasks use the synced source binlog offset as the position. The position should be consistent with the source database if the CDC tasks catch up, and the timestamp of the position (if any) should follow the current time.
+CDC tasks calculate delays by positions. For example, a MySQL CDC task uses the synced source binlog offset as the position. The position should be consistent with the source database if the CDC task catches up, and the timestamp of the position (if any) should follow the current time.
 
-But if the source database has not been updated for a long time, or there are updates not subscribed by CDC tasks, then the positions won't change, which will be considered as a delay. Therefore, we can create a heartbeat table in the source database and update the table periodically by CDC tasks to push the task position forward.
+But if the source database has not been updated for a long time, or there are updates but the updated tables are not subscribed by the CDC task, then the position won't change, which will be considered as a delay. Therefore, we can create a heartbeat table in the source database and update the table periodically by CDC tasks to push the task position forward.
 
 # Configurations
 

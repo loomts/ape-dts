@@ -3,10 +3,10 @@
 订阅源库的数据变更，并同步到目标库。
 
 前提条件
-    - MySQL：源库开启 binlog；
-    - PG：源库设置 `wal_level = logical`；
-    - Mongo：源库需为 ReplicaSet；
-    - 详情请参考 [测试环境搭建](../../../dt-tests/README_ZH.md)。
+- MySQL：源库开启 binlog；
+- PG：源库设置 `wal_level = logical`；
+- Mongo：源库需为 ReplicaSet；
+- 详情请参考 [测试环境搭建](../../../dt-tests/README_ZH.md)。
 
 # 示例：MySQL_to_MySQL
 

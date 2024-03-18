@@ -3,10 +3,10 @@
 Subscribe to data changes in the source database and sync them to the target.
 
 Prerequisites
-    - MySQL: Enables binlog in the source database;
-    - PG: Sets `wal_level = logical` in the source database;
-    - Mongo: The source instance must be ReplicaSet;
-    - For more informaiton, refer to [init test env](../../../dt-tests/README.md).
+- MySQL: Enables binlog in the source database;
+- PG: Sets `wal_level = logical` in the source database;
+- Mongo: The source instance must be ReplicaSet;
+- For more informaiton, refer to [init test env](../../../dt-tests/README.md).
 
 # Example: MySQL_to_MySQL
 
