@@ -134,6 +134,7 @@ impl RedisCdcExtractor {
 
                 let position = Position::Redis {
                     repl_id: self.repl_id.clone(),
+                    repl_port: self.repl_port,
                     repl_offset: self.repl_offset,
                     now_db_id: self.now_db_id,
                     timestamp: heartbeat_timestamp.clone(),
