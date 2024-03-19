@@ -156,16 +156,14 @@ impl RedisPsyncExtractor<'_> {
         }
 
         // this log to mark the snapshot rdb was all received
-        log_position!(
-            "current_position | {}",
-            format!(
-                "repl_id:{},repl_offset:{},repl_next_offset:{},repl_port:{}",
-                self.repl_id,
-                self.repl_offset,
-                self.repl_offset + 1,
-                self.repl_port
-            )
-        );
+        let position = Position::Redis {
+            repl_id: self.repl_id.clone(),
+            repl_port: self.repl_port,
+            repl_offset: self.repl_offset,
+            now_db_id: parser.now_db_id,
+            timestamp: String::new(),
+        };
+        log_position!("current_position | {}", position.to_string());
         Ok(())
     }
 

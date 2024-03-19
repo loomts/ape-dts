@@ -37,6 +37,7 @@ pub enum Position {
     },
     Redis {
         repl_id: String,
+        repl_port: u64,
         repl_offset: u64,
         now_db_id: i64,
         timestamp: String,
