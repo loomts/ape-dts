@@ -11,6 +11,10 @@ spec:
   containers:
   - name: pod-redis-redisearch-dst
     image: redislabs/redisearch:2.8.4
+    lifecycle:
+      postStart:
+        exec:
+          command: [ "/bin/sh", "-c", "redis-cli config set requirepass 123456" ]
     ports:
     - containerPort: 6379
       protocol: TCP 

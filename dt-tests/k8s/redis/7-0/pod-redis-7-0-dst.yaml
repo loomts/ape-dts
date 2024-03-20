@@ -11,6 +11,10 @@ spec:
   containers:
   - name: pod-redis-7-0-dst
     image: redis:7.0
+    lifecycle:
+      postStart:
+        exec:
+          command: [ "/bin/sh", "-c", "redis-cli config set requirepass 123456" ]
     ports:
     - containerPort: 6379
       protocol: TCP 
