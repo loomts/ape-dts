@@ -3,9 +3,9 @@ use dt_meta::redis::redis_object::{HashObject, RedisString};
 
 use crate::extractor::redis::rdb::reader::rdb_reader::RdbReader;
 
-pub struct HashLoader {}
+pub struct HashParser {}
 
-impl HashLoader {
+impl HashParser {
     pub fn load_from_buffer(
         reader: &mut RdbReader,
         key: RedisString,

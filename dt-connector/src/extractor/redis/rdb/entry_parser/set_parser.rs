@@ -6,9 +6,9 @@ use dt_meta::redis::redis_object::{RedisString, SetObject};
 
 use crate::extractor::redis::{rdb::reader::rdb_reader::RdbReader, StreamReader};
 
-pub struct SetLoader {}
+pub struct SetParser {}
 
-impl SetLoader {
+impl SetParser {
     pub fn load_from_buffer(
         reader: &mut RdbReader,
         key: RedisString,
