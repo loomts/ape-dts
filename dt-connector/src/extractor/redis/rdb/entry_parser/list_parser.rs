@@ -6,9 +6,9 @@ use crate::extractor::redis::rdb::reader::rdb_reader::RdbReader;
 const QUICKLIST_NODE_CONTAINER_PLAIN: u64 = 1;
 const QUICKLIST_NODE_CONTAINER_PACKED: u64 = 2;
 
-pub struct ListLoader {}
+pub struct ListParser {}
 
-impl ListLoader {
+impl ListParser {
     pub fn load_from_buffer(
         reader: &mut RdbReader,
         key: RedisString,
