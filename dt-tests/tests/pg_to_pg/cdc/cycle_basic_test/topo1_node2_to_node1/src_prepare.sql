@@ -5,7 +5,6 @@ CREATE TABLE IF NOT EXISTS twoway_test_db_1.default_table(pk integer, val numeri
 DELETE FROM twoway_test_db_1.default_table;
 
 DROP SCHEMA IF EXISTS ape_trans_pg CASCADE;
-CREATE SCHEMA ape_trans_pg;
 
 DROP PUBLICATION IF EXISTS apecloud_migrate_pub_for_all_tables;
 CREATE PUBLICATION apecloud_migrate_pub_for_all_tables FOR ALL TABLES;

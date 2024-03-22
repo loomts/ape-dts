@@ -14,7 +14,7 @@ impl RedisUtil {
         let conn = redis::Client::open(url)
             .unwrap()
             .get_connection()
-            .expect(&format!("can not connect: {}", url));
+            .unwrap_or_else(|_| panic!("can not connect: {}", url));
         Ok(conn)
     }
 

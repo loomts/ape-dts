@@ -709,8 +709,7 @@ impl TaskRunner {
                         db_tb[0], db_tb[1]
                     );
 
-                    let tbs = TaskUtil::list_tbs(url, &db_tb[0], &DbType::Mysql).await?;
-                    if !tbs.contains(&db_tb[1]) {
+                    if !TaskUtil::check_tb_exist(url, &db_tb[0], &db_tb[1], &DbType::Mysql).await {
                         let conn_pool = TaskUtil::create_mysql_conn_pool(url, 1, true)
                             .await
                             .unwrap();
@@ -736,8 +735,7 @@ impl TaskRunner {
                         db_tb[0], db_tb[1]
                     );
 
-                    let tbs = TaskUtil::list_tbs(url, &db_tb[0], &DbType::Pg).await?;
-                    if !tbs.contains(&db_tb[1]) {
+                    if !TaskUtil::check_tb_exist(url, &db_tb[0], &db_tb[1], &DbType::Pg).await {
                         let conn_pool = TaskUtil::create_pg_conn_pool(url, 1, true).await.unwrap();
                         let schema_query = sqlx::query(&schema_sql);
                         schema_query.execute(&conn_pool).await.unwrap();
@@ -767,9 +765,14 @@ impl TaskRunner {
                         data_marker.marker_db, data_marker.marker_tb
                     );
 
-                    let tbs =
-                        TaskUtil::list_tbs(url, &data_marker.marker_db, &DbType::Mysql).await?;
-                    if !tbs.contains(&data_marker.marker_tb) {
+                    if !TaskUtil::check_tb_exist(
+                        url,
+                        &data_marker.marker_db,
+                        &data_marker.marker_tb,
+                        &DbType::Mysql,
+                    )
+                    .await
+                    {
                         let conn_pool = TaskUtil::create_mysql_conn_pool(url, 1, true)
                             .await
                             .unwrap();
@@ -794,8 +797,14 @@ impl TaskRunner {
                         data_marker.marker_db, data_marker.marker_tb
                     );
 
-                    let tbs = TaskUtil::list_tbs(url, &data_marker.marker_db, &DbType::Pg).await?;
-                    if !tbs.contains(&data_marker.marker_tb) {
+                    if !TaskUtil::check_tb_exist(
+                        url,
+                        &data_marker.marker_db,
+                        &data_marker.marker_tb,
+                        &DbType::Pg,
+                    )
+                    .await
+                    {
                         let conn_pool = TaskUtil::create_pg_conn_pool(url, 1, true).await.unwrap();
                         let schema_query = sqlx::query(&schema_sql);
                         schema_query.execute(&conn_pool).await.unwrap();
