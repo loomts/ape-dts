@@ -159,6 +159,16 @@ impl TaskUtil {
         Ok(tbs)
     }
 
+    pub async fn check_tb_exist(url: &str, db: &str, tb: &str, db_type: &DbType) -> bool {
+        let dbs = Self::list_dbs(url, db_type).await.unwrap();
+        if !dbs.contains(&db.to_string()) {
+            return false;
+        }
+
+        let tbs = Self::list_tbs(url, db, db_type).await.unwrap();
+        tbs.contains(&tb.to_string())
+    }
+
     async fn list_pg_schemas(url: &str) -> Result<Vec<String>, Error> {
         let mut schemas = Vec::new();
         let conn_pool = TaskUtil::create_pg_conn_pool(url, 1, false).await?;

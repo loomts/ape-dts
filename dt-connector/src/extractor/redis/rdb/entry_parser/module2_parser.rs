@@ -24,10 +24,10 @@ impl ModuleParser {
         let module_id = reader.read_length()?;
         let module_name = Self::module_type_name_by_id(module_id);
         // Not supported
-        return Err(Error::RedisRdbError(format!(
+        Err(Error::RedisRdbError(format!(
             "unsupported module type: [{}]",
             module_name
-        )));
+        )))
     }
 
     pub fn module_type_name_by_id(module_id: u64) -> String {

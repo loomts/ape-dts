@@ -1,5 +1,4 @@
 DROP DATABASE IF EXISTS ape_trans_mysql;
-CREATE DATABASE ape_trans_mysql;
 
 CREATE DATABASE IF NOT EXISTS twoway_test_db_1;
 
