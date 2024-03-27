@@ -167,6 +167,11 @@ impl RedisCdcExtractor {
                     continue;
                 }
 
+                // filter dangerous cmds, eg: flushdb, flushall
+                if self.filter.filter_cmd(&cmd_name) {
+                    continue;
+                }
+
                 // build entry and push it to buffer
                 let mut entry = RedisEntry::new();
                 entry.cmd = cmd;
