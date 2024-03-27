@@ -20,6 +20,7 @@ pub struct RdbFilter {
     pub do_events: HashSet<String>,
     pub do_structures: HashSet<String>,
     pub do_ddls: HashSet<String>,
+    pub ignore_cmds: HashSet<String>,
     pub cache: HashMap<(String, String), bool>,
 }
 
@@ -27,13 +28,14 @@ impl RdbFilter {
     pub fn from_config(config: &FilterConfig, db_type: DbType) -> Result<Self, Error> {
         Ok(Self {
             db_type: db_type.clone(),
-            do_dbs: Self::parse_individual_tokens(&config.do_dbs, &db_type)?,
-            ignore_dbs: Self::parse_individual_tokens(&config.ignore_dbs, &db_type)?,
+            do_dbs: Self::parse_single_tokens(&config.do_dbs, &db_type)?,
+            ignore_dbs: Self::parse_single_tokens(&config.ignore_dbs, &db_type)?,
             do_tbs: Self::parse_pair_tokens(&config.do_tbs, &db_type)?,
             ignore_tbs: Self::parse_pair_tokens(&config.ignore_tbs, &db_type)?,
-            do_events: Self::parse_individual_tokens(&config.do_events, &db_type)?,
-            do_structures: Self::parse_individual_tokens(&config.do_structures, &db_type)?,
-            do_ddls: Self::parse_individual_tokens(&config.do_ddls, &db_type)?,
+            do_events: Self::parse_single_tokens(&config.do_events, &db_type)?,
+            do_structures: Self::parse_single_tokens(&config.do_structures, &db_type)?,
+            do_ddls: Self::parse_single_tokens(&config.do_ddls, &db_type)?,
+            ignore_cmds: Self::parse_single_tokens(&config.ignore_cmds, &db_type)?,
             cache: HashMap::new(),
         })
     }
@@ -96,6 +98,10 @@ impl RdbFilter {
 
     pub fn filter_structure(&self, structure_type: &str) -> bool {
         !Self::match_all(&self.do_structures) && !self.do_structures.contains(structure_type)
+    }
+
+    pub fn filter_cmd(&self, cmd: &str) -> bool {
+        self.ignore_cmds.contains(cmd)
     }
 
     fn match_all(set: &HashSet<String>) -> bool {
@@ -163,10 +169,7 @@ impl RdbFilter {
         Ok(results)
     }
 
-    fn parse_individual_tokens(
-        config_str: &str,
-        db_type: &DbType,
-    ) -> Result<HashSet<String>, Error> {
+    fn parse_single_tokens(config_str: &str, db_type: &DbType) -> Result<HashSet<String>, Error> {
         let tokens = Self::parse_config(config_str, db_type)?;
         let results: HashSet<String> = HashSet::from_iter(tokens.into_iter());
         Ok(results)

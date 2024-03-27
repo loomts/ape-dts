@@ -391,6 +391,7 @@ impl TaskConfig {
             do_events: loader.get_optional(FILTER, "do_events"),
             do_ddls: loader.get_optional(FILTER, "do_ddls"),
             do_structures: loader.get_with_default(FILTER, "do_structures", ASTRISK.to_string()),
+            ignore_cmds: loader.get_optional(FILTER, "ignore_cmds"),
         })
     }
 
