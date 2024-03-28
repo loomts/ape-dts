@@ -2,6 +2,15 @@ use std::collections::HashMap;
 
 use super::command::key_parser::KeyParser;
 
+const TYPE_STRING: &str = "string";
+const TYPE_LIST: &str = "list";
+const TYPE_HASH: &str = "hash";
+const TYPE_SET: &str = "set";
+const TYPE_ZSET: &str = "zset";
+const TYPE_MODULE: &str = "module";
+const TYPE_STREAM: &str = "stream";
+const TYPE_UNKOWN: &str = "unkown";
+
 #[derive(Debug, Clone)]
 pub enum RedisObject {
     String(StringObject),
@@ -12,6 +21,35 @@ pub enum RedisObject {
     Module(ModuleObject),
     Stream(StreamObject),
     Unknown,
+}
+
+impl RedisObject {
+    pub fn get_type(&self) -> String {
+        match self {
+            Self::String(_) => TYPE_STRING,
+            Self::List(_) => TYPE_LIST,
+            Self::Hash(_) => TYPE_HASH,
+            Self::Set(_) => TYPE_SET,
+            Self::Zset(_) => TYPE_ZSET,
+            Self::Module(_) => TYPE_MODULE,
+            Self::Stream(_) => TYPE_STREAM,
+            Self::Unknown => TYPE_UNKOWN,
+        }
+        .to_string()
+    }
+
+    pub fn new(key_type: &str) -> Self {
+        match key_type {
+            TYPE_STRING => Self::String(StringObject::new()),
+            TYPE_LIST => Self::List(ListObject::new()),
+            TYPE_HASH => Self::Hash(HashObject::new()),
+            TYPE_SET => Self::Set(SetObject::new()),
+            TYPE_ZSET => Self::Zset(ZsetObject::new()),
+            TYPE_MODULE => Self::Module(ModuleObject::new()),
+            TYPE_STREAM => Self::Stream(StreamObject::new()),
+            _ => Self::Unknown,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

@@ -199,16 +199,25 @@ impl TaskConfig {
                 }
             }
 
-            DbType::Redis => {
-                let repl_port = loader.get_required(EXTRACTOR, "repl_port");
-                match extract_type {
-                    ExtractType::Snapshot => ExtractorConfig::RedisSnapshot { url, repl_port },
+            DbType::Redis => match extract_type {
+                ExtractType::Snapshot => {
+                    let repl_port = loader.get_required(EXTRACTOR, "repl_port");
+                    ExtractorConfig::RedisSnapshot { url, repl_port }
+                }
 
-                    ExtractType::SnapshotFile => ExtractorConfig::RedisSnapshotFile {
-                        file_path: loader.get_required(EXTRACTOR, "file_path"),
-                    },
+                ExtractType::SnapshotFile => ExtractorConfig::RedisSnapshotFile {
+                    file_path: loader.get_required(EXTRACTOR, "file_path"),
+                },
 
-                    ExtractType::Cdc => ExtractorConfig::RedisCdc {
+                ExtractType::Scan => ExtractorConfig::RedisScan {
+                    url,
+                    statistic_type: loader.get_required(EXTRACTOR, "statistic_type"),
+                    scan_count: loader.get_with_default(EXTRACTOR, "scan_count", 1000),
+                },
+
+                ExtractType::Cdc => {
+                    let repl_port = loader.get_required(EXTRACTOR, "repl_port");
+                    ExtractorConfig::RedisCdc {
                         url,
                         repl_port,
                         repl_id: loader.get_optional(EXTRACTOR, "repl_id"),
@@ -217,11 +226,11 @@ impl TaskConfig {
                         heartbeat_interval_secs,
                         heartbeat_key: loader.get_optional(EXTRACTOR, "heartbeat_key"),
                         now_db_id: loader.get_optional(EXTRACTOR, "now_db_id"),
-                    },
-
-                    _ => return not_supported_err,
+                    }
                 }
-            }
+
+                _ => return not_supported_err,
+            },
 
             DbType::Kafka => ExtractorConfig::Kafka {
                 url,
@@ -337,7 +346,9 @@ impl TaskConfig {
                 },
 
                 SinkType::Statistic => SinkerConfig::RedisStatistic {
+                    statistic_type: loader.get_required(SINKER, "statistic_type"),
                     data_size_threshold: loader.get_optional(SINKER, "data_size_threshold"),
+                    freq_threshold: loader.get_optional(SINKER, "freq_threshold"),
                     statistic_log_dir: loader.get_optional(SINKER, "statistic_log_dir"),
                 },
 

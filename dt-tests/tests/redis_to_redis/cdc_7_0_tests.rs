@@ -7,19 +7,19 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn cdc_basic_test() {
-        TestBase::run_redis_cdc_test("redis_to_redis/cdc/7_0/basic_test", 2000, 10000).await;
+        TestBase::run_redis_cdc_test("redis_to_redis/cdc/7_0/basic_test", 2000, 3000).await;
     }
 
     #[tokio::test]
     #[serial]
     async fn cdc_multi_dbs_test() {
-        TestBase::run_redis_cdc_test("redis_to_redis/cdc/7_0/multi_dbs_test", 2000, 10000).await;
+        TestBase::run_redis_cdc_test("redis_to_redis/cdc/7_0/multi_dbs_test", 2000, 3000).await;
     }
 
     #[tokio::test]
     #[serial]
     async fn cdc_multi_exec_test() {
-        TestBase::run_redis_cdc_test("redis_to_redis/cdc/7_0/multi_exec_test", 2000, 10000).await;
+        TestBase::run_redis_cdc_test("redis_to_redis/cdc/7_0/multi_exec_test", 2000, 3000).await;
     }
 
     #[tokio::test]
@@ -31,13 +31,13 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn cdc_filter_db_test() {
-        TestBase::run_redis_cdc_test("redis_to_redis/cdc/7_0/filter_db_test", 2000, 10000).await;
+        TestBase::run_redis_cdc_test("redis_to_redis/cdc/7_0/filter_db_test", 2000, 3000).await;
     }
 
     #[tokio::test]
     #[serial]
     async fn cdc_to_cluster_test() {
-        TestBase::run_redis_cdc_test("redis_to_redis/cdc/7_0/to_cluster_test", 2000, 10000).await;
+        TestBase::run_redis_cdc_test("redis_to_redis/cdc/7_0/to_cluster_test", 2000, 3000).await;
     }
 
     #[tokio::test]

@@ -30,9 +30,11 @@ use dt_connector::{
     Sinker,
 };
 use dt_meta::{
-    avro::avro_converter::AvroConverter, mysql::mysql_meta_manager::MysqlMetaManager,
-    pg::pg_meta_manager::PgMetaManager, rdb_meta_manager::RdbMetaManager,
-    redis::redis_write_method::RedisWriteMethod,
+    avro::avro_converter::AvroConverter,
+    mysql::mysql_meta_manager::MysqlMetaManager,
+    pg::pg_meta_manager::PgMetaManager,
+    rdb_meta_manager::RdbMetaManager,
+    redis::{redis_statistic_type::RedisStatisticType, redis_write_method::RedisWriteMethod},
 };
 use kafka::producer::{Producer, RequiredAcks};
 use reqwest::{redirect::Policy, Url};
@@ -232,11 +234,15 @@ impl SinkerUtil {
             }
 
             SinkerConfig::RedisStatistic {
+                statistic_type,
                 data_size_threshold,
+                freq_threshold,
                 ..
             } => {
                 Self::create_redis_statistic_sinker(
                     task_config.parallelizer.parallel_size,
+                    statistic_type,
+                    *freq_threshold,
                     *data_size_threshold,
                     monitor,
                 )
@@ -582,13 +588,18 @@ impl SinkerUtil {
 
     async fn create_redis_statistic_sinker(
         parallel_size: usize,
+        statistic_type: &str,
+        freq_threshold: i64,
         data_size_threshold: usize,
         monitor: Arc<Mutex<Monitor>>,
     ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
+        let statistic_type = RedisStatisticType::from_str(statistic_type).unwrap();
         let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
         for _ in 0..parallel_size {
             let sinker = RedisStatisticSinker {
+                statistic_type: statistic_type.clone(),
                 data_size_threshold,
+                freq_threshold,
                 monitor: monitor.clone(),
             };
             sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));

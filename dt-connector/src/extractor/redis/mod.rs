@@ -7,6 +7,7 @@ pub mod redis_client;
 pub mod redis_psync_extractor;
 pub mod redis_resp_reader;
 pub mod redis_resp_types;
+pub mod redis_scan_extractor;
 pub mod redis_snapshot_extractor;
 pub mod redis_snapshot_file_extractor;
 

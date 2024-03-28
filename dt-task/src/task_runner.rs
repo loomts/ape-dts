@@ -556,6 +556,23 @@ impl TaskRunner {
                 Box::new(extractor)
             }
 
+            ExtractorConfig::RedisScan {
+                url,
+                scan_count,
+                statistic_type,
+            } => {
+                let filter = RdbFilter::from_config(&self.config.filter, DbType::Redis)?;
+                let extractor = ExtractorUtil::create_redis_scan_extractor(
+                    base_extractor,
+                    url,
+                    statistic_type,
+                    *scan_count,
+                    filter,
+                )
+                .await?;
+                Box::new(extractor)
+            }
+
             ExtractorConfig::RedisCdc {
                 url,
                 repl_id,
