@@ -62,7 +62,9 @@ pub enum SinkerConfig {
     },
 
     RedisStatistic {
+        statistic_type: String,
         data_size_threshold: usize,
+        freq_threshold: i64,
         statistic_log_dir: String,
     },
 

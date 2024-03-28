@@ -174,8 +174,7 @@ impl RedisPsyncExtractor<'_> {
         position: Position,
     ) -> Result<(), Error> {
         // currently only support db filter
-        let db_id = &entry.db_id.to_string();
-        if filter.filter_db(db_id) {
+        if filter.filter_db(&entry.db_id.to_string()) {
             return Ok(());
         }
 

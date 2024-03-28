@@ -22,7 +22,7 @@ use dt_connector::extractor::{
     },
     redis::{
         redis_cdc_extractor::RedisCdcExtractor, redis_client::RedisClient,
-        redis_snapshot_extractor::RedisSnapshotExtractor,
+        redis_scan_extractor::RedisScanExtractor, redis_snapshot_extractor::RedisSnapshotExtractor,
         redis_snapshot_file_extractor::RedisSnapshotFileExtractor,
     },
     snapshot_resumer::SnapshotResumer,
@@ -30,7 +30,8 @@ use dt_connector::extractor::{
 use dt_meta::{
     avro::avro_converter::AvroConverter, mongo::mongo_cdc_source::MongoCdcSource,
     mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
-    rdb_meta_manager::RdbMetaManager, syncer::Syncer,
+    rdb_meta_manager::RdbMetaManager, redis::redis_statistic_type::RedisStatisticType,
+    syncer::Syncer,
 };
 
 use super::task_util::TaskUtil;
@@ -319,6 +320,24 @@ impl ExtractorUtil {
     ) -> Result<RedisSnapshotFileExtractor, Error> {
         Ok(RedisSnapshotFileExtractor {
             file_path: file_path.to_string(),
+            filter,
+            base_extractor,
+        })
+    }
+
+    pub async fn create_redis_scan_extractor(
+        base_extractor: BaseExtractor,
+        url: &str,
+        statistic_type: &str,
+        scan_count: u64,
+        filter: RdbFilter,
+    ) -> Result<RedisScanExtractor, Error> {
+        let conn = RedisClient::new(url).await.unwrap();
+        let statistic_type = RedisStatisticType::from_str(statistic_type).unwrap();
+        Ok(RedisScanExtractor {
+            conn,
+            statistic_type,
+            scan_count,
             filter,
             base_extractor,
         })

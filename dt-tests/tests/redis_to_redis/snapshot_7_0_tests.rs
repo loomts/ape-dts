@@ -85,8 +85,25 @@ mod test {
 
     #[tokio::test]
     #[serial]
-    async fn snapshot_statistic_test() {
-        TestBase::run_redis_statistic_test("redis_to_redis/snapshot/7_0/statistic_test").await;
+    async fn snapshot_statistic_big_key_rdb_test() {
+        TestBase::run_redis_statistic_test(
+            "redis_to_redis/snapshot/7_0/statistic_big_key_rdb_test",
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn snapshot_statistic_big_key_test() {
+        TestBase::run_redis_statistic_test("redis_to_redis/snapshot/7_0/statistic_big_key_test")
+            .await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn snapshot_statistic_hot_key_test() {
+        TestBase::run_redis_statistic_test("redis_to_redis/snapshot/7_0/statistic_hot_key_test")
+            .await;
     }
 
     #[tokio::test]

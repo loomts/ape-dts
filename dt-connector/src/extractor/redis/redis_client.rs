@@ -70,9 +70,17 @@ impl RedisClient {
         self.send_packed(&CmdEncoder::encode(cmd)).await
     }
 
-    pub async fn read(&mut self) -> Result<Value, String> {
+    pub async fn read(&mut self) -> Result<Value, Error> {
         let mut resp_reader = RedisRespReader { read_len: 0 };
-        resp_reader.decode(&mut self.stream).await
+        match resp_reader.decode(&mut self.stream).await {
+            Ok(value) => Ok(value),
+            Err(err) => Err(Error::RedisResultError(err)),
+        }
+    }
+
+    pub async fn read_as_string(&mut self) -> Result<Vec<String>, Error> {
+        let value = self.read().await?;
+        Self::parse_result_as_string(value)
     }
 
     pub async fn read_with_len(&mut self) -> Result<(Value, usize), String> {
@@ -93,5 +101,32 @@ impl RedisClient {
             read_count += self.stream.get_mut().read(&mut buf[read_count..]).await?;
         }
         Ok(buf)
+    }
+
+    fn parse_result_as_string(value: Value) -> Result<Vec<String>, Error> {
+        let mut results = Vec::new();
+        match value {
+            Value::Data(data) => {
+                results.push(String::from_utf8_lossy(&data).to_string());
+            }
+
+            Value::Bulk(data) => {
+                for i in data {
+                    let sub_results = Self::parse_result_as_string(i)?;
+                    results.extend_from_slice(&sub_results);
+                }
+            }
+
+            Value::Int(data) => results.push(data.to_string()),
+
+            Value::Status(data) => results.push(data),
+
+            _ => {
+                return Err(Error::Unexpected(
+                    "redis result type can not be parsed as string".to_string(),
+                ))
+            }
+        }
+        Ok(results)
     }
 }

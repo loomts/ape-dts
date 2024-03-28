@@ -33,6 +33,8 @@ pub enum ExtractType {
     Struct,
     #[strum(serialize = "snapshot_file")]
     SnapshotFile,
+    #[strum(serialize = "scan")]
+    Scan,
 }
 
 #[derive(Display, EnumString, IntoStaticStr)]

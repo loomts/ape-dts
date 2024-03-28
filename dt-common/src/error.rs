@@ -32,6 +32,9 @@ pub enum Error {
     #[error("parse redis cmd error: {0}")]
     RedisCmdError(String),
 
+    #[error("parse redis result error: {0}")]
+    RedisResultError(String),
+
     #[error("metadata error: {0}")]
     MetadataError(String),
 

@@ -1,6 +1,12 @@
 use std::{collections::HashSet, fs::File};
 
-use dt_common::{config::sinker_config::SinkerConfig, error::Error};
+use dt_common::{
+    config::{extractor_config::ExtractorConfig, sinker_config::SinkerConfig},
+    error::Error,
+};
+use dt_task::task_util::TaskUtil;
+
+use crate::test_runner::redis_util::RedisUtil;
 
 use super::base_test_runner::BaseTestRunner;
 
@@ -25,6 +31,16 @@ impl RedisStatisticTestRunner {
 
         let expect_statistic_file =
             format!("{}/expect_statistic_log/statistic.log", self.base.test_dir);
+
+        match self.base.get_config().extractor {
+            ExtractorConfig::RedisScan { url, .. } => {
+                let mut src_conn = TaskUtil::create_redis_conn(&url).await.unwrap();
+                let redis_util = RedisUtil::new(vec![('"', '"')]);
+                redis_util.execute_cmds(&mut src_conn, &self.base.src_prepare_sqls.clone());
+                redis_util.execute_cmds(&mut src_conn, &self.base.src_test_sqls.clone());
+            }
+            _ => {}
+        };
 
         // start task
         self.base.start_task().await?;

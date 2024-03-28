@@ -103,6 +103,12 @@ pub enum ExtractorConfig {
         file_path: String,
     },
 
+    RedisScan {
+        url: String,
+        scan_count: u64,
+        statistic_type: String,
+    },
+
     Kafka {
         url: String,
         group: String,
