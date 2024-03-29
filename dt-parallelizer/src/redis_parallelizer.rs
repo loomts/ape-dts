@@ -19,6 +19,7 @@ pub struct RedisParallelizer {
     // redis cluster
     pub slot_node_map: HashMap<u16, &'static str>,
     pub key_parser: KeyParser,
+    pub node_sinker_index_map: HashMap<String, usize>,
 }
 
 #[async_trait]
@@ -43,9 +44,12 @@ impl Parallelizer for RedisParallelizer {
                 .await;
         }
 
-        let mut node_sinker_index_map = HashMap::new();
-        for (i, sinker) in sinkers.iter().enumerate() {
-            node_sinker_index_map.insert(sinker.lock().await.get_id(), i);
+        if self.node_sinker_index_map.is_empty() {
+            self.node_sinker_index_map = HashMap::new();
+            for (i, sinker) in sinkers.iter().enumerate() {
+                self.node_sinker_index_map
+                    .insert(sinker.lock().await.get_id(), i);
+            }
         }
 
         let mut node_datas = Vec::new();
@@ -86,8 +90,8 @@ impl Parallelizer for RedisParallelizer {
 
             // find the dst node for entry by slot
             let node = *self.slot_node_map.get(&slots[0]).unwrap();
-            let index = *node_sinker_index_map.get(node).unwrap();
-            node_datas[index].push(dt_data);
+            let sinker_index = *self.node_sinker_index_map.get(node).unwrap();
+            node_datas[sinker_index].push(dt_data);
         }
 
         let mut futures = Vec::new();

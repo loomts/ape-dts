@@ -119,6 +119,7 @@ impl ParallelizerUtil {
                     parallel_size,
                     slot_node_map,
                     key_parser: KeyParser::new(),
+                    node_sinker_index_map: HashMap::new(),
                 })
             }
         };

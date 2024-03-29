@@ -61,7 +61,7 @@ impl RedisUtil {
     fn parse_cluster_nodes(cluster_nodes: &str) -> Result<(Vec<String>, Vec<Vec<u16>>), Error> {
         // refer: https://github.com/tair-opensource/RedisShake/blob/v4/internal/utils/cluster_nodes.go
         let mut addresses: Vec<String> = Vec::new();
-        let mut slots: Vec<Vec<u16>> = Vec::new();
+        let mut all_slots: Vec<Vec<u16>> = Vec::new();
         let mut slots_count = 0;
 
         for line in cluster_nodes.lines() {
@@ -95,7 +95,7 @@ impl RedisUtil {
 
             addresses.push(address);
 
-            let mut slot = Vec::new();
+            let mut cur_node_slots = Vec::new();
             for word in words.iter().skip(8) {
                 if word.starts_with('[') {
                     break;
@@ -113,12 +113,12 @@ impl RedisUtil {
                 };
 
                 for j in start..=end {
-                    slot.push(j);
+                    cur_node_slots.push(j);
                     slots_count += 1;
                 }
             }
 
-            slots.push(slot);
+            all_slots.push(cur_node_slots);
         }
 
         if slots_count != SLOTS_COUNT {
@@ -127,7 +127,7 @@ impl RedisUtil {
                 slots_count, cluster_nodes
             )))
         } else {
-            Ok((addresses, slots))
+            Ok((addresses, all_slots))
         }
     }
 }
@@ -139,25 +139,31 @@ mod tests {
 
     #[test]
     fn test_parse_cluster_nodes() {
-        let cluster_nodes = r#"1f40c5791e5024d1dded03af9cab600a416d3137 172.28.0.25:6379@16379 slave 957edc3536c01c6d1a0669ff3f4c7d39732ab482 0 1705325345720 1 connected
-92640aed71fece7d80a2754056b2e01e9bc2f1f5 172.28.0.22:6379@16379 master - 0 1705325346552 2 connected 5461-10922
-957edc3536c01c6d1a0669ff3f4c7d39732ab482 172.28.0.21:6379@16379 myself,master - 0 1705325345000 1 connected 0-5460
-ccb7888f9767cdff73ad9fc177ccaf69c3f44f49 172.28.0.26:6379@16379 slave 92640aed71fece7d80a2754056b2e01e9bc2f1f5 0 1705325346000 2 connected
-a29ce0030c679affbd83c70c5547f481ac2fb2a9 172.28.0.23:6379@16379 master - 0 1705325346971 3 connected 10923-16383
-fb755a0d0b2318ab89a56a4653c7be9fcdbe7252 172.28.0.24:6379@16379 slave a29ce0030c679affbd83c70c5547f481ac2fb2a9 0 1705325345000 3 connected"#;
+        let cluster_nodes = r#"09596be5c2150ad93c51fdca1ff9116d1077e042 172.28.0.17:6379@16379 master - 0 1711678515085 7 connected 0-1671 2268 5461-7127 8620 10923-12588 15759
+        0e9d360631a20c27f629267bf3e01de8e8c4cbec 172.28.0.11:6379@16379 myself,master - 0 1711678514000 1 connected 1672-2267 2269-5460
+        5bafc7277da3038a8fbf01873179260351ed0a0a 172.28.0.13:6379@16379 master - 0 1711678515180 3 connected 12589-15758 15760-16383
+        66e84ed6d7f28971cdf59d530c490561c64dda61 172.28.0.16:6379@16379 slave c02d3f6210367e1b7bbfd131b5c2269520ef4f73 0 1711678514561 2 connected
+        7dd62287c3543b076551b7412cd7425f8251809d 172.28.0.18:6379@16379 slave 09596be5c2150ad93c51fdca1ff9116d1077e042 0 1711678514000 7 connected
+        c02d3f6210367e1b7bbfd131b5c2269520ef4f73 172.28.0.12:6379@16379 master - 0 1711678514044 2 connected 7128-8619 8621-10922
+        76d90b851f7692358d9a01d783cf64c1ac673ef5 172.28.0.15:6379@16379 slave 0e9d360631a20c27f629267bf3e01de8e8c4cbec 0 1711678514562 1 connected
+        587ec020a7cd63397afe33d6e92ee975b4ab79a2 172.28.0.14:6379@16379 slave 5bafc7277da3038a8fbf01873179260351ed0a0a 0 1711678514562 3 connected"#;
         let (addresses, slots) = RedisUtil::parse_cluster_nodes(cluster_nodes).unwrap();
 
-        assert_eq!(addresses.len(), 3);
-        assert_eq!(addresses[0], "172.28.0.22:6379");
-        assert_eq!(addresses[1], "172.28.0.21:6379");
-        assert_eq!(addresses[2], "172.28.0.23:6379");
+        assert_eq!(addresses.len(), 4);
 
-        assert_eq!(slots.len(), 3);
-        assert_eq!(slots[0][0], 5461);
-        assert_eq!(*slots[0].last().unwrap(), 10922);
-        assert_eq!(slots[1][0], 0);
-        assert_eq!(*slots[1].last().unwrap(), 5460);
-        assert_eq!(slots[2][0], 10923);
-        assert_eq!(*slots[2].last().unwrap(), 16383);
+        assert_eq!(slots.len(), 4);
+        assert_eq!(slots[0].len(), 5008);
+        assert_eq!(slots[1].len(), 3788);
+        assert_eq!(slots[2].len(), 3794);
+        assert_eq!(slots[3].len(), 3794);
+
+        assert!(slots[0].contains(&0));
+        assert!(slots[0].contains(&1671));
+        assert!(slots[0].contains(&15759));
+
+        assert!(slots[1].contains(&1672));
+        assert!(slots[1].contains(&2267));
+        assert!(slots[1].contains(&2269));
+        assert!(slots[1].contains(&5460));
     }
 }
