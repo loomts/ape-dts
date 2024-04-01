@@ -16,3 +16,18 @@ CREATE TABLE "resume_table_*$4"("p.k" serial, val numeric(20,8), PRIMARY KEY("p.
 
 DROP TABLE IF EXISTS "test_db_*.*"."resume_table_*$5";
 CREATE TABLE "test_db_*.*"."resume_table_*$5"("p.k" serial, val numeric(20,8), PRIMARY KEY("p.k"));
+
+DROP TABLE IF EXISTS "test_db_*.*"."finished_table_*$1";
+CREATE TABLE "test_db_*.*"."finished_table_*$1"("p.k" serial, val numeric(20,8), PRIMARY KEY("p.k"));
+
+DROP TABLE IF EXISTS "test_db_*.*"."finished_table_*$2";
+CREATE TABLE "test_db_*.*"."finished_table_*$2"("p.k" serial, val numeric(20,8), PRIMARY KEY("p.k"));
+
+DROP TABLE IF EXISTS "test_db_*.*"."in_finished_log_table_*$1";
+CREATE TABLE "test_db_*.*"."in_finished_log_table_*$1"("p.k" serial, val numeric(20,8), PRIMARY KEY("p.k"));
+
+DROP TABLE IF EXISTS "test_db_*.*"."in_finished_log_table_*$2";
+CREATE TABLE "test_db_*.*"."in_finished_log_table_*$2"("p.k" serial, val numeric(20,8), PRIMARY KEY("p.k"));
+
+DROP TABLE IF EXISTS "test_db_*.*"."in_position_log_table_*$1";
+CREATE TABLE "test_db_*.*"."in_position_log_table_*$1"("p.k" serial, val numeric(20,8), PRIMARY KEY("p.k"));

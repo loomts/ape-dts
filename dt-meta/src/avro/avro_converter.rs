@@ -311,10 +311,12 @@ mod tests {
         // update
         row_data.row_type = RowType::Update;
         row_data.before = Some(before);
+        row_data.refresh_data_size();
         validate(row_data.clone());
         // delete
         row_data.row_type = RowType::Delete;
         row_data.after = None;
+        row_data.refresh_data_size();
         validate(row_data.clone());
     }
 }

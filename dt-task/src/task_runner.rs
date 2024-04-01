@@ -15,6 +15,7 @@ use dt_common::{
         extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
     },
     error::Error,
+    log_info,
     monitor::monitor::Monitor,
     utils::{rdb_filter::RdbFilter, sql_util::SqlUtil, time_util::TimeUtil},
 };
@@ -63,25 +64,41 @@ impl TaskRunner {
             self.init_log4rs()?;
         }
 
+        let db_type = &self.config.extractor_basic.db_type;
+        let router = RdbRouter::from_config(&self.config.router, db_type)?;
+        let resumer = SnapshotResumer::from_config(&self.config.resumer, db_type)?;
+
         match &self.config.extractor {
             ExtractorConfig::MysqlStruct { url, .. }
             | ExtractorConfig::PgStruct { url, .. }
             | ExtractorConfig::MysqlSnapshot { url, .. }
             | ExtractorConfig::PgSnapshot { url, .. }
-            | ExtractorConfig::MongoSnapshot { url, .. } => self.start_multi_task(url).await?,
+            | ExtractorConfig::MongoSnapshot { url, .. } => {
+                self.start_multi_task(url, &router, &resumer).await?
+            }
 
-            _ => self.start_single_task(&self.config.extractor).await?,
+            _ => {
+                self.start_single_task(&self.config.extractor, &router, &resumer)
+                    .await?
+            }
         };
 
         Ok(())
     }
 
-    async fn start_multi_task(&self, url: &str) -> Result<(), Error> {
-        let db_type = self.config.extractor_basic.db_type.clone();
-        let mut filter = RdbFilter::from_config(&self.config.filter, db_type.clone())?;
-        let dbs = TaskUtil::list_dbs(url, &db_type).await?;
+    async fn start_multi_task(
+        &self,
+        url: &str,
+        router: &RdbRouter,
+        resumer: &SnapshotResumer,
+    ) -> Result<(), Error> {
+        let db_type = &self.config.extractor_basic.db_type;
+        let mut filter = RdbFilter::from_config(&self.config.filter, db_type)?;
+
+        let dbs = TaskUtil::list_dbs(url, db_type).await?;
         for db in dbs.iter() {
             if filter.filter_db(db) {
+                log_info!("db: {} filtered", db);
                 continue;
             }
 
@@ -101,13 +118,19 @@ impl TaskRunner {
             };
 
             if let Some(extractor_config) = db_extractor_config {
-                self.start_single_task(&extractor_config).await?;
+                self.start_single_task(&extractor_config, router, resumer)
+                    .await?;
                 continue;
             }
 
             // start a task for each tb
-            let tbs = TaskUtil::list_tbs(url, db, &db_type).await?;
+            let tbs = TaskUtil::list_tbs(url, db, db_type).await?;
             for tb in tbs.iter() {
+                if resumer.check_finished(db, tb) {
+                    log_info!("db: {}, tb: {} already finished", db, tb);
+                    continue;
+                }
+
                 if filter.filter_event(db, tb, &RowType::Insert.to_string()) {
                     continue;
                 }
@@ -149,13 +172,19 @@ impl TaskRunner {
                     }
                 };
 
-                self.start_single_task(&tb_extractor_config).await?;
+                self.start_single_task(&tb_extractor_config, router, resumer)
+                    .await?;
             }
         }
         Ok(())
     }
 
-    async fn start_single_task(&self, extractor_config: &ExtractorConfig) -> Result<(), Error> {
+    async fn start_single_task(
+        &self,
+        extractor_config: &ExtractorConfig,
+        router: &RdbRouter,
+        resumer: &SnapshotResumer,
+    ) -> Result<(), Error> {
         let buffer = Arc::new(ConcurrentQueue::bounded(self.config.pipeline.buffer_size));
         let shut_down = Arc::new(AtomicBool::new(false));
         let syncer = Arc::new(Mutex::new(Syncer {
@@ -196,6 +225,8 @@ impl TaskRunner {
                 syncer.clone(),
                 extractor_monitor.clone(),
                 extractor_data_marker,
+                router.clone(),
+                resumer.clone(),
             )
             .await?;
 
@@ -305,12 +336,9 @@ impl TaskRunner {
         syncer: Arc<Mutex<Syncer>>,
         monitor: Arc<Mutex<Monitor>>,
         data_marker: Option<DataMarker>,
+        router: RdbRouter,
+        resumer: SnapshotResumer,
     ) -> Result<Box<dyn Extractor + Send>, Error> {
-        let resumer =
-            SnapshotResumer::new(&self.config.extractor_basic.db_type, &self.config.resumer)?;
-        let router =
-            RdbRouter::from_config(&self.config.router, &self.config.extractor_basic.db_type)?;
-
         let base_extractor = BaseExtractor {
             buffer,
             router,
@@ -364,7 +392,7 @@ impl TaskRunner {
                 heartbeat_interval_secs,
                 heartbeat_tb,
             } => {
-                let filter = RdbFilter::from_config(&self.config.filter, DbType::Mysql)?;
+                let filter = RdbFilter::from_config(&self.config.filter, &DbType::Mysql)?;
                 let extractor = ExtractorUtil::create_mysql_cdc_extractor(
                     base_extractor,
                     url,
@@ -427,7 +455,7 @@ impl TaskRunner {
                 heartbeat_tb,
                 ddl_command_tb,
             } => {
-                let filter = RdbFilter::from_config(&self.config.filter, DbType::Pg)?;
+                let filter = RdbFilter::from_config(&self.config.filter, &DbType::Pg)?;
                 let extractor = ExtractorUtil::create_pg_cdc_extractor(
                     base_extractor,
                     url,
@@ -473,7 +501,7 @@ impl TaskRunner {
                 heartbeat_interval_secs,
                 heartbeat_tb,
             } => {
-                let filter = RdbFilter::from_config(&self.config.filter, DbType::Mongo)?;
+                let filter = RdbFilter::from_config(&self.config.filter, &DbType::Mongo)?;
                 let extractor = ExtractorUtil::create_mongo_cdc_extractor(
                     base_extractor,
                     url,
@@ -508,7 +536,7 @@ impl TaskRunner {
             }
 
             ExtractorConfig::MysqlStruct { url, db } => {
-                let filter = RdbFilter::from_config(&self.config.filter, DbType::Mysql)?;
+                let filter = RdbFilter::from_config(&self.config.filter, &DbType::Mysql)?;
                 let extractor = ExtractorUtil::create_mysql_struct_extractor(
                     base_extractor,
                     url,
@@ -521,7 +549,7 @@ impl TaskRunner {
             }
 
             ExtractorConfig::PgStruct { url, schema } => {
-                let filter = RdbFilter::from_config(&self.config.filter, DbType::Pg)?;
+                let filter = RdbFilter::from_config(&self.config.filter, &DbType::Pg)?;
                 let extractor = ExtractorUtil::create_pg_struct_extractor(
                     base_extractor,
                     url,
@@ -534,7 +562,7 @@ impl TaskRunner {
             }
 
             ExtractorConfig::RedisSnapshot { url, repl_port } => {
-                let filter = RdbFilter::from_config(&self.config.filter, DbType::Redis)?;
+                let filter = RdbFilter::from_config(&self.config.filter, &DbType::Redis)?;
                 let extractor = ExtractorUtil::create_redis_snapshot_extractor(
                     base_extractor,
                     url,
@@ -546,7 +574,7 @@ impl TaskRunner {
             }
 
             ExtractorConfig::RedisSnapshotFile { file_path } => {
-                let filter = RdbFilter::from_config(&self.config.filter, DbType::Redis)?;
+                let filter = RdbFilter::from_config(&self.config.filter, &DbType::Redis)?;
                 let extractor = ExtractorUtil::create_redis_snapshot_file_extractor(
                     base_extractor,
                     file_path,
@@ -561,7 +589,7 @@ impl TaskRunner {
                 scan_count,
                 statistic_type,
             } => {
-                let filter = RdbFilter::from_config(&self.config.filter, DbType::Redis)?;
+                let filter = RdbFilter::from_config(&self.config.filter, &DbType::Redis)?;
                 let extractor = ExtractorUtil::create_redis_scan_extractor(
                     base_extractor,
                     url,
@@ -583,7 +611,7 @@ impl TaskRunner {
                 heartbeat_interval_secs,
                 heartbeat_key,
             } => {
-                let filter = RdbFilter::from_config(&self.config.filter, DbType::Redis)?;
+                let filter = RdbFilter::from_config(&self.config.filter, &DbType::Redis)?;
                 let extractor = ExtractorUtil::create_redis_cdc_extractor(
                     base_extractor,
                     url,

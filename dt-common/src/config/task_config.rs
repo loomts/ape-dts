@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::FromStr};
+use std::str::FromStr;
 
 use crate::error::Error;
 
@@ -388,8 +388,12 @@ impl TaskConfig {
     fn load_runtime_config(loader: &IniLoader) -> Result<RuntimeConfig, Error> {
         Ok(RuntimeConfig {
             log_level: loader.get_with_default(RUNTIME, "log_level", "info".to_string()),
-            log_dir: loader.get_with_default(RUNTIME, "log_dir", "./log4rs.yaml".to_string()),
-            log4rs_file: loader.get_with_default(RUNTIME, "log4rs_file", "./logs".to_string()),
+            log_dir: loader.get_with_default(RUNTIME, "log_dir", "./logs".to_string()),
+            log4rs_file: loader.get_with_default(
+                RUNTIME,
+                "log4rs_file",
+                "./log4rs.yaml".to_string(),
+            ),
         })
     }
 
@@ -416,11 +420,17 @@ impl TaskConfig {
     }
 
     fn load_resumer_config(loader: &IniLoader) -> Result<ResumerConfig, Error> {
-        let mut resume_values = HashMap::new();
-        if let Some(values) = loader.ini.get_map().unwrap().get(RESUMER) {
-            resume_values = values.clone();
+        let mut resume_log_dir: String = loader.get_optional(RESUMER, "resume_log_dir");
+        if resume_log_dir.is_empty() {
+            resume_log_dir = loader.get_with_default(RUNTIME, "log_dir", "./logs".to_string());
         }
-        Ok(ResumerConfig { resume_values })
+
+        Ok(ResumerConfig {
+            tb_positions: loader.get_optional(RESUMER, "tb_positions"),
+            finished_tbs: loader.get_optional(RESUMER, "finished_tbs"),
+            resume_from_log: loader.get_optional(RESUMER, "resume_from_log"),
+            resume_log_dir,
+        })
     }
 
     fn load_data_marker_config(loader: &IniLoader) -> Result<Option<DataMarkerConfig>, Error> {

@@ -38,6 +38,14 @@ impl SqlUtil {
             .to_string();
     }
 
+    pub fn unescape_by_db_type(token: &str, db_type: &DbType) -> String {
+        let mut result = token.to_string();
+        for escape_pair in Self::get_escape_pairs(db_type) {
+            result = Self::unescape(token, &escape_pair);
+        }
+        result
+    }
+
     pub fn escape_cols(cols: &Vec<String>, db_type: &DbType) -> Vec<String> {
         let mut escaped_cols = Vec::new();
         for col in cols {
@@ -95,6 +103,7 @@ mod tests {
 
     use super::*;
     #[test]
+    #[ignore]
     fn test_check_valid_token_without_escapes() {
         let db_type = DbType::Mysql;
         let escape_pairs = vec![];

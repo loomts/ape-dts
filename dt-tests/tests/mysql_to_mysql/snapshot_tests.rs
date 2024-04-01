@@ -51,6 +51,14 @@ mod test {
         // with special characters in db && tb && col names
         dst_expected_counts.insert("test_db_@.resume_table_*$4", 1);
 
+        dst_expected_counts.insert("test_db_@.finished_table_*$1", 0);
+        dst_expected_counts.insert("test_db_@.finished_table_*$2", 0);
+
+        dst_expected_counts.insert("test_db_@.in_position_log_table_*$1", 1);
+
+        dst_expected_counts.insert("test_db_@.in_finished_log_table_*$1", 0);
+        dst_expected_counts.insert("test_db_@.in_finished_log_table_*$2", 0);
+
         TestBase::run_snapshot_test_and_check_dst_count(
             "mysql_to_mysql/snapshot/resume_test",
             &DbType::Mysql,
