@@ -1,6 +1,7 @@
-use std::collections::HashMap;
-
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct ResumerConfig {
-    pub resume_values: HashMap<String, Option<String>>,
+    pub tb_positions: String,
+    pub finished_tbs: String,
+    pub resume_from_log: bool,
+    pub resume_log_dir: String,
 }

@@ -50,7 +50,7 @@ impl PrecheckerBuilder {
             )
         };
 
-        let filter = RdbFilter::from_config(&self.task_config.filter, db_type.clone()).unwrap();
+        let filter = RdbFilter::from_config(&self.task_config.filter, &db_type).unwrap();
         let checker: Option<Box<dyn Prechecker + Send>> = match db_type {
             DbType::Mysql => Some(Box::new(MySqlPrechecker {
                 filter_config: self.task_config.filter.clone(),

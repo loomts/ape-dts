@@ -25,17 +25,17 @@ pub struct RdbFilter {
 }
 
 impl RdbFilter {
-    pub fn from_config(config: &FilterConfig, db_type: DbType) -> Result<Self, Error> {
+    pub fn from_config(config: &FilterConfig, db_type: &DbType) -> Result<Self, Error> {
         Ok(Self {
-            db_type: db_type.clone(),
-            do_dbs: Self::parse_single_tokens(&config.do_dbs, &db_type)?,
-            ignore_dbs: Self::parse_single_tokens(&config.ignore_dbs, &db_type)?,
-            do_tbs: Self::parse_pair_tokens(&config.do_tbs, &db_type)?,
-            ignore_tbs: Self::parse_pair_tokens(&config.ignore_tbs, &db_type)?,
-            do_events: Self::parse_single_tokens(&config.do_events, &db_type)?,
-            do_structures: Self::parse_single_tokens(&config.do_structures, &db_type)?,
-            do_ddls: Self::parse_single_tokens(&config.do_ddls, &db_type)?,
-            ignore_cmds: Self::parse_single_tokens(&config.ignore_cmds, &db_type)?,
+            db_type: db_type.to_owned(),
+            do_dbs: Self::parse_single_tokens(&config.do_dbs, db_type)?,
+            ignore_dbs: Self::parse_single_tokens(&config.ignore_dbs, db_type)?,
+            do_tbs: Self::parse_pair_tokens(&config.do_tbs, db_type)?,
+            ignore_tbs: Self::parse_pair_tokens(&config.ignore_tbs, db_type)?,
+            do_events: Self::parse_single_tokens(&config.do_events, db_type)?,
+            do_structures: Self::parse_single_tokens(&config.do_structures, db_type)?,
+            do_ddls: Self::parse_single_tokens(&config.do_ddls, db_type)?,
+            ignore_cmds: Self::parse_single_tokens(&config.ignore_cmds, db_type)?,
             cache: HashMap::new(),
         })
     }
@@ -370,7 +370,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(rdb_fitler.filter_event("a", "bcd", "insert"));
         assert!(rdb_fitler.filter_event("b", "b", "insert"));
         assert!(!rdb_fitler.filter_event("a", "cbd", "insert"));
@@ -387,7 +387,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(rdb_fitler.filter_event("a", "b*", "insert"));
         assert!(rdb_fitler.filter_event("b", "b*", "insert"));
         assert!(!rdb_fitler.filter_event("a", "bcd", "insert"));
@@ -404,7 +404,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(!rdb_fitler.filter_event("db_test_position.aaa", "b.bbb,.b", "insert"));
         assert!(!rdb_fitler.filter_event("db_test_position.aaa", "c", "insert"));
     }
@@ -419,7 +419,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(rdb_fitler.filter_event("abc", "bcd", "insert"));
         assert!(rdb_fitler.filter_event("a", "bcd", "insert"));
         assert!(!rdb_fitler.filter_event("b", "cbd", "insert"));
@@ -436,7 +436,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(!rdb_fitler.filter_event("abc", "bcd", "insert"));
         assert!(!rdb_fitler.filter_event("a", "bcd", "insert"));
         assert!(rdb_fitler.filter_event("bcd", "cbd", "insert"));
@@ -453,7 +453,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(rdb_fitler.filter_event("a", "bcd", "insert"));
         assert!(rdb_fitler.filter_event("c", "bcd", "insert"));
         assert!(!rdb_fitler.filter_event("b", "bcd", "insert"));
@@ -470,7 +470,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(rdb_fitler.filter_event("a", "bcd", "insert"));
         assert!(rdb_fitler.filter_event("c", "bcd", "insert"));
         assert!(rdb_fitler.filter_event("b", "bcd", "insert"));
@@ -491,7 +491,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(rdb_fitler.filter_event("bcd", "bcd", "insert"));
         assert!(rdb_fitler.filter_event("cde", "bcd", "insert"));
         assert!(!rdb_fitler.filter_event("a", "bcd", "insert"));
@@ -507,7 +507,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(rdb_fitler.filter_event("bcd", "bcd", "insert"));
         assert!(rdb_fitler.filter_event("cde", "bcd", "insert"));
         assert!(!rdb_fitler.filter_event("a", "bcd", "insert"));
@@ -529,7 +529,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(!rdb_fitler.filter_db("test_db_1"));
 
         // keep by do_dbs, filtered by ignore_dbs exactly
@@ -540,7 +540,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(rdb_fitler.filter_db("test_db_1"));
 
         // keep by do_dbs, filtered by ignore_dbs wildchar
@@ -550,7 +550,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(rdb_fitler.filter_db("test_db_1"));
 
         // keep by do_dbs, NOT all tables filtered by ignore_tbs
@@ -560,7 +560,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(!rdb_fitler.filter_db("test_db_1"));
 
         // keep by do_dbs, all tables filtered by ignore_tbs
@@ -570,7 +570,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(rdb_fitler.filter_db("test_db_1"));
 
         // keep by do_tbs, NOT all tables filtered by ignore_tbs
@@ -580,7 +580,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(!rdb_fitler.filter_db("test_db_1"));
 
         // keep by do_tbs, all tables filtered by ignore_tbs
@@ -591,7 +591,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(rdb_fitler.filter_db("test_db_1"));
 
         // keep by do_tbs, NOT filtered by ignore_dbs
@@ -601,7 +601,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(!rdb_fitler.filter_db("test_db_1"));
 
         // keep by do_tbs, filtered by ignore_dbs exactly
@@ -611,7 +611,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(rdb_fitler.filter_db("test_db_1"));
 
         // keep by do_tbs, filtered by ignore_dbs wildchar
@@ -621,7 +621,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(rdb_fitler.filter_db("test_db_1"));
     }
 
@@ -635,7 +635,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(!rdb_fitler.filter_db("test_db_*"));
 
         // keep by do_dbs, filtered by ignore_dbs exactly
@@ -645,7 +645,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(rdb_fitler.filter_db("test_db_*"));
 
         // keep by do_dbs, filtered by ignore_dbs wildchar
@@ -655,7 +655,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(rdb_fitler.filter_db("test_db_*"));
 
         // keep by do_dbs, NOT all tables filtered by ignore_tbs
@@ -665,7 +665,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(!rdb_fitler.filter_db("test_db_*"));
 
         // keep by do_dbs, all tables filtered by ignore_tbs
@@ -675,7 +675,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(rdb_fitler.filter_db("test_db_*"));
 
         // keep by do_tbs, NOT all tables filtered by ignore_tbs
@@ -685,7 +685,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(!rdb_fitler.filter_db("test_db_*"));
 
         // keep by do_tbs, all tables filtered by ignore_tbs
@@ -696,7 +696,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(rdb_fitler.filter_db("test_db_*"));
 
         // keep by do_tbs, NOT filtered by ignore_dbs
@@ -706,7 +706,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(!rdb_fitler.filter_db("test_db_*"));
 
         // keep by do_tbs, filtered by ignore_dbs exactly
@@ -716,7 +716,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(rdb_fitler.filter_db("test_db_*"));
 
         // keep by do_tbs, filtered by ignore_dbs wildchar
@@ -726,7 +726,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(rdb_fitler.filter_db("test_db_*"));
 
         // ingore some tbs in db, but not all tbs in db filtered
@@ -735,7 +735,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(rdb_fitler.filter_db("test_db_*"));
     }
 
@@ -750,7 +750,7 @@ mod tests {
             do_events: "*".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(!rdb_fitler.filter_event("test_db_1", "aaaa", "insert"));
         assert!(!rdb_fitler.filter_event("test_db_1", "aaaa", "update"));
         assert!(!rdb_fitler.filter_event("test_db_1", "aaaa", "delete"));
@@ -762,7 +762,7 @@ mod tests {
             do_events: "insert".to_string(),
             ..Default::default()
         };
-        let mut rdb_fitler = RdbFilter::from_config(&config, db_type.clone()).unwrap();
+        let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
         assert!(!rdb_fitler.filter_event("test_db_1", "aaaa", "insert"));
         assert!(rdb_fitler.filter_event("test_db_1", "aaaa", "update"));
         assert!(rdb_fitler.filter_event("test_db_1", "aaaa", "delete"));

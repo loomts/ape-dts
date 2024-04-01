@@ -3,7 +3,7 @@ use futures::TryStreamExt;
 
 use sqlx::{Pool, Postgres};
 
-use dt_common::{config::config_enums::DbType, log_info};
+use dt_common::{config::config_enums::DbType, log_finished, log_info};
 
 use dt_meta::{
     adaptor::{pg_col_value_convertor::PgColValueConvertor, sqlx_ext::SqlxPgExt},
@@ -80,6 +80,15 @@ impl PgSnapshotExtractor {
             self.extract_all(&tb_meta).await?;
         }
 
+        log_finished!(
+            "{}",
+            Position::RdbSnapshotFinished {
+                db_type: DbType::Pg.to_string(),
+                schema: self.schema.clone(),
+                tb: self.tb.clone(),
+            }
+            .to_string()
+        );
         self.base_extractor.wait_task_finish().await
     }
 

@@ -52,7 +52,7 @@ impl RedisTestRunner {
         };
 
         let redis_util = RedisUtil::new(escape_pairs);
-        let filter = RdbFilter::from_config(&config.filter, DbType::Redis)?;
+        let filter = RdbFilter::from_config(&config.filter, &DbType::Redis)?;
         Ok(Self {
             base,
             src_conn,

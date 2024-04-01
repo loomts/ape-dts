@@ -15,6 +15,7 @@ pub struct TestConfigUtil {}
 const EXTRACTOR: &str = "extractor";
 const SINKER: &str = "sinker";
 const RUNTIME: &str = "runtime";
+const RESUMER: &str = "resumer";
 const TEST_PROJECT: &str = "dt-tests";
 
 #[allow(dead_code)]
@@ -108,6 +109,14 @@ impl TestConfigUtil {
         // runtime/log_dir
         let log_dir = format!("{}/{}", project_root, config.runtime.log_dir);
         update_configs.push((RUNTIME.to_string(), "log_dir".to_string(), log_dir.clone()));
+
+        // resumer/resume_log_dir
+        let resume_log_dir = format!("{}/{}", project_root, config.resumer.resume_log_dir);
+        update_configs.push((
+            RESUMER.to_string(),
+            "resume_log_dir".to_string(),
+            resume_log_dir,
+        ));
 
         // extractor/check_log_dir
         match config.extractor {

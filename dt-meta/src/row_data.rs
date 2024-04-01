@@ -113,6 +113,10 @@ impl RowData {
         hash_code
     }
 
+    pub fn refresh_data_size(&mut self) {
+        self.data_size = self.get_data_malloc_size();
+    }
+
     fn get_data_malloc_size(&self) -> usize {
         let mut size = 0;
         // do not use mem::size_of_val() since:

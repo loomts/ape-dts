@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum Position {
     None,
     Kafka {
@@ -19,6 +20,11 @@ pub enum Position {
         tb: String,
         order_col: String,
         value: String,
+    },
+    RdbSnapshotFinished {
+        db_type: String,
+        schema: String,
+        tb: String,
     },
     MysqlCdc {
         server_id: String,
@@ -83,5 +89,18 @@ mod test {
             "2023-03-28 05:33:47.000 UTC-0000",
             Position::format_timestamp_millis(1679981627 * 1000)
         );
+    }
+
+    #[test]
+    fn test_from_str() {
+        let strs = [
+            r#"{"type":"None"}"#,
+            r#"{"type":"RdbSnapshot","db_type":"mysql","schema":"test_db_1","tb":"numeric_table","order_col":"f_0","value":"127"}"#,
+        ];
+
+        for str in strs {
+            let position = Position::from_str(str).unwrap();
+            assert_eq!(str, &position.to_string());
+        }
     }
 }

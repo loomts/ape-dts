@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use dt_common::{config::config_enums::DbType, error::Error, log_info};
+use dt_common::{config::config_enums::DbType, error::Error, log_finished, log_info};
 use dt_meta::{
     col_value::ColValue,
     mongo::{mongo_constant::MongoConstants, mongo_key::MongoKey},
@@ -101,6 +101,16 @@ impl MongoSnapshotExtractor {
             self.db,
             self.tb,
             self.base_extractor.monitor.counters.record_count
+        );
+
+        log_finished!(
+            "{}",
+            Position::RdbSnapshotFinished {
+                db_type: DbType::Mongo.to_string(),
+                schema: self.db.clone(),
+                tb: self.tb.clone(),
+            }
+            .to_string()
         );
         self.base_extractor.wait_task_finish().await
     }

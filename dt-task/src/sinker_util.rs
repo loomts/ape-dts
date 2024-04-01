@@ -71,7 +71,7 @@ impl SinkerUtil {
             } => {
                 // checker needs the reverse router
                 let router = RdbRouter::from_config(&task_config.router, &DbType::Mysql)?.reverse();
-                let filter = RdbFilter::from_config(&task_config.filter, DbType::Mysql)?;
+                let filter = RdbFilter::from_config(&task_config.filter, &DbType::Mysql)?;
                 let extractor_meta_manager = Self::get_extractor_meta_manager(task_config).await?;
                 Self::create_mysql_checker(
                     url,
@@ -105,7 +105,7 @@ impl SinkerUtil {
             } => {
                 // checker needs the reverse router
                 let router = RdbRouter::from_config(&task_config.router, &DbType::Pg)?.reverse();
-                let filter = RdbFilter::from_config(&task_config.filter, DbType::Pg)?;
+                let filter = RdbFilter::from_config(&task_config.filter, &DbType::Pg)?;
                 let extractor_meta_manager = Self::get_extractor_meta_manager(task_config).await?;
                 Self::create_pg_checker(
                     url,
@@ -186,7 +186,7 @@ impl SinkerUtil {
                 url,
                 conflict_policy,
             } => {
-                let filter = RdbFilter::from_config(&task_config.filter, DbType::Mysql)?;
+                let filter = RdbFilter::from_config(&task_config.filter, &DbType::Mysql)?;
                 Self::create_mysql_struct_sinker(
                     url,
                     &task_config.runtime.log_level,
@@ -201,7 +201,7 @@ impl SinkerUtil {
                 url,
                 conflict_policy,
             } => {
-                let filter = RdbFilter::from_config(&task_config.filter, DbType::Pg)?;
+                let filter = RdbFilter::from_config(&task_config.filter, &DbType::Pg)?;
                 Self::create_pg_struct_sinker(
                     url,
                     &task_config.runtime.log_level,

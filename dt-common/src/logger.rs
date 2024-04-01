@@ -29,6 +29,11 @@ macro_rules! log_statistic {
 }
 
 #[macro_export(local_inner_macros)]
+macro_rules! log_finished {
+    ($($arg:tt)+) => (log::log!(target: "finished_logger", log::Level::Info, $($arg)+));
+}
+
+#[macro_export(local_inner_macros)]
 macro_rules! log_error {
     ($($arg:tt)+) => (log::log!(target: "default_logger", log::Level::Error, $($arg)+))
 }

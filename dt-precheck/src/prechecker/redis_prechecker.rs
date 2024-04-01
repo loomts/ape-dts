@@ -76,7 +76,7 @@ impl Prechecker for RedisPrechecker {
         let mut conn = RedisClient::new(&self.fetcher.url).await?;
         let buffer = Arc::new(ConcurrentQueue::bounded(1));
 
-        let filter = RdbFilter::from_config(&self.task_config.filter, DbType::Redis)?;
+        let filter = RdbFilter::from_config(&self.task_config.filter, &DbType::Redis)?;
         let monitor = Arc::new(Mutex::new(Monitor::new("extractor", 1, 1)));
         let mut base_extractor = BaseExtractor {
             buffer,

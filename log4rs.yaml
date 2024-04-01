@@ -138,6 +138,23 @@ appenders:
         count: 10
         pattern: "STATISTIC_LOG_DIR_PLACEHODLER/statistic{}.log"
 
+  finished_appender:
+    kind: rolling_file
+    append: true
+    path: "LOG_DIR_PLACEHODLER/finished.log"
+    encoder:
+      pattern: "{d(%Y-%m-%d %H:%M:%S.%6f)(utc)} | {m}{n}"
+    policy:
+      kind: compound
+      trigger:
+        kind: size
+        limit: 100mb
+      roller:
+        kind: fixed_window
+        base: 1
+        count: 10
+        pattern: "LOG_DIR_PLACEHODLER/finished{}.log"
+
 loggers:
   default_logger:
     level: LOG_LEVEL_PLACEHODLER
@@ -178,6 +195,11 @@ loggers:
     level: LOG_LEVEL_PLACEHODLER
     appenders: 
       - statistic_appender
+
+  finished_logger: 
+    level: LOG_LEVEL_PLACEHODLER
+    appenders: 
+      - finished_appender
 
 root:
   level: LOG_LEVEL_PLACEHODLER
