@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use dt_common::{error::Error, log_info, utils::rdb_filter::RdbFilter};
 
-use dt_meta::{
+use dt_common::meta::{
     ddl_data::DdlData, ddl_type::DdlType, dt_data::DtData, position::Position,
     struct_meta::statement::struct_statement::StructStatement,
 };

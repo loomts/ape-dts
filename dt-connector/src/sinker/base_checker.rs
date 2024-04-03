@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use dt_common::{error::Error, log_diff, log_extra, log_miss, utils::rdb_filter::RdbFilter};
-use dt_meta::{
+use dt_common::meta::{
     rdb_meta_manager::RdbMetaManager, rdb_tb_meta::RdbTbMeta, row_data::RowData,
     struct_meta::statement::struct_statement::StructStatement,
 };
+use dt_common::{error::Error, log_diff, log_extra, log_miss, utils::rdb_filter::RdbFilter};
 
 use crate::{
     check_log::{

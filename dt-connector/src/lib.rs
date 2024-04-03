@@ -11,7 +11,7 @@ pub mod sinker;
 use async_trait::async_trait;
 use check_log::check_log::CheckLog;
 use dt_common::error::Error;
-use dt_meta::{ddl_data::DdlData, dt_data::DtData, row_data::RowData};
+use dt_common::meta::{ddl_data::DdlData, dt_data::DtData, row_data::RowData};
 
 #[async_trait]
 pub trait Sinker {

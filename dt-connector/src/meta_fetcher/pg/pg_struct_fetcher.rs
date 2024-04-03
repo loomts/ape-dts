@@ -1,12 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use dt_common::{
-    config::{config_enums::DbType, config_token_parser::ConfigTokenParser},
-    error::Error,
-    log_error, log_info, log_warn,
-    utils::{rdb_filter::RdbFilter, sql_util::SqlUtil},
-};
-use dt_meta::struct_meta::{
+use dt_common::meta::struct_meta::{
     statement::{
         pg_create_schema_statement::PgCreateSchemaStatement,
         pg_create_table_statement::PgCreateTableStatement,
@@ -21,6 +15,12 @@ use dt_meta::struct_meta::{
         sequence_owner::SequenceOwner,
         table::Table,
     },
+};
+use dt_common::{
+    config::{config_enums::DbType, config_token_parser::ConfigTokenParser},
+    error::Error,
+    log_error, log_info, log_warn,
+    utils::{rdb_filter::RdbFilter, sql_util::SqlUtil},
 };
 use futures::TryStreamExt;
 use sqlx::{postgres::PgRow, Pool, Postgres, Row};

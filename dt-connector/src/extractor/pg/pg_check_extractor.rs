@@ -8,7 +8,7 @@ use sqlx::{Pool, Postgres};
 
 use dt_common::{error::Error, log_info};
 
-use dt_meta::{
+use dt_common::meta::{
     adaptor::pg_col_value_convertor::PgColValueConvertor,
     col_value::ColValue,
     pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},

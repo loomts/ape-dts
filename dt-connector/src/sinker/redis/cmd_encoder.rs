@@ -1,5 +1,5 @@
 use byteorder::WriteBytesExt;
-use dt_meta::redis::redis_object::RedisCmd;
+use dt_common::meta::redis::redis_object::RedisCmd;
 use std::io::Write;
 
 pub struct CmdEncoder {}

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use byteorder::{BigEndian, ByteOrder};
 use dt_common::error::Error;
-use dt_meta::redis::redis_object::{RedisCmd, RedisString, StreamObject};
+use dt_common::meta::redis::redis_object::{RedisCmd, RedisString, StreamObject};
 
 use crate::extractor::redis::rdb::reader::rdb_reader::RdbReader;
 

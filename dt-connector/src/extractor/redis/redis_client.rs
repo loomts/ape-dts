@@ -6,7 +6,7 @@ use async_std::io::BufReader;
 use async_std::net::TcpStream;
 use async_std::prelude::*;
 use dt_common::error::Error;
-use dt_meta::redis::redis_object::RedisCmd;
+use dt_common::meta::redis::redis_object::RedisCmd;
 use futures::executor::block_on;
 
 use url::Url;

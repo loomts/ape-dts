@@ -2,8 +2,8 @@ use crate::{extractor::base_extractor::BaseExtractor, Extractor};
 use async_trait::async_trait;
 use std::sync::{Arc, Mutex};
 
+use dt_common::meta::{avro::avro_converter::AvroConverter, position::Position, syncer::Syncer};
 use dt_common::{error::Error, log_info};
-use dt_meta::{avro::avro_converter::AvroConverter, position::Position, syncer::Syncer};
 use rdkafka::{
     consumer::{Consumer, StreamConsumer},
     ClientConfig, Message, Offset, TopicPartitionList,

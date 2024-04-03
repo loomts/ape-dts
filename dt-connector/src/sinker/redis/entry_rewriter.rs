@@ -1,5 +1,5 @@
 use dt_common::error::Error;
-use dt_meta::redis::{
+use dt_common::meta::redis::{
     redis_entry::RedisEntry,
     redis_object::{
         HashObject, ListObject, ModuleObject, RedisCmd, SetObject, StringObject, ZsetObject,

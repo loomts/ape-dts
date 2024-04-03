@@ -1,10 +1,10 @@
-use dt_common::{config::config_enums::DbType, error::Error};
-use dt_connector::rdb_query_builder::RdbQueryBuilder;
-use dt_meta::{
+use dt_common::meta::{
     mysql::{mysql_meta_manager::MysqlMetaManager, mysql_tb_meta::MysqlTbMeta},
     pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
     row_data::RowData,
 };
+use dt_common::{config::config_enums::DbType, error::Error};
+use dt_connector::rdb_query_builder::RdbQueryBuilder;
 use futures::TryStreamExt;
 use sqlx::{MySql, Pool, Postgres};
 

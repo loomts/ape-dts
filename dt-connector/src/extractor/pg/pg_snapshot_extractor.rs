@@ -5,7 +5,7 @@ use sqlx::{Pool, Postgres};
 
 use dt_common::{config::config_enums::DbType, log_finished, log_info};
 
-use dt_meta::{
+use dt_common::meta::{
     adaptor::{pg_col_value_convertor::PgColValueConvertor, sqlx_ext::SqlxPgExt},
     col_value::ColValue,
     pg::{pg_col_type::PgColType, pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},

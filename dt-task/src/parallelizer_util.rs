@@ -3,6 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use dt_common::meta::redis::command::key_parser::KeyParser;
 use dt_common::{
     config::{
         config_enums::{DbType, ParallelType},
@@ -12,7 +13,6 @@ use dt_common::{
     error::Error,
     monitor::monitor::Monitor,
 };
-use dt_meta::redis::command::key_parser::KeyParser;
 use dt_parallelizer::{
     base_parallelizer::BaseParallelizer, check_parallelizer::CheckParallelizer,
     merge_parallelizer::MergeParallelizer, mongo_merger::MongoMerger,

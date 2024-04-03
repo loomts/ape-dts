@@ -2,12 +2,12 @@ use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
-use dt_common::{error::Error, log_warn};
-use dt_connector::Sinker;
-use dt_meta::{
+use dt_common::meta::{
     dt_data::{DtData, DtItem},
     redis::command::key_parser::KeyParser,
 };
+use dt_common::{error::Error, log_warn};
+use dt_connector::Sinker;
 
 use crate::Parallelizer;
 

@@ -8,6 +8,13 @@ use std::{
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
+use dt_common::meta::{
+    ddl_data::DdlData,
+    dt_data::{DtData, DtItem},
+    position::Position,
+    row_data::RowData,
+    syncer::Syncer,
+};
 use dt_common::{
     config::sinker_config::BasicSinkerConfig,
     error::Error,
@@ -16,13 +23,6 @@ use dt_common::{
     utils::time_util::TimeUtil,
 };
 use dt_connector::{data_marker::DataMarker, Sinker};
-use dt_meta::{
-    ddl_data::DdlData,
-    dt_data::{DtData, DtItem},
-    position::Position,
-    row_data::RowData,
-    syncer::Syncer,
-};
 use dt_parallelizer::Parallelizer;
 
 use crate::Pipeline;

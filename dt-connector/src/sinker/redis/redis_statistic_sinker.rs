@@ -4,9 +4,9 @@ use std::sync::Mutex;
 use async_trait::async_trait;
 use dt_common::error::Error;
 use dt_common::log_statistic;
+use dt_common::meta::dt_data::DtData;
+use dt_common::meta::redis::redis_statistic_type::RedisStatisticType;
 use dt_common::monitor::monitor::Monitor;
-use dt_meta::dt_data::DtData;
-use dt_meta::redis::redis_statistic_type::RedisStatisticType;
 use serde::Serialize;
 use serde_json::json;
 

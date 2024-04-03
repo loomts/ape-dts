@@ -2,7 +2,7 @@ use std::io::Cursor;
 
 use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
 use dt_common::error::Error;
-use dt_meta::redis::redis_object::{RedisString, SetObject};
+use dt_common::meta::redis::redis_object::{RedisString, SetObject};
 
 use crate::extractor::redis::{rdb::reader::rdb_reader::RdbReader, StreamReader};
 

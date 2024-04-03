@@ -1,12 +1,12 @@
 use async_trait::async_trait;
-use dt_common::{config::config_enums::DbType, error::Error, log_finished, log_info};
-use dt_meta::{
+use dt_common::meta::{
     col_value::ColValue,
     mongo::{mongo_constant::MongoConstants, mongo_key::MongoKey},
     position::Position,
     row_data::RowData,
     row_type::RowType,
 };
+use dt_common::{config::config_enums::DbType, error::Error, log_finished, log_info};
 use mongodb::{
     bson::{doc, oid::ObjectId, Bson, Document},
     options::FindOptions,

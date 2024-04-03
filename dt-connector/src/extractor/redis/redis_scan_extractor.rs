@@ -1,6 +1,5 @@
 use async_trait::async_trait;
-use dt_common::{error::Error, log_info, utils::rdb_filter::RdbFilter};
-use dt_meta::{
+use dt_common::meta::{
     dt_data::DtData,
     position::Position,
     redis::{
@@ -9,6 +8,7 @@ use dt_meta::{
         redis_statistic_type::RedisStatisticType,
     },
 };
+use dt_common::{error::Error, log_info, utils::rdb_filter::RdbFilter};
 
 use crate::{
     extractor::{base_extractor::BaseExtractor, redis::redis_resp_types::Value},

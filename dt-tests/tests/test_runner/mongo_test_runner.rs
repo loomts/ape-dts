@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use dt_common::meta::mongo::{mongo_constant::MongoConstants, mongo_key::MongoKey};
 use dt_common::{
     config::{
         config_enums::DbType, extractor_config::ExtractorConfig, sinker_config::SinkerConfig,
@@ -9,7 +10,6 @@ use dt_common::{
     utils::time_util::TimeUtil,
 };
 use dt_connector::rdb_router::RdbRouter;
-use dt_meta::mongo::{mongo_constant::MongoConstants, mongo_key::MongoKey};
 use dt_task::task_util::TaskUtil;
 use mongodb::{
     bson::{doc, Document},

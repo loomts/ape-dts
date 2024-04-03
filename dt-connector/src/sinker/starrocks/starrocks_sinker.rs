@@ -5,8 +5,8 @@ use std::{
 
 use crate::{call_batch_fn, sinker::base_sinker::BaseSinker, Sinker};
 use async_trait::async_trait;
+use dt_common::meta::{row_data::RowData, row_type::RowType};
 use dt_common::{error::Error, log_error, monitor::monitor::Monitor};
-use dt_meta::{row_data::RowData, row_type::RowType};
 use reqwest::{header, Client, Method, Response, StatusCode};
 use serde_json::{json, Value};
 

@@ -9,6 +9,7 @@ use std::{
 };
 
 use concurrent_queue::ConcurrentQueue;
+use dt_common::meta::{dt_data::DtItem, position::Position, row_type::RowType, syncer::Syncer};
 use dt_common::{
     config::{
         config_enums::DbType, config_token_parser::ConfigTokenParser,
@@ -28,7 +29,6 @@ use dt_connector::{
     rdb_router::RdbRouter,
     Extractor, Sinker,
 };
-use dt_meta::{dt_data::DtItem, position::Position, row_type::RowType, syncer::Syncer};
 use dt_pipeline::{base_pipeline::BasePipeline, Pipeline};
 
 use log4rs::config::RawConfig;

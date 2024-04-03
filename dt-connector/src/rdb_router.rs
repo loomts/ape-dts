@@ -8,7 +8,7 @@ use dt_common::{
     utils::sql_util::SqlUtil,
 };
 
-use dt_meta::{col_value::ColValue, row_data::RowData};
+use dt_common::meta::{col_value::ColValue, row_data::RowData};
 use serde::{Deserialize, Serialize};
 
 type TbMap = HashMap<(String, String), (String, String)>;

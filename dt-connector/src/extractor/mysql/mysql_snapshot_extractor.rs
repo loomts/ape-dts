@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use dt_meta::{
+use dt_common::meta::{
     adaptor::{mysql_col_value_convertor::MysqlColValueConvertor, sqlx_ext::SqlxMysqlExt},
     col_value::ColValue,
     mysql::{

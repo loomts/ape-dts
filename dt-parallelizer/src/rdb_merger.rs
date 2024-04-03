@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
-use dt_common::{error::Error, log_debug};
-use dt_meta::{
+use dt_common::meta::{
     rdb_meta_manager::RdbMetaManager, rdb_tb_meta::RdbTbMeta, row_data::RowData, row_type::RowType,
 };
+use dt_common::{error::Error, log_debug};
 
 use crate::{merge_parallelizer::TbMergedData, Merger};
 

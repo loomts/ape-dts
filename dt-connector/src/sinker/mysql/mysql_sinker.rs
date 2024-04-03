@@ -11,7 +11,7 @@ use crate::{
 
 use dt_common::{error::Error, log_error, log_info, monitor::monitor::Monitor};
 
-use dt_meta::{
+use dt_common::meta::{
     ddl_data::DdlData, ddl_type::DdlType, mysql::mysql_meta_manager::MysqlMetaManager,
     row_data::RowData, row_type::RowType,
 };

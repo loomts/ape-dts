@@ -1,11 +1,11 @@
 use async_trait::async_trait;
 use dt_common::log_position;
+use dt_common::meta::dt_data::DtData;
+use dt_common::meta::position::Position;
+use dt_common::meta::redis::redis_entry::RedisEntry;
+use dt_common::meta::redis::redis_object::RedisCmd;
 use dt_common::utils::rdb_filter::RdbFilter;
 use dt_common::{error::Error, log_info};
-use dt_meta::dt_data::DtData;
-use dt_meta::position::Position;
-use dt_meta::redis::redis_entry::RedisEntry;
-use dt_meta::redis::redis_object::RedisCmd;
 
 use crate::extractor::base_extractor::BaseExtractor;
 use crate::extractor::redis::rdb::rdb_parser::RdbParser;

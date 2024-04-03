@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
+use dt_common::meta::redis::redis_object::RedisCmd;
 use dt_common::{config::config_token_parser::ConfigTokenParser, utils::sql_util::SqlUtil};
 use dt_connector::sinker::redis::cmd_encoder::CmdEncoder;
-use dt_meta::redis::redis_object::RedisCmd;
 use redis::{Connection, ConnectionLike, Value};
 
 use super::redis_cluster_connection::RedisClusterConnection;

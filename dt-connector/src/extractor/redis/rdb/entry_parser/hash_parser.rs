@@ -1,5 +1,5 @@
 use dt_common::error::Error;
-use dt_meta::redis::redis_object::{HashObject, RedisString};
+use dt_common::meta::redis::redis_object::{HashObject, RedisString};
 
 use crate::extractor::redis::rdb::reader::rdb_reader::RdbReader;
 

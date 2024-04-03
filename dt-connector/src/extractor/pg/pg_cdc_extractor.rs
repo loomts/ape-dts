@@ -33,7 +33,7 @@ use crate::{
     extractor::{base_extractor::BaseExtractor, pg::pg_cdc_client::PgCdcClient},
     Extractor,
 };
-use dt_meta::{
+use dt_common::meta::{
     adaptor::pg_col_value_convertor::PgColValueConvertor,
     col_value::ColValue,
     dt_data::DtData,

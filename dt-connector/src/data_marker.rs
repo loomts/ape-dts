@@ -3,8 +3,8 @@ use std::collections::HashSet;
 use dt_common::{
     config::{config_enums::DbType, data_marker_config::DataMarkerConfig},
     error::Error,
+    meta::{col_value::ColValue, dt_data::DtData},
 };
-use dt_meta::{col_value::ColValue, dt_data::DtData};
 
 #[derive(Debug, Clone, Default)]
 pub struct DataMarker {

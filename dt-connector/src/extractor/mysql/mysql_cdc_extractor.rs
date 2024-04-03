@@ -7,7 +7,7 @@ use std::{
     time::Instant,
 };
 
-use dt_meta::{
+use dt_common::meta::{
     adaptor::mysql_col_value_convertor::MysqlColValueConvertor, col_value::ColValue,
     dt_data::DtData, mysql::mysql_meta_manager::MysqlMetaManager, position::Position,
     row_data::RowData, row_type::RowType, syncer::Syncer,

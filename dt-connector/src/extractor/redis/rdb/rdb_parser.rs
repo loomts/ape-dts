@@ -1,5 +1,5 @@
+use dt_common::meta::redis::{redis_entry::RedisEntry, redis_object::RedisCmd};
 use dt_common::{error::Error, log_debug, log_info};
-use dt_meta::redis::{redis_entry::RedisEntry, redis_object::RedisCmd};
 use sqlx::types::chrono;
 
 use crate::extractor::redis::{rdb::entry_parser::module2_parser::ModuleParser, StreamReader};
