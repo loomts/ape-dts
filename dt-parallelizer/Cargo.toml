@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 dt-common = {path = "../dt-common", version = "0.1.0"}
-dt-meta = {path = "../dt-meta", version = "0.1.0"}
 dt-connector = {path = "../dt-connector", version = "0.1.0"}
 
 async-trait = { workspace = true }

@@ -22,7 +22,7 @@ use sqlx::{
     Executor, Pool, Postgres,
 };
 
-use dt_meta::{
+use dt_common::meta::{
     ddl_data::DdlData,
     ddl_type::DdlType,
     pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},

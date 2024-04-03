@@ -2,7 +2,6 @@
 
 members = [
     "dt-common",
-    "dt-meta",
     "dt-precheck",
     "dt-connector",
     "dt-parallelizer",

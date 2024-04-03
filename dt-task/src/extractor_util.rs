@@ -3,6 +3,12 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use dt_common::meta::{
+    avro::avro_converter::AvroConverter, mongo::mongo_cdc_source::MongoCdcSource,
+    mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
+    rdb_meta_manager::RdbMetaManager, redis::redis_statistic_type::RedisStatisticType,
+    syncer::Syncer,
+};
 use dt_common::{error::Error, utils::rdb_filter::RdbFilter};
 use dt_connector::extractor::{
     base_extractor::BaseExtractor,
@@ -26,12 +32,6 @@ use dt_connector::extractor::{
         redis_snapshot_file_extractor::RedisSnapshotFileExtractor,
     },
     snapshot_resumer::SnapshotResumer,
-};
-use dt_meta::{
-    avro::avro_converter::AvroConverter, mongo::mongo_cdc_source::MongoCdcSource,
-    mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
-    rdb_meta_manager::RdbMetaManager, redis::redis_statistic_type::RedisStatisticType,
-    syncer::Syncer,
 };
 
 use super::task_util::TaskUtil;

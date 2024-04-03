@@ -1,7 +1,7 @@
+use dt_common::meta::ddl_data::DdlData;
 use dt_common::{
     config::config_enums::ConflictPolicyEnum, error::Error, log_info, utils::rdb_filter::RdbFilter,
 };
-use dt_meta::ddl_data::DdlData;
 use sqlx::{query, MySql, Pool, Postgres};
 
 pub struct BaseStructSinker {}

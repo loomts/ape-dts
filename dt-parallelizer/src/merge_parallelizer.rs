@@ -2,12 +2,12 @@ use std::{cmp, sync::Arc};
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
-use dt_common::{config::sinker_config::BasicSinkerConfig, error::Error};
-use dt_connector::Sinker;
-use dt_meta::{
+use dt_common::meta::{
     ddl_data::DdlData, dt_data::DtItem, rdb_meta_manager::RdbMetaManager, row_data::RowData,
     row_type::RowType,
 };
+use dt_common::{config::sinker_config::BasicSinkerConfig, error::Error};
+use dt_connector::Sinker;
 
 use crate::{Merger, Parallelizer};
 

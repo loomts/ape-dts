@@ -9,7 +9,7 @@ use crate::{call_batch_fn, rdb_router::RdbRouter, sinker::base_sinker::BaseSinke
 
 use dt_common::{error::Error, monitor::monitor::Monitor};
 
-use dt_meta::{avro::avro_converter::AvroConverter, row_data::RowData};
+use dt_common::meta::{avro::avro_converter::AvroConverter, row_data::RowData};
 
 use kafka::producer::{Producer, Record};
 

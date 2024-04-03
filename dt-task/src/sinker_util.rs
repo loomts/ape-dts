@@ -3,6 +3,13 @@ use std::{
     sync::{Arc, Mutex, RwLock},
 };
 
+use dt_common::meta::{
+    avro::avro_converter::AvroConverter,
+    mysql::mysql_meta_manager::MysqlMetaManager,
+    pg::pg_meta_manager::PgMetaManager,
+    rdb_meta_manager::RdbMetaManager,
+    redis::{redis_statistic_type::RedisStatisticType, redis_write_method::RedisWriteMethod},
+};
 use dt_common::{
     config::{
         config_enums::{ConflictPolicyEnum, DbType},
@@ -28,13 +35,6 @@ use dt_connector::{
         starrocks::starrocks_sinker::StarRocksSinker,
     },
     Sinker,
-};
-use dt_meta::{
-    avro::avro_converter::AvroConverter,
-    mysql::mysql_meta_manager::MysqlMetaManager,
-    pg::pg_meta_manager::PgMetaManager,
-    rdb_meta_manager::RdbMetaManager,
-    redis::{redis_statistic_type::RedisStatisticType, redis_write_method::RedisWriteMethod},
 };
 use kafka::producer::{Producer, RequiredAcks};
 use reqwest::{redirect::Policy, Url};

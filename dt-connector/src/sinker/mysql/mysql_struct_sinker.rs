@@ -8,7 +8,7 @@ use dt_common::{
     config::config_enums::ConflictPolicyEnum, error::Error, utils::rdb_filter::RdbFilter,
 };
 
-use dt_meta::ddl_data::DdlData;
+use dt_common::meta::ddl_data::DdlData;
 
 use sqlx::{MySql, Pool};
 

@@ -1,7 +1,6 @@
 use std::{collections::HashMap, str::FromStr};
 
-use dt_common::{config::config_enums::DbType, error::Error, utils::rdb_filter::RdbFilter};
-use dt_meta::{
+use dt_common::meta::{
     mysql::mysql_meta_manager::MysqlMetaManager,
     struct_meta::{
         statement::{
@@ -17,6 +16,7 @@ use dt_meta::{
         },
     },
 };
+use dt_common::{config::config_enums::DbType, error::Error, utils::rdb_filter::RdbFilter};
 use futures::TryStreamExt;
 use sqlx::{mysql::MySqlRow, MySql, Pool, Row};
 

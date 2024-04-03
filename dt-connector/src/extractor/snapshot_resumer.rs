@@ -5,6 +5,7 @@ use std::{
     str::FromStr,
 };
 
+use dt_common::meta::position::Position;
 use dt_common::{
     config::{
         config_enums::DbType, config_token_parser::ConfigTokenParser, resumer_config::ResumerConfig,
@@ -12,7 +13,6 @@ use dt_common::{
     error::Error,
     utils::{file_util::FileUtil, sql_util::SqlUtil},
 };
-use dt_meta::position::Position;
 
 #[derive(Clone)]
 pub struct SnapshotResumer {

@@ -9,11 +9,11 @@ use dt_common::{
     utils::{sql_util::SqlUtil, time_util::TimeUtil},
 };
 
-use dt_connector::rdb_router::RdbRouter;
-use dt_meta::{
+use dt_common::meta::{
     col_value::ColValue, ddl_type::DdlType, mysql::mysql_meta_manager::MysqlMetaManager,
     row_data::RowData, sql_parser::ddl_parser::DdlParser,
 };
+use dt_connector::rdb_router::RdbRouter;
 use dt_task::task_util::TaskUtil;
 
 use sqlx::{MySql, Pool, Postgres};

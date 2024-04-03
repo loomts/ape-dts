@@ -1,12 +1,12 @@
 use std::{str::FromStr, time::Duration};
 
+use dt_common::meta::{
+    mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
+    rdb_meta_manager::RdbMetaManager,
+};
 use dt_common::{
     config::{config_enums::DbType, sinker_config::SinkerConfig, task_config::TaskConfig},
     error::Error,
-};
-use dt_meta::{
-    mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
-    rdb_meta_manager::RdbMetaManager,
 };
 use futures::TryStreamExt;
 use mongodb::options::ClientOptions;

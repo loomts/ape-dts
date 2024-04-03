@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use dt_common::error::Error;
-use dt_meta::redis::command::key_parser::KeyParser;
+use dt_common::meta::redis::command::key_parser::KeyParser;
 use dt_task::{redis_util::RedisUtil, task_util::TaskUtil};
 use redis::Connection;
 use url::Url;

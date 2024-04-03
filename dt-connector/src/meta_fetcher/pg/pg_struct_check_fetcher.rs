@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use dt_meta::{
+use dt_common::meta::{
     adaptor::pg_col_value_convertor::PgColValueConvertor, col_value::ColValue,
     pg::pg_col_type::PgColType,
 };

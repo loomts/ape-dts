@@ -1,13 +1,13 @@
 use concurrent_queue::ConcurrentQueue;
-use dt_common::monitor::counter::Counter;
-use dt_common::monitor::counter_type::CounterType;
-use dt_common::{error::Error, monitor::monitor::Monitor};
-use dt_connector::Sinker;
-use dt_meta::{
+use dt_common::meta::{
     ddl_data::DdlData,
     dt_data::{DtData, DtItem},
     row_data::RowData,
 };
+use dt_common::monitor::counter::Counter;
+use dt_common::monitor::counter_type::CounterType;
+use dt_common::{error::Error, monitor::monitor::Monitor};
+use dt_connector::Sinker;
 use ratelimit::Ratelimiter;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};

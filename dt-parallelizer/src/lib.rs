@@ -15,12 +15,12 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 use dt_common::error::Error;
-use dt_connector::Sinker;
-use dt_meta::{
+use dt_common::meta::{
     ddl_data::DdlData,
     dt_data::{DtData, DtItem},
     row_data::RowData,
 };
+use dt_connector::Sinker;
 use merge_parallelizer::TbMergedData;
 
 #[async_trait]

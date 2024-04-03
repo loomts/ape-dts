@@ -1,6 +1,6 @@
 use dt_common::error::Error;
+use dt_common::meta::redis::redis_object::RedisCmd;
 use dt_connector::sinker::redis::cmd_encoder::CmdEncoder;
-use dt_meta::redis::redis_object::RedisCmd;
 use redis::ConnectionLike;
 use regex::Regex;
 use std::str::FromStr;

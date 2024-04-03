@@ -5,19 +5,19 @@ use std::sync::{
 
 use concurrent_queue::ConcurrentQueue;
 
-use dt_common::{
-    config::{config_enums::DbType, config_token_parser::ConfigTokenParser},
-    error::Error,
-    log_error, log_info, log_warn,
-    utils::{sql_util::SqlUtil, time_util::TimeUtil},
-};
-use dt_meta::{
+use dt_common::meta::{
     ddl_data::DdlData,
     ddl_type::DdlType,
     dt_data::{DtData, DtItem},
     position::Position,
     row_data::RowData,
     sql_parser::ddl_parser::DdlParser,
+};
+use dt_common::{
+    config::{config_enums::DbType, config_token_parser::ConfigTokenParser},
+    error::Error,
+    log_error, log_info, log_warn,
+    utils::{sql_util::SqlUtil, time_util::TimeUtil},
 };
 
 use crate::{data_marker::DataMarker, rdb_router::RdbRouter};

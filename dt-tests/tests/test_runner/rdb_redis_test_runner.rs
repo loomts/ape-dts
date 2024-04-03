@@ -1,9 +1,9 @@
+use dt_common::meta::mysql::mysql_col_type::MysqlColType;
 use dt_common::{
     config::{sinker_config::SinkerConfig, task_config::TaskConfig},
     error::Error,
     utils::time_util::TimeUtil,
 };
-use dt_meta::mysql::mysql_col_type::MysqlColType;
 use dt_task::task_util::TaskUtil;
 use redis::{Connection, Value};
 use sqlx::{MySql, Pool};

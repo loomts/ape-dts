@@ -6,19 +6,19 @@ use std::{
 
 use async_trait::async_trait;
 use chrono::Utc;
-use dt_common::{
-    config::config_enums::DbType,
-    error::Error,
-    log_error, log_info,
-    utils::{rdb_filter::RdbFilter, time_util::TimeUtil},
-};
-use dt_meta::{
+use dt_common::meta::{
     col_value::ColValue,
     mongo::{mongo_cdc_source::MongoCdcSource, mongo_constant::MongoConstants},
     position::Position,
     row_data::RowData,
     row_type::RowType,
     syncer::Syncer,
+};
+use dt_common::{
+    config::config_enums::DbType,
+    error::Error,
+    log_error, log_info,
+    utils::{rdb_filter::RdbFilter, time_util::TimeUtil},
 };
 use mongodb::{
     bson::{doc, Bson, Document, Timestamp},

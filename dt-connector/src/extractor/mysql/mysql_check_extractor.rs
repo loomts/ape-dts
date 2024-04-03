@@ -1,6 +1,5 @@
 use async_trait::async_trait;
-use dt_common::{error::Error, log_info};
-use dt_meta::{
+use dt_common::meta::{
     adaptor::mysql_col_value_convertor::MysqlColValueConvertor,
     col_value::ColValue,
     mysql::{mysql_meta_manager::MysqlMetaManager, mysql_tb_meta::MysqlTbMeta},
@@ -8,6 +7,7 @@ use dt_meta::{
     row_data::RowData,
     row_type::RowType,
 };
+use dt_common::{error::Error, log_info};
 use futures::TryStreamExt;
 use sqlx::{MySql, Pool};
 use std::collections::HashMap;

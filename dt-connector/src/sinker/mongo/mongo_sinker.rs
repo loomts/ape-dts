@@ -12,7 +12,7 @@ use mongodb::{
 
 use dt_common::{error::Error, log_error, monitor::monitor::Monitor};
 
-use dt_meta::{
+use dt_common::meta::{
     col_value::ColValue, mongo::mongo_constant::MongoConstants, row_data::RowData,
     row_type::RowType,
 };

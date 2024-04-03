@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
-use dt_common::{config::config_enums::DbType, error::Error, utils::sql_util::SqlUtil};
-use dt_meta::{
+use dt_common::meta::{
     adaptor::{
         pg_col_value_convertor::PgColValueConvertor,
         sqlx_ext::{SqlxMysqlExt, SqlxPgExt},
@@ -13,6 +12,7 @@ use dt_meta::{
     row_data::RowData,
     row_type::RowType,
 };
+use dt_common::{config::config_enums::DbType, error::Error, utils::sql_util::SqlUtil};
 use sqlx::{mysql::MySqlArguments, postgres::PgArguments, query::Query, MySql, Postgres};
 
 pub struct RdbQueryInfo<'a> {
