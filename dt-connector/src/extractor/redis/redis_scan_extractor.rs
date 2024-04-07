@@ -1,27 +1,26 @@
 use async_trait::async_trait;
-use dt_common::meta::{
-    dt_data::DtData,
-    position::Position,
-    redis::{
-        redis_entry::RedisEntry,
-        redis_object::{RedisCmd, RedisObject, RedisString},
-        redis_statistic_type::RedisStatisticType,
-    },
-};
 use dt_common::{error::Error, log_info, utils::rdb_filter::RdbFilter};
-
-use crate::{
-    extractor::{base_extractor::BaseExtractor, redis::redis_resp_types::Value},
-    Extractor,
+use dt_common::{
+    meta::{
+        dt_data::DtData,
+        position::Position,
+        redis::{
+            redis_entry::RedisEntry,
+            redis_object::{RedisObject, RedisString},
+            redis_statistic_type::RedisStatisticType,
+        },
+    },
+    utils::redis_util::RedisUtil,
 };
+use redis::{Connection, Value};
 
-use super::redis_client::RedisClient;
+use crate::{extractor::base_extractor::BaseExtractor, Extractor};
 
 pub struct RedisScanExtractor {
     pub base_extractor: BaseExtractor,
     pub statistic_type: RedisStatisticType,
     pub scan_count: u64,
-    pub conn: RedisClient,
+    pub conn: Connection,
     pub filter: RdbFilter,
 }
 
@@ -47,9 +46,8 @@ impl Extractor for RedisScanExtractor {
             }
 
             // select db
-            let cmd = RedisCmd::from_str_args(&["SELECT", &db]);
-            self.conn.send(&cmd).await?;
-            if Value::Okay != self.conn.read().await? {
+            let cmd = ["SELECT", &db];
+            if Value::Okay != RedisUtil::send_cmd(&mut self.conn, &cmd) {
                 return Err(Error::RedisResultError(format!("\"SELECT {}\" failed", db)));
             }
 
@@ -75,10 +73,6 @@ impl Extractor for RedisScanExtractor {
         }
 
         self.base_extractor.wait_task_finish().await
-    }
-
-    async fn close(&mut self) -> Result<(), Error> {
-        self.conn.close().await
     }
 }
 
@@ -141,7 +135,7 @@ impl RedisScanExtractor {
     }
 
     async fn query(&mut self, cmd: &[&str]) -> Result<Vec<String>, Error> {
-        self.conn.send(&RedisCmd::from_str_args(cmd)).await?;
-        self.conn.read_as_string().await
+        let result = RedisUtil::send_cmd(&mut self.conn, cmd);
+        RedisUtil::parse_result_as_string(result)
     }
 }
