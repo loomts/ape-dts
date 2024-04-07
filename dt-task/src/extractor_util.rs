@@ -1,38 +1,54 @@
 use std::{
     str::FromStr,
-    sync::{Arc, Mutex},
+    sync::{atomic::AtomicBool, Arc, Mutex},
 };
 
-use dt_common::meta::{
-    avro::avro_converter::AvroConverter, mongo::mongo_cdc_source::MongoCdcSource,
-    mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
-    rdb_meta_manager::RdbMetaManager, redis::redis_statistic_type::RedisStatisticType,
-    syncer::Syncer,
+use concurrent_queue::ConcurrentQueue;
+use dt_common::{
+    config::{extractor_config::ExtractorConfig, task_config::TaskConfig},
+    error::Error,
+    meta::dt_data::DtItem,
+    monitor::monitor::Monitor,
+    utils::rdb_filter::RdbFilter,
 };
-use dt_common::{error::Error, utils::rdb_filter::RdbFilter};
-use dt_connector::extractor::{
-    base_extractor::BaseExtractor,
-    kafka::kafka_extractor::KafkaExtractor,
-    mongo::{
-        mongo_cdc_extractor::MongoCdcExtractor, mongo_check_extractor::MongoCheckExtractor,
-        mongo_snapshot_extractor::MongoSnapshotExtractor,
+use dt_common::{
+    meta::{
+        avro::avro_converter::AvroConverter, mongo::mongo_cdc_source::MongoCdcSource,
+        mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
+        redis::redis_statistic_type::RedisStatisticType, syncer::Syncer,
     },
-    mysql::{
-        mysql_cdc_extractor::MysqlCdcExtractor, mysql_check_extractor::MysqlCheckExtractor,
-        mysql_snapshot_extractor::MysqlSnapshotExtractor,
-        mysql_struct_extractor::MysqlStructExtractor,
+    utils::redis_util::RedisUtil,
+};
+use dt_connector::{
+    data_marker::DataMarker,
+    extractor::{
+        base_extractor::BaseExtractor,
+        extractor_monitor::ExtractorMonitor,
+        kafka::kafka_extractor::KafkaExtractor,
+        mongo::{
+            mongo_cdc_extractor::MongoCdcExtractor, mongo_check_extractor::MongoCheckExtractor,
+            mongo_snapshot_extractor::MongoSnapshotExtractor,
+        },
+        mysql::{
+            mysql_cdc_extractor::MysqlCdcExtractor, mysql_check_extractor::MysqlCheckExtractor,
+            mysql_snapshot_extractor::MysqlSnapshotExtractor,
+            mysql_struct_extractor::MysqlStructExtractor,
+        },
+        pg::{
+            pg_cdc_extractor::PgCdcExtractor, pg_check_extractor::PgCheckExtractor,
+            pg_snapshot_extractor::PgSnapshotExtractor, pg_struct_extractor::PgStructExtractor,
+        },
+        redis::{
+            redis_cdc_extractor::RedisCdcExtractor, redis_client::RedisClient,
+            redis_reshard_extractor::RedisReshardExtractor,
+            redis_scan_extractor::RedisScanExtractor,
+            redis_snapshot_extractor::RedisSnapshotExtractor,
+            redis_snapshot_file_extractor::RedisSnapshotFileExtractor,
+        },
+        snapshot_resumer::SnapshotResumer,
     },
-    pg::{
-        pg_cdc_extractor::PgCdcExtractor, pg_check_extractor::PgCheckExtractor,
-        pg_snapshot_extractor::PgSnapshotExtractor, pg_struct_extractor::PgStructExtractor,
-    },
-    redis::{
-        redis_cdc_extractor::RedisCdcExtractor, redis_client::RedisClient,
-        redis_reshard_extractor::RedisReshardExtractor, redis_scan_extractor::RedisScanExtractor,
-        redis_snapshot_extractor::RedisSnapshotExtractor,
-        redis_snapshot_file_extractor::RedisSnapshotFileExtractor,
-    },
-    snapshot_resumer::SnapshotResumer,
+    rdb_router::RdbRouter,
+    Extractor,
 };
 
 use super::task_util::TaskUtil;
@@ -40,375 +56,350 @@ use super::task_util::TaskUtil;
 pub struct ExtractorUtil {}
 
 impl ExtractorUtil {
-    pub async fn create_mysql_cdc_extractor(
-        base_extractor: BaseExtractor,
-        url: &str,
-        binlog_filename: &str,
-        binlog_position: u32,
-        server_id: u64,
-        heartbeat_interval_secs: u64,
-        heartbeat_tb: &str,
-        filter: RdbFilter,
-        log_level: &str,
+    pub async fn create_extractor(
+        config: &TaskConfig,
+        extractor_config: &ExtractorConfig,
+        buffer: Arc<ConcurrentQueue<DtItem>>,
+        shut_down: Arc<AtomicBool>,
         syncer: Arc<Mutex<Syncer>>,
-    ) -> Result<MysqlCdcExtractor, Error> {
-        let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
-        let conn_pool = TaskUtil::create_mysql_conn_pool(url, 2, enable_sqlx_log).await?;
-        let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
-
-        Ok(MysqlCdcExtractor {
-            meta_manager,
-            filter,
-            conn_pool,
-            url: url.to_string(),
-            binlog_filename: binlog_filename.to_string(),
-            binlog_position,
-            server_id,
-            heartbeat_interval_secs,
-            heartbeat_tb: heartbeat_tb.to_string(),
-            syncer,
-            base_extractor,
-        })
-    }
-
-    pub async fn create_pg_cdc_extractor(
-        base_extractor: BaseExtractor,
-        url: &str,
-        slot_name: &str,
-        pub_name: &str,
-        start_lsn: &str,
-        keepalive_interval_secs: u64,
-        heartbeat_interval_secs: u64,
-        heartbeat_tb: &str,
-        filter: RdbFilter,
-        log_level: &str,
-        ddl_command_tb: &str,
-        syncer: Arc<Mutex<Syncer>>,
-    ) -> Result<PgCdcExtractor, Error> {
-        let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
-        let conn_pool = TaskUtil::create_pg_conn_pool(url, 2, enable_sqlx_log).await?;
-        let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
-
-        Ok(PgCdcExtractor {
-            meta_manager,
-            filter,
-            url: url.to_string(),
-            conn_pool,
-            slot_name: slot_name.to_string(),
-            pub_name: pub_name.to_string(),
-            start_lsn: start_lsn.to_string(),
-            syncer,
-            keepalive_interval_secs,
-            heartbeat_interval_secs,
-            heartbeat_tb: heartbeat_tb.to_string(),
-            ddl_command_tb: ddl_command_tb.to_string(),
-            base_extractor,
-        })
-    }
-
-    pub async fn create_mysql_snapshot_extractor(
-        base_extractor: BaseExtractor,
-        url: &str,
-        db: &str,
-        tb: &str,
-        slice_size: usize,
-        sample_interval: usize,
+        monitor: Arc<Mutex<Monitor>>,
+        data_marker: Option<DataMarker>,
+        router: RdbRouter,
         resumer: SnapshotResumer,
-        log_level: &str,
-    ) -> Result<MysqlSnapshotExtractor, Error> {
-        let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
-        // max_connections: 1 for extracting data from table, 1 for db-meta-manager
-        let conn_pool = TaskUtil::create_mysql_conn_pool(url, 2, enable_sqlx_log).await?;
-        let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
+    ) -> Result<Box<dyn Extractor + Send>, Error> {
+        let base_extractor = BaseExtractor {
+            buffer,
+            router,
+            shut_down,
+            monitor: ExtractorMonitor::new(monitor),
+            data_marker,
+        };
 
-        Ok(MysqlSnapshotExtractor {
-            conn_pool: conn_pool.clone(),
-            meta_manager,
-            resumer,
-            db: db.to_string(),
-            tb: tb.to_string(),
-            slice_size,
-            sample_interval,
-            base_extractor,
-        })
-    }
+        let buffer_size = config.pipeline.buffer_size;
+        let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(&config.runtime.log_level);
+        let filter = RdbFilter::from_config(&config.filter, &config.extractor_basic.db_type)?;
 
-    pub async fn create_mysql_check_extractor(
-        base_extractor: BaseExtractor,
-        url: &str,
-        check_log_dir: &str,
-        batch_size: usize,
-        log_level: &str,
-    ) -> Result<MysqlCheckExtractor, Error> {
-        let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
-        let conn_pool = TaskUtil::create_mysql_conn_pool(url, 2, enable_sqlx_log).await?;
-        let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
+        let extractor: Box<dyn Extractor + Send> = match extractor_config.to_owned() {
+            ExtractorConfig::MysqlSnapshot {
+                url,
+                db,
+                tb,
+                sample_interval,
+            } => {
+                // max_connections: 1 for extracting data from table, 1 for db-meta-manager
+                let conn_pool = TaskUtil::create_mysql_conn_pool(&url, 2, enable_sqlx_log).await?;
+                let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
+                let extractor = MysqlSnapshotExtractor {
+                    conn_pool: conn_pool.clone(),
+                    meta_manager,
+                    resumer,
+                    db,
+                    tb,
+                    slice_size: buffer_size,
+                    sample_interval,
+                    base_extractor,
+                };
+                Box::new(extractor)
+            }
 
-        Ok(MysqlCheckExtractor {
-            conn_pool: conn_pool.clone(),
-            meta_manager,
-            check_log_dir: check_log_dir.to_string(),
-            batch_size,
-            base_extractor,
-        })
-    }
+            ExtractorConfig::MysqlCheck {
+                url,
+                check_log_dir,
+                batch_size,
+            } => {
+                let conn_pool = TaskUtil::create_mysql_conn_pool(&url, 2, enable_sqlx_log).await?;
+                let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
+                let extractor = MysqlCheckExtractor {
+                    conn_pool,
+                    meta_manager,
+                    check_log_dir,
+                    batch_size,
+                    base_extractor,
+                };
+                Box::new(extractor)
+            }
 
-    pub async fn create_pg_check_extractor(
-        base_extractor: BaseExtractor,
-        url: &str,
-        check_log_dir: &str,
-        batch_size: usize,
-        log_level: &str,
-    ) -> Result<PgCheckExtractor, Error> {
-        let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
-        let conn_pool = TaskUtil::create_pg_conn_pool(url, 2, enable_sqlx_log).await?;
-        let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
+            ExtractorConfig::MysqlCdc {
+                url,
+                binlog_filename,
+                binlog_position,
+                server_id,
+                heartbeat_interval_secs,
+                heartbeat_tb,
+            } => {
+                let conn_pool = TaskUtil::create_mysql_conn_pool(&url, 2, enable_sqlx_log).await?;
+                let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
+                let extractor = MysqlCdcExtractor {
+                    meta_manager,
+                    filter,
+                    conn_pool,
+                    url,
+                    binlog_filename,
+                    binlog_position,
+                    server_id,
+                    heartbeat_interval_secs,
+                    heartbeat_tb,
+                    syncer,
+                    base_extractor,
+                };
+                Box::new(extractor)
+            }
 
-        Ok(PgCheckExtractor {
-            conn_pool: conn_pool.clone(),
-            meta_manager,
-            check_log_dir: check_log_dir.to_string(),
-            batch_size,
-            base_extractor,
-        })
-    }
+            ExtractorConfig::PgSnapshot {
+                url,
+                schema: db,
+                tb,
+                sample_interval,
+            } => {
+                let conn_pool = TaskUtil::create_pg_conn_pool(&url, 2, enable_sqlx_log).await?;
+                let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
+                let extractor = PgSnapshotExtractor {
+                    conn_pool,
+                    meta_manager,
+                    resumer,
+                    slice_size: buffer_size,
+                    sample_interval,
+                    schema: db,
+                    tb,
+                    base_extractor,
+                };
+                Box::new(extractor)
+            }
 
-    pub async fn create_pg_snapshot_extractor(
-        base_extractor: BaseExtractor,
-        url: &str,
-        db: &str,
-        tb: &str,
-        slice_size: usize,
-        sample_interval: usize,
-        resumer: SnapshotResumer,
-        log_level: &str,
-    ) -> Result<PgSnapshotExtractor, Error> {
-        let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
-        let conn_pool = TaskUtil::create_pg_conn_pool(url, 2, enable_sqlx_log).await?;
-        let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
+            ExtractorConfig::PgCheck {
+                url,
+                check_log_dir,
+                batch_size,
+            } => {
+                let conn_pool = TaskUtil::create_pg_conn_pool(&url, 2, enable_sqlx_log).await?;
+                let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
+                let extractor = PgCheckExtractor {
+                    conn_pool,
+                    meta_manager,
+                    check_log_dir,
+                    batch_size,
+                    base_extractor,
+                };
+                Box::new(extractor)
+            }
 
-        Ok(PgSnapshotExtractor {
-            conn_pool: conn_pool.clone(),
-            meta_manager,
-            resumer,
-            slice_size,
-            sample_interval,
-            schema: db.to_string(),
-            tb: tb.to_string(),
-            base_extractor,
-        })
-    }
+            ExtractorConfig::PgCdc {
+                url,
+                slot_name,
+                pub_name,
+                start_lsn,
+                keepalive_interval_secs,
+                heartbeat_interval_secs,
+                heartbeat_tb,
+                ddl_command_tb,
+            } => {
+                let conn_pool = TaskUtil::create_pg_conn_pool(&url, 2, enable_sqlx_log).await?;
+                let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
+                let extractor = PgCdcExtractor {
+                    meta_manager,
+                    filter,
+                    url,
+                    conn_pool,
+                    slot_name,
+                    pub_name,
+                    start_lsn,
+                    syncer,
+                    keepalive_interval_secs,
+                    heartbeat_interval_secs,
+                    heartbeat_tb,
+                    ddl_command_tb,
+                    base_extractor,
+                };
+                Box::new(extractor)
+            }
 
-    pub async fn create_mongo_snapshot_extractor(
-        base_extractor: BaseExtractor,
-        url: &str,
-        app_name: &str,
-        db: &str,
-        tb: &str,
-        resumer: SnapshotResumer,
-    ) -> Result<MongoSnapshotExtractor, Error> {
-        let mongo_client = TaskUtil::create_mongo_client(url, app_name).await.unwrap();
-        Ok(MongoSnapshotExtractor {
-            resumer,
-            db: db.to_string(),
-            tb: tb.to_string(),
-            mongo_client,
-            base_extractor,
-        })
-    }
+            ExtractorConfig::MongoSnapshot {
+                url,
+                app_name,
+                db,
+                tb,
+            } => {
+                let mongo_client = TaskUtil::create_mongo_client(&url, &app_name)
+                    .await
+                    .unwrap();
+                let extractor = MongoSnapshotExtractor {
+                    resumer,
+                    db,
+                    tb,
+                    mongo_client,
+                    base_extractor,
+                };
+                Box::new(extractor)
+            }
 
-    pub async fn create_mongo_cdc_extractor(
-        base_extractor: BaseExtractor,
-        url: &str,
-        app_name: &str,
-        resume_token: &str,
-        start_timestamp: &u32,
-        source: &str,
-        filter: RdbFilter,
-        heartbeat_interval_secs: u64,
-        heartbeat_tb: &str,
-        syncer: Arc<Mutex<Syncer>>,
-    ) -> Result<MongoCdcExtractor, Error> {
-        let mongo_client = TaskUtil::create_mongo_client(url, app_name).await.unwrap();
-        Ok(MongoCdcExtractor {
-            filter,
-            resume_token: resume_token.to_string(),
-            start_timestamp: *start_timestamp,
-            source: MongoCdcSource::from_str(source)?,
-            mongo_client,
-            app_name: app_name.to_string(),
-            base_extractor,
-            heartbeat_interval_secs,
-            heartbeat_tb: heartbeat_tb.to_string(),
-            syncer,
-        })
-    }
+            ExtractorConfig::MongoCdc {
+                url,
+                app_name,
+                resume_token,
+                start_timestamp,
+                source,
+                heartbeat_interval_secs,
+                heartbeat_tb,
+            } => {
+                let mongo_client = TaskUtil::create_mongo_client(&url, &app_name)
+                    .await
+                    .unwrap();
+                let extractor = MongoCdcExtractor {
+                    filter,
+                    resume_token,
+                    start_timestamp,
+                    source: MongoCdcSource::from_str(&source)?,
+                    mongo_client,
+                    app_name,
+                    base_extractor,
+                    heartbeat_interval_secs,
+                    heartbeat_tb,
+                    syncer,
+                };
+                Box::new(extractor)
+            }
 
-    pub async fn create_mongo_check_extractor(
-        base_extractor: BaseExtractor,
-        url: &str,
-        app_name: &str,
-        check_log_dir: &str,
-        batch_size: usize,
-    ) -> Result<MongoCheckExtractor, Error> {
-        let mongo_client = TaskUtil::create_mongo_client(url, app_name).await.unwrap();
-        Ok(MongoCheckExtractor {
-            mongo_client,
-            check_log_dir: check_log_dir.to_string(),
-            batch_size,
-            base_extractor,
-        })
-    }
+            ExtractorConfig::MongoCheck {
+                url,
+                app_name,
+                check_log_dir,
+                batch_size,
+            } => {
+                let mongo_client = TaskUtil::create_mongo_client(&url, &app_name)
+                    .await
+                    .unwrap();
+                let extractor = MongoCheckExtractor {
+                    mongo_client,
+                    check_log_dir,
+                    batch_size,
+                    base_extractor,
+                };
+                Box::new(extractor)
+            }
 
-    pub async fn create_mysql_struct_extractor(
-        base_extractor: BaseExtractor,
-        url: &str,
-        db: &str,
-        filter: RdbFilter,
-        log_level: &str,
-    ) -> Result<MysqlStructExtractor, Error> {
-        let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
-        // TODO, pass max_connections as parameter
-        let conn_pool = TaskUtil::create_mysql_conn_pool(url, 2, enable_sqlx_log).await?;
+            ExtractorConfig::MysqlStruct { url, db } => {
+                // TODO, pass max_connections as parameter
+                let conn_pool = TaskUtil::create_mysql_conn_pool(&url, 2, enable_sqlx_log).await?;
+                let extractor = MysqlStructExtractor {
+                    conn_pool,
+                    db,
+                    filter,
+                    base_extractor,
+                };
+                Box::new(extractor)
+            }
 
-        Ok(MysqlStructExtractor {
-            conn_pool,
-            db: db.to_string(),
-            filter,
-            base_extractor,
-        })
-    }
+            ExtractorConfig::PgStruct { url, schema } => {
+                // TODO, pass max_connections as parameter
+                let conn_pool = TaskUtil::create_pg_conn_pool(&url, 2, enable_sqlx_log).await?;
+                let extractor = PgStructExtractor {
+                    conn_pool,
+                    schema,
+                    filter,
+                    base_extractor,
+                };
+                Box::new(extractor)
+            }
 
-    pub async fn create_pg_struct_extractor(
-        base_extractor: BaseExtractor,
-        url: &str,
-        schema: &str,
-        filter: RdbFilter,
-        log_level: &str,
-    ) -> Result<PgStructExtractor, Error> {
-        let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
-        // TODO, pass max_connections as parameter
-        let conn_pool = TaskUtil::create_pg_conn_pool(url, 2, enable_sqlx_log).await?;
+            ExtractorConfig::RedisSnapshot { url, repl_port } => {
+                let conn = RedisClient::new(&url).await.unwrap();
+                let extractor = RedisSnapshotExtractor {
+                    conn,
+                    repl_port,
+                    filter,
+                    base_extractor,
+                };
+                Box::new(extractor)
+            }
 
-        Ok(PgStructExtractor {
-            conn_pool,
-            schema: schema.to_string(),
-            filter,
-            base_extractor,
-        })
-    }
+            ExtractorConfig::RedisSnapshotFile { file_path } => {
+                let extractor = RedisSnapshotFileExtractor {
+                    file_path,
+                    filter,
+                    base_extractor,
+                };
+                Box::new(extractor)
+            }
 
-    pub async fn create_redis_snapshot_extractor(
-        base_extractor: BaseExtractor,
-        url: &str,
-        repl_port: u64,
-        filter: RdbFilter,
-    ) -> Result<RedisSnapshotExtractor, Error> {
-        // let conn = TaskUtil::create_redis_conn(url).await?;
-        let conn = RedisClient::new(url).await.unwrap();
-        Ok(RedisSnapshotExtractor {
-            conn,
-            repl_port,
-            filter,
-            base_extractor,
-        })
-    }
+            ExtractorConfig::RedisScan {
+                url,
+                scan_count,
+                statistic_type,
+            } => {
+                let conn = RedisUtil::create_redis_conn(&url).await.unwrap();
+                let statistic_type = RedisStatisticType::from_str(&statistic_type).unwrap();
+                let extractor = RedisScanExtractor {
+                    conn,
+                    statistic_type,
+                    scan_count,
+                    filter,
+                    base_extractor,
+                };
+                Box::new(extractor)
+            }
 
-    pub async fn create_redis_snapshot_file_extractor(
-        base_extractor: BaseExtractor,
-        file_path: &str,
-        filter: RdbFilter,
-    ) -> Result<RedisSnapshotFileExtractor, Error> {
-        Ok(RedisSnapshotFileExtractor {
-            file_path: file_path.to_string(),
-            filter,
-            base_extractor,
-        })
-    }
+            ExtractorConfig::RedisCdc {
+                url,
+                repl_id,
+                repl_offset,
+                now_db_id,
+                repl_port,
+                keepalive_interval_secs,
+                heartbeat_interval_secs,
+                heartbeat_key,
+            } => {
+                let conn = RedisClient::new(&url).await.unwrap();
+                let extractor = RedisCdcExtractor {
+                    conn,
+                    repl_id,
+                    repl_offset,
+                    keepalive_interval_secs,
+                    heartbeat_interval_secs,
+                    heartbeat_key,
+                    syncer,
+                    repl_port,
+                    now_db_id,
+                    filter,
+                    base_extractor,
+                };
+                Box::new(extractor)
+            }
 
-    pub async fn create_redis_scan_extractor(
-        base_extractor: BaseExtractor,
-        url: &str,
-        statistic_type: &str,
-        scan_count: u64,
-        filter: RdbFilter,
-    ) -> Result<RedisScanExtractor, Error> {
-        let conn = RedisClient::new(url).await.unwrap();
-        let statistic_type = RedisStatisticType::from_str(statistic_type).unwrap();
-        Ok(RedisScanExtractor {
-            conn,
-            statistic_type,
-            scan_count,
-            filter,
-            base_extractor,
-        })
-    }
+            ExtractorConfig::RedisReshard { url, to_node_ids } => {
+                let to_node_ids: Vec<String> =
+                    to_node_ids.split(',').map(|i| i.to_string()).collect();
+                let extractor = RedisReshardExtractor {
+                    base_extractor,
+                    url,
+                    to_node_ids,
+                };
+                Box::new(extractor)
+            }
 
-    pub async fn create_redis_cdc_extractor(
-        base_extractor: BaseExtractor,
-        url: &str,
-        repl_id: &str,
-        repl_offset: u64,
-        repl_port: u64,
-        now_db_id: i64,
-        keepalive_interval_secs: u64,
-        heartbeat_interval_secs: u64,
-        heartbeat_key: &str,
-        filter: RdbFilter,
-        syncer: Arc<Mutex<Syncer>>,
-    ) -> Result<RedisCdcExtractor, Error> {
-        // let conn = TaskUtil::create_redis_conn(url).await?;
-        let conn = RedisClient::new(url).await.unwrap();
-        Ok(RedisCdcExtractor {
-            conn,
-            repl_id: repl_id.to_string(),
-            repl_offset,
-            keepalive_interval_secs,
-            heartbeat_interval_secs,
-            heartbeat_key: heartbeat_key.into(),
-            syncer,
-            repl_port,
-            now_db_id,
-            filter,
-            base_extractor,
-        })
-    }
-
-    pub async fn create_redis_reshard_extractor(
-        base_extractor: BaseExtractor,
-        url: &str,
-        to_node_ids: &str,
-    ) -> Result<RedisReshardExtractor, Error> {
-        let to_node_ids: Vec<String> = to_node_ids.split(',').map(|i| i.to_string()).collect();
-        Ok(RedisReshardExtractor {
-            base_extractor,
-            url: url.to_string(),
-            to_node_ids,
-        })
-    }
-
-    pub async fn create_kafka_extractor(
-        base_extractor: BaseExtractor,
-        url: &str,
-        group: &str,
-        topic: &str,
-        partition: i32,
-        offset: i64,
-        ack_interval_secs: u64,
-        meta_manager: Option<RdbMetaManager>,
-        syncer: Arc<Mutex<Syncer>>,
-    ) -> Result<KafkaExtractor, Error> {
-        let avro_converter = AvroConverter::new(meta_manager);
-        Ok(KafkaExtractor {
-            url: url.into(),
-            group: group.into(),
-            topic: topic.into(),
-            partition,
-            offset,
-            ack_interval_secs,
-            avro_converter,
-            syncer,
-            base_extractor,
-        })
+            ExtractorConfig::Kafka {
+                url,
+                group,
+                topic,
+                partition,
+                offset,
+                ack_interval_secs,
+            } => {
+                let meta_manager = TaskUtil::create_rdb_meta_manager(config).await?;
+                let avro_converter = AvroConverter::new(meta_manager);
+                let extractor = KafkaExtractor {
+                    url,
+                    group,
+                    topic,
+                    partition,
+                    offset,
+                    ack_interval_secs,
+                    avro_converter,
+                    syncer,
+                    base_extractor,
+                };
+                Box::new(extractor)
+            }
+        };
+        Ok(extractor)
     }
 }

@@ -2,7 +2,7 @@ use crate::error::Error;
 use crate::meta::redis::cluster_node::ClusterNode;
 use crate::meta::redis::command::cmd_encoder::CmdEncoder;
 use crate::meta::redis::redis_object::RedisCmd;
-use redis::{ConnectionLike, Value};
+use redis::{Connection, ConnectionLike, Value};
 use regex::Regex;
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -18,6 +18,12 @@ impl RedisUtil {
             .get_connection()
             .unwrap_or_else(|_| panic!("can not connect: {}", url));
         Ok(conn)
+    }
+
+    pub fn send_cmd(conn: &mut Connection, cmd: &[&str]) -> Value {
+        let cmd = RedisCmd::from_str_args(cmd);
+        let packed_cmd = CmdEncoder::encode(&cmd);
+        conn.req_packed_command(&packed_cmd).unwrap()
     }
 
     pub fn get_cluster_master_nodes(
