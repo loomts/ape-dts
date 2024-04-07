@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use dt_common::error::Error;
 use dt_common::meta::dt_data::DtData;
 use dt_common::meta::rdb_meta_manager::RdbMetaManager;
+use dt_common::meta::redis::command::cmd_encoder::CmdEncoder;
 use dt_common::meta::redis::redis_object::RedisCmd;
 use dt_common::meta::redis::redis_object::RedisObject;
 use dt_common::meta::redis::redis_write_method::RedisWriteMethod;
@@ -21,7 +22,6 @@ use crate::data_marker::DataMarker;
 use crate::sinker::base_sinker::BaseSinker;
 use crate::Sinker;
 
-use super::cmd_encoder::CmdEncoder;
 use super::entry_rewriter::EntryRewriter;
 
 pub struct RedisSinker {

@@ -3,13 +3,6 @@ use std::{
     sync::{Arc, Mutex, RwLock},
 };
 
-use dt_common::meta::{
-    avro::avro_converter::AvroConverter,
-    mysql::mysql_meta_manager::MysqlMetaManager,
-    pg::pg_meta_manager::PgMetaManager,
-    rdb_meta_manager::RdbMetaManager,
-    redis::{redis_statistic_type::RedisStatisticType, redis_write_method::RedisWriteMethod},
-};
 use dt_common::{
     config::{
         config_enums::{ConflictPolicyEnum, DbType},
@@ -20,10 +13,21 @@ use dt_common::{
     monitor::monitor::Monitor,
     utils::rdb_filter::RdbFilter,
 };
+use dt_common::{
+    meta::{
+        avro::avro_converter::AvroConverter,
+        mysql::mysql_meta_manager::MysqlMetaManager,
+        pg::pg_meta_manager::PgMetaManager,
+        rdb_meta_manager::RdbMetaManager,
+        redis::{redis_statistic_type::RedisStatisticType, redis_write_method::RedisWriteMethod},
+    },
+    utils::redis_util::RedisUtil,
+};
 use dt_connector::{
     data_marker::DataMarker,
     rdb_router::RdbRouter,
     sinker::{
+        dummy_sinker::DummySinker,
         kafka::kafka_sinker::KafkaSinker,
         mongo::{mongo_checker::MongoChecker, mongo_sinker::MongoSinker},
         mysql::{
@@ -39,9 +43,9 @@ use dt_connector::{
 use kafka::producer::{Producer, RequiredAcks};
 use reqwest::{redirect::Policy, Url};
 
-use crate::redis_util::RedisUtil;
-
 use super::task_util::TaskUtil;
+
+type Sinkers = Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>;
 
 pub struct SinkerUtil {}
 
@@ -50,8 +54,12 @@ impl SinkerUtil {
         task_config: &TaskConfig,
         monitor: Arc<Mutex<Monitor>>,
         data_marker: Option<Arc<RwLock<DataMarker>>>,
-    ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
+    ) -> Result<Sinkers, Error> {
         let sinkers = match &task_config.sinker {
+            SinkerConfig::Dummy => {
+                Self::create_dummy_sinker(task_config.parallelizer.parallel_size)?
+            }
+
             SinkerConfig::Mysql { url, batch_size } => {
                 let router = RdbRouter::from_config(&task_config.router, &DbType::Mysql)?;
                 Self::create_mysql_sinker(
@@ -266,6 +274,15 @@ impl SinkerUtil {
         Ok(sinkers)
     }
 
+    fn create_dummy_sinker(parallel_size: usize) -> Result<Sinkers, Error> {
+        let mut sub_sinkers: Sinkers = Vec::new();
+        for _ in 0..parallel_size {
+            let sinker = DummySinker {};
+            sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
+        }
+        Ok(sub_sinkers)
+    }
+
     async fn create_mysql_sinker<'a>(
         url: &str,
         router: &RdbRouter,
@@ -274,14 +291,14 @@ impl SinkerUtil {
         batch_size: usize,
         monitor: Arc<Mutex<Monitor>>,
         data_marker: Option<Arc<RwLock<DataMarker>>>,
-    ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
+    ) -> Result<Sinkers, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool =
             TaskUtil::create_mysql_conn_pool(url, parallel_size as u32 * 2, enable_sqlx_log)
                 .await?;
 
         let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
-        let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
+        let mut sub_sinkers: Sinkers = Vec::new();
         // to avoid contention for monitor write lock between sinker threads,
         // create a monitor for each sinker instead of sharing a single monitor between sinkers,
         // sometimes a sinker may cost several millis to get write lock for a global monitor.
@@ -309,14 +326,14 @@ impl SinkerUtil {
         parallel_size: usize,
         batch_size: usize,
         monitor: Arc<Mutex<Monitor>>,
-    ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
+    ) -> Result<Sinkers, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool =
             TaskUtil::create_mysql_conn_pool(url, parallel_size as u32 * 2, enable_sqlx_log)
                 .await?;
 
         let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
-        let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
+        let mut sub_sinkers: Sinkers = Vec::new();
         for _ in 0..parallel_size {
             let sinker = MysqlChecker {
                 conn_pool: conn_pool.clone(),
@@ -340,13 +357,13 @@ impl SinkerUtil {
         batch_size: usize,
         monitor: Arc<Mutex<Monitor>>,
         data_marker: Option<Arc<RwLock<DataMarker>>>,
-    ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
+    ) -> Result<Sinkers, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool =
             TaskUtil::create_pg_conn_pool(url, parallel_size as u32 * 2, enable_sqlx_log).await?;
         let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
 
-        let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
+        let mut sub_sinkers: Sinkers = Vec::new();
         for _ in 0..parallel_size {
             let sinker = PgSinker {
                 url: url.to_string(),
@@ -371,13 +388,13 @@ impl SinkerUtil {
         parallel_size: usize,
         batch_size: usize,
         monitor: Arc<Mutex<Monitor>>,
-    ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
+    ) -> Result<Sinkers, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool =
             TaskUtil::create_pg_conn_pool(url, parallel_size as u32 * 2, enable_sqlx_log).await?;
         let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
 
-        let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
+        let mut sub_sinkers: Sinkers = Vec::new();
         for _ in 0..parallel_size {
             let sinker = PgChecker {
                 conn_pool: conn_pool.clone(),
@@ -402,7 +419,7 @@ impl SinkerUtil {
         required_acks: &str,
         avro_converter: &AvroConverter,
         monitor: Arc<Mutex<Monitor>>,
-    ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
+    ) -> Result<Sinkers, Error> {
         let brokers = vec![url.to_string()];
         let acks = match required_acks {
             "all" => RequiredAcks::All,
@@ -410,7 +427,7 @@ impl SinkerUtil {
             _ => RequiredAcks::One,
         };
 
-        let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
+        let mut sub_sinkers: Sinkers = Vec::new();
         for _ in 0..parallel_size {
             // TODO, authentication, https://github.com/kafka-rust/kafka-rust/blob/master/examples/example-ssl.rs
 
@@ -439,8 +456,8 @@ impl SinkerUtil {
         parallel_size: usize,
         batch_size: usize,
         monitor: Arc<Mutex<Monitor>>,
-    ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
-        let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
+    ) -> Result<Sinkers, Error> {
+        let mut sub_sinkers: Sinkers = Vec::new();
         for _ in 0..parallel_size {
             let mongo_client = TaskUtil::create_mongo_client(url, app_name).await.unwrap();
             let sinker = MongoSinker {
@@ -461,8 +478,8 @@ impl SinkerUtil {
         parallel_size: usize,
         batch_size: usize,
         monitor: Arc<Mutex<Monitor>>,
-    ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
-        let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
+    ) -> Result<Sinkers, Error> {
+        let mut sub_sinkers: Sinkers = Vec::new();
         for _ in 0..parallel_size {
             let mongo_client = TaskUtil::create_mongo_client(url, app_name).await.unwrap();
             let sinker = MongoChecker {
@@ -482,13 +499,13 @@ impl SinkerUtil {
         parallel_size: usize,
         conflict_policy: &ConflictPolicyEnum,
         filter: &RdbFilter,
-    ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
+    ) -> Result<Sinkers, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool =
             TaskUtil::create_mysql_conn_pool(url, parallel_size as u32 * 2, enable_sqlx_log)
                 .await?;
 
-        let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
+        let mut sub_sinkers: Sinkers = Vec::new();
         for _ in 0..parallel_size {
             let sinker = MysqlStructSinker {
                 conn_pool: conn_pool.clone(),
@@ -506,12 +523,12 @@ impl SinkerUtil {
         parallel_size: usize,
         conflict_policy: &ConflictPolicyEnum,
         filter: &RdbFilter,
-    ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
+    ) -> Result<Sinkers, Error> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool =
             TaskUtil::create_pg_conn_pool(url, parallel_size as u32 * 2, enable_sqlx_log).await?;
 
-        let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
+        let mut sub_sinkers: Sinkers = Vec::new();
         for _ in 0..parallel_size {
             let sinker = PgStructSinker {
                 conn_pool: conn_pool.clone(),
@@ -532,8 +549,8 @@ impl SinkerUtil {
         monitor: Arc<Mutex<Monitor>>,
         data_marker: Option<Arc<RwLock<DataMarker>>>,
         is_cluster: bool,
-    ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
-        let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
+    ) -> Result<Sinkers, Error> {
+        let mut sub_sinkers: Sinkers = Vec::new();
 
         let mut conn = RedisUtil::create_redis_conn(url).await?;
         let version = RedisUtil::get_redis_version(&mut conn)?;
@@ -548,12 +565,16 @@ impl SinkerUtil {
                 String::new()
             };
 
-            let (addresses, _slots) = RedisUtil::get_cluster_nodes(&mut conn)?;
-            for address in addresses {
-                let new_url = format!("redis://{}:{}@{}", username, password, address);
+            let nodes = RedisUtil::get_cluster_master_nodes(&mut conn)?;
+            for node in nodes.iter() {
+                if !node.is_master {
+                    continue;
+                }
+
+                let new_url = format!("redis://{}:{}@{}", username, password, node.address);
                 let conn = RedisUtil::create_redis_conn(&new_url).await?;
                 let sinker = RedisSinker {
-                    id: address,
+                    id: node.address.clone(),
                     conn,
                     batch_size,
                     now_db_id: -1,
@@ -592,9 +613,9 @@ impl SinkerUtil {
         freq_threshold: i64,
         data_size_threshold: usize,
         monitor: Arc<Mutex<Monitor>>,
-    ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
+    ) -> Result<Sinkers, Error> {
         let statistic_type = RedisStatisticType::from_str(statistic_type).unwrap();
-        let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
+        let mut sub_sinkers: Sinkers = Vec::new();
         for _ in 0..parallel_size {
             let sinker = RedisStatisticSinker {
                 statistic_type: statistic_type.clone(),
@@ -612,8 +633,8 @@ impl SinkerUtil {
         parallel_size: usize,
         batch_size: usize,
         monitor: Arc<Mutex<Monitor>>,
-    ) -> Result<Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>, Error> {
-        let mut sub_sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>> = Vec::new();
+    ) -> Result<Sinkers, Error> {
+        let mut sub_sinkers: Sinkers = Vec::new();
         for _ in 0..parallel_size {
             let url_info = Url::parse(stream_load_url).unwrap();
             let host = url_info.host_str().unwrap().to_string();

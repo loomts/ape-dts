@@ -28,7 +28,8 @@ use dt_connector::extractor::{
     },
     redis::{
         redis_cdc_extractor::RedisCdcExtractor, redis_client::RedisClient,
-        redis_scan_extractor::RedisScanExtractor, redis_snapshot_extractor::RedisSnapshotExtractor,
+        redis_reshard_extractor::RedisReshardExtractor, redis_scan_extractor::RedisScanExtractor,
+        redis_snapshot_extractor::RedisSnapshotExtractor,
         redis_snapshot_file_extractor::RedisSnapshotFileExtractor,
     },
     snapshot_resumer::SnapshotResumer,
@@ -370,6 +371,19 @@ impl ExtractorUtil {
             now_db_id,
             filter,
             base_extractor,
+        })
+    }
+
+    pub async fn create_redis_reshard_extractor(
+        base_extractor: BaseExtractor,
+        url: &str,
+        to_node_ids: &str,
+    ) -> Result<RedisReshardExtractor, Error> {
+        let to_node_ids: Vec<String> = to_node_ids.split(',').map(|i| i.to_string()).collect();
+        Ok(RedisReshardExtractor {
+            base_extractor,
+            url: url.to_string(),
+            to_node_ids,
         })
     }
 

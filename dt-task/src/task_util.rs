@@ -16,8 +16,6 @@ use sqlx::{
     ConnectOptions, MySql, Pool, Postgres, Row,
 };
 
-use crate::redis_util::RedisUtil;
-
 const MYSQL_SYS_DBS: [&str; 4] = ["information_schema", "mysql", "performance_schema", "sys"];
 const PG_SYS_SCHEMAS: [&str; 2] = ["pg_catalog", "information_schema"];
 
@@ -65,14 +63,6 @@ impl TaskUtil {
             .connect_with(conn_options)
             .await?;
         Ok(conn_pool)
-    }
-
-    pub async fn create_redis_conn(url: &str) -> Result<redis::Connection, Error> {
-        RedisUtil::create_redis_conn(url).await
-    }
-
-    pub fn get_redis_version(conn: &mut redis::Connection) -> Result<f32, Error> {
-        RedisUtil::get_redis_version(conn)
     }
 
     pub async fn create_rdb_meta_manager(

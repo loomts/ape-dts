@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use dt_common::error::Error;
 use dt_common::meta::redis::command::key_parser::KeyParser;
-use dt_task::{redis_util::RedisUtil, task_util::TaskUtil};
+use dt_common::utils::redis_util::RedisUtil;
 use redis::Connection;
 use url::Url;
 
@@ -17,16 +17,11 @@ impl RedisClusterConnection {
     pub async fn new(url: &str, is_cluster: bool) -> Result<Self, Error> {
         let mut slot_node_map = HashMap::new();
         let mut node_conn_map = HashMap::new();
-        let mut conn = TaskUtil::create_redis_conn(url).await?;
+        let mut conn = RedisUtil::create_redis_conn(url).await?;
 
         if is_cluster {
-            let (nodes, slots) = RedisUtil::get_cluster_nodes(&mut conn)?;
-            for i in 0..nodes.len() {
-                let node: &'static str = Box::leak(nodes[i].clone().into_boxed_str());
-                for slot in slots[i].iter() {
-                    slot_node_map.insert(*slot, node);
-                }
-            }
+            let nodes = RedisUtil::get_cluster_master_nodes(&mut conn)?;
+            slot_node_map = RedisUtil::get_slot_address_map(&nodes);
 
             let url_info = Url::parse(url).unwrap();
             let username = url_info.username();
@@ -36,13 +31,12 @@ impl RedisClusterConnection {
                 String::new()
             };
 
-            let (addresses, _slots) = RedisUtil::get_cluster_nodes(&mut conn)?;
-            println!("redis cluster nodes: {:?}", addresses);
-
-            for address in addresses {
-                let new_url = format!("redis://{}:{}@{}", username, password, address);
+            let nodes = RedisUtil::get_cluster_master_nodes(&mut conn)?;
+            for node in nodes {
+                println!("redis cluster node: {}", node.address);
+                let new_url = format!("redis://{}:{}@{}", username, password, node.address);
                 let conn = RedisUtil::create_redis_conn(&new_url).await?;
-                node_conn_map.insert(address.clone(), conn);
+                node_conn_map.insert(node.address.clone(), conn);
             }
         }
 

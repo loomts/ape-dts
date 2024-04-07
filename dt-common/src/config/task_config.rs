@@ -229,6 +229,11 @@ impl TaskConfig {
                     }
                 }
 
+                ExtractType::Reshard => {
+                    let to_node_ids = loader.get_required(EXTRACTOR, "to_node_ids");
+                    ExtractorConfig::RedisReshard { url, to_node_ids }
+                }
+
                 _ => return not_supported_err,
             },
 
@@ -258,7 +263,7 @@ impl TaskConfig {
         let sink_type = SinkType::from_str(&sink_type_str).unwrap();
 
         let url: String = loader.get_optional(SINKER, URL);
-        let batch_size: usize = loader.get_required(SINKER, BATCH_SIZE);
+        let batch_size: usize = loader.get_with_default(SINKER, BATCH_SIZE, 1);
 
         let basic = BasicSinkerConfig {
             db_type: db_type.clone(),
@@ -351,6 +356,8 @@ impl TaskConfig {
                     freq_threshold: loader.get_optional(SINKER, "freq_threshold"),
                     statistic_log_dir: loader.get_optional(SINKER, "statistic_log_dir"),
                 },
+
+                SinkType::Dummy => SinkerConfig::Dummy,
 
                 _ => return not_supported_err,
             },

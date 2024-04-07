@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
+use dt_common::meta::redis::command::cmd_encoder::CmdEncoder;
 use dt_common::meta::redis::redis_object::RedisCmd;
 use dt_common::{config::config_token_parser::ConfigTokenParser, utils::sql_util::SqlUtil};
-use dt_connector::sinker::redis::cmd_encoder::CmdEncoder;
 use redis::{Connection, ConnectionLike, Value};
 
 use super::redis_cluster_connection::RedisClusterConnection;
@@ -17,11 +17,11 @@ const SYSTEM_KEYS: [&str; 5] = [
     "ape_dts_heartbeat_key",
 ];
 
-pub struct RedisUtil {
+pub struct RedisTestUtil {
     escape_pairs: Vec<(char, char)>,
 }
 
-impl RedisUtil {
+impl RedisTestUtil {
     pub fn new_default() -> Self {
         Self::new(DEFAULT_ESCAPE_PAIRS.to_vec())
     }

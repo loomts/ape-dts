@@ -27,3 +27,4 @@ thiserror = { workspace = true }
 kafka = { workspace = true }
 apache-avro = {workspace = true}
 log = { workspace = true }
+redis = { workspace = true }
