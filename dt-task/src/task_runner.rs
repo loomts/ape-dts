@@ -629,6 +629,13 @@ impl TaskRunner {
                 Box::new(extractor)
             }
 
+            ExtractorConfig::RedisReshard { url, to_node_ids } => {
+                let extractor =
+                    ExtractorUtil::create_redis_reshard_extractor(base_extractor, url, to_node_ids)
+                        .await?;
+                Box::new(extractor)
+            }
+
             ExtractorConfig::Kafka {
                 url,
                 group,

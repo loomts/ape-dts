@@ -109,6 +109,11 @@ pub enum ExtractorConfig {
         statistic_type: String,
     },
 
+    RedisReshard {
+        url: String,
+        to_node_ids: String,
+    },
+
     Kafka {
         url: String,
         group: String,

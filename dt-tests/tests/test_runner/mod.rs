@@ -14,5 +14,5 @@ pub mod redis_cluster_connection;
 pub mod redis_cycle_test_runner;
 pub mod redis_statistic_runner;
 pub mod redis_test_runner;
-pub mod redis_util;
+pub mod redis_test_util;
 pub mod test_base;

@@ -3,7 +3,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use dt_common::meta::redis::command::key_parser::KeyParser;
 use dt_common::{
     config::{
         config_enums::{DbType, ParallelType},
@@ -13,6 +12,7 @@ use dt_common::{
     error::Error,
     monitor::monitor::Monitor,
 };
+use dt_common::{meta::redis::command::key_parser::KeyParser, utils::redis_util::RedisUtil};
 use dt_parallelizer::{
     base_parallelizer::BaseParallelizer, check_parallelizer::CheckParallelizer,
     merge_parallelizer::MergeParallelizer, mongo_merger::MongoMerger,
@@ -22,8 +22,6 @@ use dt_parallelizer::{
     table_parallelizer::TableParallelizer, Merger, Parallelizer,
 };
 use ratelimit::Ratelimiter;
-
-use crate::redis_util::RedisUtil;
 
 use super::task_util::TaskUtil;
 
@@ -105,13 +103,8 @@ impl ParallelizerUtil {
                 if let SinkerConfig::Redis { is_cluster, .. } = config.sinker {
                     let mut conn = RedisUtil::create_redis_conn(&config.sinker_basic.url).await?;
                     if is_cluster {
-                        let (nodes, slots) = RedisUtil::get_cluster_nodes(&mut conn)?;
-                        for i in 0..nodes.len() {
-                            let node: &'static str = Box::leak(nodes[i].clone().into_boxed_str());
-                            for slot in slots[i].iter() {
-                                slot_node_map.insert(*slot, node);
-                            }
-                        }
+                        let nodes = RedisUtil::get_cluster_master_nodes(&mut conn)?;
+                        slot_node_map = RedisUtil::get_slot_address_map(&nodes);
                     }
                 }
                 Box::new(RedisParallelizer {

@@ -1,11 +1,11 @@
 use super::redis_resp_reader::RedisRespReader;
 use super::redis_resp_types::Value;
 use super::StreamReader;
-use crate::sinker::redis::cmd_encoder::CmdEncoder;
 use async_std::io::BufReader;
 use async_std::net::TcpStream;
 use async_std::prelude::*;
 use dt_common::error::Error;
+use dt_common::meta::redis::command::cmd_encoder::CmdEncoder;
 use dt_common::meta::redis::redis_object::RedisCmd;
 use futures::executor::block_on;
 

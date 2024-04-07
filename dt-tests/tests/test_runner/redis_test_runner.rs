@@ -1,4 +1,4 @@
-use crate::test_runner::redis_util::RedisUtil;
+use crate::test_runner::redis_test_util::RedisTestUtil;
 
 use super::{base_test_runner::BaseTestRunner, redis_cluster_connection::RedisClusterConnection};
 use dt_common::{
@@ -7,17 +7,16 @@ use dt_common::{
         extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
     },
     error::Error,
-    utils::{rdb_filter::RdbFilter, sql_util::SqlUtil, time_util::TimeUtil},
+    utils::{rdb_filter::RdbFilter, redis_util::RedisUtil, sql_util::SqlUtil, time_util::TimeUtil},
 };
 
-use dt_task::task_util::TaskUtil;
 use redis::{Connection, Value};
 
 pub struct RedisTestRunner {
     pub base: BaseTestRunner,
     src_conn: Connection,
     dst_conn: RedisClusterConnection,
-    redis_util: RedisUtil,
+    redis_util: RedisTestUtil,
     filter: RdbFilter,
 }
 
@@ -35,7 +34,7 @@ impl RedisTestRunner {
         let config = TaskConfig::new(&base.task_config_file);
         let src_conn = match config.extractor {
             ExtractorConfig::RedisSnapshot { url, .. } | ExtractorConfig::RedisCdc { url, .. } => {
-                TaskUtil::create_redis_conn(&url).await.unwrap()
+                RedisUtil::create_redis_conn(&url).await.unwrap()
             }
             _ => {
                 return Err(Error::ConfigError("unsupported extractor config".into()));
@@ -51,7 +50,7 @@ impl RedisTestRunner {
             }
         };
 
-        let redis_util = RedisUtil::new(escape_pairs);
+        let redis_util = RedisTestUtil::new(escape_pairs);
         let filter = RdbFilter::from_config(&config.filter, &DbType::Redis)?;
         Ok(Self {
             base,
@@ -344,12 +343,12 @@ impl RedisTestRunner {
     fn print_version_info(&mut self) {
         println!(
             "src: {}",
-            TaskUtil::get_redis_version(&mut self.src_conn).unwrap()
+            RedisUtil::get_redis_version(&mut self.src_conn).unwrap()
         );
         let mut dst_node_conn = self.dst_conn.get_default_conn();
         println!(
             "dst: {}",
-            TaskUtil::get_redis_version(&mut dst_node_conn).unwrap()
+            RedisUtil::get_redis_version(&mut dst_node_conn).unwrap()
         );
     }
 }

@@ -35,10 +35,14 @@ pub enum ExtractType {
     SnapshotFile,
     #[strum(serialize = "scan")]
     Scan,
+    #[strum(serialize = "reshard")]
+    Reshard,
 }
 
 #[derive(Display, EnumString, IntoStaticStr)]
 pub enum SinkType {
+    #[strum(serialize = "dummy")]
+    Dummy,
     #[strum(serialize = "write")]
     Write,
     #[strum(serialize = "check")]

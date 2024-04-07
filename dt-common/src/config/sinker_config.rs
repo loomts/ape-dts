@@ -2,6 +2,8 @@ use super::config_enums::{ConflictPolicyEnum, DbType};
 
 #[derive(Clone, Debug)]
 pub enum SinkerConfig {
+    Dummy,
+
     Mysql {
         url: String,
         batch_size: usize,

@@ -1,4 +1,5 @@
 use dt_common::meta::mysql::mysql_col_type::MysqlColType;
+use dt_common::utils::redis_util::RedisUtil;
 use dt_common::{
     config::{sinker_config::SinkerConfig, task_config::TaskConfig},
     error::Error,
@@ -11,14 +12,15 @@ use sqlx::{MySql, Pool};
 use crate::test_runner::rdb_util::RdbUtil;
 
 use super::{
-    base_test_runner::BaseTestRunner, rdb_test_runner::RdbTestRunner, redis_util::RedisUtil,
+    base_test_runner::BaseTestRunner, rdb_test_runner::RdbTestRunner,
+    redis_test_util::RedisTestUtil,
 };
 
 pub struct RdbRedisTestRunner {
     pub base: BaseTestRunner,
     mysql_conn_pool: Option<Pool<MySql>>,
     redis_conn: Connection,
-    redis_util: RedisUtil,
+    redis_util: RedisTestUtil,
 }
 
 impl RdbRedisTestRunner {
@@ -29,12 +31,12 @@ impl RdbRedisTestRunner {
         let mysql_conn_pool =
             Some(TaskUtil::create_mysql_conn_pool(&config.extractor_basic.url, 1, false).await?);
         let redis_conn = match config.sinker {
-            SinkerConfig::Redis { url, .. } => TaskUtil::create_redis_conn(&url).await.unwrap(),
+            SinkerConfig::Redis { url, .. } => RedisUtil::create_redis_conn(&url).await.unwrap(),
             _ => {
                 return Err(Error::ConfigError("unsupported sinker config".into()));
             }
         };
-        let redis_util = RedisUtil::new_default();
+        let redis_util = RedisTestUtil::new_default();
 
         Ok(Self {
             base,
