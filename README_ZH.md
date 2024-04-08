@@ -69,8 +69,7 @@ apecloud/ape-dts:0.1.13.hotfix4 \
 - dt-pipeline：串联 extractor 和 sinker 的模块
 - dt-parallelizer：各种并发算法
 - dt-task：根据配置创建 extractor，sinker，pipeline，parallelizer 以组装任务
-- dt-meta：元数据管理及基础数据结构
-- dt-common：通用基础模块
+- dt-common：通用基础模块，基础数据结构，元数据管理
 - dt-tests：集成测试
 - dt-precheck: 任务预检查，**这部分将被移除**
 

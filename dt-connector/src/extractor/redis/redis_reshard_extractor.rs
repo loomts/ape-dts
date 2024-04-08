@@ -3,13 +3,14 @@ use std::collections::HashMap;
 use async_trait::async_trait;
 use dt_common::{
     error::Error,
-    log_info,
+    log_debug, log_info,
     meta::redis::{
         cluster_node::ClusterNode, command::cmd_encoder::CmdEncoder, redis_object::RedisCmd,
     },
     utils::redis_util::RedisUtil,
 };
 use redis::{Connection, ConnectionLike};
+use serde_json::json;
 use url::Url;
 
 use crate::{extractor::base_extractor::BaseExtractor, Extractor};
@@ -68,6 +69,11 @@ impl RedisReshardExtractor {
                 i += 1;
             }
 
+            log_info!(
+                "will move slots to {}, slots: {}",
+                node_id,
+                json!(move_in_slots),
+            );
             node_move_in_slots.insert(node_id.to_owned(), move_in_slots);
         }
 
@@ -126,7 +132,15 @@ impl RedisReshardExtractor {
         dst_conn: &mut Connection,
         slot: u16,
     ) -> Result<(), Error> {
+        log_info!(
+            "moving slot {} from {} to {}",
+            slot,
+            src_node.id,
+            dst_node.id
+        );
+
         let keys = Self::get_keys_in_slot(src_conn, slot).unwrap();
+        log_info!("slot {} has {} keys", slot, keys.len());
 
         // cluster setslot importing
         let dst_cmd = RedisCmd::from_str_args(&[
@@ -153,6 +167,13 @@ impl RedisReshardExtractor {
 
         // migrate
         for key in keys.iter() {
+            log_debug!(
+                "migrating key: [{}] in slot {} from {} to {}",
+                key,
+                slot,
+                src_node.id,
+                dst_node.id
+            );
             let cmd = RedisCmd::from_str_args(&[
                 "migrate",
                 &dst_node.host,
@@ -182,6 +203,12 @@ impl RedisReshardExtractor {
         src_conn
             .req_packed_command(&CmdEncoder::encode(&cmd))
             .unwrap();
+        log_info!(
+            "moved slot {} from {} to {}",
+            slot,
+            src_node.id,
+            dst_node.id
+        );
 
         Ok(())
     }
