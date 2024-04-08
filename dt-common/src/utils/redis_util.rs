@@ -146,16 +146,6 @@ impl RedisUtil {
                 (tokens[0].to_string(), tokens[1].to_string(), address)
             };
 
-            let address = address
-                .replace("172.28.0.18:6379", "127.0.0.1:6378")
-                .replace("172.28.0.17:6379", "127.0.0.1:6377")
-                .replace("172.28.0.16:6379", "127.0.0.1:6376")
-                .replace("172.28.0.15:6379", "127.0.0.1:6375")
-                .replace("172.28.0.14:6379", "127.0.0.1:6374")
-                .replace("172.28.0.13:6379", "127.0.0.1:6373")
-                .replace("172.28.0.12:6379", "127.0.0.1:6372")
-                .replace("172.28.0.11:6379", "127.0.0.1:6371");
-
             let mut node = ClusterNode {
                 is_master,
                 id,
@@ -176,6 +166,7 @@ impl RedisUtil {
                     "the current master node does not hold any slots. address=[{}]",
                     node.address
                 );
+                parsed_nodes.push(node);
                 continue;
             }
 

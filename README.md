@@ -61,8 +61,7 @@ Refer to [docs](./dt-tests/README.md) for more details.
 - dt-pipeline: pipeline to connect extractors and sinkers
 - dt-parallelizer: various parallel algorithms
 - dt-task: create extractors + sinkers + pipelines + parallelizers according to configurations
-- dt-meta: metadata management and basic data structures
-- dt-common: common utils
+- dt-common: common utils, basic data structures, metadata management
 - dt-tests: integration tests
 
 ## Coding
