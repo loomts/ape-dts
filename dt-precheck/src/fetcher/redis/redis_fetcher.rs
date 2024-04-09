@@ -1,8 +1,5 @@
 use async_trait::async_trait;
-use dt_common::{
-    error::Error,
-    utils::{rdb_filter::RdbFilter, redis_util::RedisUtil},
-};
+use dt_common::{error::Error, rdb_filter::RdbFilter, utils::redis_util::RedisUtil};
 
 use crate::fetcher::traits::Fetcher;
 

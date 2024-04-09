@@ -37,7 +37,9 @@ impl RedisUtil {
             let master_nodes = nodes.into_iter().filter(|i| i.is_master).collect();
             Ok(master_nodes)
         } else {
-            Err(Error::Unexpected("can not get redis cluster nodes".into()))
+            Err(Error::RedisResultError(
+                "can not get redis cluster nodes".into(),
+            ))
         }
     }
 
@@ -67,7 +69,7 @@ impl RedisUtil {
             let version_str = cap[1].to_string();
             let tokens: Vec<&str> = version_str.split('.').collect();
             if tokens.is_empty() {
-                return Err(Error::Unexpected(
+                return Err(Error::RedisResultError(
                     "can not get redis version by INFO".into(),
                 ));
             }
@@ -78,7 +80,7 @@ impl RedisUtil {
             }
             return Ok(f32::from_str(&version).unwrap());
         }
-        Err(Error::Unexpected(
+        Err(Error::RedisResultError(
             "can not get redis version by INFO".into(),
         ))
     }
@@ -102,8 +104,8 @@ impl RedisUtil {
             Value::Status(data) => results.push(data),
 
             _ => {
-                return Err(Error::Unexpected(
-                    "redis result type can not be parsed as string".to_string(),
+                return Err(Error::RedisResultError(
+                    "redis result type can not be parsed as string".into(),
                 ))
             }
         }

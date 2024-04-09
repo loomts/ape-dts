@@ -383,11 +383,7 @@ impl RdbTestRunner {
 
             for (src_col, src_col_value) in src_col_values {
                 let dst_col = if let Some(col_map) = col_map {
-                    if let Some(dst_col) = col_map.get(src_col) {
-                        dst_col
-                    } else {
-                        src_col
-                    }
+                    col_map.get(src_col).unwrap_or(src_col)
                 } else {
                     src_col
                 };
@@ -494,11 +490,7 @@ impl RdbTestRunner {
 
             let ddl = DdlParser::parse(&sql).unwrap();
             if ddl.0 == DdlType::CreateTable {
-                let db = if let Some(db) = ddl.1 {
-                    db
-                } else {
-                    PUBLIC.to_string()
-                };
+                let db = ddl.1.unwrap_or(PUBLIC.into());
                 let tb = ddl.2.unwrap();
                 db_tbs.push((db, tb));
             }

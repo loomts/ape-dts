@@ -16,7 +16,7 @@ use dt_common::meta::{
         },
     },
 };
-use dt_common::{config::config_enums::DbType, error::Error, utils::rdb_filter::RdbFilter};
+use dt_common::{config::config_enums::DbType, error::Error, rdb_filter::RdbFilter};
 use futures::TryStreamExt;
 use sqlx::{mysql::MySqlRow, MySql, Pool, Row};
 
@@ -482,10 +482,6 @@ impl MysqlStructFetcher {
     }
 
     fn get_result<T>(&self, results: &mut HashMap<String, Vec<T>>, table_name: &str) -> Vec<T> {
-        if let Some(result) = results.remove(table_name) {
-            result
-        } else {
-            Vec::new()
-        }
+        results.remove(table_name).unwrap_or(Vec::new())
     }
 }

@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use dt_common::{error::Error, log_info, utils::rdb_filter::RdbFilter};
+use dt_common::{error::Error, log_info, rdb_filter::RdbFilter};
 use dt_common::{
     meta::{
         dt_data::DtData,

@@ -16,7 +16,7 @@ use sqlx::{MySql, Pool};
 use dt_common::{config::config_enums::DbType, error::Error, log_finished, log_info};
 
 use crate::{
-    extractor::{base_extractor::BaseExtractor, snapshot_resumer::SnapshotResumer},
+    extractor::{base_extractor::BaseExtractor, resumer::snapshot_resumer::SnapshotResumer},
     Extractor,
 };
 

@@ -3,7 +3,7 @@ use std::vec;
 use dt_common::{
     config::{config_enums::DbType, task_config::TaskConfig},
     error::Error,
-    utils::rdb_filter::RdbFilter,
+    rdb_filter::RdbFilter,
 };
 
 use crate::{

@@ -9,7 +9,7 @@ use dt_common::{
     error::Error,
     meta::dt_data::DtItem,
     monitor::monitor::Monitor,
-    utils::rdb_filter::RdbFilter,
+    rdb_filter::RdbFilter,
 };
 use dt_common::{
     meta::{
@@ -45,7 +45,7 @@ use dt_connector::{
             redis_snapshot_extractor::RedisSnapshotExtractor,
             redis_snapshot_file_extractor::RedisSnapshotFileExtractor,
         },
-        snapshot_resumer::SnapshotResumer,
+        resumer::{cdc_resumer::CdcResumer, snapshot_resumer::SnapshotResumer},
     },
     rdb_router::RdbRouter,
     Extractor,
@@ -65,7 +65,8 @@ impl ExtractorUtil {
         monitor: Arc<Mutex<Monitor>>,
         data_marker: Option<DataMarker>,
         router: RdbRouter,
-        resumer: SnapshotResumer,
+        snapshot_resumer: SnapshotResumer,
+        cdc_resumer: CdcResumer,
     ) -> Result<Box<dyn Extractor + Send>, Error> {
         let base_extractor = BaseExtractor {
             buffer,
@@ -92,7 +93,7 @@ impl ExtractorUtil {
                 let extractor = MysqlSnapshotExtractor {
                     conn_pool: conn_pool.clone(),
                     meta_manager,
-                    resumer,
+                    resumer: snapshot_resumer,
                     db,
                     tb,
                     slice_size: buffer_size,
@@ -141,6 +142,7 @@ impl ExtractorUtil {
                     heartbeat_tb,
                     syncer,
                     base_extractor,
+                    resumer: cdc_resumer,
                 };
                 Box::new(extractor)
             }
@@ -156,7 +158,7 @@ impl ExtractorUtil {
                 let extractor = PgSnapshotExtractor {
                     conn_pool,
                     meta_manager,
-                    resumer,
+                    resumer: snapshot_resumer,
                     slice_size: buffer_size,
                     sample_interval,
                     schema: db,
@@ -208,6 +210,7 @@ impl ExtractorUtil {
                     heartbeat_interval_secs,
                     heartbeat_tb,
                     ddl_command_tb,
+                    resumer: cdc_resumer,
                     base_extractor,
                 };
                 Box::new(extractor)
@@ -223,7 +226,7 @@ impl ExtractorUtil {
                     .await
                     .unwrap();
                 let extractor = MongoSnapshotExtractor {
-                    resumer,
+                    resumer: snapshot_resumer,
                     db,
                     tb,
                     mongo_client,
@@ -255,6 +258,7 @@ impl ExtractorUtil {
                     heartbeat_interval_secs,
                     heartbeat_tb,
                     syncer,
+                    resumer: cdc_resumer,
                 };
                 Box::new(extractor)
             }
@@ -360,6 +364,7 @@ impl ExtractorUtil {
                     repl_port,
                     now_db_id,
                     filter,
+                    resumer: cdc_resumer,
                     base_extractor,
                 };
                 Box::new(extractor)
@@ -395,6 +400,7 @@ impl ExtractorUtil {
                     ack_interval_secs,
                     avro_converter,
                     syncer,
+                    resumer: cdc_resumer,
                     base_extractor,
                 };
                 Box::new(extractor)

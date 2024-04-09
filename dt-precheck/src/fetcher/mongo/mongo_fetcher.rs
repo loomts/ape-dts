@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
-use dt_common::{error::Error, utils::rdb_filter::RdbFilter};
+use dt_common::{error::Error, rdb_filter::RdbFilter};
 use dt_task::task_util::TaskUtil;
 use mongodb::{
     bson::{doc, Bson, Document},

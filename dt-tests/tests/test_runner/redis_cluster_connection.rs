@@ -25,11 +25,7 @@ impl RedisClusterConnection {
 
             let url_info = Url::parse(url).unwrap();
             let username = url_info.username();
-            let password = if let Some(password) = url_info.password() {
-                password.to_string()
-            } else {
-                String::new()
-            };
+            let password = url_info.password().unwrap_or("").to_string();
 
             let nodes = RedisUtil::get_cluster_master_nodes(&mut conn)?;
             for node in nodes {

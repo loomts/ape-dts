@@ -294,7 +294,9 @@ impl EntryRewriter {
     }
 
     pub fn rewrite_module(_obj: &mut ModuleObject) -> Result<Vec<RedisCmd>, Error> {
-        Err(Error::Unexpected("module rewrite not implemented".into()))
+        Err(Error::RedisRdbError(
+            "module rewrite not implemented".into(),
+        ))
     }
 
     pub fn rewrite_set(obj: &mut SetObject) -> Result<Vec<RedisCmd>, Error> {

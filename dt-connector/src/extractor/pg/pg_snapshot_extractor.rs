@@ -16,7 +16,7 @@ use dt_common::meta::{
 use dt_common::error::Error;
 
 use crate::{
-    extractor::{base_extractor::BaseExtractor, snapshot_resumer::SnapshotResumer},
+    extractor::{base_extractor::BaseExtractor, resumer::snapshot_resumer::SnapshotResumer},
     rdb_query_builder::RdbQueryBuilder,
     Extractor,
 };

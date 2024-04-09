@@ -17,7 +17,7 @@ use crate::{
     Sinker,
 };
 
-use dt_common::{error::Error, monitor::monitor::Monitor, utils::rdb_filter::RdbFilter};
+use dt_common::{error::Error, monitor::monitor::Monitor, rdb_filter::RdbFilter};
 
 use dt_common::meta::{
     ddl_data::DdlData, mysql::mysql_meta_manager::MysqlMetaManager,

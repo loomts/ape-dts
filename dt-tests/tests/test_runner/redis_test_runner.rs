@@ -7,7 +7,8 @@ use dt_common::{
         extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
     },
     error::Error,
-    utils::{rdb_filter::RdbFilter, redis_util::RedisUtil, sql_util::SqlUtil, time_util::TimeUtil},
+    rdb_filter::RdbFilter,
+    utils::{redis_util::RedisUtil, sql_util::SqlUtil, time_util::TimeUtil},
 };
 
 use redis::{Connection, Value};

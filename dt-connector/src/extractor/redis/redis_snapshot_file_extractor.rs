@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use dt_common::error::Error;
 use dt_common::log_info;
 use dt_common::meta::position::Position;
-use dt_common::utils::rdb_filter::RdbFilter;
+use dt_common::rdb_filter::RdbFilter;
 
 pub struct RedisSnapshotFileExtractor {
     pub file_path: String,

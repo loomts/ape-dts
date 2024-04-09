@@ -2,6 +2,7 @@ use super::redis_client::RedisClient;
 use super::redis_psync_extractor::RedisPsyncExtractor;
 use super::redis_resp_types::Value;
 use crate::extractor::base_extractor::BaseExtractor;
+use crate::extractor::resumer::cdc_resumer::CdcResumer;
 use crate::Extractor;
 use async_trait::async_trait;
 use dt_common::config::config_enums::DbType;
@@ -15,7 +16,7 @@ use dt_common::meta::position::Position;
 use dt_common::meta::redis::redis_entry::RedisEntry;
 use dt_common::meta::redis::redis_object::RedisCmd;
 use dt_common::meta::syncer::Syncer;
-use dt_common::utils::rdb_filter::RdbFilter;
+use dt_common::rdb_filter::RdbFilter;
 use dt_common::utils::sql_util::SqlUtil;
 use dt_common::utils::time_util::TimeUtil;
 use std::sync::Arc;
@@ -36,11 +37,26 @@ pub struct RedisCdcExtractor {
     pub heartbeat_key: String,
     pub syncer: Arc<Mutex<Syncer>>,
     pub filter: RdbFilter,
+    pub resumer: CdcResumer,
 }
 
 #[async_trait]
 impl Extractor for RedisCdcExtractor {
     async fn extract(&mut self) -> Result<(), Error> {
+        if let Position::Redis {
+            repl_id,
+            repl_port,
+            repl_offset,
+            now_db_id,
+            ..
+        } = &self.resumer.position
+        {
+            self.repl_id = repl_id.to_owned();
+            self.repl_port = repl_port.to_owned();
+            self.repl_offset = repl_offset.to_owned();
+            self.now_db_id = now_db_id.to_owned();
+        };
+
         log_info!(
             "RedisCdcExtractor starts, keepalive_interval_secs: {}, heartbeat_interval_secs: {}, heartbeat_key: {}",
             self.keepalive_interval_secs,

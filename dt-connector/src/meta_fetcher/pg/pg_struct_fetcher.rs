@@ -20,7 +20,8 @@ use dt_common::{
     config::{config_enums::DbType, config_token_parser::ConfigTokenParser},
     error::Error,
     log_error, log_info, log_warn,
-    utils::{rdb_filter::RdbFilter, sql_util::SqlUtil},
+    rdb_filter::RdbFilter,
+    utils::sql_util::SqlUtil,
 };
 use futures::TryStreamExt;
 use sqlx::{postgres::PgRow, Pool, Postgres, Row};
@@ -711,11 +712,7 @@ impl PgStructFetcher {
     }
 
     fn get_result<T>(&self, results: &mut HashMap<String, Vec<T>>, table_name: &str) -> Vec<T> {
-        if let Some(result) = results.remove(table_name) {
-            result
-        } else {
-            Vec::new()
-        }
+        results.remove(table_name).unwrap_or(Vec::new())
     }
 }
 
