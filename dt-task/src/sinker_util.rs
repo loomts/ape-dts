@@ -11,7 +11,7 @@ use dt_common::{
     },
     error::Error,
     monitor::monitor::Monitor,
-    utils::rdb_filter::RdbFilter,
+    rdb_filter::RdbFilter,
 };
 use dt_common::{
     meta::{
@@ -559,11 +559,7 @@ impl SinkerUtil {
         if is_cluster {
             let url_info = Url::parse(url).unwrap();
             let username = url_info.username();
-            let password = if let Some(password) = url_info.password() {
-                password.to_string()
-            } else {
-                String::new()
-            };
+            let password = url_info.password().unwrap_or("").to_string();
 
             let nodes = RedisUtil::get_cluster_master_nodes(&mut conn)?;
             for node in nodes.iter() {
@@ -640,11 +636,7 @@ impl SinkerUtil {
             let host = url_info.host_str().unwrap().to_string();
             let port = format!("{}", url_info.port().unwrap());
             let username = url_info.username().to_string();
-            let password = if let Some(password) = url_info.password() {
-                password.to_string()
-            } else {
-                String::new()
-            };
+            let password = url_info.password().unwrap_or("").to_string();
 
             let custom = Policy::custom(|attempt| attempt.follow());
             let client = reqwest::Client::builder()

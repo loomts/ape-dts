@@ -23,14 +23,15 @@ use sqlx::{postgres::PgArguments, query::Query, Pool, Postgres};
 use tokio_postgres::replication::LogicalReplicationStream;
 
 use dt_common::{
-    config::config_enums::DbType,
-    error::Error,
-    log_error, log_info,
-    utils::{rdb_filter::RdbFilter, time_util::TimeUtil},
+    config::config_enums::DbType, error::Error, log_error, log_info, rdb_filter::RdbFilter,
+    utils::time_util::TimeUtil,
 };
 
 use crate::{
-    extractor::{base_extractor::BaseExtractor, pg::pg_cdc_client::PgCdcClient},
+    extractor::{
+        base_extractor::BaseExtractor, pg::pg_cdc_client::PgCdcClient,
+        resumer::cdc_resumer::CdcResumer,
+    },
     Extractor,
 };
 use dt_common::meta::{
@@ -59,6 +60,7 @@ pub struct PgCdcExtractor {
     pub heartbeat_tb: String,
     pub ddl_command_tb: String,
     pub syncer: Arc<Mutex<Syncer>>,
+    pub resumer: CdcResumer,
 }
 
 const SECS_FROM_1970_TO_2000: i64 = 946_684_800;
@@ -66,6 +68,10 @@ const SECS_FROM_1970_TO_2000: i64 = 946_684_800;
 #[async_trait]
 impl Extractor for PgCdcExtractor {
     async fn extract(&mut self) -> Result<(), Error> {
+        if let Position::PgCdc { lsn, .. } = &self.resumer.position {
+            self.start_lsn = lsn.to_owned()
+        };
+
         log_info!(
             "PgCdcExtractor starts, slot_name: {}, start_lsn: {}, keepalive_interval_secs: {}, heartbeat_interval_secs: {}, heartbeat_tb: {}",
             self.slot_name,

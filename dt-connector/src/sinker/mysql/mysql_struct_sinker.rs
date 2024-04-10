@@ -5,7 +5,7 @@ use crate::{
 };
 
 use dt_common::{
-    config::config_enums::ConflictPolicyEnum, error::Error, utils::rdb_filter::RdbFilter,
+    config::config_enums::ConflictPolicyEnum, error::Error, rdb_filter::RdbFilter,
 };
 
 use dt_common::meta::ddl_data::DdlData;

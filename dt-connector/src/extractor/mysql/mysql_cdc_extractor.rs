@@ -21,13 +21,14 @@ use mysql_binlog_connector_rust::{
 };
 
 use dt_common::{
-    config::config_enums::DbType,
-    error::Error,
-    log_error, log_info,
-    utils::{rdb_filter::RdbFilter, time_util::TimeUtil},
+    config::config_enums::DbType, error::Error, log_error, log_info, rdb_filter::RdbFilter,
+    utils::time_util::TimeUtil,
 };
 
-use crate::{extractor::base_extractor::BaseExtractor, Extractor};
+use crate::{
+    extractor::{base_extractor::BaseExtractor, resumer::cdc_resumer::CdcResumer},
+    Extractor,
+};
 
 pub struct MysqlCdcExtractor {
     pub base_extractor: BaseExtractor,
@@ -41,6 +42,7 @@ pub struct MysqlCdcExtractor {
     pub heartbeat_interval_secs: u64,
     pub heartbeat_tb: String,
     pub syncer: Arc<Mutex<Syncer>>,
+    pub resumer: CdcResumer,
 }
 
 const QUERY_BEGIN: &str = "BEGIN";
@@ -48,6 +50,16 @@ const QUERY_BEGIN: &str = "BEGIN";
 #[async_trait]
 impl Extractor for MysqlCdcExtractor {
     async fn extract(&mut self) -> Result<(), Error> {
+        if let Position::MysqlCdc {
+            binlog_filename,
+            next_event_position,
+            ..
+        } = &self.resumer.position
+        {
+            self.binlog_filename = binlog_filename.to_owned();
+            self.binlog_position = next_event_position.to_owned();
+        };
+
         log_info!(
             "MysqlCdcExtractor starts, binlog_filename: {}, binlog_position: {}, heartbeat_interval_secs: {}, heartbeat_tb: {}",
             self.binlog_filename,

@@ -1,3 +1,4 @@
+use crate::extractor::resumer::cdc_resumer::CdcResumer;
 use crate::{extractor::base_extractor::BaseExtractor, Extractor};
 use async_trait::async_trait;
 use std::sync::{Arc, Mutex};
@@ -19,12 +20,22 @@ pub struct KafkaExtractor {
     pub ack_interval_secs: u64,
     pub avro_converter: AvroConverter,
     pub syncer: Arc<Mutex<Syncer>>,
+    pub resumer: CdcResumer,
 }
 
 #[async_trait]
 impl Extractor for KafkaExtractor {
     async fn extract(&mut self) -> Result<(), Error> {
-        log_info!("KafkaCdcExtractor starts");
+        if let Position::Kafka { offset, .. } = &self.resumer.position {
+            self.offset = offset.to_owned();
+        };
+
+        log_info!(
+            "KafkaCdcExtractor starts, topic: {}, partition: {}, offset: {}",
+            self.topic,
+            self.partition,
+            self.offset
+        );
         let consumer = self.create_consumer();
         self.extract_avro(consumer).await
     }

@@ -2,7 +2,6 @@ use std::{
     collections::{HashMap, HashSet},
     fs::File,
     io::{BufRead, BufReader},
-    str::FromStr,
 };
 
 use dt_common::meta::position::Position;
@@ -71,7 +70,7 @@ impl SnapshotResumer {
                         order_col,
                         value,
                         ..
-                    } = Self::get_position_from_log(line)
+                    } = Position::from_log(line)
                     {
                         tb_positions.insert((schema, tb, order_col), value);
                     }
@@ -82,7 +81,7 @@ impl SnapshotResumer {
             if let Ok(file) = File::open(&finished_log) {
                 for line in BufReader::new(file).lines().flatten() {
                     if let Position::RdbSnapshotFinished { schema, tb, .. } =
-                        Self::get_position_from_log(&line)
+                        Position::from_log(&line)
                     {
                         finished_tbs.insert((schema, tb));
                     }
@@ -110,20 +109,6 @@ impl SnapshotResumer {
         }
         None
     }
-
-    fn get_position_from_log(log: &str) -> Position {
-        // 2024-03-29 07:02:24.463776 | current_position | {"type":"RdbSnapshot","db_type":"mysql","schema":"test_db_1","tb":"one_pk_no_uk","order_col":"f_0","value":"9"}
-        // 2024-04-01 03:25:18.701725 | {"type":"RdbSnapshotFinished","db_type":"mysql","schema":"test_db_1","tb":"one_pk_no_uk"}
-        if log.trim().is_empty() {
-            return Position::None;
-        }
-
-        let error = format!("invalid position log: {}", log);
-        let left = log.find('{').expect(&error);
-        let right = log.rfind('}').expect(&error);
-        let position_log = &log[left..=right];
-        Position::from_str(position_log).expect(&error)
-    }
 }
 
 #[cfg(test)]
@@ -132,42 +117,6 @@ mod tests {
     use serde_json::json;
 
     use super::*;
-
-    #[test]
-    fn test_get_position_from_log() {
-        let log1 = r#"2024-04-01 03:25:18.701725 | {"type":"RdbSnapshotFinished","db_type":"mysql","schema":"test_db_1","tb":"one_pk_no_uk"}"#;
-        let log2 = r#"2024-03-29 07:02:24.463776 | current_position | {"type":"RdbSnapshot","db_type":"mysql","schema":"test_db_1","tb":"one_pk_no_uk","order_col":"f_0","value":"9"}"#;
-
-        if let Position::RdbSnapshotFinished {
-            db_type,
-            schema,
-            tb,
-        } = SnapshotResumer::get_position_from_log(log1)
-        {
-            assert_eq!(db_type, "mysql");
-            assert_eq!(schema, "test_db_1");
-            assert_eq!(tb, "one_pk_no_uk");
-        } else {
-            assert!(false)
-        }
-
-        if let Position::RdbSnapshot {
-            db_type,
-            schema,
-            tb,
-            order_col,
-            value,
-        } = SnapshotResumer::get_position_from_log(log2)
-        {
-            assert_eq!(db_type, "mysql");
-            assert_eq!(schema, "test_db_1");
-            assert_eq!(tb, "one_pk_no_uk");
-            assert_eq!(order_col, "f_0");
-            assert_eq!(value, "9");
-        } else {
-            assert!(false)
-        }
-    }
 
     #[test]
     fn test_finished() {

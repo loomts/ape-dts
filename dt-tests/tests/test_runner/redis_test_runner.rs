@@ -7,7 +7,8 @@ use dt_common::{
         extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
     },
     error::Error,
-    utils::{rdb_filter::RdbFilter, redis_util::RedisUtil, sql_util::SqlUtil, time_util::TimeUtil},
+    rdb_filter::RdbFilter,
+    utils::{redis_util::RedisUtil, sql_util::SqlUtil, time_util::TimeUtil},
 };
 
 use redis::{Connection, Value};
@@ -142,7 +143,12 @@ impl RedisTestRunner {
     }
 
     pub fn compare_all_data(&mut self) -> Result<(), Error> {
-        let dbs = self.redis_util.list_dbs(&mut self.src_conn);
+        let dbs = if self.dst_conn.is_cluster() {
+            // a redis cluster strictly supports only database 0
+            vec!["0".to_string()]
+        } else {
+            self.redis_util.list_dbs(&mut self.src_conn)
+        };
         for db in dbs.iter() {
             println!("compare data for db: {}", db);
             self.compare_data(db)?;

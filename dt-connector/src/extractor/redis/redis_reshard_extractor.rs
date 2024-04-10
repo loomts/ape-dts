@@ -225,12 +225,7 @@ impl RedisReshardExtractor {
     async fn get_node_conn(&self, node: &ClusterNode) -> Result<Connection, Error> {
         let url_info = Url::parse(&self.url).unwrap();
         let username = url_info.username();
-        let password = if let Some(password) = url_info.password() {
-            password.to_string()
-        } else {
-            String::new()
-        };
-
+        let password = url_info.password().unwrap_or("").to_string();
         let url = format!("redis://{}:{}@{}", username, password, node.address);
         RedisUtil::create_redis_conn(&url).await
     }

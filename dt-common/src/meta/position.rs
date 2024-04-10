@@ -6,7 +6,7 @@ use serde_json::json;
 
 use crate::error::Error;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type")]
 pub enum Position {
     None,
@@ -75,6 +75,22 @@ impl FromStr for Position {
     }
 }
 
+impl Position {
+    pub fn from_log(log: &str) -> Position {
+        // 2024-03-29 07:02:24.463776 | current_position | {"type":"RdbSnapshot","db_type":"mysql","schema":"test_db_1","tb":"one_pk_no_uk","order_col":"f_0","value":"9"}
+        // 2024-04-01 03:25:18.701725 | {"type":"RdbSnapshotFinished","db_type":"mysql","schema":"test_db_1","tb":"one_pk_no_uk"}
+        if log.trim().is_empty() {
+            return Position::None;
+        }
+
+        let error = format!("invalid position log: {}", log);
+        let left = log.find('{').expect(&error);
+        let right = log.rfind('}').expect(&error);
+        let position_log = &log[left..=right];
+        Position::from_str(position_log).expect(&error)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -102,6 +118,42 @@ mod test {
         for str in strs {
             let position = Position::from_str(str).unwrap();
             assert_eq!(str, &position.to_string());
+        }
+    }
+
+    #[test]
+    fn test_from_log() {
+        let log1 = r#"2024-04-01 03:25:18.701725 | {"type":"RdbSnapshotFinished","db_type":"mysql","schema":"test_db_1","tb":"one_pk_no_uk"}"#;
+        let log2 = r#"2024-03-29 07:02:24.463776 | current_position | {"type":"RdbSnapshot","db_type":"mysql","schema":"test_db_1","tb":"one_pk_no_uk","order_col":"f_0","value":"9"}"#;
+
+        if let Position::RdbSnapshotFinished {
+            db_type,
+            schema,
+            tb,
+        } = Position::from_log(log1)
+        {
+            assert_eq!(db_type, "mysql");
+            assert_eq!(schema, "test_db_1");
+            assert_eq!(tb, "one_pk_no_uk");
+        } else {
+            assert!(false)
+        }
+
+        if let Position::RdbSnapshot {
+            db_type,
+            schema,
+            tb,
+            order_col,
+            value,
+        } = Position::from_log(log2)
+        {
+            assert_eq!(db_type, "mysql");
+            assert_eq!(schema, "test_db_1");
+            assert_eq!(tb, "one_pk_no_uk");
+            assert_eq!(order_col, "f_0");
+            assert_eq!(value, "9");
+        } else {
+            assert!(false)
         }
     }
 }

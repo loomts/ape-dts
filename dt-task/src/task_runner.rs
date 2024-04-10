@@ -18,10 +18,13 @@ use dt_common::{
     error::Error,
     log_info,
     monitor::monitor::Monitor,
-    utils::{rdb_filter::RdbFilter, sql_util::SqlUtil, time_util::TimeUtil},
+    rdb_filter::RdbFilter,
+    utils::{sql_util::SqlUtil, time_util::TimeUtil},
 };
 use dt_connector::{
-    data_marker::DataMarker, extractor::snapshot_resumer::SnapshotResumer, rdb_router::RdbRouter,
+    data_marker::DataMarker,
+    extractor::resumer::{cdc_resumer::CdcResumer, snapshot_resumer::SnapshotResumer},
+    rdb_router::RdbRouter,
     Sinker,
 };
 use dt_pipeline::{base_pipeline::BasePipeline, Pipeline};
@@ -61,7 +64,8 @@ impl TaskRunner {
 
         let db_type = &self.config.extractor_basic.db_type;
         let router = RdbRouter::from_config(&self.config.router, db_type)?;
-        let resumer = SnapshotResumer::from_config(&self.config.resumer, db_type)?;
+        let snapshot_resumer = SnapshotResumer::from_config(&self.config.resumer, db_type)?;
+        let cdc_resumer = CdcResumer::from_config(&self.config.resumer)?;
 
         match &self.config.extractor {
             ExtractorConfig::MysqlStruct { url, .. }
@@ -69,12 +73,18 @@ impl TaskRunner {
             | ExtractorConfig::MysqlSnapshot { url, .. }
             | ExtractorConfig::PgSnapshot { url, .. }
             | ExtractorConfig::MongoSnapshot { url, .. } => {
-                self.start_multi_task(url, &router, &resumer).await?
+                self.start_multi_task(url, &router, &snapshot_resumer, &cdc_resumer)
+                    .await?
             }
 
             _ => {
-                self.start_single_task(&self.config.extractor, &router, &resumer)
-                    .await?
+                self.start_single_task(
+                    &self.config.extractor,
+                    &router,
+                    &snapshot_resumer,
+                    &cdc_resumer,
+                )
+                .await?
             }
         };
 
@@ -85,7 +95,8 @@ impl TaskRunner {
         &self,
         url: &str,
         router: &RdbRouter,
-        resumer: &SnapshotResumer,
+        snapshot_resumer: &SnapshotResumer,
+        cdc_resumer: &CdcResumer,
     ) -> Result<(), Error> {
         let db_type = &self.config.extractor_basic.db_type;
         let mut filter = RdbFilter::from_config(&self.config.filter, db_type)?;
@@ -113,7 +124,7 @@ impl TaskRunner {
             };
 
             if let Some(extractor_config) = db_extractor_config {
-                self.start_single_task(&extractor_config, router, resumer)
+                self.start_single_task(&extractor_config, router, snapshot_resumer, cdc_resumer)
                     .await?;
                 continue;
             }
@@ -121,7 +132,7 @@ impl TaskRunner {
             // start a task for each tb
             let tbs = TaskUtil::list_tbs(url, db, db_type).await?;
             for tb in tbs.iter() {
-                if resumer.check_finished(db, tb) {
+                if snapshot_resumer.check_finished(db, tb) {
                     log_info!("db: {}, tb: {} already finished", db, tb);
                     continue;
                 }
@@ -167,7 +178,7 @@ impl TaskRunner {
                     }
                 };
 
-                self.start_single_task(&tb_extractor_config, router, resumer)
+                self.start_single_task(&tb_extractor_config, router, snapshot_resumer, cdc_resumer)
                     .await?;
             }
         }
@@ -178,7 +189,8 @@ impl TaskRunner {
         &self,
         extractor_config: &ExtractorConfig,
         router: &RdbRouter,
-        resumer: &SnapshotResumer,
+        snapshot_resumer: &SnapshotResumer,
+        cdc_resumer: &CdcResumer,
     ) -> Result<(), Error> {
         let buffer = Arc::new(ConcurrentQueue::bounded(self.config.pipeline.buffer_size));
         let shut_down = Arc::new(AtomicBool::new(false));
@@ -221,7 +233,8 @@ impl TaskRunner {
             extractor_monitor.clone(),
             extractor_data_marker,
             router.clone(),
-            resumer.clone(),
+            snapshot_resumer.clone(),
+            cdc_resumer.clone(),
         )
         .await?;
 

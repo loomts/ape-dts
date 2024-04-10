@@ -6,7 +6,7 @@ use dt_common::{
     config::{config_enums::DbType, extractor_config::ExtractorConfig, task_config::TaskConfig},
     error::Error,
     monitor::monitor::Monitor,
-    utils::rdb_filter::RdbFilter,
+    rdb_filter::RdbFilter,
 };
 use dt_connector::{
     extractor::{

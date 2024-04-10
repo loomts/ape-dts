@@ -4,7 +4,7 @@ use crate::extractor::base_extractor::BaseExtractor;
 use crate::Extractor;
 use async_trait::async_trait;
 use dt_common::error::Error;
-use dt_common::utils::rdb_filter::RdbFilter;
+use dt_common::rdb_filter::RdbFilter;
 
 pub struct RedisSnapshotExtractor {
     pub base_extractor: BaseExtractor,

@@ -1,4 +1,4 @@
-use crate::utils::rdb_filter::RdbFilter;
+use crate::rdb_filter::RdbFilter;
 
 use super::{
     mysql_create_database_statement::MysqlCreateDatabaseStatement,

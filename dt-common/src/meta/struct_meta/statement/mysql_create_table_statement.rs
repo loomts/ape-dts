@@ -1,4 +1,4 @@
-use crate::{config::config_enums::DbType, error::Error, utils::rdb_filter::RdbFilter};
+use crate::{config::config_enums::DbType, error::Error, rdb_filter::RdbFilter};
 
 use crate::meta::struct_meta::structure::{
     column::Column,

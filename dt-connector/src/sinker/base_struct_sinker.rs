@@ -1,6 +1,6 @@
 use dt_common::meta::ddl_data::DdlData;
 use dt_common::{
-    config::config_enums::ConflictPolicyEnum, error::Error, log_info, utils::rdb_filter::RdbFilter,
+    config::config_enums::ConflictPolicyEnum, error::Error, log_info, rdb_filter::RdbFilter,
 };
 use sqlx::{query, MySql, Pool, Postgres};
 

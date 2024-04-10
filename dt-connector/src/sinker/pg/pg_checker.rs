@@ -9,7 +9,7 @@ use dt_common::meta::{
     ddl_data::DdlData, pg::pg_meta_manager::PgMetaManager, rdb_meta_manager::RdbMetaManager,
     row_data::RowData, struct_meta::statement::struct_statement::StructStatement,
 };
-use dt_common::{error::Error, monitor::monitor::Monitor, utils::rdb_filter::RdbFilter};
+use dt_common::{error::Error, monitor::monitor::Monitor, rdb_filter::RdbFilter};
 use futures::TryStreamExt;
 use sqlx::{Pool, Postgres};
 

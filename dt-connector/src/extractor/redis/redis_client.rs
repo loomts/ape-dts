@@ -50,7 +50,10 @@ impl RedisClient {
             if let Ok(Value::Okay) = me.read().await {
                 return Ok(me);
             }
-            return Err(Error::Unexpected(format!("can't connect redis: {}", url)));
+            return Err(Error::RedisResultError(format!(
+                "can't connect redis: {}",
+                url
+            )));
         }
 
         Ok(me)
@@ -122,8 +125,8 @@ impl RedisClient {
             Value::Status(data) => results.push(data),
 
             _ => {
-                return Err(Error::Unexpected(
-                    "redis result type can not be parsed as string".to_string(),
+                return Err(Error::RedisResultError(
+                    "redis result type can not be parsed as string".into(),
                 ))
             }
         }

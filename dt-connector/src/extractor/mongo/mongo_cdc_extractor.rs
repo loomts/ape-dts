@@ -15,10 +15,8 @@ use dt_common::meta::{
     syncer::Syncer,
 };
 use dt_common::{
-    config::config_enums::DbType,
-    error::Error,
-    log_error, log_info,
-    utils::{rdb_filter::RdbFilter, time_util::TimeUtil},
+    config::config_enums::DbType, error::Error, log_error, log_info, rdb_filter::RdbFilter,
+    utils::time_util::TimeUtil,
 };
 use mongodb::{
     bson::{doc, Bson, Document, Timestamp},
@@ -28,7 +26,10 @@ use mongodb::{
 };
 use serde_json::json;
 
-use crate::{extractor::base_extractor::BaseExtractor, Extractor};
+use crate::{
+    extractor::{base_extractor::BaseExtractor, resumer::cdc_resumer::CdcResumer},
+    Extractor,
+};
 
 const SYSTEM_DBS: [&str; 3] = ["admin", "config", "local"];
 
@@ -43,11 +44,22 @@ pub struct MongoCdcExtractor {
     pub heartbeat_interval_secs: u64,
     pub heartbeat_tb: String,
     pub syncer: Arc<Mutex<Syncer>>,
+    pub resumer: CdcResumer,
 }
 
 #[async_trait]
 impl Extractor for MongoCdcExtractor {
     async fn extract(&mut self) -> Result<(), Error> {
+        if let Position::MongoCdc {
+            resume_token,
+            operation_time,
+            ..
+        } = &self.resumer.position
+        {
+            self.resume_token = resume_token.to_owned();
+            self.start_timestamp = operation_time.to_owned();
+        };
+
         log_info!(
             "MongoCdcExtractor starts, resume_token: {}, start_timestamp: {}, source: {:?} ",
             self.resume_token,

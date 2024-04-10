@@ -4,7 +4,7 @@ use dt_common::meta::dt_data::DtData;
 use dt_common::meta::position::Position;
 use dt_common::meta::redis::redis_entry::RedisEntry;
 use dt_common::meta::redis::redis_object::RedisCmd;
-use dt_common::utils::rdb_filter::RdbFilter;
+use dt_common::rdb_filter::RdbFilter;
 use dt_common::{error::Error, log_info};
 
 use crate::extractor::base_extractor::BaseExtractor;

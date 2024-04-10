@@ -1,4 +1,4 @@
-use crate::utils::rdb_filter::RdbFilter;
+use crate::rdb_filter::RdbFilter;
 
 use crate::meta::struct_meta::structure::{database::Database, structure_type::StructureType};
 
