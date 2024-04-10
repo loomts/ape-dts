@@ -44,6 +44,10 @@ impl RedisClusterConnection {
         })
     }
 
+    pub fn is_cluster(&self) -> bool {
+        !self.node_conn_map.is_empty()
+    }
+
     pub fn get_default_conn(&mut self) -> &mut Connection {
         &mut self.default_conn
     }
