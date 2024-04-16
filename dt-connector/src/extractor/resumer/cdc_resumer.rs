@@ -14,9 +14,9 @@ impl CdcResumer {
     pub fn from_config(config: &ResumerConfig) -> Result<Self, Error> {
         let mut position = Position::None;
         if !config.resume_from_log {
-            log_info!("cdc resume from log disabled");
             return Ok(Self { position });
         }
+        log_info!("resume task from position.log");
 
         let position_log = format!("{}/position.log", config.resume_log_dir);
         if let Ok(lines) = FileUtil::tail(&position_log, TAIL_POSITION_COUNT) {
@@ -34,7 +34,7 @@ impl CdcResumer {
             }
         }
 
-        log_info!("cdc resume config: {}", position.to_string());
+        log_info!("resume config from position.log: {}", position.to_string());
         Ok(Self { position })
     }
 }
