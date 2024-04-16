@@ -52,6 +52,7 @@ const KEEPALIVE_INTERVAL_SECS: &str = "keepalive_interval_secs";
 const HEARTBEAT_TB: &str = "heartbeat_tb";
 const APP_NAME: &str = "app_name";
 const REVERSE: &str = "reverse";
+const REPL_PORT: &str = "repl_port";
 // default values
 const APE_DTS: &str = "APE_DTS";
 const ASTRISK: &str = "*";
@@ -124,7 +125,7 @@ impl TaskConfig {
                 ExtractType::CheckLog => ExtractorConfig::MysqlCheck {
                     url,
                     check_log_dir: loader.get_required(EXTRACTOR, CHECK_LOG_DIR),
-                    batch_size: loader.get_required(EXTRACTOR, BATCH_SIZE),
+                    batch_size: loader.get_with_default(EXTRACTOR, BATCH_SIZE, 200),
                 },
 
                 ExtractType::Struct => ExtractorConfig::MysqlStruct {
@@ -157,7 +158,7 @@ impl TaskConfig {
                 ExtractType::CheckLog => ExtractorConfig::PgCheck {
                     url,
                     check_log_dir: loader.get_required(EXTRACTOR, CHECK_LOG_DIR),
-                    batch_size: loader.get_required(EXTRACTOR, BATCH_SIZE),
+                    batch_size: loader.get_with_default(EXTRACTOR, BATCH_SIZE, 200),
                 },
 
                 ExtractType::Struct => ExtractorConfig::PgStruct {
@@ -193,7 +194,7 @@ impl TaskConfig {
                         url,
                         app_name,
                         check_log_dir: loader.get_required(EXTRACTOR, CHECK_LOG_DIR),
-                        batch_size: loader.get_required(EXTRACTOR, BATCH_SIZE),
+                        batch_size: loader.get_with_default(EXTRACTOR, BATCH_SIZE, 200),
                     },
 
                     _ => return not_supported_err,
@@ -202,7 +203,7 @@ impl TaskConfig {
 
             DbType::Redis => match extract_type {
                 ExtractType::Snapshot => {
-                    let repl_port = loader.get_required(EXTRACTOR, "repl_port");
+                    let repl_port = loader.get_with_default(EXTRACTOR, REPL_PORT, 10008);
                     ExtractorConfig::RedisSnapshot { url, repl_port }
                 }
 
@@ -217,7 +218,7 @@ impl TaskConfig {
                 },
 
                 ExtractType::Cdc => {
-                    let repl_port = loader.get_required(EXTRACTOR, "repl_port");
+                    let repl_port = loader.get_with_default(EXTRACTOR, REPL_PORT, 10008);
                     ExtractorConfig::RedisCdc {
                         url,
                         repl_port,
@@ -259,12 +260,12 @@ impl TaskConfig {
 
     fn load_sinker_config(loader: &IniLoader) -> Result<(BasicSinkerConfig, SinkerConfig), Error> {
         let db_type_str: String = loader.get_required(SINKER, DB_TYPE);
-        let sink_type_str: String = loader.get_required(SINKER, "sink_type");
+        let sink_type_str = loader.get_with_default(SINKER, "sink_type", "write".to_string());
         let db_type = DbType::from_str(&db_type_str).unwrap();
         let sink_type = SinkType::from_str(&sink_type_str).unwrap();
 
         let url: String = loader.get_optional(SINKER, URL);
-        let batch_size: usize = loader.get_with_default(SINKER, BATCH_SIZE, 1);
+        let batch_size: usize = loader.get_with_default(SINKER, BATCH_SIZE, 200);
 
         let basic = BasicSinkerConfig {
             db_type: db_type.clone(),
@@ -381,16 +382,17 @@ impl TaskConfig {
     }
 
     fn load_parallelizer_config(loader: &IniLoader) -> ParallelizerConfig {
-        let parallel_type_str: String = loader.get_required(PARALLELIZER, "parallel_type");
+        let parallel_type_str =
+            loader.get_with_default(PARALLELIZER, "parallel_type", "serial".to_string());
         ParallelizerConfig {
-            parallel_size: loader.get_required(PARALLELIZER, "parallel_size"),
+            parallel_size: loader.get_with_default(PARALLELIZER, "parallel_size", 1),
             parallel_type: ParallelType::from_str(&parallel_type_str).unwrap(),
         }
     }
 
     fn load_pipeline_config(loader: &IniLoader) -> PipelineConfig {
         PipelineConfig {
-            buffer_size: loader.get_required(PIPELINE, "buffer_size"),
+            buffer_size: loader.get_with_default(PIPELINE, "buffer_size", 16000),
             checkpoint_interval_secs: loader.get_with_default(
                 PIPELINE,
                 "checkpoint_interval_secs",
