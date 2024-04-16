@@ -6,6 +6,8 @@ use std::{
 use mongodb::bson::Document;
 use serde::{Deserialize, Serialize, Serializer};
 
+use super::mysql::mysql_col_type::MysqlColType;
+
 // #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 // #[serde(tag = "type", content = "value")]
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -59,6 +61,26 @@ impl ColValue {
         }
     }
 
+    /// return: (str, is_hex_str)
+    pub fn to_mysql_string(&self, col_type: &MysqlColType) -> (Option<String>, bool) {
+        if let ColValue::Blob(v) = self {
+            match *col_type {
+                // tinyblob, mediumblob, longblob, blob, varbinary, binary
+                MysqlColType::Blob
+                | MysqlColType::VarBinary { .. }
+                | MysqlColType::Binary { .. } => {
+                    return (Some(Self::binary_to_hex_str(&v)), true);
+                }
+                // varchar, char, tinytext, mediumtext, longtext, text
+                _ => {
+                    let (str, is_hex_str) = Self::binary_to_str(v);
+                    return (Some(str), is_hex_str);
+                }
+            }
+        }
+        (self.to_option_string(), false)
+    }
+
     pub fn to_option_string(&self) -> Option<String> {
         match self {
             ColValue::Tiny(v) => Some(v.to_string()),
@@ -85,16 +107,29 @@ impl ColValue {
             ColValue::Enum2(v) => Some(v.to_string()),
             ColValue::Json(v) => Some(format!("{:?}", v)),
             ColValue::Json2(v) => Some(v.to_string()),
-            ColValue::Blob(v) => {
-                if let Ok(str) = String::from_utf8(v.clone()) {
-                    Some(str)
-                } else {
-                    Some(format!("{:?}", v))
-                }
-            }
+            ColValue::Blob(v) => Some(Self::binary_to_str(v).0),
             ColValue::MongoDoc(v) => Some(v.to_string()),
-            _ => Option::None,
+            ColValue::Bool(v) => Some(v.to_string()),
+            ColValue::None => Option::None,
         }
+    }
+
+    /// return: (str, is_hex_str)
+    fn binary_to_str(v: &Vec<u8>) -> (String, bool) {
+        if let Ok(str) = String::from_utf8(v.clone()) {
+            (str, false)
+        } else {
+            // charsets like: gbk, big5, ujis, euckr
+            (Self::binary_to_hex_str(&v), true)
+        }
+    }
+
+    fn binary_to_hex_str(v: &Vec<u8>) -> String {
+        let hex_str = v
+            .iter()
+            .map(|byte| format!("{:02X}", byte))
+            .collect::<String>();
+        format!("x'{}'", hex_str)
     }
 
     pub fn is_nan(&self) -> bool {

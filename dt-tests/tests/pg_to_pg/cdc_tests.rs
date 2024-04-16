@@ -135,4 +135,17 @@ mod test {
     async fn cdc_heartbeat_test() {
         TestBase::run_heartbeat_test("pg_to_pg/cdc/heartbeat_test", 3000, 4000).await;
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn cdc_to_sql_test() {
+        TestBase::run_cdc_to_sql_test("pg_to_pg/cdc/to_sql_test", false, 3000, 4000).await;
+    }
+
+    /// need postgres tables: ALTER TABLE table_name REPLICA IDENTITY FULL;
+    #[tokio::test]
+    #[serial]
+    async fn cdc_to_reverse_sql_test() {
+        TestBase::run_cdc_to_sql_test("pg_to_pg/cdc/to_sql_test", true, 3000, 4000).await;
+    }
 }

@@ -5,28 +5,18 @@ use std::{
 };
 
 use crate::{
-    call_batch_fn, close_conn_pool,
-    data_marker::DataMarker,
-    rdb_query_builder::{RdbQueryBuilder, RdbQueryInfo},
-    rdb_router::RdbRouter,
-    sinker::base_sinker::BaseSinker,
-    Sinker,
+    call_batch_fn, close_conn_pool, data_marker::DataMarker, rdb_query_builder::RdbQueryBuilder,
+    rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker,
 };
 
-use dt_common::{
-    config::config_enums::DbType, error::Error, log_error, log_info, monitor::monitor::Monitor,
-    utils::sql_util::SqlUtil,
-};
+use dt_common::{error::Error, log_error, log_info, monitor::monitor::Monitor};
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     Executor, Pool, Postgres,
 };
 
 use dt_common::meta::{
-    ddl_data::DdlData,
-    ddl_type::DdlType,
-    pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
-    row_data::RowData,
+    ddl_data::DdlData, ddl_type::DdlType, pg::pg_meta_manager::PgMetaManager, row_data::RowData,
     row_type::RowType,
 };
 
@@ -119,11 +109,7 @@ impl PgSinker {
             let tb_meta = self.meta_manager.get_tb_meta_by_row_data(row_data).await?;
             let query_builder = RdbQueryBuilder::new_for_pg(tb_meta);
 
-            let query_info = if row_data.row_type == RowType::Insert {
-                Self::get_insert_query(&query_builder, tb_meta, row_data)?
-            } else {
-                query_builder.get_query_info(row_data)?
-            };
+            let query_info = query_builder.get_query_info(row_data, true)?;
             let query = query_builder.create_pg_query(&query_info);
             query.execute(&mut tx).await.unwrap();
         }
@@ -203,37 +189,6 @@ impl PgSinker {
         }
 
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
-    }
-
-    fn get_insert_query<'a>(
-        query_builder: &'a RdbQueryBuilder,
-        tb_meta: &'a PgTbMeta,
-        row_data: &'a RowData,
-    ) -> Result<RdbQueryInfo<'a>, Error> {
-        let mut query_info = query_builder.get_insert_query(row_data)?;
-
-        let mut placeholder_index = query_info.cols.len() + 1;
-        let after = row_data.after.as_ref().unwrap();
-        let mut set_pairs = Vec::new();
-        for col in tb_meta.basic.cols.iter() {
-            let set_pair = format!(
-                r#""{}"={}"#,
-                col,
-                query_builder.get_placeholder(placeholder_index, col)
-            );
-            set_pairs.push(set_pair);
-            query_info.cols.push(col.clone());
-            query_info.binds.push(after.get(col));
-            placeholder_index += 1;
-        }
-
-        query_info.sql = format!(
-            "{} ON CONFLICT ({}) DO UPDATE SET {}",
-            query_info.sql,
-            SqlUtil::escape_cols(&tb_meta.basic.id_cols, &DbType::Pg).join(","),
-            set_pairs.join(",")
-        );
-        Ok(query_info)
     }
 
     fn get_data_marker_sql(&self) -> Option<String> {

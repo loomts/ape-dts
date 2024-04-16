@@ -7,4 +7,5 @@ pub mod mongo;
 pub mod mysql;
 pub mod pg;
 pub mod redis;
+pub mod sql_sinker;
 pub mod starrocks;

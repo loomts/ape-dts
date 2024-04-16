@@ -7,6 +7,7 @@ pub mod rdb_check_test_runner;
 pub mod rdb_cycle_test_runner;
 pub mod rdb_kafka_rdb_test_runner;
 pub mod rdb_redis_test_runner;
+pub mod rdb_sql_test_runner;
 pub mod rdb_struct_test_runner;
 pub mod rdb_test_runner;
 pub mod rdb_util;

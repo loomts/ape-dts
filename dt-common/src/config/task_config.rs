@@ -51,6 +51,7 @@ const HEARTBEAT_INTERVAL_SECS: &str = "heartbeat_interval_secs";
 const KEEPALIVE_INTERVAL_SECS: &str = "keepalive_interval_secs";
 const HEARTBEAT_TB: &str = "heartbeat_tb";
 const APP_NAME: &str = "app_name";
+const REVERSE: &str = "reverse";
 // default values
 const APE_DTS: &str = "APE_DTS";
 const ASTRISK: &str = "*";
@@ -294,6 +295,10 @@ impl TaskConfig {
                     conflict_policy,
                 },
 
+                SinkType::Sql => SinkerConfig::Sql {
+                    reverse: loader.get_optional(SINKER, REVERSE),
+                },
+
                 _ => return not_supported_err,
             },
 
@@ -309,6 +314,10 @@ impl TaskConfig {
                 SinkType::Struct => SinkerConfig::PgStruct {
                     url,
                     conflict_policy,
+                },
+
+                SinkType::Sql => SinkerConfig::Sql {
+                    reverse: loader.get_optional(SINKER, REVERSE),
                 },
 
                 _ => return not_supported_err,

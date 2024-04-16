@@ -50,6 +50,23 @@ impl RowData {
         me
     }
 
+    pub fn reverse(&self) -> Self {
+        let row_type = match self.row_type {
+            RowType::Insert => RowType::Delete,
+            RowType::Update => RowType::Update,
+            RowType::Delete => RowType::Insert,
+        };
+
+        Self {
+            schema: self.schema.clone(),
+            tb: self.tb.clone(),
+            row_type,
+            before: self.after.clone(),
+            after: self.before.clone(),
+            data_size: self.data_size,
+        }
+    }
+
     pub fn from_mysql_row(row: &MySqlRow, tb_meta: &MysqlTbMeta) -> Self {
         Self::from_mysql_compatible_row(row, tb_meta, &DbType::Mysql)
     }

@@ -34,6 +34,11 @@ macro_rules! log_finished {
 }
 
 #[macro_export(local_inner_macros)]
+macro_rules! log_sql {
+    ($($arg:tt)+) => (log::log!(target: "sql_logger", log::Level::Info, $($arg)+));
+}
+
+#[macro_export(local_inner_macros)]
 macro_rules! log_error {
     ($($arg:tt)+) => (log::log!(target: "default_logger", log::Level::Error, $($arg)+))
 }

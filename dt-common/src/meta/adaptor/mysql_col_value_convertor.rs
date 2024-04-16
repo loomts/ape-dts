@@ -150,7 +150,7 @@ impl MysqlColValueConvertor {
             // char, varchar, binary, varbinary
             ColumnValue::String(v) => {
                 // when the type is binary(length), the value shoud be right-padded with '\0' to the specified length,
-                // otherwise the comparison will fail. https://dev.mysql.com/doc/refman/8.0/en/binary-varbinary.html
+                // refer: https://dev.mysql.com/doc/refman/8.0/en/binary-varbinary.html
                 let final_v = if let MysqlColType::Binary { length } = *col_type {
                     if length as usize > v.len() {
                         let pad_v: Vec<u8> = vec![0; length as usize - v.len()];
@@ -161,10 +161,11 @@ impl MysqlColValueConvertor {
                 } else {
                     v
                 };
-                Self::try_blob_to_string(final_v, col_type)
+                ColValue::Blob(final_v)
             }
 
-            ColumnValue::Blob(v) => Self::try_blob_to_string(v, col_type),
+            // tinyblob, mediumblob, longblob, blob
+            ColumnValue::Blob(v) => ColValue::Blob(v),
             ColumnValue::Bit(v) => ColValue::Bit(v),
             ColumnValue::Set(v) => ColValue::Set(v),
             ColumnValue::Enum(v) => ColValue::Enum(v),
@@ -402,20 +403,5 @@ impl MysqlColValueConvertor {
             _ => {}
         }
         Ok(ColValue::None)
-    }
-
-    fn try_blob_to_string(blob: Vec<u8>, col_type: &MysqlColType) -> ColValue {
-        // TODO, transfer blob into string with the column charset by encoding_rs
-        match col_type {
-            // tinytext, text, mediumtext, longtext, char, varchar, binary, varbinary
-            MysqlColType::String { .. } => {
-                if let Ok(str) = String::from_utf8(blob.clone()) {
-                    ColValue::String(str)
-                } else {
-                    ColValue::Blob(blob)
-                }
-            }
-            _ => ColValue::Blob(blob),
-        }
     }
 }

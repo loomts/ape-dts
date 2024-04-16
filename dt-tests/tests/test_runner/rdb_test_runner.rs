@@ -55,10 +55,13 @@ impl RdbTestRunner {
             src_conn_pool_pg = Some(TaskUtil::create_pg_conn_pool(&src_url, 1, false).await?);
         }
 
-        if dst_db_type == DbType::Mysql {
-            dst_conn_pool_mysql = Some(TaskUtil::create_mysql_conn_pool(&dst_url, 1, false).await?);
-        } else {
-            dst_conn_pool_pg = Some(TaskUtil::create_pg_conn_pool(&dst_url, 1, false).await?);
+        if !dst_url.is_empty() {
+            if dst_db_type == DbType::Mysql {
+                dst_conn_pool_mysql =
+                    Some(TaskUtil::create_mysql_conn_pool(&dst_url, 1, false).await?);
+            } else {
+                dst_conn_pool_pg = Some(TaskUtil::create_pg_conn_pool(&dst_url, 1, false).await?);
+            }
         }
 
         let config = TaskConfig::new(&base.task_config_file);
@@ -249,19 +252,8 @@ impl RdbTestRunner {
 
     pub async fn execute_test_sqls_and_compare(&self, parse_millis: u64) -> Result<(), Error> {
         // load dml sqls
-        let mut src_insert_sqls = Vec::new();
-        let mut src_update_sqls = Vec::new();
-        let mut src_delete_sqls = Vec::new();
-
-        for sql in self.base.src_test_sqls.iter() {
-            if sql.to_lowercase().starts_with("insert") {
-                src_insert_sqls.push(sql.clone());
-            } else if sql.to_lowercase().starts_with("update") {
-                src_update_sqls.push(sql.clone());
-            } else {
-                src_delete_sqls.push(sql.clone());
-            }
-        }
+        let (src_insert_sqls, src_update_sqls, src_delete_sqls) =
+            Self::split_dml_sqls(&self.base.src_test_sqls);
 
         // insert src data
         self.execute_src_sqls(&src_insert_sqls).await?;
@@ -286,6 +278,23 @@ impl RdbTestRunner {
         }
         self.compare_data_for_tbs(&src_db_tbs, &dst_db_tbs).await?;
         Ok(())
+    }
+
+    pub fn split_dml_sqls(dml_sqls: &Vec<String>) -> (Vec<String>, Vec<String>, Vec<String>) {
+        let mut insert_sqls = Vec::new();
+        let mut update_sqls = Vec::new();
+        let mut delete_sqls = Vec::new();
+
+        for sql in dml_sqls.iter() {
+            if sql.to_lowercase().starts_with("insert") {
+                insert_sqls.push(sql.clone());
+            } else if sql.to_lowercase().starts_with("update") {
+                update_sqls.push(sql.clone());
+            } else {
+                delete_sqls.push(sql.clone());
+            }
+        }
+        (insert_sqls, update_sqls, delete_sqls)
     }
 
     pub async fn execute_test_sqls(&self) -> Result<(), Error> {
@@ -313,7 +322,7 @@ impl RdbTestRunner {
         Ok(())
     }
 
-    async fn execute_dst_sqls(&self, sqls: &Vec<String>) -> Result<(), Error> {
+    pub async fn execute_dst_sqls(&self, sqls: &Vec<String>) -> Result<(), Error> {
         if let Some(pool) = &self.dst_conn_pool_mysql {
             RdbUtil::execute_sqls_mysql(pool, sqls).await?;
         }

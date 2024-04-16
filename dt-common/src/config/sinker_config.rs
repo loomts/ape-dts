@@ -75,6 +75,10 @@ pub enum SinkerConfig {
         batch_size: usize,
         stream_load_url: String,
     },
+
+    Sql {
+        reverse: bool,
+    },
 }
 
 #[derive(Clone, Debug)]
