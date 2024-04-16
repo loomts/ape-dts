@@ -51,6 +51,8 @@ pub enum SinkType {
     Struct,
     #[strum(serialize = "statistic")]
     Statistic,
+    #[strum(serialize = "sql")]
+    Sql,
 }
 
 #[derive(EnumString, IntoStaticStr, Clone, Display)]

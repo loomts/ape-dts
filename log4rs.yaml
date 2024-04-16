@@ -154,6 +154,23 @@ appenders:
         base: 1
         count: 10
         pattern: "LOG_DIR_PLACEHODLER/finished{}.log"
+  
+  sql_appender:
+    kind: rolling_file
+    append: true
+    path: "LOG_DIR_PLACEHODLER/sql.log"
+    encoder:
+      pattern: "{m}{n}"
+    policy:
+      kind: compound
+      trigger:
+        kind: size
+        limit: 100mb
+      roller:
+        kind: fixed_window
+        base: 1
+        count: 10
+        pattern: "LOG_DIR_PLACEHODLER/sql{}.log"
 
 loggers:
   default_logger:
@@ -200,6 +217,11 @@ loggers:
     level: LOG_LEVEL_PLACEHODLER
     appenders: 
       - finished_appender
+
+  sql_logger: 
+    level: LOG_LEVEL_PLACEHODLER
+    appenders: 
+      - sql_appender
 
 root:
   level: LOG_LEVEL_PLACEHODLER

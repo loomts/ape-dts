@@ -10,8 +10,9 @@ use super::{
     mongo_check_test_runner::MongoCheckTestRunner, mongo_test_runner::MongoTestRunner,
     precheck_test_runner::PrecheckTestRunner, rdb_check_test_runner::RdbCheckTestRunner,
     rdb_kafka_rdb_test_runner::RdbKafkaRdbTestRunner, rdb_redis_test_runner::RdbRedisTestRunner,
-    rdb_struct_test_runner::RdbStructTestRunner, rdb_test_runner::RdbTestRunner,
-    redis_statistic_runner::RedisStatisticTestRunner, redis_test_runner::RedisTestRunner,
+    rdb_sql_test_runner::RdbSqlTestRunner, rdb_struct_test_runner::RdbStructTestRunner,
+    rdb_test_runner::RdbTestRunner, redis_statistic_runner::RedisStatisticTestRunner,
+    redis_test_runner::RedisTestRunner,
 };
 
 pub struct TestBase {}
@@ -57,6 +58,20 @@ impl TestBase {
         runner.close().await.unwrap();
         // runner.run_cdc_test_with_different_configs(start_millis, parse_millis))
         //     .unwrap();
+    }
+
+    pub async fn run_cdc_to_sql_test(
+        test_dir: &str,
+        reverse: bool,
+        start_millis: u64,
+        parse_millis: u64,
+    ) {
+        let runner = RdbSqlTestRunner::new(test_dir, reverse).await.unwrap();
+        runner
+            .run_cdc_to_sql_test(start_millis, parse_millis)
+            .await
+            .unwrap();
+        runner.close().await.unwrap();
     }
 
     pub async fn run_heartbeat_test(test_dir: &str, start_millis: u64, parse_millis: u64) {

@@ -33,17 +33,12 @@ impl CheckUtil {
     }
 
     pub fn clear_check_log(dst_check_log_dir: &str) {
-        let miss_log_file = format!("{}/miss.log", dst_check_log_dir);
-        let diff_log_file = format!("{}/diff.log", dst_check_log_dir);
-        let extra_log_file = format!("{}/extra.log", dst_check_log_dir);
-        if BaseTestRunner::check_path_exists(&miss_log_file) {
-            File::create(&miss_log_file).unwrap().set_len(0).unwrap();
-        }
-        if BaseTestRunner::check_path_exists(&diff_log_file) {
-            File::create(&diff_log_file).unwrap().set_len(0).unwrap();
-        }
-        if BaseTestRunner::check_path_exists(&extra_log_file) {
-            File::create(&extra_log_file).unwrap().set_len(0).unwrap();
+        let files = ["miss.log", "diff.log", "extra.log"];
+        for file in files {
+            let log_file = format!("{}/{}", dst_check_log_dir, file);
+            if BaseTestRunner::check_path_exists(&log_file) {
+                File::create(&log_file).unwrap().set_len(0).unwrap();
+            }
         }
     }
 

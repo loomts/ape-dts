@@ -9,8 +9,8 @@ use super::{
 
 #[derive(Clone)]
 pub struct RdbMetaManager {
-    mysql_meta_manager: Option<MysqlMetaManager>,
-    pg_meta_manager: Option<PgMetaManager>,
+    pub mysql_meta_manager: Option<MysqlMetaManager>,
+    pub pg_meta_manager: Option<PgMetaManager>,
 }
 
 impl RdbMetaManager {

@@ -106,8 +106,7 @@ impl MysqlSinker {
             let tb_meta = self.meta_manager.get_tb_meta_by_row_data(row_data).await?;
             let query_builder = RdbQueryBuilder::new_for_mysql(tb_meta);
 
-            let mut query_info = query_builder.get_query_info(row_data)?;
-            query_info.sql = Self::handle_dialect(&query_info.sql);
+            let query_info = query_builder.get_query_info(row_data, true)?;
             let query = query_builder.create_mysql_query(&query_info);
             query.execute(&mut tx).await.unwrap();
         }
@@ -162,9 +161,8 @@ impl MysqlSinker {
             .to_owned();
         let query_builder = RdbQueryBuilder::new_for_mysql(&tb_meta);
 
-        let (mut query_info, data_size) =
+        let (query_info, data_size) =
             query_builder.get_batch_insert_query(data, start_index, batch_size)?;
-        query_info.sql = Self::handle_dialect(&query_info.sql);
         let query = query_builder.create_mysql_query(&query_info);
 
         let exec_error = if let Some(sql) = self.get_data_marker_sql() {
@@ -195,11 +193,6 @@ impl MysqlSinker {
         }
 
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
-    }
-
-    #[inline(always)]
-    fn handle_dialect(sql: &str) -> String {
-        sql.replace("INSERT", "REPLACE")
     }
 
     fn get_data_marker_sql(&self) -> Option<String> {

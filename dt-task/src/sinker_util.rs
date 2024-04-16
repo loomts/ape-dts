@@ -36,6 +36,7 @@ use dt_connector::{
         },
         pg::{pg_checker::PgChecker, pg_sinker::PgSinker, pg_struct_sinker::PgStructSinker},
         redis::{redis_sinker::RedisSinker, redis_statistic_sinker::RedisStatisticSinker},
+        sql_sinker::SqlSinker,
         starrocks::starrocks_sinker::StarRocksSinker,
     },
     Sinker,
@@ -55,18 +56,19 @@ impl SinkerUtil {
         monitor: Arc<Mutex<Monitor>>,
         data_marker: Option<Arc<RwLock<DataMarker>>>,
     ) -> Result<Sinkers, Error> {
+        let log_level = &task_config.runtime.log_level;
+        let parallel_size = task_config.parallelizer.parallel_size;
+
         let sinkers = match &task_config.sinker {
-            SinkerConfig::Dummy => {
-                Self::create_dummy_sinker(task_config.parallelizer.parallel_size)?
-            }
+            SinkerConfig::Dummy => Self::create_dummy_sinker(parallel_size)?,
 
             SinkerConfig::Mysql { url, batch_size } => {
                 let router = RdbRouter::from_config(&task_config.router, &DbType::Mysql)?;
                 Self::create_mysql_sinker(
                     url,
                     &router,
-                    &task_config.runtime.log_level,
-                    task_config.parallelizer.parallel_size,
+                    log_level,
+                    parallel_size,
                     *batch_size,
                     monitor,
                     data_marker,
@@ -86,8 +88,8 @@ impl SinkerUtil {
                     &router,
                     &filter,
                     extractor_meta_manager.unwrap(),
-                    &task_config.runtime.log_level,
-                    task_config.parallelizer.parallel_size,
+                    log_level,
+                    parallel_size,
                     *batch_size,
                     monitor,
                 )
@@ -99,8 +101,8 @@ impl SinkerUtil {
                 Self::create_pg_sinker(
                     url,
                     &router,
-                    &task_config.runtime.log_level,
-                    task_config.parallelizer.parallel_size,
+                    log_level,
+                    parallel_size,
                     *batch_size,
                     monitor,
                     data_marker,
@@ -120,8 +122,8 @@ impl SinkerUtil {
                     &router,
                     &filter,
                     extractor_meta_manager.unwrap(),
-                    &task_config.runtime.log_level,
-                    task_config.parallelizer.parallel_size,
+                    log_level,
+                    parallel_size,
                     *batch_size,
                     monitor,
                 )
@@ -138,7 +140,7 @@ impl SinkerUtil {
                     url,
                     app_name,
                     &router,
-                    task_config.parallelizer.parallel_size,
+                    parallel_size,
                     *batch_size,
                     monitor,
                 )
@@ -156,7 +158,7 @@ impl SinkerUtil {
                     url,
                     app_name,
                     &router,
-                    task_config.parallelizer.parallel_size,
+                    parallel_size,
                     *batch_size,
                     monitor,
                 )
@@ -180,7 +182,7 @@ impl SinkerUtil {
                 Self::create_kafka_sinker(
                     url,
                     &router,
-                    task_config.parallelizer.parallel_size,
+                    parallel_size,
                     *batch_size,
                     *ack_timeout_secs,
                     required_acks,
@@ -197,8 +199,8 @@ impl SinkerUtil {
                 let filter = RdbFilter::from_config(&task_config.filter, &DbType::Mysql)?;
                 Self::create_mysql_struct_sinker(
                     url,
-                    &task_config.runtime.log_level,
-                    task_config.parallelizer.parallel_size,
+                    log_level,
+                    parallel_size,
                     conflict_policy,
                     &filter,
                 )
@@ -212,8 +214,8 @@ impl SinkerUtil {
                 let filter = RdbFilter::from_config(&task_config.filter, &DbType::Pg)?;
                 Self::create_pg_struct_sinker(
                     url,
-                    &task_config.runtime.log_level,
-                    task_config.parallelizer.parallel_size,
+                    log_level,
+                    parallel_size,
                     conflict_policy,
                     &filter,
                 )
@@ -230,7 +232,7 @@ impl SinkerUtil {
                 let meta_manager = Self::get_extractor_meta_manager(task_config).await?;
                 Self::create_redis_sinker(
                     url,
-                    task_config.parallelizer.parallel_size,
+                    parallel_size,
                     *batch_size,
                     method,
                     meta_manager,
@@ -248,7 +250,7 @@ impl SinkerUtil {
                 ..
             } => {
                 Self::create_redis_statistic_sinker(
-                    task_config.parallelizer.parallel_size,
+                    parallel_size,
                     statistic_type,
                     *freq_threshold,
                     *data_size_threshold,
@@ -262,13 +264,17 @@ impl SinkerUtil {
                 stream_load_url,
                 ..
             } => {
-                Self::create_starrocks_sinker(
-                    stream_load_url,
-                    task_config.parallelizer.parallel_size,
-                    *batch_size,
-                    monitor,
-                )
-                .await?
+                Self::create_starrocks_sinker(stream_load_url, parallel_size, *batch_size, monitor)
+                    .await?
+            }
+
+            SinkerConfig::Sql { reverse } => {
+                let router = RdbRouter::from_config(
+                    &task_config.router,
+                    &task_config.extractor_basic.db_type,
+                )?;
+                Self::create_sql_sinker(task_config, &router, parallel_size, *reverse, monitor)
+                    .await?
             }
         };
         Ok(sinkers)
@@ -652,6 +658,29 @@ impl SinkerUtil {
                 username,
                 password,
                 batch_size,
+                monitor: monitor.clone(),
+            };
+            sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
+        }
+        Ok(sub_sinkers)
+    }
+
+    async fn create_sql_sinker<'a>(
+        task_config: &TaskConfig,
+        router: &RdbRouter,
+        parallel_size: usize,
+        reverse: bool,
+        monitor: Arc<Mutex<Monitor>>,
+    ) -> Result<Sinkers, Error> {
+        let mut sub_sinkers: Sinkers = Vec::new();
+        for _ in 0..parallel_size {
+            let meta_manager = Self::get_extractor_meta_manager(task_config)
+                .await?
+                .unwrap();
+            let sinker = SqlSinker {
+                meta_manager,
+                router: router.clone(),
+                reverse,
                 monitor: monitor.clone(),
             };
             sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));

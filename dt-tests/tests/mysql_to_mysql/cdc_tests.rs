@@ -134,4 +134,17 @@ mod test {
     async fn cdc_heartbeat_test() {
         TestBase::run_heartbeat_test("mysql_to_mysql/cdc/heartbeat_test", 3000, 2000).await;
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn cdc_to_sql_test() {
+        TestBase::run_cdc_to_sql_test("mysql_to_mysql/cdc/to_sql_test", false, 3000, 2000).await;
+    }
+
+    /// need mysql config: binlog_row_image =FULL
+    #[tokio::test]
+    #[serial]
+    async fn cdc_to_reverse_sql_test() {
+        TestBase::run_cdc_to_sql_test("mysql_to_mysql/cdc/to_sql_test", true, 3000, 2000).await;
+    }
 }
