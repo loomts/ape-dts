@@ -1,4 +1,6 @@
 #![allow(clippy::manual_range_contains)]
+#![allow(clippy::needless_range_loop)]
+#![allow(clippy::comparison_chain)]
 
 pub mod check_log;
 pub mod data_marker;

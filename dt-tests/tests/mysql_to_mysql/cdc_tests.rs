@@ -138,13 +138,13 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn cdc_to_sql_test() {
-        TestBase::run_cdc_to_sql_test("mysql_to_mysql/cdc/to_sql_test", false, 3000, 2000).await;
+        TestBase::run_cdc_to_sql_test("mysql_to_mysql/cdc/to_sql_test", false, 1000, 0).await;
     }
 
     /// need mysql config: binlog_row_image =FULL
     #[tokio::test]
     #[serial]
     async fn cdc_to_reverse_sql_test() {
-        TestBase::run_cdc_to_sql_test("mysql_to_mysql/cdc/to_sql_test", true, 3000, 2000).await;
+        TestBase::run_cdc_to_sql_test("mysql_to_mysql/cdc/to_sql_test", true, 1000, 0).await;
     }
 }

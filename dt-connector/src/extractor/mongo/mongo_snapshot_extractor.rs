@@ -35,7 +35,8 @@ impl Extractor for MongoSnapshotExtractor {
             self.db,
             self.tb
         );
-        self.extract_internal().await
+        self.extract_internal().await?;
+        self.base_extractor.wait_task_finish().await
     }
 }
 
@@ -112,7 +113,7 @@ impl MongoSnapshotExtractor {
             }
             .to_string()
         );
-        self.base_extractor.wait_task_finish().await
+        Ok(())
     }
 
     fn get_object_id(doc: &Document) -> String {

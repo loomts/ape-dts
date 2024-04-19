@@ -24,7 +24,8 @@ pub struct PgStructExtractor {
 impl Extractor for PgStructExtractor {
     async fn extract(&mut self) -> Result<(), Error> {
         log_info!("PgStructExtractor starts, schema: {}", self.schema);
-        self.extract_internal().await
+        self.extract_internal().await?;
+        self.base_extractor.wait_task_finish().await
     }
 }
 
@@ -48,8 +49,7 @@ impl PgStructExtractor {
             self.push_dt_data(StructStatement::PgCreateTable { statement })
                 .await;
         }
-
-        self.base_extractor.wait_task_finish().await
+        Ok(())
     }
 
     pub async fn push_dt_data(&mut self, statement: StructStatement) {

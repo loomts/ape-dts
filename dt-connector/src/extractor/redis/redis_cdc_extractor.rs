@@ -79,7 +79,8 @@ impl Extractor for RedisCdcExtractor {
         self.repl_id = psync_extractor.repl_id;
         self.repl_offset = psync_extractor.repl_offset;
 
-        self.receive_aof().await
+        self.receive_aof().await?;
+        self.base_extractor.wait_task_finish().await
     }
 
     async fn close(&mut self) -> Result<(), Error> {

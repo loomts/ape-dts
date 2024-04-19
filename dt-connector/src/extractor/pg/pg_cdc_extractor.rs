@@ -81,7 +81,7 @@ impl Extractor for PgCdcExtractor {
             self.heartbeat_tb
         );
         self.extract_internal().await.unwrap();
-        Ok(())
+        self.base_extractor.wait_task_finish().await
     }
 }
 

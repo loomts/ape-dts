@@ -69,7 +69,7 @@ impl ColValue {
                 MysqlColType::Blob
                 | MysqlColType::VarBinary { .. }
                 | MysqlColType::Binary { .. } => {
-                    return (Some(Self::binary_to_hex_str(&v)), true);
+                    return (Some(Self::binary_to_hex_str(v)), true);
                 }
                 // varchar, char, tinytext, mediumtext, longtext, text
                 _ => {
@@ -115,16 +115,16 @@ impl ColValue {
     }
 
     /// return: (str, is_hex_str)
-    fn binary_to_str(v: &Vec<u8>) -> (String, bool) {
-        if let Ok(str) = String::from_utf8(v.clone()) {
+    fn binary_to_str(v: &[u8]) -> (String, bool) {
+        if let Ok(str) = String::from_utf8(v.to_owned()) {
             (str, false)
         } else {
             // charsets like: gbk, big5, ujis, euckr
-            (Self::binary_to_hex_str(&v), true)
+            (Self::binary_to_hex_str(v), true)
         }
     }
 
-    fn binary_to_hex_str(v: &Vec<u8>) -> String {
+    fn binary_to_hex_str(v: &[u8]) -> String {
         let hex_str = v
             .iter()
             .map(|byte| format!("{:02X}", byte))

@@ -10,6 +10,7 @@ use dt_common::{
     meta::dt_data::DtItem,
     monitor::monitor::Monitor,
     rdb_filter::RdbFilter,
+    time_filter::TimeFilter,
 };
 use dt_common::{
     meta::{
@@ -127,9 +128,12 @@ impl ExtractorUtil {
                 server_id,
                 heartbeat_interval_secs,
                 heartbeat_tb,
+                start_time_utc,
+                end_time_utc,
             } => {
                 let conn_pool = TaskUtil::create_mysql_conn_pool(&url, 2, enable_sqlx_log).await?;
                 let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
+                let time_filter = TimeFilter::new(&start_time_utc, &end_time_utc);
                 let extractor = MysqlCdcExtractor {
                     meta_manager,
                     filter,
@@ -143,6 +147,7 @@ impl ExtractorUtil {
                     syncer,
                     base_extractor,
                     resumer: cdc_resumer,
+                    time_filter,
                 };
                 Box::new(extractor)
             }
