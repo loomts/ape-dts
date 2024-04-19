@@ -7,10 +7,13 @@ use std::{
     time::Instant,
 };
 
-use dt_common::meta::{
-    adaptor::mysql_col_value_convertor::MysqlColValueConvertor, col_value::ColValue,
-    dt_data::DtData, mysql::mysql_meta_manager::MysqlMetaManager, position::Position,
-    row_data::RowData, row_type::RowType, syncer::Syncer,
+use dt_common::{
+    meta::{
+        adaptor::mysql_col_value_convertor::MysqlColValueConvertor, col_value::ColValue,
+        dt_data::DtData, mysql::mysql_meta_manager::MysqlMetaManager, position::Position,
+        row_data::RowData, row_type::RowType, syncer::Syncer,
+    },
+    time_filter::TimeFilter,
 };
 use mysql_binlog_connector_rust::{
     binlog_client::BinlogClient,
@@ -26,7 +29,10 @@ use dt_common::{
 };
 
 use crate::{
-    extractor::{base_extractor::BaseExtractor, resumer::cdc_resumer::CdcResumer},
+    extractor::{
+        base_extractor::BaseExtractor, mysql::binlog_util::BinlogUtil,
+        resumer::cdc_resumer::CdcResumer,
+    },
     Extractor,
 };
 
@@ -38,6 +44,7 @@ pub struct MysqlCdcExtractor {
     pub url: String,
     pub binlog_filename: String,
     pub binlog_position: u32,
+    pub time_filter: TimeFilter,
     pub server_id: u64,
     pub heartbeat_interval_secs: u64,
     pub heartbeat_tb: String,
@@ -50,6 +57,16 @@ const QUERY_BEGIN: &str = "BEGIN";
 #[async_trait]
 impl Extractor for MysqlCdcExtractor {
     async fn extract(&mut self) -> Result<(), Error> {
+        if self.time_filter.start_timestamp > 0 {
+            self.binlog_filename = BinlogUtil::find_last_binlog_before_timestamp(
+                self.time_filter.start_timestamp,
+                &self.url,
+                self.server_id,
+                &self.conn_pool,
+            )
+            .await?;
+        }
+
         if let Position::MysqlCdc {
             binlog_filename,
             next_event_position,
@@ -67,7 +84,8 @@ impl Extractor for MysqlCdcExtractor {
             self.heartbeat_interval_secs,
             self.heartbeat_tb
         );
-        self.extract_internal().await
+        self.extract_internal().await?;
+        self.base_extractor.wait_task_finish().await
     }
 }
 
@@ -87,6 +105,11 @@ impl MysqlCdcExtractor {
         self.start_heartbeat().unwrap();
 
         loop {
+            if self.time_filter.ended {
+                stream.close().await.unwrap();
+                return Ok(());
+            }
+
             let (header, data) = stream.read().await.unwrap();
             match data {
                 EventData::Rotate(r) => {
@@ -199,6 +222,22 @@ impl MysqlCdcExtractor {
             }
 
             EventData::Query(query) => {
+                if query.query == QUERY_BEGIN {
+                    // the first transaction after start_timestamp
+                    if !self.time_filter.started
+                        && header.timestamp >= self.time_filter.start_timestamp
+                    {
+                        self.time_filter.started = true;
+                        log_info!("start receiving binlog, position: {}", position.to_string());
+                    }
+                    // the first transaction after end_timestamp
+                    if !self.time_filter.ended && header.timestamp >= self.time_filter.end_timestamp
+                    {
+                        self.time_filter.ended = true;
+                        log_info!("end receiving binlog, position: {}", position.to_string());
+                    }
+                }
+
                 self.handle_query_event(query, position.clone()).await?;
             }
 
@@ -206,9 +245,7 @@ impl MysqlCdcExtractor {
                 let commit = DtData::Commit {
                     xid: xid.xid.to_string(),
                 };
-                self.base_extractor
-                    .push_dt_data(commit, position.clone())
-                    .await?;
+                self.push_dt_data_to_buf(commit, position.clone()).await?;
             }
 
             _ => {}
@@ -222,7 +259,21 @@ impl MysqlCdcExtractor {
         row_data: RowData,
         position: Position,
     ) -> Result<(), Error> {
+        if !self.time_filter.started {
+            return Ok(());
+        }
         self.base_extractor.push_row(row_data, position).await
+    }
+
+    async fn push_dt_data_to_buf(
+        &mut self,
+        dt_data: DtData,
+        position: Position,
+    ) -> Result<(), Error> {
+        if !self.time_filter.started {
+            return Ok(());
+        }
+        self.base_extractor.push_dt_data(dt_data, position).await
     }
 
     async fn parse_row_data(
@@ -231,6 +282,10 @@ impl MysqlCdcExtractor {
         included_columns: &Vec<bool>,
         event: &mut RowEvent,
     ) -> Result<HashMap<String, ColValue>, Error> {
+        if !self.time_filter.started {
+            return Ok(HashMap::new());
+        }
+
         let tb_meta = self
             .meta_manager
             .get_tb_meta(&table_map_event.database_name, &table_map_event.table_name)
@@ -288,10 +343,8 @@ impl MysqlCdcExtractor {
                 &ddl_data.tb,
                 &ddl_data.ddl_type.to_string(),
             ) {
-                self.base_extractor
-                    .push_dt_data(DtData::Ddl { ddl_data }, position)
-                    .await
-                    .unwrap();
+                self.push_dt_data_to_buf(DtData::Ddl { ddl_data }, position)
+                    .await?;
             }
         }
         Ok(())

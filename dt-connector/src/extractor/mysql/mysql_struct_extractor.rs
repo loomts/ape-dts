@@ -24,7 +24,8 @@ pub struct MysqlStructExtractor {
 impl Extractor for MysqlStructExtractor {
     async fn extract(&mut self) -> Result<(), Error> {
         log_info!("MysqlStructExtractor starts, schema: {}", self.db,);
-        self.extract_internal().await
+        self.extract_internal().await?;
+        self.base_extractor.wait_task_finish().await
     }
 }
 
@@ -50,8 +51,7 @@ impl MysqlStructExtractor {
             self.push_dt_data(StructStatement::MysqlCreateTable { statement })
                 .await;
         }
-
-        self.base_extractor.wait_task_finish().await
+        Ok(())
     }
 
     pub async fn push_dt_data(&mut self, statement: StructStatement) {

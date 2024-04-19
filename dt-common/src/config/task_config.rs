@@ -120,6 +120,8 @@ impl TaskConfig {
                     server_id: loader.get_required(EXTRACTOR, "server_id"),
                     heartbeat_interval_secs,
                     heartbeat_tb,
+                    start_time_utc: loader.get_optional(EXTRACTOR, "start_time_utc"),
+                    end_time_utc: loader.get_optional(EXTRACTOR, "end_time_utc"),
                 },
 
                 ExtractType::CheckLog => ExtractorConfig::MysqlCheck {

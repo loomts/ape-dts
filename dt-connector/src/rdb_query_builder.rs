@@ -89,7 +89,7 @@ impl RdbQueryBuilder<'_> {
         self.get_query_info_internal(row_data, replace, true)
     }
 
-    pub fn get_query_sql<'a>(&self, row_data: &'a RowData, replace: bool) -> Result<String, Error> {
+    pub fn get_query_sql(&self, row_data: &RowData, replace: bool) -> Result<String, Error> {
         let query_info = self.get_query_info_internal(row_data, replace, false)?;
         Ok(query_info.sql + ";")
     }
@@ -177,7 +177,7 @@ impl RdbQueryBuilder<'_> {
             row_values.push(format!("({})", col_values.join(",")));
         }
 
-        let sql = format!(
+        let mut sql = format!(
             "INSERT INTO {}.{}({}) VALUES{}",
             self.escape(&self.rdb_tb_meta.schema),
             self.escape(&self.rdb_tb_meta.tb),
@@ -194,6 +194,10 @@ impl RdbQueryBuilder<'_> {
                 cols.push(col_name.clone());
                 binds.push(after.get(col_name));
             }
+        }
+
+        if self.mysql_tb_meta.is_some() {
+            sql = format!("REPLACE{}", sql.trim_start_matches("INSERT"));
         }
         Ok((RdbQueryInfo { sql, cols, binds }, malloc_size))
     }
@@ -224,9 +228,9 @@ impl RdbQueryBuilder<'_> {
                 set_pairs.join(",")
             );
             return Ok(query_info);
+        } else {
+            query_info.sql = format!("REPLACE{}", query_info.sql.trim_start_matches("INSERT"));
         }
-
-        query_info.sql = format!("REPLACE{}", query_info.sql.trim_start_matches("INSERT"));
         Ok(query_info)
     }
 
@@ -494,7 +498,7 @@ impl RdbQueryBuilder<'_> {
         }
 
         let value = str.unwrap();
-        return format!(r#"'{}'"#, value.replace("\'", "\'\'"));
+        format!(r#"'{}'"#, value.replace('\'', "\'\'"))
     }
 
     fn get_mysql_sql_value(&self, col: &str, col_value: &ColValue) -> String {
@@ -514,20 +518,14 @@ impl RdbQueryBuilder<'_> {
             | MysqlColType::Binary { .. }
             | MysqlColType::VarBinary { .. }
             | MysqlColType::Json => true,
-            MysqlColType::Enum => match col_value {
-                ColValue::Enum(_) => false,
-                _ => true,
-            },
-            MysqlColType::Set => match col_value {
-                ColValue::Set(_) => false,
-                _ => true,
-            },
+            MysqlColType::Enum => !matches!(col_value, ColValue::Enum(_)),
+            MysqlColType::Set => !matches!(col_value, ColValue::Set(_)),
             _ => false,
         };
 
         if !is_hex_str && is_str {
             // INSERT INTO tb1 VALUES(1, 'abc''');
-            return format!(r#"'{}'"#, value.replace("\'", "\'\'"));
+            return format!(r#"'{}'"#, value.replace('\'', "\'\'"));
         }
         value
     }

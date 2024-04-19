@@ -71,9 +71,10 @@ impl Extractor for MongoCdcExtractor {
         self.start_heartbeat().unwrap();
 
         match self.source {
-            MongoCdcSource::OpLog => self.extract_oplog().await,
-            MongoCdcSource::ChangeStream => self.extract_change_stream().await,
+            MongoCdcSource::OpLog => self.extract_oplog().await?,
+            MongoCdcSource::ChangeStream => self.extract_change_stream().await?,
         }
+        self.base_extractor.wait_task_finish().await
     }
 }
 

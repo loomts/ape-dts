@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use dt_common::{
     config::{config_enums::DbType, data_marker_config::DataMarkerConfig},
     error::Error,
-    meta::{col_value::ColValue, dt_data::DtData},
+    meta::dt_data::DtData,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -95,10 +95,10 @@ impl DataMarker {
             DtData::Dml { row_data } => {
                 // refresh should be only called when dt_data is a data marker
                 // update data_origin_node
-                if let Some(ColValue::String(data_origin_node)) =
-                    row_data.after.as_ref().unwrap().get(DATA_ORIGIN_NODE)
-                {
-                    self.data_origin_node = data_origin_node.to_owned();
+                if let Some(col_value) = row_data.after.as_ref().unwrap().get(DATA_ORIGIN_NODE) {
+                    // mysql, ColValue::Blob
+                    // pg, ColValue::String
+                    self.data_origin_node = col_value.to_option_string().unwrap();
                 }
             }
 

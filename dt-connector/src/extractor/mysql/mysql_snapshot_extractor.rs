@@ -40,7 +40,8 @@ impl Extractor for MysqlSnapshotExtractor {
             self.tb,
             self.slice_size
         );
-        self.extract_internal().await
+        self.extract_internal().await?;
+        self.base_extractor.wait_task_finish().await
     }
 
     async fn close(&mut self) -> Result<(), Error> {
@@ -85,8 +86,7 @@ impl MysqlSnapshotExtractor {
             }
             .to_string()
         );
-
-        self.base_extractor.wait_task_finish().await
+        Ok(())
     }
 
     async fn extract_all(&mut self, tb_meta: &MysqlTbMeta) -> Result<(), Error> {
