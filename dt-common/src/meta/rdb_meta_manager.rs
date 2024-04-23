@@ -28,6 +28,16 @@ impl RdbMetaManager {
         }
     }
 
+    pub async fn close(&self) -> Result<(), Error> {
+        if let Some(mysql_meta_manager) = &self.mysql_meta_manager {
+            mysql_meta_manager.close().await?;
+        }
+        if let Some(pg_meta_manager) = &self.pg_meta_manager {
+            pg_meta_manager.close().await?;
+        }
+        Ok(())
+    }
+
     pub async fn get_tb_meta<'a>(
         &'a mut self,
         schema: &str,

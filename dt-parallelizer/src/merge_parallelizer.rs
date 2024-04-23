@@ -36,6 +36,13 @@ pub struct TbMergedData {
 
 #[async_trait]
 impl Parallelizer for MergeParallelizer {
+    async fn close(&mut self) -> Result<(), Error> {
+        if let Some(meta_manager) = &self.meta_manager {
+            meta_manager.close().await?;
+        }
+        self.merger.close().await
+    }
+
     fn get_name(&self) -> String {
         "MergeParallelizer".to_string()
     }

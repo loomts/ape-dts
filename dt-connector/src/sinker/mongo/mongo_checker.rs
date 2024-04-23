@@ -45,6 +45,11 @@ impl Sinker for MongoChecker {
         call_batch_fn!(self, data, Self::batch_check);
         Ok(())
     }
+
+    async fn close(&mut self) -> Result<(), Error> {
+        self.mongo_client.clone().shutdown().await;
+        Ok(())
+    }
 }
 
 impl MongoChecker {

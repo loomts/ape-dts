@@ -30,6 +30,11 @@ impl PgMetaManager {
         }
     }
 
+    pub async fn close(&self) -> Result<(), Error> {
+        self.conn_pool.close().await;
+        Ok(())
+    }
+
     pub async fn init(mut self) -> Result<Self, Error> {
         self.type_registry = self.type_registry.init().await?;
         Ok(self)

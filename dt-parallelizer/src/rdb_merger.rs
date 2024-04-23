@@ -39,6 +39,10 @@ impl Merger for RdbMerger {
         }
         Ok(results)
     }
+
+    async fn close(&mut self) -> Result<(), Error> {
+        self.meta_manager.close().await
+    }
 }
 
 impl RdbMerger {

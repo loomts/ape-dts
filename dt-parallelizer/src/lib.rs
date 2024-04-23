@@ -54,9 +54,17 @@ pub trait Parallelizer {
     ) -> Result<(), Error> {
         Ok(())
     }
+
+    async fn close(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
 }
 
 #[async_trait]
 pub trait Merger {
     async fn merge(&mut self, data: Vec<RowData>) -> Result<Vec<TbMergedData>, Error>;
+
+    async fn close(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
 }

@@ -88,7 +88,7 @@ impl RedisTestRunner {
         TimeUtil::sleep_millis(parse_millis).await;
         self.compare_all_data()?;
 
-        self.base.wait_task_finish(&task).await
+        self.base.abort_task(&task).await
     }
 
     pub async fn run_heartbeat_test(
@@ -121,7 +121,7 @@ impl RedisTestRunner {
 
         let task = self.base.spawn_task().await?;
         TimeUtil::sleep_millis(start_millis).await;
-        self.base.wait_task_finish(&task).await.unwrap();
+        self.base.abort_task(&task).await.unwrap();
 
         let result = self.redis_util.execute_cmd(&mut self.src_conn, &cmd);
         assert_ne!(result, Value::Nil);

@@ -104,6 +104,10 @@ impl RdbFilter {
         self.ignore_cmds.contains(cmd)
     }
 
+    pub fn add_ignore_tb(&mut self, db: &str, tb: &str) {
+        self.ignore_tbs.insert((db.into(), tb.into()));
+    }
+
     fn match_all(set: &HashSet<String>) -> bool {
         set.len() == 1 && set.contains("*")
     }

@@ -3,7 +3,10 @@ use async_trait::async_trait;
 use sqlx::{mysql::MySqlArguments, query::Query, MySql, Pool};
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
     time::Instant,
 };
 
@@ -29,6 +32,7 @@ use dt_common::{
 };
 
 use crate::{
+    close_conn_pool,
     extractor::{
         base_extractor::BaseExtractor, mysql::binlog_util::BinlogUtil,
         resumer::cdc_resumer::CdcResumer,
@@ -41,10 +45,10 @@ pub struct MysqlCdcExtractor {
     pub meta_manager: MysqlMetaManager,
     pub conn_pool: Pool<MySql>,
     pub filter: RdbFilter,
+    pub time_filter: TimeFilter,
     pub url: String,
     pub binlog_filename: String,
     pub binlog_position: u32,
-    pub time_filter: TimeFilter,
     pub server_id: u64,
     pub heartbeat_interval_secs: u64,
     pub heartbeat_tb: String,
@@ -87,6 +91,11 @@ impl Extractor for MysqlCdcExtractor {
         self.extract_internal().await?;
         self.base_extractor.wait_task_finish().await
     }
+
+    async fn close(&mut self) -> Result<(), Error> {
+        self.meta_manager.close().await?;
+        return close_conn_pool!(self);
+    }
 }
 
 impl MysqlCdcExtractor {
@@ -102,7 +111,8 @@ impl MysqlCdcExtractor {
         let mut binlog_filename = self.binlog_filename.clone();
 
         // start heartbeat
-        self.start_heartbeat().unwrap();
+        self.start_heartbeat(self.base_extractor.shut_down.clone())
+            .unwrap();
 
         loop {
             if self.time_filter.ended {
@@ -223,19 +233,11 @@ impl MysqlCdcExtractor {
 
             EventData::Query(query) => {
                 if query.query == QUERY_BEGIN {
-                    // the first transaction after start_timestamp
-                    if !self.time_filter.started
-                        && header.timestamp >= self.time_filter.start_timestamp
-                    {
-                        self.time_filter.started = true;
-                        log_info!("start receiving binlog, position: {}", position.to_string());
-                    }
-                    // the first transaction after end_timestamp
-                    if !self.time_filter.ended && header.timestamp >= self.time_filter.end_timestamp
-                    {
-                        self.time_filter.ended = true;
-                        log_info!("end receiving binlog, position: {}", position.to_string());
-                    }
+                    BaseExtractor::update_time_filter(
+                        &mut self.time_filter,
+                        header.timestamp,
+                        &position,
+                    );
                 }
 
                 self.handle_query_event(query, position.clone()).await?;
@@ -360,7 +362,7 @@ impl MysqlCdcExtractor {
         filtered
     }
 
-    fn start_heartbeat(&self) -> Result<(), Error> {
+    fn start_heartbeat(&mut self, shut_down: Arc<AtomicBool>) -> Result<(), Error> {
         let db_tb = self.base_extractor.precheck_heartbeat(
             self.heartbeat_interval_secs,
             &self.heartbeat_tb,
@@ -369,6 +371,8 @@ impl MysqlCdcExtractor {
         if db_tb.len() != 2 {
             return Ok(());
         }
+
+        self.filter.add_ignore_tb(&db_tb[0], &db_tb[1]);
 
         let (server_id, heartbeat_interval_secs, syncer, conn_pool) = (
             self.server_id,
@@ -379,7 +383,7 @@ impl MysqlCdcExtractor {
 
         tokio::spawn(async move {
             let mut start_time = Instant::now();
-            loop {
+            while !shut_down.load(Ordering::Acquire) {
                 if start_time.elapsed().as_secs() >= heartbeat_interval_secs {
                     Self::heartbeat(server_id, &db_tb[0], &db_tb[1], &syncer, &conn_pool)
                         .await

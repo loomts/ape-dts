@@ -159,6 +159,40 @@ impl TaskUtil {
         tbs.contains(&tb.to_string())
     }
 
+    pub async fn check_and_create_tb(
+        url: &str,
+        db: &str,
+        tb: &str,
+        db_sql: &str,
+        tb_sql: &str,
+        db_type: &DbType,
+    ) -> Result<(), Error> {
+        if TaskUtil::check_tb_exist(url, db, tb, db_type).await {
+            return Ok(());
+        }
+
+        match db_type {
+            DbType::Mysql => {
+                let conn_pool = TaskUtil::create_mysql_conn_pool(url, 1, true)
+                    .await
+                    .unwrap();
+                sqlx::query(db_sql).execute(&conn_pool).await.unwrap();
+                sqlx::query(tb_sql).execute(&conn_pool).await.unwrap();
+                conn_pool.close().await
+            }
+
+            DbType::Pg => {
+                let conn_pool = TaskUtil::create_pg_conn_pool(url, 1, true).await.unwrap();
+                sqlx::query(db_sql).execute(&conn_pool).await.unwrap();
+                sqlx::query(tb_sql).execute(&conn_pool).await.unwrap();
+                conn_pool.close().await
+            }
+
+            _ => {}
+        }
+        Ok(())
+    }
+
     async fn list_pg_schemas(url: &str) -> Result<Vec<String>, Error> {
         let mut schemas = Vec::new();
         let conn_pool = TaskUtil::create_pg_conn_pool(url, 1, false).await?;
@@ -232,6 +266,7 @@ impl TaskUtil {
     async fn list_mongo_dbs(url: &str) -> Result<Vec<String>, Error> {
         let client = TaskUtil::create_mongo_client(url, "").await.unwrap();
         let dbs = client.list_database_names(None, None).await.unwrap();
+        client.shutdown().await;
         Ok(dbs)
     }
 
@@ -242,6 +277,7 @@ impl TaskUtil {
             .list_collection_names(None)
             .await
             .unwrap();
+        client.shutdown().await;
         Ok(tbs)
     }
 }

@@ -434,15 +434,15 @@ impl TaskRunner {
                         db_tb[0], db_tb[1]
                     );
 
-                    if !TaskUtil::check_tb_exist(url, &db_tb[0], &db_tb[1], &DbType::Mysql).await {
-                        let conn_pool = TaskUtil::create_mysql_conn_pool(url, 1, true)
-                            .await
-                            .unwrap();
-                        let db_query = sqlx::query(&db_sql);
-                        db_query.execute(&conn_pool).await.unwrap();
-                        let tb_query = sqlx::query(&tb_sql);
-                        tb_query.execute(&conn_pool).await.unwrap();
-                    }
+                    TaskUtil::check_and_create_tb(
+                        url,
+                        &db_tb[0],
+                        &db_tb[1],
+                        &db_sql,
+                        &tb_sql,
+                        &DbType::Mysql,
+                    )
+                    .await?
                 }
 
                 ExtractorConfig::PgCdc { url, .. } => {
@@ -460,13 +460,15 @@ impl TaskRunner {
                         db_tb[0], db_tb[1]
                     );
 
-                    if !TaskUtil::check_tb_exist(url, &db_tb[0], &db_tb[1], &DbType::Pg).await {
-                        let conn_pool = TaskUtil::create_pg_conn_pool(url, 1, true).await.unwrap();
-                        let schema_query = sqlx::query(&schema_sql);
-                        schema_query.execute(&conn_pool).await.unwrap();
-                        let tb_query = sqlx::query(&tb_sql);
-                        tb_query.execute(&conn_pool).await.unwrap();
-                    }
+                    TaskUtil::check_and_create_tb(
+                        url,
+                        &db_tb[0],
+                        &db_tb[1],
+                        &schema_sql,
+                        &tb_sql,
+                        &DbType::Pg,
+                    )
+                    .await?
                 }
 
                 _ => {}
@@ -490,22 +492,15 @@ impl TaskRunner {
                         data_marker.marker_db, data_marker.marker_tb
                     );
 
-                    if !TaskUtil::check_tb_exist(
+                    TaskUtil::check_and_create_tb(
                         url,
                         &data_marker.marker_db,
                         &data_marker.marker_tb,
+                        &db_sql,
+                        &tb_sql,
                         &DbType::Mysql,
                     )
-                    .await
-                    {
-                        let conn_pool = TaskUtil::create_mysql_conn_pool(url, 1, true)
-                            .await
-                            .unwrap();
-                        let db_query = sqlx::query(&db_sql);
-                        db_query.execute(&conn_pool).await.unwrap();
-                        let tb_query = sqlx::query(&tb_sql);
-                        tb_query.execute(&conn_pool).await.unwrap();
-                    }
+                    .await?
                 }
 
                 SinkerConfig::Pg { url, .. } => {
@@ -522,20 +517,15 @@ impl TaskRunner {
                         data_marker.marker_db, data_marker.marker_tb
                     );
 
-                    if !TaskUtil::check_tb_exist(
+                    TaskUtil::check_and_create_tb(
                         url,
                         &data_marker.marker_db,
                         &data_marker.marker_tb,
+                        &schema_sql,
+                        &tb_sql,
                         &DbType::Pg,
                     )
-                    .await
-                    {
-                        let conn_pool = TaskUtil::create_pg_conn_pool(url, 1, true).await.unwrap();
-                        let schema_query = sqlx::query(&schema_sql);
-                        schema_query.execute(&conn_pool).await.unwrap();
-                        let tb_query = sqlx::query(&tb_sql);
-                        tb_query.execute(&conn_pool).await.unwrap();
-                    }
+                    .await?
                 }
 
                 _ => {}

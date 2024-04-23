@@ -56,8 +56,6 @@ impl TestBase {
             .await
             .unwrap();
         runner.close().await.unwrap();
-        // runner.run_cdc_test_with_different_configs(start_millis, parse_millis))
-        //     .unwrap();
     }
 
     pub async fn run_cdc_to_sql_test(
@@ -95,16 +93,19 @@ impl TestBase {
     pub async fn run_check_test(test_dir: &str) {
         let runner = RdbCheckTestRunner::new(test_dir).await.unwrap();
         runner.run_check_test().await.unwrap();
+        runner.close().await.unwrap();
     }
 
     pub async fn run_review_test(test_dir: &str) {
         let runner = RdbCheckTestRunner::new(test_dir).await.unwrap();
         runner.run_review_test().await.unwrap();
+        runner.close().await.unwrap();
     }
 
     pub async fn run_revise_test(test_dir: &str) {
         let runner = RdbCheckTestRunner::new(test_dir).await.unwrap();
         runner.run_revise_test().await.unwrap();
+        runner.close().await.unwrap();
     }
 
     pub async fn run_mongo_snapshot_test(test_dir: &str) {
@@ -222,12 +223,14 @@ impl TestBase {
         let mut runner = RdbStructTestRunner::new(test_dir).await.unwrap();
         runner.run_mysql_struct_test().await.unwrap();
         runner.base.execute_clean_sqls().await.unwrap();
+        runner.close().await.unwrap();
     }
 
     pub async fn run_pg_struct_test(test_dir: &str) {
         let mut runner = RdbStructTestRunner::new(test_dir).await.unwrap();
         runner.run_pg_struct_test().await.unwrap();
         runner.base.execute_clean_sqls().await.unwrap();
+        runner.close().await.unwrap();
     }
 
     pub async fn run_precheck_test(

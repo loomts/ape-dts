@@ -68,7 +68,7 @@ mod test {
 
         RdbCycleTestRunner::run_cycle_cdc_test(
             "mysql_to_mysql/cdc/cycle_basic_test",
-            3000,
+            1000,
             2000,
             &tx_check_data,
         )
@@ -89,8 +89,8 @@ mod test {
 
         RdbCycleTestRunner::run_cycle_cdc_test(
             "mysql_to_mysql/cdc/cycle_star_test",
-            3000,
-            2000,
+            1000,
+            5000,
             &tx_check_data,
         )
         .await;
@@ -110,8 +110,8 @@ mod test {
 
         RdbCycleTestRunner::run_cycle_cdc_test(
             "mysql_to_mysql/cdc/cycle_net_test",
-            3000,
-            2000,
+            1000,
+            5000,
             &tx_check_data,
         )
         .await;

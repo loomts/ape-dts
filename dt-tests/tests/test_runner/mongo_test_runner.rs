@@ -135,7 +135,7 @@ impl MongoTestRunner {
             self.compare_db_data(db).await;
         }
 
-        self.base.wait_task_finish(&task).await
+        self.base.abort_task(&task).await
     }
 
     pub async fn run_cdc_test(&self, start_millis: u64, parse_millis: u64) -> Result<(), Error> {
@@ -171,7 +171,7 @@ impl MongoTestRunner {
             TimeUtil::sleep_millis(parse_millis).await;
             self.compare_db_data(db).await;
         }
-        self.base.wait_task_finish(&task).await
+        self.base.abort_task(&task).await
     }
 
     pub async fn run_snapshot_test(&self, compare_data: bool) -> Result<(), Error> {
@@ -214,7 +214,7 @@ impl MongoTestRunner {
         let src_data = self.fetch_data(&db, &tb, SRC).await;
         assert_eq!(src_data.len(), 1);
 
-        self.base.wait_task_finish(&task).await
+        self.base.abort_task(&task).await
     }
 
     pub async fn execute_prepare_sqls(&self) -> Result<(), Error> {

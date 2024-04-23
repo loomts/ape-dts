@@ -19,6 +19,8 @@ use dt_common::meta::syncer::Syncer;
 use dt_common::rdb_filter::RdbFilter;
 use dt_common::utils::sql_util::SqlUtil;
 use dt_common::utils::time_util::TimeUtil;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Instant;
@@ -103,9 +105,13 @@ impl RedisCdcExtractor {
 
         // start hearbeat
         if heartbeat_db_key.len() == 2 {
-            self.start_heartbeat(heartbeat_db_id, &heartbeat_db_key[1])
-                .await
-                .unwrap();
+            self.start_heartbeat(
+                heartbeat_db_id,
+                &heartbeat_db_key[1],
+                self.base_extractor.shut_down.clone(),
+            )
+            .await
+            .unwrap();
         } else {
             log_warn!("heartbeat disabled, heartbeat_tb should be like db.key");
         }
@@ -250,7 +256,12 @@ impl RedisCdcExtractor {
         Ok(())
     }
 
-    async fn start_heartbeat(&self, db_id: i64, key: &str) -> Result<(), Error> {
+    async fn start_heartbeat(
+        &self,
+        db_id: i64,
+        key: &str,
+        shut_down: Arc<AtomicBool>,
+    ) -> Result<(), Error> {
         log_info!(
             "try starting heartbeat, heartbeat_interval_secs: {}, db_id: {}, key: {}",
             self.heartbeat_interval_secs,
@@ -279,7 +290,7 @@ impl RedisCdcExtractor {
             }
 
             let mut start_time = Instant::now();
-            loop {
+            while !shut_down.load(Ordering::Acquire) {
                 if start_time.elapsed().as_secs() >= heartbeat_interval_secs {
                     Self::heartbeat(&key, &mut conn).await.unwrap();
                     start_time = Instant::now();

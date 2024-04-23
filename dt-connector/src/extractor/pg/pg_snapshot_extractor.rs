@@ -15,6 +15,7 @@ use dt_common::meta::{
 
 use dt_common::error::Error;
 
+use crate::close_conn_pool;
 use crate::{
     extractor::{base_extractor::BaseExtractor, resumer::snapshot_resumer::SnapshotResumer},
     rdb_query_builder::RdbQueryBuilder,
@@ -46,11 +47,7 @@ impl Extractor for PgSnapshotExtractor {
     }
 
     async fn close(&mut self) -> Result<(), Error> {
-        if self.conn_pool.is_closed() {
-            return Ok(());
-        }
-        self.conn_pool.close().await;
-        Ok(())
+        close_conn_pool!(self)
     }
 }
 

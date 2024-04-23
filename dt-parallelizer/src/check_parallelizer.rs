@@ -22,6 +22,10 @@ impl Parallelizer for CheckParallelizer {
         "CheckParallelizer".to_string()
     }
 
+    async fn close(&mut self) -> Result<(), Error> {
+        self.merger.close().await
+    }
+
     async fn drain(&mut self, buffer: &ConcurrentQueue<DtItem>) -> Result<Vec<DtItem>, Error> {
         self.base_parallelizer.drain(buffer).await
     }

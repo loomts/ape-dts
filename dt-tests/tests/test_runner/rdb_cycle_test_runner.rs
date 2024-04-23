@@ -67,6 +67,11 @@ impl RdbCycleTestRunner {
         // start all sub tasks
         for sub_path in &sub_paths {
             let runner = runner_map.get(sub_path.1.as_str()).unwrap();
+            // sleep start_millis for each sub task to check and create heartbeat and data_marker tables if not exist.
+            // if all sub tasks start at the same time, it may cause lock issues when creating these tables.
+            runner
+                .base
+                .update_cdc_task_config(start_millis * sub_paths.len() as u64, parse_millis * 2);
             handlers.push(runner.base.base.spawn_task().await.unwrap());
             TimeUtil::sleep_millis(start_millis).await;
         }
@@ -97,7 +102,6 @@ impl RdbCycleTestRunner {
         }
 
         for handler in handlers {
-            handler.abort();
             while !handler.is_finished() {
                 TimeUtil::sleep_millis(1).await;
             }

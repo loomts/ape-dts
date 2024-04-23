@@ -73,10 +73,11 @@ impl Sinker for PgSinker {
                     })
                 });
             }
-            let conn_pool = pool_options.connect_with(conn_options).await.unwrap();
 
+            let conn_pool = pool_options.connect_with(conn_options).await.unwrap();
             let query = sqlx::query(&ddl_data.query);
             query.execute(&conn_pool).await.unwrap();
+            conn_pool.close().await;
         }
         Ok(())
     }
@@ -90,6 +91,7 @@ impl Sinker for PgSinker {
     }
 
     async fn close(&mut self) -> Result<(), Error> {
+        self.meta_manager.close().await?;
         return close_conn_pool!(self);
     }
 }

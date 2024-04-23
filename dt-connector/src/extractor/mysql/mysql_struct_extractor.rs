@@ -8,6 +8,7 @@ use dt_common::meta::{
 };
 use sqlx::{MySql, Pool};
 
+use crate::close_conn_pool;
 use crate::{
     extractor::base_extractor::BaseExtractor,
     meta_fetcher::mysql::mysql_struct_fetcher::MysqlStructFetcher, Extractor,
@@ -26,6 +27,10 @@ impl Extractor for MysqlStructExtractor {
         log_info!("MysqlStructExtractor starts, schema: {}", self.db,);
         self.extract_internal().await?;
         self.base_extractor.wait_task_finish().await
+    }
+
+    async fn close(&mut self) -> Result<(), Error> {
+        close_conn_pool!(self)
     }
 }
 

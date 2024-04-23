@@ -1,7 +1,7 @@
 use std::fs::File;
 
-use chrono::Utc;
-use dt_common::{error::Error, utils::time_util::TimeUtil};
+use chrono::{Duration, Utc};
+use dt_common::{config::config_enums::DbType, error::Error, utils::time_util::TimeUtil};
 
 use crate::test_config_util::TestConfigUtil;
 
@@ -42,33 +42,19 @@ impl RdbSqlTestRunner {
     pub async fn run_cdc_to_sql_test(
         &self,
         start_millis: u64,
-        _parse_millis: u64,
+        parse_millis: u64,
     ) -> Result<(), Error> {
         self.src_to_sql_runner.execute_prepare_sqls().await?;
 
-        let start_time_utc = Utc::now().format(UTC_FORMAT).to_string();
-
-        // execute sqls in src
-        TimeUtil::sleep_millis(start_millis).await;
-        self.src_to_sql_runner
-            .execute_src_sqls(&self.src_to_sql_runner.base.src_test_sqls)
+        let gernated_sqls = self
+            .start_task_to_get_sqls(start_millis, parse_millis)
             .await?;
-        TimeUtil::sleep_millis(start_millis).await;
-
-        let end_time_utc = Utc::now().format(UTC_FORMAT).to_string();
-
-        self.update_task_config(self.reverse, &start_time_utc, &end_time_utc);
-
-        let mut gernated_sqls = self.start_task_to_get_sqls().await?;
-        if self.reverse {
-            gernated_sqls.reverse();
-        }
 
         // 1, clear src and dst
         // 2, execute src_to_sql/src_test_sqls in src
         // 3, execute gernerated_sqls in dst
         // 4, compare src and dst, make sure src_test_sqls and gernerated_sqls generate same data
-        let (src_db_tbs, dst_db_tbs) = self.src_to_dst_runner.get_compare_db_tbs().await?;
+        let (src_db_tbs, dst_db_tbs) = self.src_to_dst_runner.get_compare_db_tbs()?;
         let (src_insert_sqls, src_update_sqls, src_delete_sqls) =
             RdbTestRunner::split_dml_sqls(&self.src_to_sql_runner.base.src_test_sqls);
         let (dst_insert_sqls, dst_update_sqls, dst_delete_sqls) =
@@ -162,22 +148,60 @@ impl RdbSqlTestRunner {
         Ok(())
     }
 
-    async fn start_task_to_get_sqls(&self) -> Result<Vec<String>, Error> {
+    async fn start_task_to_get_sqls(
+        &self,
+        start_millis: u64,
+        parse_millis: u64,
+    ) -> Result<Vec<String>, Error> {
+        let config = self.src_to_sql_runner.base.get_config();
+
         // clear sql.log if exists
-        let log_file = format!(
-            "{}/sql.log",
-            self.src_to_sql_runner.base.get_config().runtime.log_dir
-        );
+        let log_file = format!("{}/sql.log", config.runtime.log_dir);
         if BaseTestRunner::check_path_exists(&log_file) {
             File::create(&log_file).unwrap().set_len(0).unwrap();
         }
 
         // start task to generate sql file
-        self.src_to_sql_runner.base.start_task().await?;
+        if config.extractor_basic.db_type == DbType::Mysql {
+            self.start_mysql_task(start_millis).await?
+        } else {
+            self.start_pg_task(start_millis, parse_millis).await?
+        }
 
         let gernated_sqls = BaseTestRunner::load_file(&log_file);
         assert!(!gernated_sqls.is_empty());
         Ok(gernated_sqls)
+    }
+
+    async fn start_mysql_task(&self, start_millis: u64) -> Result<(), Error> {
+        let start_time_utc = Utc::now().format(UTC_FORMAT).to_string();
+        // execute sqls in src
+        TimeUtil::sleep_millis(start_millis).await;
+        self.src_to_sql_runner
+            .execute_src_sqls(&self.src_to_sql_runner.base.src_test_sqls)
+            .await?;
+        TimeUtil::sleep_millis(start_millis).await;
+
+        let end_time_utc = Utc::now().format(UTC_FORMAT).to_string();
+        self.update_task_config(self.reverse, &start_time_utc, &end_time_utc);
+
+        // start task to generate sql file
+        self.src_to_sql_runner.base.start_task().await
+    }
+
+    async fn start_pg_task(&self, start_millis: u64, parse_millis: u64) -> Result<(), Error> {
+        let duration = Duration::try_milliseconds((start_millis + parse_millis) as i64).unwrap();
+        let end_time_utc = (Utc::now() + duration).format(UTC_FORMAT).to_string();
+        self.update_task_config(self.reverse, "", &end_time_utc);
+
+        let task = self.src_to_sql_runner.base.spawn_task().await?;
+        TimeUtil::sleep_millis(start_millis).await;
+
+        self.src_to_sql_runner
+            .execute_src_sqls(&self.src_to_sql_runner.base.src_test_sqls)
+            .await?;
+
+        self.src_to_sql_runner.base.wait_task_finish(&task).await
     }
 
     fn update_task_config(&self, reverse: bool, start_time_utc: &str, end_time_utc: &str) {
@@ -188,12 +212,7 @@ impl RdbSqlTestRunner {
             ("extractor", "end_time_utc", end_time_utc),
         ];
 
-        let update_configs = update_configs
-            .into_iter()
-            .map(|i| (i.0.to_string(), i.1.to_string(), i.2.to_string()))
-            .collect();
-
-        TestConfigUtil::update_task_config(
+        TestConfigUtil::update_task_config_2(
             &self.src_to_sql_runner.base.task_config_file,
             &self.src_to_sql_runner.base.task_config_file,
             &update_configs,
