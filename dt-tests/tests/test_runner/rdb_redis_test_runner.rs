@@ -111,7 +111,7 @@ impl RdbRedisTestRunner {
         TimeUtil::sleep_millis(parse_millis).await;
         self.compare_data_for_tbs(&db_tbs).await;
 
-        self.base.wait_task_finish(&task).await
+        self.base.abort_task(&task).await
     }
 
     async fn execute_sqls(&self, sqls: &Vec<String>) -> Result<(), Error> {

@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use chrono::{Duration, Utc};
 use dt_common::{
     config::{
         config_enums::DbType, config_token_parser::ConfigTokenParser,
@@ -18,6 +19,8 @@ use dt_task::task_util::TaskUtil;
 
 use sqlx::{MySql, Pool, Postgres};
 
+use crate::test_config_util::TestConfigUtil;
+
 use super::{base_test_runner::BaseTestRunner, rdb_util::RdbUtil};
 
 pub struct RdbTestRunner {
@@ -32,6 +35,8 @@ pub struct RdbTestRunner {
 pub const SRC: &str = "src";
 pub const DST: &str = "dst";
 pub const PUBLIC: &str = "public";
+
+const UTC_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 
 #[allow(dead_code)]
 impl RdbTestRunner {
@@ -180,7 +185,7 @@ impl RdbTestRunner {
         self.base.start_task().await?;
 
         // compare data
-        let (src_db_tbs, dst_db_tbs) = self.get_compare_db_tbs().await?;
+        let (src_db_tbs, dst_db_tbs) = self.get_compare_db_tbs()?;
         if compare_data {
             assert!(self.compare_data_for_tbs(&src_db_tbs, &dst_db_tbs).await?)
         }
@@ -189,13 +194,14 @@ impl RdbTestRunner {
 
     pub async fn run_ddl_test(&self, start_millis: u64, parse_millis: u64) -> Result<(), Error> {
         self.execute_prepare_sqls().await?;
+
+        self.update_cdc_task_config(start_millis, parse_millis);
         let task = self.base.spawn_task().await?;
         TimeUtil::sleep_millis(start_millis).await;
 
         self.execute_src_sqls(&self.base.src_test_sqls).await?;
-        TimeUtil::sleep_millis(parse_millis).await;
 
-        let (mut src_db_tbs, mut dst_db_tbs) = self.get_compare_db_tbs().await?;
+        let (mut src_db_tbs, mut dst_db_tbs) = self.get_compare_db_tbs()?;
         let filtered_db_tbs = self.get_filtered_db_tbs();
         for i in (0..src_db_tbs.len()).rev() {
             // do not check filtered tables since they may be dropped
@@ -205,8 +211,9 @@ impl RdbTestRunner {
             }
         }
 
+        self.base.wait_task_finish(&task).await?;
         assert!(self.compare_data_for_tbs(&src_db_tbs, &dst_db_tbs).await?);
-        self.base.wait_task_finish(&task).await
+        Ok(())
     }
 
     pub async fn run_cdc_test(&self, start_millis: u64, parse_millis: u64) -> Result<(), Error> {
@@ -214,6 +221,8 @@ impl RdbTestRunner {
         self.execute_prepare_sqls().await?;
 
         // start task
+        let total_parse_millis = self.get_total_parse_millis(parse_millis);
+        self.update_cdc_task_config(start_millis, total_parse_millis);
         let task = self.base.spawn_task().await?;
         TimeUtil::sleep_millis(start_millis).await;
 
@@ -241,8 +250,8 @@ impl RdbTestRunner {
         self.execute_prepare_sqls().await?;
 
         // start task
+        self.update_cdc_task_config(0, parse_millis);
         let task = self.base.spawn_task().await?;
-        TimeUtil::sleep_millis(parse_millis).await;
         self.base.wait_task_finish(&task).await.unwrap();
 
         let src_data = self.fetch_data(&db_tb, SRC).await?;
@@ -250,33 +259,56 @@ impl RdbTestRunner {
         Ok(())
     }
 
+    pub fn update_cdc_task_config(&self, start_millis: u64, parse_millis: u64) {
+        let duration = Duration::try_milliseconds((start_millis + parse_millis) as i64).unwrap();
+        let end_time_utc = (Utc::now() + duration).format(UTC_FORMAT).to_string();
+        let update_configs = vec![("extractor", "end_time_utc", end_time_utc.as_str())];
+        TestConfigUtil::update_task_config_2(
+            &self.base.task_config_file,
+            &self.base.task_config_file,
+            &update_configs,
+        );
+    }
+
+    fn get_total_parse_millis(&self, parse_millis: u64) -> u64 {
+        let (src_insert_sqls, src_update_sqls, src_delete_sqls) =
+            Self::split_dml_sqls(&self.base.src_test_sqls);
+        // parse_millis * 2 for: time to parse binlog + time to compare data
+        (!src_insert_sqls.is_empty() as u64
+            + !src_update_sqls.is_empty() as u64
+            + !src_delete_sqls.is_empty() as u64)
+            * parse_millis
+            * 2
+    }
+
     pub async fn execute_test_sqls_and_compare(&self, parse_millis: u64) -> Result<(), Error> {
         // load dml sqls
         let (src_insert_sqls, src_update_sqls, src_delete_sqls) =
             Self::split_dml_sqls(&self.base.src_test_sqls);
 
-        // insert src data
-        self.execute_src_sqls(&src_insert_sqls).await?;
-        if !src_insert_sqls.is_empty() {
-            TimeUtil::sleep_millis(parse_millis).await;
-        }
+        let (src_db_tbs, dst_db_tbs) = self.get_compare_db_tbs()?;
 
-        let (src_db_tbs, dst_db_tbs) = self.get_compare_db_tbs().await?;
-        self.compare_data_for_tbs(&src_db_tbs, &dst_db_tbs).await?;
+        // insert src data
+        if !src_insert_sqls.is_empty() {
+            self.execute_src_sqls(&src_insert_sqls).await?;
+            TimeUtil::sleep_millis(parse_millis).await;
+            self.compare_data_for_tbs(&src_db_tbs, &dst_db_tbs).await?;
+        }
 
         // update src data
-        self.execute_src_sqls(&src_update_sqls).await?;
         if !src_update_sqls.is_empty() {
+            self.execute_src_sqls(&src_update_sqls).await?;
             TimeUtil::sleep_millis(parse_millis).await;
+            self.compare_data_for_tbs(&src_db_tbs, &dst_db_tbs).await?;
         }
-        self.compare_data_for_tbs(&src_db_tbs, &dst_db_tbs).await?;
 
         // delete src data
-        self.execute_src_sqls(&src_delete_sqls).await?;
         if !src_delete_sqls.is_empty() {
+            self.execute_src_sqls(&src_delete_sqls).await?;
             TimeUtil::sleep_millis(parse_millis).await;
+            self.compare_data_for_tbs(&src_db_tbs, &dst_db_tbs).await?;
         }
-        self.compare_data_for_tbs(&src_db_tbs, &dst_db_tbs).await?;
+
         Ok(())
     }
 
@@ -466,7 +498,7 @@ impl RdbTestRunner {
     }
 
     /// get compare tbs
-    pub async fn get_compare_db_tbs(
+    pub fn get_compare_db_tbs(
         &self,
     ) -> Result<(Vec<(String, String)>, Vec<(String, String)>), Error> {
         let mut src_db_tbs = Self::get_compare_db_tbs_from_sqls(&self.base.src_prepare_sqls)?;

@@ -40,6 +40,11 @@ impl Extractor for MongoCheckExtractor {
         base_check_extractor.extract(self).await.unwrap();
         self.base_extractor.wait_task_finish().await
     }
+
+    async fn close(&mut self) -> Result<(), Error> {
+        self.mongo_client.clone().shutdown().await;
+        Ok(())
+    }
 }
 
 #[async_trait]

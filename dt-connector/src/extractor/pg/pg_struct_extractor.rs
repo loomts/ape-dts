@@ -8,6 +8,7 @@ use dt_common::meta::{
 
 use sqlx::{Pool, Postgres};
 
+use crate::close_conn_pool;
 use crate::{
     extractor::base_extractor::BaseExtractor, meta_fetcher::pg::pg_struct_fetcher::PgStructFetcher,
     Extractor,
@@ -26,6 +27,10 @@ impl Extractor for PgStructExtractor {
         log_info!("PgStructExtractor starts, schema: {}", self.schema);
         self.extract_internal().await?;
         self.base_extractor.wait_task_finish().await
+    }
+
+    async fn close(&mut self) -> Result<(), Error> {
+        close_conn_pool!(self)
     }
 }
 

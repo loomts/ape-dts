@@ -26,6 +26,10 @@ impl Parallelizer for PartitionParallelizer {
         "PartitionParallelizer".to_string()
     }
 
+    async fn close(&mut self) -> Result<(), Error> {
+        self.partitioner.close().await
+    }
+
     async fn drain(&mut self, buffer: &ConcurrentQueue<DtItem>) -> Result<Vec<DtItem>, Error> {
         let mut data = Vec::new();
         let mut record_size_counter = Counter::new(0, 0);

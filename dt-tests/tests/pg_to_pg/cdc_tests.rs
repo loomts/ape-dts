@@ -8,31 +8,31 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn cdc_basic_test() {
-        TestBase::run_cdc_test("pg_to_pg/cdc/basic_test", 7000, 5000).await;
+        TestBase::run_cdc_test("pg_to_pg/cdc/basic_test", 3000, 7000).await;
     }
 
     #[tokio::test]
     #[serial]
     async fn cdc_postgis_test() {
-        TestBase::run_cdc_test("pg_to_pg/cdc/postgis_test", 7000, 5000).await;
+        TestBase::run_cdc_test("pg_to_pg/cdc/postgis_test", 3000, 9000).await;
     }
 
     #[tokio::test]
     #[serial]
     async fn cdc_postgis_array_test() {
-        TestBase::run_cdc_test("pg_to_pg/cdc/postgis_array_test", 7000, 5000).await;
+        TestBase::run_cdc_test("pg_to_pg/cdc/postgis_array_test", 3000, 9000).await;
     }
 
     #[tokio::test]
     #[serial]
     async fn cdc_charset_test() {
-        TestBase::run_cdc_test("pg_to_pg/cdc/charset_test", 7000, 5000).await;
+        TestBase::run_cdc_test("pg_to_pg/cdc/charset_test", 3000, 5000).await;
     }
 
     #[tokio::test]
     #[serial]
     async fn cdc_charset_euc_cn_test() {
-        TestBase::run_cdc_test("pg_to_pg/cdc/charset_euc_cn_test", 7000, 5000).await;
+        TestBase::run_cdc_test("pg_to_pg/cdc/charset_euc_cn_test", 3000, 5000).await;
     }
 
     #[tokio::test]
@@ -44,25 +44,25 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn cdc_special_character_in_name_test() {
-        TestBase::run_cdc_test("pg_to_pg/cdc/special_character_in_name_test", 3000, 2000).await;
+        TestBase::run_cdc_test("pg_to_pg/cdc/special_character_in_name_test", 3000, 4000).await;
     }
 
     #[tokio::test]
     #[serial]
     async fn cdc_wildchar_filter_test() {
-        TestBase::run_cdc_test("pg_to_pg/cdc/wildchar_filter_test", 3000, 2000).await;
+        TestBase::run_cdc_test("pg_to_pg/cdc/wildchar_filter_test", 3000, 4000).await;
     }
 
     #[tokio::test]
     #[serial]
     async fn cdc_route_test() {
-        TestBase::run_cdc_test("pg_to_pg/cdc/route_test", 3000, 2000).await;
+        TestBase::run_cdc_test("pg_to_pg/cdc/route_test", 3000, 4000).await;
     }
 
     #[tokio::test]
     #[serial]
     async fn cdc_foreign_key_test() {
-        TestBase::run_cdc_test("pg_to_pg/cdc/foreign_key_test", 3000, 2000).await;
+        TestBase::run_cdc_test("pg_to_pg/cdc/foreign_key_test", 3000, 4000).await;
     }
 
     #[tokio::test]
@@ -82,7 +82,7 @@ mod test {
         RdbCycleTestRunner::run_cycle_cdc_test(
             "pg_to_pg/cdc/cycle_basic_test",
             2000,
-            2000,
+            4000,
             &tx_check_data,
         )
         .await;
@@ -103,7 +103,7 @@ mod test {
         RdbCycleTestRunner::run_cycle_cdc_test(
             "pg_to_pg/cdc/cycle_star_test",
             2000,
-            2000,
+            4000,
             &tx_check_data,
         )
         .await;
@@ -124,7 +124,7 @@ mod test {
         RdbCycleTestRunner::run_cycle_cdc_test(
             "pg_to_pg/cdc/cycle_net_test",
             2000,
-            2000,
+            4000,
             &tx_check_data,
         )
         .await;

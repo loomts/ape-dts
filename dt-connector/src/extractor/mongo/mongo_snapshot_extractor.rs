@@ -38,6 +38,11 @@ impl Extractor for MongoSnapshotExtractor {
         self.extract_internal().await?;
         self.base_extractor.wait_task_finish().await
     }
+
+    async fn close(&mut self) -> Result<(), Error> {
+        self.mongo_client.clone().shutdown().await;
+        Ok(())
+    }
 }
 
 impl MongoSnapshotExtractor {

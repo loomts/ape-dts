@@ -5,19 +5,22 @@ use std::sync::{
 
 use concurrent_queue::ConcurrentQueue;
 
-use dt_common::meta::{
-    ddl_data::DdlData,
-    ddl_type::DdlType,
-    dt_data::{DtData, DtItem},
-    position::Position,
-    row_data::RowData,
-    sql_parser::ddl_parser::DdlParser,
-};
 use dt_common::{
     config::{config_enums::DbType, config_token_parser::ConfigTokenParser},
     error::Error,
     log_error, log_info, log_warn,
     utils::{sql_util::SqlUtil, time_util::TimeUtil},
+};
+use dt_common::{
+    meta::{
+        ddl_data::DdlData,
+        ddl_type::DdlType,
+        dt_data::{DtData, DtItem},
+        position::Position,
+        row_data::RowData,
+        sql_parser::ddl_parser::DdlParser,
+    },
+    time_filter::TimeFilter,
 };
 
 use crate::{data_marker::DataMarker, rdb_router::RdbRouter};
@@ -152,6 +155,18 @@ impl BaseExtractor {
             return vec![];
         }
         db_tb
+    }
+
+    pub fn update_time_filter(time_filter: &mut TimeFilter, timestamp: u32, position: &Position) {
+        if !time_filter.started && timestamp >= time_filter.start_timestamp {
+            time_filter.started = true;
+            log_info!("time filter started, position: {}", position.to_string());
+        }
+
+        if !time_filter.ended && timestamp >= time_filter.end_timestamp {
+            time_filter.ended = true;
+            log_info!("time filter ended, position: {}", position.to_string());
+        }
     }
 
     pub async fn wait_task_finish(&mut self) -> Result<(), Error> {

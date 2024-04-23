@@ -185,7 +185,7 @@ impl TestConfigUtil {
     pub fn update_task_config(
         src_task_config_file: &str,
         dst_task_config_file: &str,
-        config: &Vec<(String, String, String)>,
+        config: &[(String, String, String)],
     ) {
         let mut ini = Self::load_ini(src_task_config_file);
         for (section, key, value) in config.iter() {
@@ -199,6 +199,18 @@ impl TestConfigUtil {
             .set_len(0)
             .unwrap();
         ini.write(dst_task_config_file).unwrap();
+    }
+
+    pub fn update_task_config_2<'a>(
+        src_task_config_file: &str,
+        dst_task_config_file: &str,
+        config: &[(&'a str, &'a str, &'a str)],
+    ) {
+        let config: Vec<(String, String, String)> = config
+            .into_iter()
+            .map(|i| (i.0.to_string(), i.1.to_string(), i.2.to_string()))
+            .collect();
+        Self::update_task_config(src_task_config_file, dst_task_config_file, &config);
     }
 
     fn load_ini(task_config_file: &str) -> Ini {

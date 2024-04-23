@@ -75,11 +75,13 @@ impl Sinker for MysqlSinker {
                 .await
                 .unwrap();
             query.execute(&conn_pool).await.unwrap();
+            conn_pool.close().await;
         }
         Ok(())
     }
 
     async fn close(&mut self) -> Result<(), Error> {
+        self.meta_manager.close().await?;
         return close_conn_pool!(self);
     }
 

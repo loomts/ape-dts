@@ -105,4 +105,8 @@ impl RdbPartitioner {
             Ok(0)
         }
     }
+
+    pub async fn close(&mut self) -> Result<(), Error> {
+        self.meta_manager.close().await
+    }
 }

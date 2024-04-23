@@ -49,6 +49,11 @@ impl Sinker for MongoSinker {
         }
         Ok(())
     }
+
+    async fn close(&mut self) -> Result<(), Error> {
+        self.mongo_client.clone().shutdown().await;
+        Ok(())
+    }
 }
 
 impl MongoSinker {

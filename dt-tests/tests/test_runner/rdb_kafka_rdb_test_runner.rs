@@ -75,7 +75,7 @@ impl RdbKafkaRdbTestRunner {
         TimeUtil::sleep_millis(parse_millis).await;
 
         // compare data
-        let (src_db_tbs, dst_db_tbs) = self.src_to_dst_runner.get_compare_db_tbs().await?;
+        let (src_db_tbs, dst_db_tbs) = self.src_to_dst_runner.get_compare_db_tbs()?;
         assert!(
             self.src_to_dst_runner
                 .compare_data_for_tbs(&src_db_tbs, &dst_db_tbs)
@@ -85,7 +85,7 @@ impl RdbKafkaRdbTestRunner {
         // stop
         for i in 0..self.kafka_to_dst_runners.len() {
             self.kafka_to_dst_runners[i]
-                .wait_task_finish(&kafka_to_dst_tasks[i])
+                .abort_task(&kafka_to_dst_tasks[i])
                 .await?;
         }
 
@@ -115,12 +115,12 @@ impl RdbKafkaRdbTestRunner {
         // stop
         for i in 0..self.kafka_to_dst_runners.len() {
             self.kafka_to_dst_runners[i]
-                .wait_task_finish(&kafka_to_dst_tasks[i])
+                .abort_task(&kafka_to_dst_tasks[i])
                 .await?;
         }
 
         self.src_to_kafka_runner
-            .wait_task_finish(&src_to_kafka_task)
+            .abort_task(&src_to_kafka_task)
             .await?;
         Ok(())
     }

@@ -18,6 +18,10 @@ impl RdbStructTestRunner {
         Ok(Self { base })
     }
 
+    pub async fn close(&self) -> Result<(), Error> {
+        self.base.close().await
+    }
+
     pub async fn run_mysql_struct_test(&mut self) -> Result<(), Error> {
         self.base.execute_prepare_sqls().await?;
         self.base.base.start_task().await?;
@@ -39,7 +43,7 @@ impl RdbStructTestRunner {
             line_set
         };
 
-        let (src_db_tbs, dst_db_tbs) = self.base.get_compare_db_tbs().await.unwrap();
+        let (src_db_tbs, dst_db_tbs) = self.base.get_compare_db_tbs().unwrap();
         for i in 0..src_db_tbs.len() {
             let src_ddl_sql = src_check_fetcher
                 .fetch_table(&src_db_tbs[i].0, &src_db_tbs[i].1)
@@ -104,7 +108,7 @@ impl RdbStructTestRunner {
             conn_pool: self.base.dst_conn_pool_pg.as_mut().unwrap().clone(),
         };
 
-        let (src_db_tbs, dst_db_tbs) = self.base.get_compare_db_tbs().await.unwrap();
+        let (src_db_tbs, dst_db_tbs) = self.base.get_compare_db_tbs().unwrap();
         for i in 0..src_db_tbs.len() {
             let src_table = src_check_fetcher
                 .fetch_table(&src_db_tbs[i].0, &src_db_tbs[i].1)

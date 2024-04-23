@@ -49,6 +49,8 @@ impl Sinker for PgChecker {
     }
 
     async fn close(&mut self) -> Result<(), Error> {
+        self.meta_manager.close().await?;
+        self.extractor_meta_manager.close().await?;
         return close_conn_pool!(self);
     }
 

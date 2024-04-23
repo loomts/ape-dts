@@ -16,6 +16,7 @@ use sqlx::{MySql, Pool};
 use dt_common::{config::config_enums::DbType, error::Error, log_finished, log_info};
 
 use crate::{
+    close_conn_pool,
     extractor::{base_extractor::BaseExtractor, resumer::snapshot_resumer::SnapshotResumer},
     Extractor,
 };
@@ -45,11 +46,7 @@ impl Extractor for MysqlSnapshotExtractor {
     }
 
     async fn close(&mut self) -> Result<(), Error> {
-        if self.conn_pool.is_closed() {
-            return Ok(());
-        }
-        self.conn_pool.close().await;
-        Ok(())
+        close_conn_pool!(self)
     }
 }
 

@@ -3,6 +3,7 @@
 #![allow(clippy::comparison_chain)]
 
 pub mod check_log;
+pub mod conn_util;
 pub mod data_marker;
 pub mod extractor;
 pub mod meta_fetcher;

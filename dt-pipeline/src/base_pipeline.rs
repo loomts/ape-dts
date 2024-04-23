@@ -52,7 +52,7 @@ impl Pipeline for BasePipeline {
         for sinker in self.sinkers.iter_mut() {
             sinker.lock().await.close().await.unwrap();
         }
-        Ok(())
+        self.parallelizer.close().await
     }
 
     async fn start(&mut self) -> Result<(), Error> {

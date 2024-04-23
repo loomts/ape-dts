@@ -49,4 +49,8 @@ impl Sinker for SqlSinker {
 
         Ok(())
     }
+
+    async fn close(&mut self) -> Result<(), Error> {
+        self.meta_manager.close().await
+    }
 }

@@ -31,6 +31,11 @@ impl MysqlMetaManager {
         Self::new_mysql_compatible(conn_pool, DbType::Mysql)
     }
 
+    pub async fn close(&self) -> Result<(), Error> {
+        self.conn_pool.close().await;
+        Ok(())
+    }
+
     pub fn new_mysql_compatible(conn_pool: Pool<MySql>, db_type: DbType) -> Self {
         Self {
             conn_pool,

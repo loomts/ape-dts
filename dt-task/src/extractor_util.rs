@@ -199,12 +199,16 @@ impl ExtractorUtil {
                 heartbeat_interval_secs,
                 heartbeat_tb,
                 ddl_command_tb,
+                start_time_utc,
+                end_time_utc,
             } => {
                 let conn_pool = TaskUtil::create_pg_conn_pool(&url, 2, enable_sqlx_log).await?;
                 let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
+                let time_filter = TimeFilter::new(&start_time_utc, &end_time_utc);
                 let extractor = PgCdcExtractor {
                     meta_manager,
                     filter,
+                    time_filter,
                     url,
                     conn_pool,
                     slot_name,

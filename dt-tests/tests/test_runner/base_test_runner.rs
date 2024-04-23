@@ -93,8 +93,15 @@ impl BaseTestRunner {
         Ok(task)
     }
 
-    pub async fn wait_task_finish(&self, task: &JoinHandle<()>) -> Result<(), Error> {
+    pub async fn abort_task(&self, task: &JoinHandle<()>) -> Result<(), Error> {
         task.abort();
+        while !task.is_finished() {
+            TimeUtil::sleep_millis(1).await;
+        }
+        Ok(())
+    }
+
+    pub async fn wait_task_finish(&self, task: &JoinHandle<()>) -> Result<(), Error> {
         while !task.is_finished() {
             TimeUtil::sleep_millis(1).await;
         }

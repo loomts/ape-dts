@@ -21,6 +21,10 @@ impl RdbCheckTestRunner {
         })
     }
 
+    pub async fn close(&self) -> Result<(), Error> {
+        self.base.close().await
+    }
+
     pub async fn run_check_test(&self) -> Result<(), Error> {
         // clear existed check logs
         CheckUtil::clear_check_log(&self.dst_check_log_dir);

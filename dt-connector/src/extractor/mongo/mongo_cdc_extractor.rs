@@ -1,6 +1,9 @@
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
     time::Instant,
 };
 
@@ -68,13 +71,19 @@ impl Extractor for MongoCdcExtractor {
         );
 
         // start heartbeat
-        self.start_heartbeat().unwrap();
+        self.start_heartbeat(self.base_extractor.shut_down.clone())
+            .unwrap();
 
         match self.source {
             MongoCdcSource::OpLog => self.extract_oplog().await?,
             MongoCdcSource::ChangeStream => self.extract_change_stream().await?,
         }
         self.base_extractor.wait_task_finish().await
+    }
+
+    async fn close(&mut self) -> Result<(), Error> {
+        self.mongo_client.clone().shutdown().await;
+        Ok(())
     }
 }
 
@@ -433,7 +442,7 @@ impl MongoCdcExtractor {
         Timestamp { time, increment: 0 }
     }
 
-    fn start_heartbeat(&self) -> Result<(), Error> {
+    fn start_heartbeat(&mut self, shut_down: Arc<AtomicBool>) -> Result<(), Error> {
         let db_tb = self.base_extractor.precheck_heartbeat(
             self.heartbeat_interval_secs,
             &self.heartbeat_tb,
@@ -442,6 +451,8 @@ impl MongoCdcExtractor {
         if db_tb.len() != 2 {
             return Ok(());
         }
+
+        self.filter.add_ignore_tb(&db_tb[0], &db_tb[1]);
 
         let (app_name, heartbeat_interval_secs, syncer, mongo_client) = (
             self.app_name.clone(),
@@ -452,7 +463,7 @@ impl MongoCdcExtractor {
 
         tokio::spawn(async move {
             let mut start_time = Instant::now();
-            loop {
+            while !shut_down.load(Ordering::Acquire) {
                 if start_time.elapsed().as_secs() >= heartbeat_interval_secs {
                     Self::heartbeat(&app_name, &db_tb[0], &db_tb[1], &syncer, &mongo_client)
                         .await

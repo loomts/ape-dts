@@ -1,7 +1,10 @@
 use std::{
     collections::HashMap,
     pin::Pin,
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
     time::{Duration, Instant, UNIX_EPOCH},
 };
 
@@ -24,10 +27,11 @@ use tokio_postgres::replication::LogicalReplicationStream;
 
 use dt_common::{
     config::config_enums::DbType, error::Error, log_error, log_info, rdb_filter::RdbFilter,
-    utils::time_util::TimeUtil,
+    time_filter::TimeFilter, utils::time_util::TimeUtil,
 };
 
 use crate::{
+    close_conn_pool,
     extractor::{
         base_extractor::BaseExtractor, pg::pg_cdc_client::PgCdcClient,
         resumer::cdc_resumer::CdcResumer,
@@ -51,6 +55,7 @@ pub struct PgCdcExtractor {
     pub meta_manager: PgMetaManager,
     pub conn_pool: Pool<Postgres>,
     pub filter: RdbFilter,
+    pub time_filter: TimeFilter,
     pub url: String,
     pub slot_name: String,
     pub pub_name: String,
@@ -83,6 +88,11 @@ impl Extractor for PgCdcExtractor {
         self.extract_internal().await.unwrap();
         self.base_extractor.wait_task_finish().await
     }
+
+    async fn close(&mut self) -> Result<(), Error> {
+        self.meta_manager.close().await?;
+        close_conn_pool!(self)
+    }
 }
 
 impl PgCdcExtractor {
@@ -97,7 +107,8 @@ impl PgCdcExtractor {
         tokio::pin!(stream);
 
         // start heartbeat
-        self.start_heartbeat().unwrap();
+        self.start_heartbeat(self.base_extractor.shut_down.clone())
+            .unwrap();
 
         let mut last_tx_end_lsn = actual_start_lsn.clone();
         let mut xid = String::new();
@@ -115,6 +126,11 @@ impl PgCdcExtractor {
 
         // refer: https://www.postgresql.org/docs/10/protocol-replication.html to get WAL data details
         loop {
+            if self.time_filter.ended {
+                // cdc stream will be dropped automaticaly if postgres receives no keepalive ack
+                return Ok(());
+            }
+
             if start_time.elapsed().as_secs() >= self.keepalive_interval_secs {
                 self.keep_alive_ack(&mut stream, &actual_start_lsn).await?;
                 start_time = Instant::now();
@@ -132,15 +148,20 @@ impl PgCdcExtractor {
                         Begin(begin) => {
                             position = get_position(&last_tx_end_lsn, begin.timestamp());
                             xid = begin.xid().to_string();
+
+                            let timestamp = begin.timestamp() / 1_000_000 + SECS_FROM_1970_TO_2000;
+                            BaseExtractor::update_time_filter(
+                                &mut self.time_filter,
+                                timestamp as u32,
+                                &position,
+                            );
                         }
 
                         Commit(commit) => {
                             last_tx_end_lsn = PgLsn::from(commit.end_lsn()).to_string();
                             position = get_position(&last_tx_end_lsn, commit.timestamp());
                             let commit = DtData::Commit { xid: xid.clone() };
-                            self.base_extractor
-                                .push_dt_data(commit, position.clone())
-                                .await?;
+                            self.push_dt_data_to_buf(commit, position.clone()).await?;
                         }
 
                         Origin(_origin) => {}
@@ -150,15 +171,21 @@ impl PgCdcExtractor {
                         Type(_typee) => {}
 
                         Insert(insert) => {
-                            self.decode_insert(&insert, &position).await?;
+                            if self.time_filter.started {
+                                self.decode_insert(&insert, &position).await?;
+                            }
                         }
 
                         Update(update) => {
-                            self.decode_update(&update, &position).await?;
+                            if self.time_filter.started {
+                                self.decode_update(&update, &position).await?;
+                            }
                         }
 
                         Delete(delete) => {
-                            self.decode_delete(&delete, &position).await?;
+                            if self.time_filter.started {
+                                self.decode_delete(&delete, &position).await?;
+                            }
                         }
 
                         _ => {}
@@ -210,7 +237,7 @@ impl PgCdcExtractor {
             .await;
         if let Err(error) = result {
             log_error!(
-                "heartbeat to postgres failed, lsn: {}, error: {}",
+                "keepalive ack to postgres failed, lsn: {}, error: {}",
                 lsn.to_string(),
                 error
             );
@@ -400,8 +427,7 @@ impl PgCdcExtractor {
                 &ddl_data.tb,
                 &ddl_data.ddl_type.to_string(),
             ) {
-                self.base_extractor
-                    .push_dt_data(DtData::Ddl { ddl_data }, position.to_owned())
+                self.push_dt_data_to_buf(DtData::Ddl { ddl_data }, position.to_owned())
                     .await
                     .unwrap();
             }
@@ -446,7 +472,21 @@ impl PgCdcExtractor {
         row_data: RowData,
         position: Position,
     ) -> Result<(), Error> {
+        if !self.time_filter.started {
+            return Ok(());
+        }
         self.base_extractor.push_row(row_data, position).await
+    }
+
+    async fn push_dt_data_to_buf(
+        &mut self,
+        dt_data: DtData,
+        position: Position,
+    ) -> Result<(), Error> {
+        if !self.time_filter.started {
+            return Ok(());
+        }
+        self.base_extractor.push_dt_data(dt_data, position).await
     }
 
     fn filter_event(&mut self, tb_meta: &PgTbMeta, row_type: RowType) -> bool {
@@ -471,7 +511,7 @@ impl PgCdcExtractor {
         }
     }
 
-    fn start_heartbeat(&self) -> Result<(), Error> {
+    fn start_heartbeat(&mut self, shut_down: Arc<AtomicBool>) -> Result<(), Error> {
         let schema_tb = self.base_extractor.precheck_heartbeat(
             self.heartbeat_interval_secs,
             &self.heartbeat_tb,
@@ -481,6 +521,8 @@ impl PgCdcExtractor {
             return Ok(());
         }
 
+        self.filter.add_ignore_tb(&schema_tb[0], &schema_tb[1]);
+
         let (slot_name, heartbeat_interval_secs, syncer, conn_pool) = (
             self.slot_name.clone(),
             self.heartbeat_interval_secs,
@@ -489,7 +531,7 @@ impl PgCdcExtractor {
         );
         tokio::spawn(async move {
             let mut start_time = Instant::now();
-            loop {
+            while !shut_down.load(Ordering::Acquire) {
                 if start_time.elapsed().as_secs() >= heartbeat_interval_secs {
                     Self::heartbeat(
                         &slot_name,
