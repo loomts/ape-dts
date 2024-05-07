@@ -4,6 +4,7 @@ mod mysql_to_kafka_to_mysql;
 mod mysql_to_mysql;
 mod mysql_to_redis;
 mod mysql_to_starrocks;
+mod pg_to_kafka_to_pg;
 mod pg_to_pg;
 mod redis_to_redis;
 mod test_config_util;
