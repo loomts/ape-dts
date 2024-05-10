@@ -7,7 +7,7 @@ pub struct DbTable {
 }
 
 impl DbTable {
-    pub fn from_str(str: &String, modes: &mut Vec<Self>) {
+    pub fn from_str(str: &str, modes: &mut Vec<Self>) {
         if str.is_empty() {
             return;
         }

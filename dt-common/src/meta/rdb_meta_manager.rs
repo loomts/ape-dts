@@ -76,7 +76,7 @@ impl RdbMetaManager {
         }
 
         let order_col = if id_cols.len() == 1 {
-            Some(id_cols.get(0).unwrap().clone())
+            Some(id_cols.first().unwrap().clone())
         } else {
             None
         };

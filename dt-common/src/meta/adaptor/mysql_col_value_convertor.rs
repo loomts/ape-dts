@@ -151,21 +151,35 @@ impl MysqlColValueConvertor {
             ColumnValue::String(v) => {
                 // when the type is binary(length), the value shoud be right-padded with '\0' to the specified length,
                 // refer: https://dev.mysql.com/doc/refman/8.0/en/binary-varbinary.html
-                let final_v = if let MysqlColType::Binary { length } = *col_type {
-                    if length as usize > v.len() {
-                        let pad_v: Vec<u8> = vec![0; length as usize - v.len()];
-                        [v, pad_v].concat()
-                    } else {
-                        v
+                match *col_type {
+                    // binary
+                    MysqlColType::Binary { length } => {
+                        let final_v = if length as usize > v.len() {
+                            let pad_v: Vec<u8> = vec![0; length as usize - v.len()];
+                            [v, pad_v].concat()
+                        } else {
+                            v
+                        };
+                        ColValue::Blob(final_v)
                     }
-                } else {
-                    v
-                };
-                ColValue::Blob(final_v)
+                    // varbinary
+                    MysqlColType::VarBinary { length: _ } => ColValue::Blob(v),
+                    // char, varchar
+                    _ => ColValue::RawString(v),
+                }
             }
 
-            // tinyblob, mediumblob, longblob, blob
-            ColumnValue::Blob(v) => ColValue::Blob(v),
+            // tinyblob, mediumblob, longblob, blob, tinytext, mediumtext, longtext, text
+            ColumnValue::Blob(v) => match col_type {
+                // tinytext, mediumtext, longtext, text
+                MysqlColType::String {
+                    length: _,
+                    charset: _,
+                } => ColValue::RawString(v),
+                // tinyblob, mediumblob, longblob, blob
+                _ => ColValue::Blob(v),
+            },
+
             ColumnValue::Bit(v) => ColValue::Bit(v),
             ColumnValue::Set(v) => ColValue::Set(v),
             ColumnValue::Enum(v) => ColValue::Enum(v),

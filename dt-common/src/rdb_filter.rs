@@ -175,7 +175,7 @@ impl RdbFilter {
 
     fn parse_single_tokens(config_str: &str, db_type: &DbType) -> Result<HashSet<String>, Error> {
         let tokens = Self::parse_config(config_str, db_type)?;
-        let results: HashSet<String> = HashSet::from_iter(tokens.into_iter());
+        let results: HashSet<String> = HashSet::from_iter(tokens);
         Ok(results)
     }
 

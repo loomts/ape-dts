@@ -87,7 +87,7 @@ impl Prechecker for MySqlPrechecker {
         }
 
         let mut errs: Vec<String> = vec![];
-        let cdc_configs = vec!["log_bin", "binlog_format", "binlog_row_image"]
+        let cdc_configs = ["log_bin", "binlog_format", "binlog_row_image"]
             .iter()
             .map(|c| c.to_string())
             .collect::<Vec<String>>();

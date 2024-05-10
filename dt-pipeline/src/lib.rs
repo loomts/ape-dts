@@ -1,4 +1,5 @@
 pub mod base_pipeline;
+pub mod lua_processor;
 
 use async_trait::async_trait;
 use dt_common::error::Error;

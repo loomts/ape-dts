@@ -6,8 +6,6 @@ use std::{
 use mongodb::bson::Document;
 use serde::{Deserialize, Serialize, Serializer};
 
-use super::mysql::mysql_col_type::MysqlColType;
-
 // #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 // #[serde(tag = "type", content = "value")]
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -32,6 +30,7 @@ pub enum ColValue {
     Timestamp(String),
     Year(u16),
     String(String),
+    RawString(Vec<u8>),
     Blob(Vec<u8>),
     Bit(u64),
     Set(u64),
@@ -43,9 +42,13 @@ pub enum ColValue {
     MongoDoc(Document),
 }
 
-impl ToString for ColValue {
-    fn to_string(&self) -> String {
-        self.to_option_string().unwrap()
+impl std::fmt::Display for ColValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            self.to_option_string().unwrap_or("NULL".to_string())
+        )
     }
 }
 
@@ -62,23 +65,19 @@ impl ColValue {
     }
 
     /// return: (str, is_hex_str)
-    pub fn to_mysql_string(&self, col_type: &MysqlColType) -> (Option<String>, bool) {
-        if let ColValue::Blob(v) = self {
-            match *col_type {
-                // tinyblob, mediumblob, longblob, blob, varbinary, binary
-                MysqlColType::Blob
-                | MysqlColType::VarBinary { .. }
-                | MysqlColType::Binary { .. } => {
-                    return (Some(Self::binary_to_hex_str(v)), true);
-                }
-                // varchar, char, tinytext, mediumtext, longtext, text
-                _ => {
-                    let (str, is_hex_str) = Self::binary_to_str(v);
-                    return (Some(str), is_hex_str);
-                }
+    pub fn to_mysql_string(&self) -> (Option<String>, bool) {
+        match self {
+            // varchar, char, tinytext, mediumtext, longtext, text
+            ColValue::RawString(v) => {
+                let (str, is_hex_str) = Self::binary_to_str(v);
+                (Some(str), is_hex_str)
             }
+
+            // tinyblob, mediumblob, longblob, blob, varbinary, binary
+            ColValue::Blob(v) => (Some(Self::binary_to_hex_str(v)), true),
+
+            _ => (self.to_option_string(), false),
         }
-        (self.to_option_string(), false)
     }
 
     pub fn to_option_string(&self) -> Option<String> {
@@ -100,6 +99,7 @@ impl ColValue {
             ColValue::Timestamp(v) => Some(v.to_string()),
             ColValue::Year(v) => Some(v.to_string()),
             ColValue::String(v) => Some(v.to_string()),
+            ColValue::RawString(v) => Some(Self::binary_to_str(v).0),
             ColValue::Bit(v) => Some(v.to_string()),
             ColValue::Set(v) => Some(v.to_string()),
             ColValue::Set2(v) => Some(v.to_string()),
@@ -127,8 +127,7 @@ impl ColValue {
     fn binary_to_hex_str(v: &[u8]) -> String {
         let hex_str = v
             .iter()
-            .map(|byte| format!("{:02X}", byte))
-            .collect::<String>();
+            .fold(String::new(), |hex_str, &x| format!("{hex_str}{:02X}", x));
         format!("x'{}'", hex_str)
     }
 
@@ -162,7 +161,7 @@ impl ColValue {
             | ColValue::Set2(v)
             | ColValue::Enum2(v)
             | ColValue::Json2(v) => v.len(),
-            ColValue::Json(v) | ColValue::Blob(v) => v.len(),
+            ColValue::Json(v) | ColValue::Blob(v) | ColValue::RawString(v) => v.len(),
             ColValue::MongoDoc(v) => v.to_string().len(),
             ColValue::None => 0,
         }
@@ -183,6 +182,7 @@ impl Serialize for ColValue {
         // case 3: this impl
         //   output: {"title":"C++ primer","author":"avc"}
         match self {
+            ColValue::Bool(v) => serializer.serialize_bool(*v),
             ColValue::Tiny(v) => serializer.serialize_i8(*v),
             ColValue::UnsignedTiny(v) => serializer.serialize_u8(*v),
             ColValue::Short(v) => serializer.serialize_i16(*v),
@@ -200,6 +200,7 @@ impl Serialize for ColValue {
             ColValue::Timestamp(v) => serializer.serialize_str(v),
             ColValue::Year(v) => serializer.serialize_u16(*v),
             ColValue::String(v) => serializer.serialize_str(v),
+            ColValue::RawString(v) => serializer.serialize_bytes(v),
             ColValue::Blob(v) => serializer.serialize_bytes(v),
             ColValue::Bit(v) => serializer.serialize_u64(*v),
             ColValue::Set(v) => serializer.serialize_u64(*v),
@@ -208,7 +209,9 @@ impl Serialize for ColValue {
             ColValue::Enum2(v) => serializer.serialize_str(v),
             ColValue::Json(v) => serializer.serialize_bytes(v),
             ColValue::Json2(v) => serializer.serialize_str(v),
-            _ => serializer.serialize_none(),
+            // not supported
+            ColValue::MongoDoc(_) => serializer.serialize_none(),
+            ColValue::None => serializer.serialize_none(),
         }
     }
 }

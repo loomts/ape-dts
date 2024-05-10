@@ -171,7 +171,7 @@ impl AvroConverter {
     }
 
     fn col_values_to_avro(
-        cols: &Vec<String>,
+        cols: &[String],
         col_values: &Option<HashMap<String, ColValue>>,
     ) -> Value {
         if cols.is_empty() || col_values.is_none() {
@@ -218,7 +218,9 @@ impl AvroConverter {
 
             ColValue::Float(v) => Value::Double(*v as f64),
             ColValue::Double(v) => Value::Double(*v),
-            ColValue::Blob(v) | ColValue::Json(v) => Value::Bytes(v.clone()),
+            ColValue::Blob(v) | ColValue::Json(v) | ColValue::RawString(v) => {
+                Value::Bytes(v.clone())
+            }
 
             ColValue::Decimal(v)
             | ColValue::Time(v)

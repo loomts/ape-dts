@@ -1,4 +1,5 @@
 [workspace]
+resolver = "2"
 
 members = [
     "dt-common",
@@ -11,6 +12,8 @@ members = [
     "dt-tests"
 ]
 
+[workspace.lints.clippy]
+assigning_clones = "allow"
 
 [workspace.dependencies]
 sqlx = {git = "https://github.com/qianyiwen2019/sqlx", features = ["runtime-async-std-rustls", "mysql", "postgres", "bigdecimal", "ipnetwork", "mac_address", "bit-vec", "time", "chrono", "json", "uuid"]}
@@ -54,3 +57,4 @@ thiserror = "1.0.44"
 async-std = "1.12.0"
 apache-avro =  { version = "0.16.0", features = ["derive"]}
 ratelimit = "0.7.1"
+mlua = { version = "0.9.7", features = ["lua54", "vendored"] }

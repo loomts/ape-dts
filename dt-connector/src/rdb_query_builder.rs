@@ -503,7 +503,7 @@ impl RdbQueryBuilder<'_> {
 
     fn get_mysql_sql_value(&self, col: &str, col_value: &ColValue) -> String {
         let col_type = self.mysql_tb_meta.unwrap().col_type_map.get(col).unwrap();
-        let (str, is_hex_str) = col_value.to_mysql_string(col_type);
+        let (str, is_hex_str) = col_value.to_mysql_string();
         if str.is_none() {
             return "NULL".to_string();
         }

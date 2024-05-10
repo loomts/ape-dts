@@ -33,7 +33,7 @@ impl Fetcher for PgFetcher {
         match results {
             Ok(rows) => {
                 if !rows.is_empty() {
-                    version = rows.get(0).unwrap().get("current_setting");
+                    version = rows.first().unwrap().get("current_setting");
                 }
             }
             Err(e) => return Err(e),

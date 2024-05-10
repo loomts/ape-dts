@@ -9,10 +9,10 @@ use crate::test_runner::rdb_test_runner::DST;
 use super::{
     mongo_check_test_runner::MongoCheckTestRunner, mongo_test_runner::MongoTestRunner,
     precheck_test_runner::PrecheckTestRunner, rdb_check_test_runner::RdbCheckTestRunner,
-    rdb_kafka_rdb_test_runner::RdbKafkaRdbTestRunner, rdb_redis_test_runner::RdbRedisTestRunner,
-    rdb_sql_test_runner::RdbSqlTestRunner, rdb_struct_test_runner::RdbStructTestRunner,
-    rdb_test_runner::RdbTestRunner, redis_statistic_runner::RedisStatisticTestRunner,
-    redis_test_runner::RedisTestRunner,
+    rdb_kafka_rdb_test_runner::RdbKafkaRdbTestRunner, rdb_lua_test_runner::RdbLuaTestRunner,
+    rdb_redis_test_runner::RdbRedisTestRunner, rdb_sql_test_runner::RdbSqlTestRunner,
+    rdb_struct_test_runner::RdbStructTestRunner, rdb_test_runner::RdbTestRunner,
+    redis_statistic_runner::RedisStatisticTestRunner, redis_test_runner::RedisTestRunner,
 };
 
 pub struct TestBase {}
@@ -69,6 +69,21 @@ impl TestBase {
             .run_cdc_to_sql_test(start_millis, parse_millis)
             .await
             .unwrap();
+        runner.close().await.unwrap();
+    }
+
+    pub async fn run_cdc_lua_test(test_dir: &str, start_millis: u64, parse_millis: u64) {
+        let runner = RdbLuaTestRunner::new(test_dir).await.unwrap();
+        runner
+            .run_cdc_test(start_millis, parse_millis)
+            .await
+            .unwrap();
+        runner.close().await.unwrap();
+    }
+
+    pub async fn run_snapshot_lua_test(test_dir: &str) {
+        let runner = RdbLuaTestRunner::new(test_dir).await.unwrap();
+        runner.run_snapshot_test().await.unwrap();
         runner.close().await.unwrap();
     }
 

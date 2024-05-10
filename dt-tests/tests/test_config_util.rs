@@ -20,10 +20,6 @@ const TEST_PROJECT: &str = "dt-tests";
 
 #[allow(dead_code)]
 impl TestConfigUtil {
-    pub const LOG_DIR: &str = "log_dir";
-    pub const EXTRACTOR_CHECK_LOG_DIR: &str = "extractor_check_log_dir";
-    pub const SINKER_CHECK_LOG_DIR: &str = "sinker_check_log_dir";
-
     pub fn get_project_root() -> String {
         project_root::get_project_root()
             .unwrap()
@@ -94,7 +90,7 @@ impl TestConfigUtil {
         );
     }
 
-    pub fn update_task_config_log_dir(
+    pub fn update_file_paths_in_task_config(
         src_task_config_file: &str,
         dst_task_config_file: &str,
         project_root: &str,
@@ -173,6 +169,15 @@ impl TestConfigUtil {
             }
 
             _ => {}
+        }
+
+        if let Some(processor) = config.processor {
+            let lua_code_file = format!("{}/{}", project_root, processor.lua_code_file);
+            update_configs.push((
+                "processor".to_string(),
+                "lua_code_file".to_string(),
+                lua_code_file,
+            ));
         }
 
         TestConfigUtil::update_task_config(

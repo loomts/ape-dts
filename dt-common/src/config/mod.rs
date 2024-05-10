@@ -6,6 +6,7 @@ pub mod filter_config;
 pub mod ini_loader;
 pub mod parallelizer_config;
 pub mod pipeline_config;
+pub mod processor_config;
 pub mod resumer_config;
 pub mod router_config;
 pub mod runtime_config;

@@ -44,12 +44,7 @@ impl KafkaSinker {
         let mut data_size = 0;
 
         let mut messages = Vec::new();
-        for (_, row_data) in data
-            .iter_mut()
-            .skip(sinked_count)
-            .take(batch_size)
-            .enumerate()
-        {
+        for row_data in data.iter_mut().skip(sinked_count).take(batch_size) {
             data_size += row_data.data_size;
 
             let topic = self.router.get_topic(&row_data.schema, &row_data.tb);

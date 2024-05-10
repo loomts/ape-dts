@@ -281,7 +281,7 @@ impl MysqlCdcExtractor {
     async fn parse_row_data(
         &mut self,
         table_map_event: &TableMapEvent,
-        included_columns: &Vec<bool>,
+        included_columns: &[bool],
         event: &mut RowEvent,
     ) -> Result<HashMap<String, ColValue>, Error> {
         if !self.time_filter.started {
