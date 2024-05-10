@@ -25,7 +25,7 @@ use dt_common::{
 use dt_connector::{data_marker::DataMarker, Sinker};
 use dt_parallelizer::Parallelizer;
 
-use crate::Pipeline;
+use crate::{lua_processor::LuaProcessor, Pipeline};
 
 pub struct BasePipeline {
     pub buffer: Arc<ConcurrentQueue<DtItem>>,
@@ -38,6 +38,7 @@ pub struct BasePipeline {
     pub syncer: Arc<Mutex<Syncer>>,
     pub monitor: Arc<Mutex<Monitor>>,
     pub data_marker: Option<Arc<RwLock<DataMarker>>>,
+    pub lua_processor: Option<LuaProcessor>,
 }
 
 enum SinkMethod {
@@ -148,9 +149,14 @@ impl BasePipeline {
         &mut self,
         all_data: Vec<DtItem>,
     ) -> Result<(usize, Option<Position>, Option<Position>), Error> {
-        let (data, last_received_position, last_commit_position) = Self::fetch_dml(all_data);
+        let (mut data, last_received_position, last_commit_position) = Self::fetch_dml(all_data);
         let count = data.len();
         if count > 0 {
+            // execute lua processor
+            if let Some(lua_processor) = &self.lua_processor {
+                data = lua_processor.process(data)?;
+            }
+
             self.parallelizer
                 .sink_dml(data, &self.sinkers)
                 .await

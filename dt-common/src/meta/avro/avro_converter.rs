@@ -218,7 +218,9 @@ impl AvroConverter {
 
             ColValue::Float(v) => Value::Double(*v as f64),
             ColValue::Double(v) => Value::Double(*v),
-            ColValue::Blob(v) | ColValue::Json(v) => Value::Bytes(v.clone()),
+            ColValue::Blob(v) | ColValue::Json(v) | ColValue::RawString(v) => {
+                Value::Bytes(v.clone())
+            }
 
             ColValue::Decimal(v)
             | ColValue::Time(v)

@@ -18,6 +18,7 @@ use dt_connector::rdb_router::RdbRouter;
 use dt_task::task_util::TaskUtil;
 
 use sqlx::{MySql, Pool, Postgres};
+use tokio::task::JoinHandle;
 
 use crate::test_config_util::TestConfigUtil;
 
@@ -221,10 +222,7 @@ impl RdbTestRunner {
         self.execute_prepare_sqls().await?;
 
         // start task
-        let total_parse_millis = self.get_total_parse_millis(parse_millis);
-        self.update_cdc_task_config(start_millis, total_parse_millis);
-        let task = self.base.spawn_task().await?;
-        TimeUtil::sleep_millis(start_millis).await;
+        let task = self.spawn_cdc_task(start_millis, parse_millis).await?;
 
         self.execute_test_sqls_and_compare(parse_millis).await?;
 
@@ -268,6 +266,19 @@ impl RdbTestRunner {
             &self.base.task_config_file,
             &update_configs,
         );
+    }
+
+    pub async fn spawn_cdc_task(
+        &self,
+        start_millis: u64,
+        parse_millis: u64,
+    ) -> Result<JoinHandle<()>, Error> {
+        // start task
+        let total_parse_millis = self.get_total_parse_millis(parse_millis);
+        self.update_cdc_task_config(start_millis, total_parse_millis);
+        let task = self.base.spawn_task().await?;
+        TimeUtil::sleep_millis(start_millis).await;
+        Ok(task)
     }
 
     fn get_total_parse_millis(&self, parse_millis: u64) -> u64 {
@@ -392,8 +403,9 @@ impl RdbTestRunner {
         let src_data = self.fetch_data(src_db_tb, SRC).await?;
         let dst_data = self.fetch_data(dst_db_tb, DST).await?;
         println!(
-            "comparing row data for src_tb: {:?}, src_data count: {}",
+            "comparing row data for src_tb: {:?}, dst_tb: {:?}, src_data count: {}",
             src_db_tb,
+            dst_db_tb,
             src_data.len()
         );
 

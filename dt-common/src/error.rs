@@ -70,4 +70,7 @@ pub enum Error {
 
     #[error("data marker error: {0}")]
     DataMarkerError(String),
+
+    #[error("mlua error: {0}")]
+    MluaError(#[from] mlua::Error),
 }

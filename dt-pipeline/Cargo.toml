@@ -17,3 +17,4 @@ log4rs = { workspace = true }
 futures = { workspace = true }
 regex = { workspace = true }
 async-std = { workspace = true }
+mlua = { workspace = true }

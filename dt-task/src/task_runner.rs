@@ -27,7 +27,7 @@ use dt_connector::{
     rdb_router::RdbRouter,
     Sinker,
 };
-use dt_pipeline::{base_pipeline::BasePipeline, Pipeline};
+use dt_pipeline::{base_pipeline::BasePipeline, lua_processor::LuaProcessor, Pipeline};
 
 use log4rs::config::RawConfig;
 use ratelimit::Ratelimiter;
@@ -317,9 +317,19 @@ impl TaskRunner {
         } else {
             None
         };
+
+        let lua_processor = if let Some(processor_config) = &self.config.processor {
+            Some(LuaProcessor {
+                lua_code: processor_config.lua_code.clone(),
+            })
+        } else {
+            None
+        };
+
         let parallelizer =
             ParallelizerUtil::create_parallelizer(&self.config, monitor.clone(), rps_limiter)
                 .await?;
+
         let pipeline = BasePipeline {
             buffer,
             parallelizer,
@@ -331,6 +341,7 @@ impl TaskRunner {
             syncer,
             monitor,
             data_marker,
+            lua_processor,
         };
 
         Ok(Box::new(pipeline))

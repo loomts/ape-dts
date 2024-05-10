@@ -36,7 +36,7 @@ impl BaseTestRunner {
         let dst_task_config_file = format!("{}/task_config.ini", tmp_dir);
 
         // update relative path to absolute path in task_config.ini
-        TestConfigUtil::update_task_config_log_dir(
+        TestConfigUtil::update_file_paths_in_task_config(
             &src_task_config_file,
             &dst_task_config_file,
             &project_root,

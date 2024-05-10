@@ -1,4 +1,8 @@
-use std::str::FromStr;
+use std::{
+    fs::{self, File},
+    io::Read,
+    str::FromStr,
+};
 
 use crate::error::Error;
 
@@ -10,6 +14,7 @@ use super::{
     ini_loader::IniLoader,
     parallelizer_config::ParallelizerConfig,
     pipeline_config::PipelineConfig,
+    processor_config::ProcessorConfig,
     resumer_config::ResumerConfig,
     router_config::RouterConfig,
     runtime_config::RuntimeConfig,
@@ -29,6 +34,7 @@ pub struct TaskConfig {
     pub router: RouterConfig,
     pub resumer: ResumerConfig,
     pub data_marker: Option<DataMarkerConfig>,
+    pub processor: Option<ProcessorConfig>,
 }
 
 // sections
@@ -41,6 +47,7 @@ const FILTER: &str = "filter";
 const ROUTER: &str = "router";
 const RESUMER: &str = "resumer";
 const DATA_MARKER: &str = "data_marker";
+const PROCESSOR: &str = "processor";
 // keys
 const CHECK_LOG_DIR: &str = "check_log_dir";
 const DB_TYPE: &str = "db_type";
@@ -75,6 +82,7 @@ impl TaskConfig {
             router: Self::load_router_config(&loader).unwrap(),
             resumer: Self::load_resumer_config(&loader).unwrap(),
             data_marker: Self::load_data_marker_config(&loader).unwrap(),
+            processor: Self::load_processor_config(&loader).unwrap(),
         }
     }
 
@@ -468,6 +476,26 @@ impl TaskConfig {
             do_nodes: loader.get_required(DATA_MARKER, "do_nodes"),
             ignore_nodes: loader.get_optional(DATA_MARKER, "ignore_nodes"),
             marker: loader.get_required(DATA_MARKER, "marker"),
+        }))
+    }
+
+    fn load_processor_config(loader: &IniLoader) -> Result<Option<ProcessorConfig>, Error> {
+        if !loader.ini.sections().contains(&PROCESSOR.to_string()) {
+            return Ok(None);
+        }
+
+        let lua_code_file = loader.get_optional(PROCESSOR, "lua_code_file");
+        let mut lua_code = String::new();
+
+        if fs::metadata(&lua_code_file).is_ok() {
+            let mut file = File::open(&lua_code_file).expect("failed to open lua code file");
+            file.read_to_string(&mut lua_code)
+                .expect("failed to read lua code file");
+        }
+
+        Ok(Some(ProcessorConfig {
+            lua_code_file,
+            lua_code,
         }))
     }
 }
