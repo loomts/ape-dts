@@ -453,7 +453,7 @@ impl MysqlStructFetcher {
         match sqlx::query(&sql).fetch_all(&self.conn_pool).await {
             Ok(rows) => {
                 if !rows.is_empty() {
-                    let result: String = rows.get(0).unwrap().get("result");
+                    let result: String = rows.first().unwrap().get("result");
                     return Ok(result);
                 }
             }
@@ -482,6 +482,6 @@ impl MysqlStructFetcher {
     }
 
     fn get_result<T>(&self, results: &mut HashMap<String, Vec<T>>, table_name: &str) -> Vec<T> {
-        results.remove(table_name).unwrap_or(Vec::new())
+        results.remove(table_name).unwrap_or_default()
     }
 }

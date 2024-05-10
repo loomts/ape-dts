@@ -78,8 +78,8 @@ impl SnapshotResumer {
             }
 
             let finished_log = format!("{}/finished.log", config.resume_log_dir);
-            if let Ok(file) = File::open(&finished_log) {
-                for line in BufReader::new(file).lines().flatten() {
+            if let Ok(file) = File::open(finished_log) {
+                for line in BufReader::new(file).lines().map_while(Result::ok) {
                     if let Position::RdbSnapshotFinished { schema, tb, .. } =
                         Position::from_log(&line)
                     {

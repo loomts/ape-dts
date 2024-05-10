@@ -5,6 +5,9 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lints]
+workspace = true
+
 [dependencies]
 dt-common = { path = "../dt-common", version = "0.1.0"}
 dt-task = { path = "../dt-task", version = "0.1.0" }

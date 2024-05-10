@@ -293,8 +293,7 @@ impl RedisSinker {
             if let Err(error) = result {
                 return Err(Error::SinkerError(format!(
                     "serial sink failed, error: {:?}, cmd: {}",
-                    error,
-                    cmd.to_string()
+                    error, cmd
                 )));
             }
         }

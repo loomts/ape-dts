@@ -28,7 +28,7 @@ impl CmdConstants {
         0x3eb2, 0x0ed1, 0x1ef0,
     ];
 
-    pub const CONTAINER_COMMANDS: &str = r#"[
+    pub const CONTAINER_COMMANDS: &'static str = r#"[
     "ACL",
     "CLIENT",
     "CLUSTER",
@@ -47,7 +47,7 @@ impl CmdConstants {
     "XINFO"
 ]"#;
 
-    pub const COMMAND_METAS: &str = r#"[
+    pub const COMMAND_METAS: &'static str = r#"[
     {
         "name":"ACL",
         "group":"SERVER",

@@ -98,7 +98,7 @@ impl Prechecker for PostgresqlPrechecker {
         }
 
         // check the cdc settings
-        let configs: Vec<String> = vec!["wal_level", "max_wal_senders", "max_replication_slots"]
+        let configs: Vec<String> = ["wal_level", "max_wal_senders", "max_replication_slots"]
             .iter()
             .map(|c| c.to_string())
             .collect();

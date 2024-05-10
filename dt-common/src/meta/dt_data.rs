@@ -59,8 +59,8 @@ impl DtData {
     }
 }
 
-impl ToString for DtData {
-    fn to_string(&self) -> String {
-        json!(self).to_string()
+impl std::fmt::Display for DtData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", json!(self))
     }
 }

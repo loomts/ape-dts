@@ -65,7 +65,7 @@ impl Parallelizer for RedisParallelizer {
                     if slots[i] != slots[0] {
                         return Err(Error::RedisCmdError(format!(
                             "multi keys don't hash to the same slot, cmd: {}",
-                            entry.cmd.to_string()
+                            entry.cmd
                         )));
                     }
                 }

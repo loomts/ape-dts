@@ -173,9 +173,9 @@ impl RedisString {
     }
 }
 
-impl ToString for RedisString {
-    fn to_string(&self) -> String {
-        String::from_utf8_lossy(&self.bytes).to_string()
+impl std::fmt::Display for RedisString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", String::from_utf8_lossy(&self.bytes))
     }
 }
 
@@ -282,10 +282,9 @@ impl RedisCmd {
     }
 }
 
-impl ToString for RedisCmd {
-    fn to_string(&self) -> String {
-        let str_args = self.args_to_string();
-        str_args.join(" ")
+impl std::fmt::Display for RedisCmd {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.args_to_string().join(" "))
     }
 }
 

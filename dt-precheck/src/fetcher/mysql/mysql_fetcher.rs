@@ -33,7 +33,7 @@ impl Fetcher for MysqlFetcher {
         match result {
             Ok(rows) => {
                 if !rows.is_empty() {
-                    let version_str: String = rows.get(0).unwrap().get("VERSION");
+                    let version_str: String = rows.first().unwrap().get("VERSION");
                     version = version_str;
                 }
             }
@@ -232,7 +232,7 @@ impl MysqlFetcher {
     }
 
     fn get_system_databases() -> Vec<String> {
-        let dbs = vec!["mysql", "performance_schema", "sys", "information_schema"];
+        let dbs = ["mysql", "performance_schema", "sys", "information_schema"];
         return dbs.iter().map(|d| d.to_string()).collect();
     }
 

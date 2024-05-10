@@ -67,9 +67,9 @@ impl LuaProcessor {
                     // do not support editing Blob columns in lua, pass empty values into lua
                     ColValue::Blob(_) => {
                         blob_col_values.insert(key.clone(), col_value);
-                        self.col_value_to_lua_value(ColValue::Blob(Vec::new()), &lua)?
+                        self.col_value_to_lua_value(ColValue::Blob(Vec::new()), lua)?
                     }
-                    _ => self.col_value_to_lua_value(col_value, &lua)?,
+                    _ => self.col_value_to_lua_value(col_value, lua)?,
                 };
                 lua_table.set(key, lua_value)?;
             }
@@ -124,7 +124,7 @@ impl LuaProcessor {
             ColValue::UnsignedShort(v) => mlua::Value::Integer(v as i64),
             ColValue::Long(v) => mlua::Value::Integer(v as i64),
             ColValue::UnsignedLong(v) => mlua::Value::Integer(v as i64),
-            ColValue::LongLong(v) => mlua::Value::Integer(v as i64),
+            ColValue::LongLong(v) => mlua::Value::Integer(v),
             ColValue::UnsignedLongLong(v) => mlua::Value::Integer(v as i64),
             ColValue::Year(v) => mlua::Value::Integer(v as i64),
             ColValue::Bit(v) => mlua::Value::Integer(v as i64),
@@ -132,7 +132,7 @@ impl LuaProcessor {
             ColValue::Enum(v) => mlua::Value::Integer(v as i64),
 
             ColValue::Float(v) => mlua::Value::Number(v as f64),
-            ColValue::Double(v) => mlua::Value::Number(v as f64),
+            ColValue::Double(v) => mlua::Value::Number(v),
 
             ColValue::Decimal(v)
             | ColValue::Time(v)

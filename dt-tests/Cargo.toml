@@ -3,6 +3,9 @@ name = "dt-tests"
 version = "0.1.0"
 edition = "2021"
 
+[lints]
+workspace = true
+
 [dependencies]
 dt-common = {path = "../dt-common", version = "0.1.0"}
 dt-task = {path = "../dt-task", version = "0.1.0"}

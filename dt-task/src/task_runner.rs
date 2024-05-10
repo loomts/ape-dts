@@ -318,13 +318,13 @@ impl TaskRunner {
             None
         };
 
-        let lua_processor = if let Some(processor_config) = &self.config.processor {
-            Some(LuaProcessor {
+        let lua_processor = self
+            .config
+            .processor
+            .as_ref()
+            .map(|processor_config| LuaProcessor {
                 lua_code: processor_config.lua_code.clone(),
-            })
-        } else {
-            None
-        };
+            });
 
         let parallelizer =
             ParallelizerUtil::create_parallelizer(&self.config, monitor.clone(), rps_limiter)

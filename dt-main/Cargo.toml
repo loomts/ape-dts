@@ -3,6 +3,9 @@ name = "dt-main"
 version = "0.1.0"
 edition = "2021"
 
+[lints]
+workspace = true
+
 [dependencies]
 dt-task = {path = "../dt-task", version = "0.1.0"}
 dt-precheck = {path = "../dt-precheck", version = "0.1.0"}

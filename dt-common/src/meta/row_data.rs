@@ -24,9 +24,9 @@ pub struct RowData {
     pub data_size: usize,
 }
 
-impl ToString for RowData {
-    fn to_string(&self) -> String {
-        json!(self).to_string()
+impl std::fmt::Display for RowData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", json!(self))
     }
 }
 

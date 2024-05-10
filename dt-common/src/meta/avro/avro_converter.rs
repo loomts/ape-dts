@@ -171,7 +171,7 @@ impl AvroConverter {
     }
 
     fn col_values_to_avro(
-        cols: &Vec<String>,
+        cols: &[String],
         col_values: &Option<HashMap<String, ColValue>>,
     ) -> Value {
         if cols.is_empty() || col_values.is_none() {

@@ -61,7 +61,7 @@ impl BaseCheckExtractor {
         batch.clear();
     }
 
-    fn can_in_same_batch(exist_items: &Vec<CheckLog>, new_item: &CheckLog) -> bool {
+    fn can_in_same_batch(exist_items: &[CheckLog], new_item: &CheckLog) -> bool {
         if exist_items.is_empty() {
             return true;
         }

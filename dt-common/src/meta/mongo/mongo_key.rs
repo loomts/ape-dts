@@ -50,8 +50,8 @@ impl MongoKey {
     }
 }
 
-impl ToString for MongoKey {
-    fn to_string(&self) -> String {
-        json!(self).to_string()
+impl std::fmt::Display for MongoKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", json!(self))
     }
 }

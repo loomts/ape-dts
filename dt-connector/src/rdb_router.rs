@@ -56,7 +56,7 @@ impl RdbRouter {
         if let Some((dst_db, dst_tb)) = self.tb_map.get(&(db.into(), tb.into())) {
             return (dst_db, dst_tb);
         }
-        if let Some(dst_db) = self.db_map.get(&db.to_string()) {
+        if let Some(dst_db) = self.db_map.get(db) {
             return (dst_db, tb);
         }
         (db, tb)

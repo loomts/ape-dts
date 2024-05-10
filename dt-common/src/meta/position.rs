@@ -61,9 +61,9 @@ impl Position {
     }
 }
 
-impl ToString for Position {
-    fn to_string(&self) -> String {
-        json!(self).to_string()
+impl std::fmt::Display for Position {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", json!(self))
     }
 }
 

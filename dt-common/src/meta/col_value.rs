@@ -42,13 +42,13 @@ pub enum ColValue {
     MongoDoc(Document),
 }
 
-impl ToString for ColValue {
-    fn to_string(&self) -> String {
-        if let Some(str) = self.to_option_string() {
-            str
-        } else {
-            "NULL".to_string()
-        }
+impl std::fmt::Display for ColValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            self.to_option_string().unwrap_or("NULL".to_string())
+        )
     }
 }
 
@@ -70,13 +70,11 @@ impl ColValue {
             // varchar, char, tinytext, mediumtext, longtext, text
             ColValue::RawString(v) => {
                 let (str, is_hex_str) = Self::binary_to_str(v);
-                return (Some(str), is_hex_str);
+                (Some(str), is_hex_str)
             }
 
             // tinyblob, mediumblob, longblob, blob, varbinary, binary
-            ColValue::Blob(v) => {
-                return (Some(Self::binary_to_hex_str(v)), true);
-            }
+            ColValue::Blob(v) => (Some(Self::binary_to_hex_str(v)), true),
 
             _ => (self.to_option_string(), false),
         }
@@ -129,8 +127,7 @@ impl ColValue {
     fn binary_to_hex_str(v: &[u8]) -> String {
         let hex_str = v
             .iter()
-            .map(|byte| format!("{:02X}", byte))
-            .collect::<String>();
+            .fold(String::new(), |hex_str, &x| format!("{hex_str}{:02X}", x));
         format!("x'{}'", hex_str)
     }
 

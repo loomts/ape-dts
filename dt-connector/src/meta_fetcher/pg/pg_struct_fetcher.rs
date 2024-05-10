@@ -712,7 +712,7 @@ impl PgStructFetcher {
     }
 
     fn get_result<T>(&self, results: &mut HashMap<String, Vec<T>>, table_name: &str) -> Vec<T> {
-        results.remove(table_name).unwrap_or(Vec::new())
+        results.remove(table_name).unwrap_or_default()
     }
 }
 
