@@ -55,6 +55,8 @@ apecloud/ape-dts:0.1.13.hotfix4 \
     - [迁移](./docs/zh/cdc/migration.md)
     - [心跳](./docs/zh/cdc/heartbeat.md)
     - [双向同步](./docs/zh/cdc/two_way.md)
+- 数据加工
+    - [自定义 lua 脚本](./docs/zh/etl/lua.md)
 - 监控
     - [监控](./docs/zh/monitor.md)
     - [位点信息](./docs/zh/position.md)
