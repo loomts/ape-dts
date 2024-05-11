@@ -48,6 +48,8 @@ Refer to [docs](./dt-tests/README.md) for more details.
     - [data sync](./docs/en/cdc/migration.md)
     - [heartbeat](./docs/en/cdc/heartbeat.md)
     - [two-way data sync](./docs/en/cdc/two_way.md)
+- Data processing
+    - [custom lua script](./docs/en/etl/lua.md)
 
 # Contributions
 
