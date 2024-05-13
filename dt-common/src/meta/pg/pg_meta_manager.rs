@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::error::Error;
+use anyhow::bail;
 use futures::TryStreamExt;
 use sqlx::{Pool, Postgres, Row};
 
@@ -30,35 +31,35 @@ impl PgMetaManager {
         }
     }
 
-    pub async fn close(&self) -> Result<(), Error> {
+    pub async fn close(&self) -> anyhow::Result<()> {
         self.conn_pool.close().await;
         Ok(())
     }
 
-    pub async fn init(mut self) -> Result<Self, Error> {
+    pub async fn init(mut self) -> anyhow::Result<Self> {
         self.type_registry = self.type_registry.init().await?;
         Ok(self)
     }
 
-    pub fn get_col_type_by_oid(&mut self, oid: i32) -> Result<PgColType, Error> {
+    pub fn get_col_type_by_oid(&mut self, oid: i32) -> anyhow::Result<PgColType> {
         Ok(self.type_registry.oid_to_type.get(&oid).unwrap().clone())
     }
 
-    pub fn update_tb_meta_by_oid(&mut self, oid: i32, tb_meta: PgTbMeta) -> Result<(), Error> {
+    pub fn update_tb_meta_by_oid(&mut self, oid: i32, tb_meta: PgTbMeta) -> anyhow::Result<()> {
         self.oid_to_tb_meta.insert(oid, tb_meta.clone());
         let full_name = format!(r#""{}"."{}""#, &tb_meta.basic.schema, &tb_meta.basic.tb);
         self.name_to_tb_meta.insert(full_name, tb_meta);
         Ok(())
     }
 
-    pub fn get_tb_meta_by_oid(&mut self, oid: i32) -> Result<PgTbMeta, Error> {
+    pub fn get_tb_meta_by_oid(&mut self, oid: i32) -> anyhow::Result<PgTbMeta> {
         Ok(self.oid_to_tb_meta.get(&oid).unwrap().clone())
     }
 
     pub async fn get_tb_meta_by_row_data<'a>(
         &'a mut self,
         row_data: &RowData,
-    ) -> Result<&'a PgTbMeta, Error> {
+    ) -> anyhow::Result<&'a PgTbMeta> {
         self.get_tb_meta(&row_data.schema, &row_data.tb).await
     }
 
@@ -66,7 +67,7 @@ impl PgMetaManager {
         &'a mut self,
         schema: &str,
         tb: &str,
-    ) -> Result<&'a PgTbMeta, Error> {
+    ) -> anyhow::Result<&'a PgTbMeta> {
         let full_name = format!(r#""{}"."{}""#, schema, tb);
         if !self.name_to_tb_meta.contains_key(&full_name) {
             let oid = Self::get_oid(&self.conn_pool, schema, tb).await?;
@@ -113,7 +114,7 @@ impl PgMetaManager {
         type_registry: &mut TypeRegistry,
         schema: &str,
         tb: &str,
-    ) -> Result<(Vec<String>, HashMap<String, PgColType>), Error> {
+    ) -> anyhow::Result<(Vec<String>, HashMap<String, PgColType>)> {
         let mut cols = Vec::new();
         let mut col_type_map = HashMap::new();
 
@@ -163,7 +164,7 @@ impl PgMetaManager {
         conn_pool: &Pool<Postgres>,
         schema: &str,
         tb: &str,
-    ) -> Result<HashMap<String, Vec<String>>, Error> {
+    ) -> anyhow::Result<HashMap<String, Vec<String>>> {
         // TODO, find pk and use pk as where_cols if tables has pk
         let sql = format!(
             "SELECT t.relname AS tb_name,
@@ -207,7 +208,7 @@ impl PgMetaManager {
         Ok(key_map)
     }
 
-    async fn get_oid(conn_pool: &Pool<Postgres>, schema: &str, tb: &str) -> Result<i32, Error> {
+    async fn get_oid(conn_pool: &Pool<Postgres>, schema: &str, tb: &str) -> anyhow::Result<i32> {
         let sql = format!(r#"SELECT '"{}"."{}"'::regclass::oid;"#, schema, tb);
         let mut rows = sqlx::query(&sql).fetch(conn_pool);
         if let Some(row) = rows.try_next().await.unwrap() {
@@ -215,17 +216,17 @@ impl PgMetaManager {
             return Ok(oid);
         }
 
-        Err(Error::MetadataError(format!(
+        bail! {Error::MetadataError(format!(
             "failed to get oid for: {} by query: {}",
             tb, sql
-        )))
+        ))}
     }
 
     async fn get_foreign_keys(
         conn_pool: &Pool<Postgres>,
         schema: &str,
         tb: &str,
-    ) -> Result<Vec<ForeignKey>, Error> {
+    ) -> anyhow::Result<Vec<ForeignKey>> {
         let mut foreign_keys = Vec::new();
         let sql = format!(
             "SELECT

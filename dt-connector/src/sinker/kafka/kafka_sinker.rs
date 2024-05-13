@@ -7,7 +7,7 @@ use async_trait::async_trait;
 
 use crate::{call_batch_fn, rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker};
 
-use dt_common::{error::Error, monitor::monitor::Monitor};
+use dt_common::monitor::monitor::Monitor;
 
 use dt_common::meta::{avro::avro_converter::AvroConverter, row_data::RowData};
 
@@ -23,7 +23,7 @@ pub struct KafkaSinker {
 
 #[async_trait]
 impl Sinker for KafkaSinker {
-    async fn sink_dml(&mut self, mut data: Vec<RowData>, _batch: bool) -> Result<(), Error> {
+    async fn sink_dml(&mut self, mut data: Vec<RowData>, _batch: bool) -> anyhow::Result<()> {
         if data.is_empty() {
             return Ok(());
         }
@@ -39,7 +39,7 @@ impl KafkaSinker {
         data: &mut [RowData],
         sinked_count: usize,
         batch_size: usize,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let start_time = Instant::now();
         let mut data_size = 0;
 

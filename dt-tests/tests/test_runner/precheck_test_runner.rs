@@ -1,9 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use dt_common::{
-    config::{config_enums::DbType, task_config::TaskConfig},
-    error::Error,
-};
+use dt_common::config::{config_enums::DbType, task_config::TaskConfig};
 
 use dt_precheck::{
     builder::prechecker_builder::PrecheckerBuilder, config::task_config::PrecheckTaskConfig,
@@ -22,7 +19,7 @@ pub struct PrecheckTestRunner {
 }
 
 impl PrecheckTestRunner {
-    pub async fn new(test_dir: &str) -> Result<Self, Error> {
+    pub async fn new(test_dir: &str) -> anyhow::Result<Self> {
         let base = BaseTestRunner::new(test_dir).await.unwrap();
         let task_config = TaskConfig::new(&base.task_config_file);
         let precheck_config = PrecheckTaskConfig::new(&base.task_config_file).unwrap();
@@ -41,10 +38,10 @@ impl PrecheckTestRunner {
         ignore_check_items: &HashSet<String>,
         src_expected_results: &HashMap<String, bool>,
         dst_expected_results: &HashMap<String, bool>,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         self.before_check().await?;
 
-        let results: Vec<Result<dt_precheck::meta::check_result::CheckResult, Error>> =
+        let results: Vec<anyhow::Result<dt_precheck::meta::check_result::CheckResult>> =
             self.checker_connector.check().await?;
 
         let compare = |result: &CheckResult, expected_results: &HashMap<String, bool>| {
@@ -77,7 +74,7 @@ impl PrecheckTestRunner {
         Ok(())
     }
 
-    async fn before_check(&self) -> Result<(), Error> {
+    async fn before_check(&self) -> anyhow::Result<()> {
         match self.db_type {
             DbType::Mysql | DbType::Pg => {
                 let base = RdbTestRunner::new_default(&self.test_dir).await?;

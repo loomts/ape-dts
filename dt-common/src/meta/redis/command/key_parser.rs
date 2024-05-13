@@ -1,5 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
+use anyhow::bail;
+
 use crate::error::Error;
 
 use super::{cmd_constants::CmdConstants, cmd_meta::CmdMeta};
@@ -29,7 +31,7 @@ impl KeyParser {
     pub fn parse_key_from_argv(
         &self,
         argv: &[String],
-    ) -> Result<(String, String, Vec<String>, Vec<usize>), Error> {
+    ) -> anyhow::Result<(String, String, Vec<String>, Vec<usize>)> {
         // refer: https://github.com/tair-opensource/RedisShake/blob/v4/internal/commands/keys.go
         let mut cmd_name = argv[0].to_uppercase();
         if self.container_cmds.contains(&cmd_name) {
@@ -39,10 +41,10 @@ impl KeyParser {
         let cmd = match self.cmd_metas.get(&cmd_name) {
             Some(cmd) => cmd,
             None => {
-                return Err(Error::RedisCmdError(format!(
+                bail! {Error::RedisCmdError(format!(
                     "unkown command: {}",
                     cmd_name
-                )));
+                ))}
             }
         };
 
@@ -73,10 +75,10 @@ impl KeyParser {
 
                     loop {
                         if idx <= 0 || idx >= arg_cout {
-                            return Err(Error::RedisCmdError(format!(
+                            bail! {Error::RedisCmdError(format!(
                                 "keyword not found: {}",
                                 cmd_name
-                            )));
+                            ))}
                         }
                         if argv[idx as usize].to_uppercase() == spec.begin_search_keyword {
                             begin = idx + 1;
@@ -87,10 +89,10 @@ impl KeyParser {
                 }
 
                 _ => {
-                    return Err(Error::RedisCmdError(format!(
+                    bail! {Error::RedisCmdError(format!(
                         "unsupported begin search type: {}",
                         spec.begin_search_type
-                    )));
+                    ))}
                 }
             }
 
@@ -129,10 +131,10 @@ impl KeyParser {
                     // keynumidx: the index, relative to begin_search, of the argument containing the number of keys.
                     let keynum_idx = begin + spec.find_keys_keynum_index;
                     if keynum_idx < 0 || keynum_idx > arg_cout {
-                        return Err(Error::RedisCmdError(format!(
+                        bail! {Error::RedisCmdError(format!(
                             "wrong keynumidx: {}",
                             keynum_idx
-                        )));
+                        ))}
                     }
 
                     let key_count = argv[keynum_idx as usize].parse::<usize>().unwrap();
@@ -148,10 +150,10 @@ impl KeyParser {
                 }
 
                 _ => {
-                    return Err(Error::RedisCmdError(format!(
+                    bail! {Error::RedisCmdError(format!(
                         "unsupported find keys type: {}",
                         spec.find_keys_type
-                    )));
+                    ))}
                 }
             }
         }

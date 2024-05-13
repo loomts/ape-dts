@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
+use dt_common::log_debug;
 use dt_common::meta::{
     rdb_meta_manager::RdbMetaManager, rdb_tb_meta::RdbTbMeta, row_data::RowData, row_type::RowType,
 };
-use dt_common::{error::Error, log_debug};
 
 use crate::{merge_parallelizer::TbMergedData, Merger};
 
@@ -14,7 +14,7 @@ pub struct RdbMerger {
 
 #[async_trait]
 impl Merger for RdbMerger {
-    async fn merge(&mut self, data: Vec<RowData>) -> Result<Vec<TbMergedData>, Error> {
+    async fn merge(&mut self, data: Vec<RowData>) -> anyhow::Result<Vec<TbMergedData>> {
         let mut tb_data_map = HashMap::<String, RdbTbMergedData>::new();
         for row_data in data {
             let full_tb = format!("{}.{}", row_data.schema, row_data.tb);
@@ -40,7 +40,7 @@ impl Merger for RdbMerger {
         Ok(results)
     }
 
-    async fn close(&mut self) -> Result<(), Error> {
+    async fn close(&mut self) -> anyhow::Result<()> {
         self.meta_manager.close().await
     }
 }
@@ -50,7 +50,7 @@ impl RdbMerger {
         &mut self,
         merged: &mut RdbTbMergedData,
         row_data: RowData,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         // if the table already has some rows unmerged, then following rows also need to be unmerged.
         // all unmerged rows will be sinked serially
         if !merged.unmerged_rows.is_empty() {
@@ -160,7 +160,7 @@ impl RdbMerger {
         false
     }
 
-    async fn split_update_row_data(row_data: RowData) -> Result<(RowData, RowData), Error> {
+    async fn split_update_row_data(row_data: RowData) -> anyhow::Result<(RowData, RowData)> {
         let delete_row = RowData::new(
             row_data.schema.clone(),
             row_data.tb.clone(),
@@ -180,7 +180,7 @@ impl RdbMerger {
         Ok((delete_row, insert_row))
     }
 
-    async fn get_hash_code(row_data: &RowData, tb_meta: &RdbTbMeta) -> Result<u128, Error> {
+    async fn get_hash_code(row_data: &RowData, tb_meta: &RdbTbMeta) -> anyhow::Result<u128> {
         if tb_meta.key_map.is_empty() {
             return Ok(0);
         }

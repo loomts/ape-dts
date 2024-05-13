@@ -3,6 +3,7 @@ use std::sync::Mutex;
 use std::sync::RwLock;
 use std::time::Instant;
 
+use anyhow::bail;
 use async_trait::async_trait;
 use dt_common::error::Error;
 use dt_common::meta::dt_data::DtData;
@@ -38,7 +39,7 @@ pub struct RedisSinker {
 
 #[async_trait]
 impl Sinker for RedisSinker {
-    async fn sink_raw(&mut self, mut data: Vec<DtData>, _batch: bool) -> Result<(), Error> {
+    async fn sink_raw(&mut self, mut data: Vec<DtData>, _batch: bool) -> anyhow::Result<()> {
         if data.is_empty() {
             return Ok(());
         }
@@ -51,7 +52,7 @@ impl Sinker for RedisSinker {
         Ok(())
     }
 
-    async fn sink_dml(&mut self, mut data: Vec<RowData>, _batch: bool) -> Result<(), Error> {
+    async fn sink_dml(&mut self, mut data: Vec<RowData>, _batch: bool) -> anyhow::Result<()> {
         if data.is_empty() {
             return Ok(());
         }
@@ -76,7 +77,7 @@ impl RedisSinker {
         data: &mut [DtData],
         start_index: usize,
         batch_size: usize,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let start_time = Instant::now();
         let mut data_size = 0;
 
@@ -90,7 +91,7 @@ impl RedisSinker {
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
 
-    async fn serial_sink_raw(&mut self, data: &mut [DtData]) -> Result<(), Error> {
+    async fn serial_sink_raw(&mut self, data: &mut [DtData]) -> anyhow::Result<()> {
         let start_time = Instant::now();
         let mut data_size = 0;
 
@@ -104,7 +105,7 @@ impl RedisSinker {
             .await
     }
 
-    fn rewrite_entry(&mut self, dt_data: &mut DtData) -> Result<Vec<RedisCmd>, Error> {
+    fn rewrite_entry(&mut self, dt_data: &mut DtData) -> anyhow::Result<Vec<RedisCmd>> {
         let mut cmds = Vec::new();
         if let DtData::Redis { entry } = dt_data {
             if entry.db_id != self.now_db_id {
@@ -137,7 +138,7 @@ impl RedisSinker {
                             let cmd = EntryRewriter::rewrite_as_restore(entry, self.version)?;
                             Ok(vec![cmd])
                         }
-                        _ => return Err(Error::SinkerError("rewrite not implemented".into())),
+                        _ => bail! {Error::SinkerError("rewrite not implemented".into())},
                     }?;
                     if let Some(expire_cmd) = EntryRewriter::rewrite_expire(entry)? {
                         rewrite_cmds.push(expire_cmd)
@@ -157,7 +158,7 @@ impl RedisSinker {
         data: &mut [RowData],
         start_index: usize,
         batch_size: usize,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let start_time = Instant::now();
         let mut data_size = 0;
 
@@ -173,7 +174,7 @@ impl RedisSinker {
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
 
-    async fn serial_sink_dml(&mut self, data: &mut [RowData]) -> Result<(), Error> {
+    async fn serial_sink_dml(&mut self, data: &mut [RowData]) -> anyhow::Result<()> {
         let start_time = Instant::now();
         let mut data_size = 0;
 
@@ -188,7 +189,7 @@ impl RedisSinker {
             .await
     }
 
-    async fn dml_to_redis_cmd(&mut self, row_data: &RowData) -> Result<Option<RedisCmd>, Error> {
+    async fn dml_to_redis_cmd(&mut self, row_data: &RowData) -> anyhow::Result<Option<RedisCmd>> {
         if self.meta_manager.is_none() {
             return Ok(None);
         }
@@ -248,7 +249,7 @@ impl RedisSinker {
 }
 
 impl RedisSinker {
-    async fn batch_sink(&mut self, cmds: Vec<RedisCmd>, batch_size: usize) -> Result<(), Error> {
+    async fn batch_sink(&mut self, cmds: Vec<RedisCmd>, batch_size: usize) -> anyhow::Result<()> {
         if cmds.is_empty() {
             return Ok(());
         }
@@ -271,15 +272,15 @@ impl RedisSinker {
 
         let result = self.conn.req_packed_commands(&packed_cmds, 0, batch_size);
         if let Err(error) = result {
-            return Err(Error::SinkerError(format!(
+            bail! {Error::SinkerError(format!(
                 "batch sink failed, error: {:?}",
                 error
-            )));
+            ))}
         }
         Ok(())
     }
 
-    async fn serial_sink(&mut self, cmds: Vec<RedisCmd>) -> Result<(), Error> {
+    async fn serial_sink(&mut self, cmds: Vec<RedisCmd>) -> anyhow::Result<()> {
         if let Some(data_marker_cmd) = self.get_data_marker_cmd() {
             let multi_cmd = self.get_multi_cmd();
             let mut packed_cmds = Vec::new();
@@ -291,10 +292,10 @@ impl RedisSinker {
         for cmd in cmds {
             let result = self.conn.req_packed_command(&CmdEncoder::encode(&cmd));
             if let Err(error) = result {
-                return Err(Error::SinkerError(format!(
+                bail! {Error::SinkerError(format!(
                     "serial sink failed, error: {:?}, cmd: {}",
                     error, cmd
-                )));
+                ))}
             }
         }
 

@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use dt_common::log_info;
 use dt_common::meta::{
     adaptor::mysql_col_value_convertor::MysqlColValueConvertor,
     col_value::ColValue,
@@ -7,7 +8,6 @@ use dt_common::meta::{
     row_data::RowData,
     row_type::RowType,
 };
-use dt_common::{error::Error, log_info};
 use futures::TryStreamExt;
 use sqlx::{MySql, Pool};
 use std::collections::HashMap;
@@ -30,7 +30,7 @@ pub struct MysqlCheckExtractor {
 
 #[async_trait]
 impl Extractor for MysqlCheckExtractor {
-    async fn extract(&mut self) -> Result<(), Error> {
+    async fn extract(&mut self) -> anyhow::Result<()> {
         log_info!("MysqlCheckExtractor starts");
         let base_check_extractor = BaseCheckExtractor {
             check_log_dir: self.check_log_dir.clone(),
@@ -40,14 +40,14 @@ impl Extractor for MysqlCheckExtractor {
         self.base_extractor.wait_task_finish().await
     }
 
-    async fn close(&mut self) -> Result<(), Error> {
+    async fn close(&mut self) -> anyhow::Result<()> {
         close_conn_pool!(self)
     }
 }
 
 #[async_trait]
 impl BatchCheckExtractor for MysqlCheckExtractor {
-    async fn batch_extract(&mut self, check_logs: &[CheckLog]) -> Result<(), Error> {
+    async fn batch_extract(&mut self, check_logs: &[CheckLog]) -> anyhow::Result<()> {
         let log_type = &check_logs[0].log_type;
         let tb_meta = self
             .meta_manager
@@ -85,7 +85,7 @@ impl MysqlCheckExtractor {
     fn build_check_row_datas(
         check_logs: &[CheckLog],
         tb_meta: &MysqlTbMeta,
-    ) -> Result<Vec<RowData>, Error> {
+    ) -> anyhow::Result<Vec<RowData>> {
         let mut result = Vec::new();
         for check_log in check_logs.iter() {
             let mut after = HashMap::new();

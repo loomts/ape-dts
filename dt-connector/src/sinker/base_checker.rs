@@ -4,7 +4,7 @@ use dt_common::meta::{
     rdb_meta_manager::RdbMetaManager, rdb_tb_meta::RdbTbMeta, row_data::RowData,
     struct_meta::statement::struct_statement::StructStatement,
 };
-use dt_common::{error::Error, log_diff, log_extra, log_miss, rdb_filter::RdbFilter};
+use dt_common::{log_diff, log_extra, log_miss, rdb_filter::RdbFilter};
 
 use crate::{
     check_log::{
@@ -26,7 +26,7 @@ impl BaseChecker {
         dst_tb_meta: &RdbTbMeta,
         extractor_meta_manager: &mut RdbMetaManager,
         reverse_router: &RdbRouter,
-    ) -> Result<(Vec<CheckLog>, Vec<CheckLog>), Error> {
+    ) -> anyhow::Result<(Vec<CheckLog>, Vec<CheckLog>)> {
         let mut miss = Vec::new();
         let mut diff = Vec::new();
         for src_row_data in src_data.iter().skip(start_index).take(batch_size) {
@@ -98,7 +98,7 @@ impl BaseChecker {
         src_statement: &mut StructStatement,
         dst_statement: &mut Option<StructStatement>,
         filter: &RdbFilter,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         if dst_statement.is_none() {
             log_miss!("{:?}", src_statement.to_sqls(filter));
             return Ok(());
@@ -138,7 +138,7 @@ impl BaseChecker {
         src_row_data: &RowData,
         extractor_meta_manager: &mut RdbMetaManager,
         reverse_router: &RdbRouter,
-    ) -> Result<CheckLog, Error> {
+    ) -> anyhow::Result<CheckLog> {
         // route src_row_data back since we need origin extracted row_data in check log
         let reverse_src_row_data = reverse_router.route_row(src_row_data.clone());
         let src_tb_meta = extractor_meta_manager
@@ -161,7 +161,7 @@ impl BaseChecker {
         diff_col_values: HashMap<String, DiffColValue>,
         extractor_meta_manager: &mut RdbMetaManager,
         reverse_router: &RdbRouter,
-    ) -> Result<CheckLog, Error> {
+    ) -> anyhow::Result<CheckLog> {
         // share same logic to fill basic CheckLog fields as miss log
         let miss_log = Self::build_miss_log(src_row_data, extractor_meta_manager, reverse_router)
             .await

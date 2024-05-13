@@ -1,4 +1,4 @@
-use crate::{config::config_enums::DbType, error::Error, rdb_filter::RdbFilter};
+use crate::{config::config_enums::DbType, rdb_filter::RdbFilter};
 
 use crate::meta::struct_meta::structure::{
     column::Column,
@@ -95,7 +95,7 @@ impl MysqlCreateTableStatement {
         sql
     }
 
-    fn columns_to_sql(columns: &mut Vec<Column>) -> Result<(String, Vec<String>), Error> {
+    fn columns_to_sql(columns: &mut Vec<Column>) -> anyhow::Result<(String, Vec<String>)> {
         let (mut sql, mut pks) = (String::new(), Vec::new());
 
         columns.sort_by(|c1, c2| c1.ordinal_position.cmp(&c2.ordinal_position));

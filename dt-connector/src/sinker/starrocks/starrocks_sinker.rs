@@ -4,6 +4,7 @@ use std::{
 };
 
 use crate::{call_batch_fn, sinker::base_sinker::BaseSinker, Sinker};
+use anyhow::bail;
 use async_trait::async_trait;
 use dt_common::meta::{row_data::RowData, row_type::RowType};
 use dt_common::{error::Error, log_error, monitor::monitor::Monitor};
@@ -23,7 +24,7 @@ pub struct StarRocksSinker {
 
 #[async_trait]
 impl Sinker for StarRocksSinker {
-    async fn sink_dml(&mut self, mut data: Vec<RowData>, batch: bool) -> Result<(), Error> {
+    async fn sink_dml(&mut self, mut data: Vec<RowData>, batch: bool) -> anyhow::Result<()> {
         if data.is_empty() {
             return Ok(());
         }
@@ -43,7 +44,7 @@ impl Sinker for StarRocksSinker {
 }
 
 impl StarRocksSinker {
-    async fn serial_sink(&mut self, mut data: Vec<RowData>) -> Result<(), Error> {
+    async fn serial_sink(&mut self, mut data: Vec<RowData>) -> anyhow::Result<()> {
         let start_time = Instant::now();
         let mut data_size = 0;
 
@@ -62,7 +63,7 @@ impl StarRocksSinker {
         data: &mut [RowData],
         start_index: usize,
         batch_size: usize,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let start_time = Instant::now();
 
         let data_size = self.send_data(data, start_index, batch_size).await.unwrap();
@@ -75,7 +76,7 @@ impl StarRocksSinker {
         data: &mut [RowData],
         start_index: usize,
         batch_size: usize,
-    ) -> Result<usize, Error> {
+    ) -> anyhow::Result<usize> {
         let mut data_size = 0;
         // build stream load data
         let mut load_data = Vec::new();
@@ -108,12 +109,7 @@ impl StarRocksSinker {
         Ok(data_size)
     }
 
-    fn build_request(
-        &self,
-        url: &str,
-        op: &str,
-        body: &str,
-    ) -> Result<reqwest::Request, reqwest::Error> {
+    fn build_request(&self, url: &str, op: &str, body: &str) -> anyhow::Result<reqwest::Request> {
         let password = if self.password.is_empty() {
             None
         } else {
@@ -134,16 +130,16 @@ impl StarRocksSinker {
             let op = format!("__op='{}'", op);
             put = put.header("columns", op);
         }
-        put.build()
+        Ok(put.build()?)
     }
 
-    async fn check_response(response: Response) -> Result<(), Error> {
+    async fn check_response(response: Response) -> anyhow::Result<()> {
         let status_code = response.status();
         if status_code != StatusCode::OK {
-            return Err(Error::HttpError(format!(
+            bail! {Error::HttpError(format!(
                 "stream load request failed, status_code: {}",
                 status_code
-            )));
+            ))}
         }
 
         // response example:
@@ -172,7 +168,7 @@ impl StarRocksSinker {
                 status_code, load_result,
             );
             log_error!("{}", err);
-            return Err(Error::HttpError(err));
+            bail! {Error::HttpError(err)}
         }
         Ok(())
     }

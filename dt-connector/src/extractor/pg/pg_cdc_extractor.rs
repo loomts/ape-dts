@@ -8,6 +8,7 @@ use std::{
     time::{Duration, Instant, UNIX_EPOCH},
 };
 
+use anyhow::bail;
 use async_trait::async_trait;
 use futures::StreamExt;
 
@@ -72,7 +73,7 @@ const SECS_FROM_1970_TO_2000: i64 = 946_684_800;
 
 #[async_trait]
 impl Extractor for PgCdcExtractor {
-    async fn extract(&mut self) -> Result<(), Error> {
+    async fn extract(&mut self) -> anyhow::Result<()> {
         if let Position::PgCdc { lsn, .. } = &self.resumer.position {
             self.start_lsn = lsn.to_owned()
         };
@@ -89,14 +90,14 @@ impl Extractor for PgCdcExtractor {
         self.base_extractor.wait_task_finish().await
     }
 
-    async fn close(&mut self) -> Result<(), Error> {
+    async fn close(&mut self) -> anyhow::Result<()> {
         self.meta_manager.close().await?;
         close_conn_pool!(self)
     }
 }
 
 impl PgCdcExtractor {
-    async fn extract_internal(&mut self) -> Result<(), Error> {
+    async fn extract_internal(&mut self) -> anyhow::Result<()> {
         let mut cdc_client = PgCdcClient {
             url: self.url.clone(),
             pub_name: self.pub_name.clone(),
@@ -215,7 +216,7 @@ impl PgCdcExtractor {
         &mut self,
         stream: &mut Pin<&mut LogicalReplicationStream>,
         start_lsn: &str,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let lsn: PgLsn =
             if let Position::PgCdc { lsn, .. } = &self.syncer.lock().unwrap().committed_position {
                 if lsn.is_empty() {
@@ -245,7 +246,7 @@ impl PgCdcExtractor {
         Ok(())
     }
 
-    async fn decode_relation(&mut self, event: &RelationBody) -> Result<(), Error> {
+    async fn decode_relation(&mut self, event: &RelationBody) -> anyhow::Result<()> {
         let schema = event.namespace()?;
         let tb = event.name()?;
         // if the tb is filtered, we won't try to get the tb_meta since we may get privilege errors,
@@ -290,7 +291,7 @@ impl PgCdcExtractor {
         &mut self,
         event: &InsertBody,
         position: &Position,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let tb_meta = self
             .meta_manager
             .get_tb_meta_by_oid(event.rel_id() as i32)?;
@@ -318,7 +319,7 @@ impl PgCdcExtractor {
         &mut self,
         event: &UpdateBody,
         position: &Position,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let tb_meta = self
             .meta_manager
             .get_tb_meta_by_oid(event.rel_id() as i32)?;
@@ -356,7 +357,7 @@ impl PgCdcExtractor {
         &mut self,
         event: &DeleteBody,
         position: &Position,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let tb_meta = self
             .meta_manager
             .get_tb_meta_by_oid(event.rel_id() as i32)?;
@@ -382,7 +383,7 @@ impl PgCdcExtractor {
         self.push_row_to_buf(row_data, position.clone()).await
     }
 
-    async fn decode_ddl(&mut self, row_data: &RowData, position: &Position) -> Result<(), Error> {
+    async fn decode_ddl(&mut self, row_data: &RowData, position: &Position) -> anyhow::Result<()> {
         if self.filter.filter_all_ddl() {
             return Ok(());
         }
@@ -439,7 +440,7 @@ impl PgCdcExtractor {
         &mut self,
         tb_meta: &PgTbMeta,
         tuple_data: &[TupleData],
-    ) -> Result<HashMap<String, ColValue>, Error> {
+    ) -> anyhow::Result<HashMap<String, ColValue>> {
         let mut col_values: HashMap<String, ColValue> = HashMap::new();
         for i in 0..tuple_data.len() {
             let tuple_data = &tuple_data[i];
@@ -458,9 +459,9 @@ impl PgCdcExtractor {
                 }
 
                 TupleData::UnchangedToast => {
-                    return Err(Error::ExtractorError(
+                    bail! {Error::ExtractorError(
                         "unexpected UnchangedToast value received".into(),
-                    ))
+                    )}
                 }
             }
         }
@@ -471,7 +472,7 @@ impl PgCdcExtractor {
         &mut self,
         row_data: RowData,
         position: Position,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         if !self.time_filter.started {
             return Ok(());
         }
@@ -482,7 +483,7 @@ impl PgCdcExtractor {
         &mut self,
         dt_data: DtData,
         position: Position,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         if !self.time_filter.started {
             return Ok(());
         }
@@ -511,7 +512,7 @@ impl PgCdcExtractor {
         }
     }
 
-    fn start_heartbeat(&mut self, shut_down: Arc<AtomicBool>) -> Result<(), Error> {
+    fn start_heartbeat(&mut self, shut_down: Arc<AtomicBool>) -> anyhow::Result<()> {
         let schema_tb = self.base_extractor.precheck_heartbeat(
             self.heartbeat_interval_secs,
             &self.heartbeat_tb,
@@ -557,7 +558,7 @@ impl PgCdcExtractor {
         tb: &str,
         syncer: &Arc<Mutex<Syncer>>,
         conn_pool: &Pool<Postgres>,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let (received_lsn, received_timestamp) =
             if let Position::PgCdc { lsn, timestamp } = &syncer.lock().unwrap().received_position {
                 (lsn.clone(), timestamp.clone())

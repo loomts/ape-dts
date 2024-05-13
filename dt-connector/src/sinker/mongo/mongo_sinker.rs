@@ -10,7 +10,7 @@ use mongodb::{
     Client, Collection,
 };
 
-use dt_common::{error::Error, log_error, monitor::monitor::Monitor};
+use dt_common::{log_error, monitor::monitor::Monitor};
 
 use dt_common::meta::{
     col_value::ColValue, mongo::mongo_constant::MongoConstants, row_data::RowData,
@@ -29,7 +29,7 @@ pub struct MongoSinker {
 
 #[async_trait]
 impl Sinker for MongoSinker {
-    async fn sink_dml(&mut self, mut data: Vec<RowData>, batch: bool) -> Result<(), Error> {
+    async fn sink_dml(&mut self, mut data: Vec<RowData>, batch: bool) -> anyhow::Result<()> {
         if data.is_empty() {
             return Ok(());
         }
@@ -50,14 +50,14 @@ impl Sinker for MongoSinker {
         Ok(())
     }
 
-    async fn close(&mut self) -> Result<(), Error> {
+    async fn close(&mut self) -> anyhow::Result<()> {
         self.mongo_client.clone().shutdown().await;
         Ok(())
     }
 }
 
 impl MongoSinker {
-    async fn serial_sink(&mut self, mut data: Vec<RowData>) -> Result<(), Error> {
+    async fn serial_sink(&mut self, mut data: Vec<RowData>) -> anyhow::Result<()> {
         let start_time = Instant::now();
         let mut data_size = 0;
 
@@ -132,7 +132,7 @@ impl MongoSinker {
         data: &mut [RowData],
         start_index: usize,
         batch_size: usize,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let start_time = Instant::now();
         let mut data_size = 0;
 
@@ -166,7 +166,7 @@ impl MongoSinker {
         data: &mut [RowData],
         start_index: usize,
         batch_size: usize,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let start_time = Instant::now();
         let mut data_size = 0;
 
@@ -203,7 +203,7 @@ impl MongoSinker {
         collection: &Collection<Document>,
         query_doc: Document,
         update_doc: Document,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let options = UpdateOptions::builder().upsert(true).build();
         collection
             .update_one(query_doc, update_doc, Some(options))

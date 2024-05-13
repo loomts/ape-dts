@@ -1,6 +1,7 @@
 use std::io::{Cursor, Seek, SeekFrom};
 
 use crate::{config::config_enums::DbType, error::Error};
+use anyhow::bail;
 use byteorder::{LittleEndian, ReadBytesExt};
 use chrono::{TimeZone, Utc};
 use mysql_binlog_connector_rust::column::{
@@ -13,7 +14,7 @@ use crate::meta::{col_value::ColValue, mysql::mysql_col_type::MysqlColType};
 pub struct MysqlColValueConvertor {}
 
 impl MysqlColValueConvertor {
-    pub fn parse_time(buf: Vec<u8>) -> Result<ColValue, Error> {
+    pub fn parse_time(buf: Vec<u8>) -> anyhow::Result<ColValue> {
         // for: 13:14:15.456, the result buf is [12, 0, 0, 0, 0, 0, 13, 14, 15, 64, 245, 6, 0]
         let mut cursor = Cursor::new(buf);
         let length = cursor.read_u8()? as usize;
@@ -23,33 +24,33 @@ impl MysqlColValueConvertor {
         Ok(ColValue::Time(time))
     }
 
-    pub fn parse_date(buf: Vec<u8>) -> Result<ColValue, Error> {
+    pub fn parse_date(buf: Vec<u8>) -> anyhow::Result<ColValue> {
         let mut cursor = Cursor::new(buf);
         let length = cursor.read_u8()? as usize;
         let date = Self::parese_date_fields(&mut cursor, length)?;
         Ok(ColValue::Date(date))
     }
 
-    pub fn parse_datetime(buf: Vec<u8>) -> Result<ColValue, Error> {
+    pub fn parse_datetime(buf: Vec<u8>) -> anyhow::Result<ColValue> {
         let mut cursor = Cursor::new(buf);
         let datetime = Self::parse_date_time_fields(&mut cursor)?;
         Ok(ColValue::DateTime(datetime))
     }
 
-    pub fn parse_timestamp(buf: Vec<u8>) -> Result<ColValue, Error> {
+    pub fn parse_timestamp(buf: Vec<u8>) -> anyhow::Result<ColValue> {
         let mut cursor = Cursor::new(buf);
         let datetime = Self::parse_date_time_fields(&mut cursor)?;
         Ok(ColValue::Timestamp(datetime))
     }
 
-    fn parse_date_time_fields(cursor: &mut Cursor<Vec<u8>>) -> Result<String, Error> {
+    fn parse_date_time_fields(cursor: &mut Cursor<Vec<u8>>) -> anyhow::Result<String> {
         let length = cursor.read_u8()? as usize;
         let date = Self::parese_date_fields(cursor, length)?;
         let time = Self::parese_time_fields(cursor, length - 4)?;
         Ok(format!("{} {}", date, time))
     }
 
-    fn parese_date_fields(cursor: &mut Cursor<Vec<u8>>, length: usize) -> Result<String, Error> {
+    fn parese_date_fields(cursor: &mut Cursor<Vec<u8>>, length: usize) -> anyhow::Result<String> {
         let mut year = 0;
         let mut month = 0;
         let mut day = 0;
@@ -65,7 +66,7 @@ impl MysqlColValueConvertor {
         Ok(format!("{}-{:02}-{:02}", year, month, day))
     }
 
-    fn parese_time_fields(cursor: &mut Cursor<Vec<u8>>, length: usize) -> Result<String, Error> {
+    fn parese_time_fields(cursor: &mut Cursor<Vec<u8>>, length: usize) -> anyhow::Result<String> {
         let mut hour = 0;
         let mut minute = 0;
         let mut second = 0;
@@ -89,7 +90,7 @@ impl MysqlColValueConvertor {
         }
     }
 
-    pub fn from_binlog(col_type: &MysqlColType, value: ColumnValue) -> Result<ColValue, Error> {
+    pub fn from_binlog(col_type: &MysqlColType, value: ColumnValue) -> anyhow::Result<ColValue> {
         let col_value = match value {
             ColumnValue::Tiny(v) => {
                 if *col_type == MysqlColType::UnsignedTiny {
@@ -194,7 +195,7 @@ impl MysqlColValueConvertor {
         Ok(col_value)
     }
 
-    pub fn from_str(col_type: &MysqlColType, value_str: &str) -> Result<ColValue, Error> {
+    pub fn from_str(col_type: &MysqlColType, value_str: &str) -> anyhow::Result<ColValue> {
         let value_str = value_str.to_string();
         let col_value = match *col_type {
             MysqlColType::Tiny => match value_str.parse::<i8>() {
@@ -268,10 +269,10 @@ impl MysqlColValueConvertor {
             MysqlColType::Json => ColValue::Json2(value_str),
 
             _ => {
-                return Err(Error::Unexpected(format!(
+                bail! {Error::Unexpected(format!(
                     "unsupported column type: {:?}",
                     col_type
-                )))
+                )) }
             }
         };
 
@@ -282,7 +283,7 @@ impl MysqlColValueConvertor {
         row: &MySqlRow,
         col: &str,
         col_type: &MysqlColType,
-    ) -> Result<ColValue, Error> {
+    ) -> anyhow::Result<ColValue> {
         Self::from_query_mysql_compatible(row, col, col_type, &DbType::Mysql)
     }
 
@@ -291,7 +292,7 @@ impl MysqlColValueConvertor {
         col: &str,
         col_type: &MysqlColType,
         db_type: &DbType,
-    ) -> Result<ColValue, Error> {
+    ) -> anyhow::Result<ColValue> {
         let value: Option<Vec<u8>> = row.get_unchecked(col);
         if value.is_none() {
             return Ok(ColValue::None);

@@ -4,6 +4,7 @@ use super::redis_resp_types::Value;
 use crate::extractor::base_extractor::BaseExtractor;
 use crate::extractor::resumer::cdc_resumer::CdcResumer;
 use crate::Extractor;
+use anyhow::bail;
 use async_trait::async_trait;
 use dt_common::config::config_enums::DbType;
 use dt_common::config::config_token_parser::ConfigTokenParser;
@@ -44,7 +45,7 @@ pub struct RedisCdcExtractor {
 
 #[async_trait]
 impl Extractor for RedisCdcExtractor {
-    async fn extract(&mut self) -> Result<(), Error> {
+    async fn extract(&mut self) -> anyhow::Result<()> {
         if let Position::Redis {
             repl_id,
             repl_port,
@@ -85,13 +86,13 @@ impl Extractor for RedisCdcExtractor {
         self.base_extractor.wait_task_finish().await
     }
 
-    async fn close(&mut self) -> Result<(), Error> {
+    async fn close(&mut self) -> anyhow::Result<()> {
         self.conn.close().await
     }
 }
 
 impl RedisCdcExtractor {
-    async fn receive_aof(&mut self) -> Result<(), Error> {
+    async fn receive_aof(&mut self) -> anyhow::Result<()> {
         let heartbeat_db_key = ConfigTokenParser::parse(
             &self.heartbeat_key,
             &['.'],
@@ -212,7 +213,7 @@ impl RedisCdcExtractor {
         }
     }
 
-    async fn handle_redis_value(&mut self, value: Value) -> Result<RedisCmd, Error> {
+    async fn handle_redis_value(&mut self, value: Value) -> anyhow::Result<RedisCmd> {
         let mut cmd = RedisCmd::new();
         match value {
             Value::Bulk(values) => {
@@ -227,16 +228,16 @@ impl RedisCdcExtractor {
                 }
             }
             v => {
-                return Err(Error::RedisRdbError(format!(
+                bail! {Error::RedisRdbError(format!(
                     "received unexpected aof value: {:?}",
                     v
-                )));
+                ))}
             }
         }
         Ok(cmd)
     }
 
-    async fn keep_alive_ack(&mut self) -> Result<(), Error> {
+    async fn keep_alive_ack(&mut self) -> anyhow::Result<()> {
         // send replconf ack to keep the connection alive
         let mut position_repl_offset = self.repl_offset;
         if let Position::Redis { repl_offset, .. } = self.syncer.lock().unwrap().committed_position
@@ -261,7 +262,7 @@ impl RedisCdcExtractor {
         db_id: i64,
         key: &str,
         shut_down: Arc<AtomicBool>,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         log_info!(
             "try starting heartbeat, heartbeat_interval_secs: {}, db_id: {}, key: {}",
             self.heartbeat_interval_secs,
@@ -302,7 +303,7 @@ impl RedisCdcExtractor {
         Ok(())
     }
 
-    async fn heartbeat(key: &str, conn: &mut RedisClient) -> Result<(), Error> {
+    async fn heartbeat(key: &str, conn: &mut RedisClient) -> anyhow::Result<()> {
         // send `SET heartbeat_key current_timestamp` by another connecion to generate timestamp
         let since_epoch = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
         let timestamp =

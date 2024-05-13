@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
+use anyhow::bail;
 use async_trait::async_trait;
-use dt_common::{error::Error, rdb_filter::RdbFilter};
+use dt_common::rdb_filter::RdbFilter;
 use dt_task::task_util::TaskUtil;
 use mongodb::{
     bson::{doc, Bson, Document},
@@ -22,12 +23,12 @@ pub struct MongoFetcher {
 
 #[async_trait]
 impl Fetcher for MongoFetcher {
-    async fn build_connection(&mut self) -> Result<(), Error> {
+    async fn build_connection(&mut self) -> anyhow::Result<()> {
         self.pool = Some(TaskUtil::create_mongo_client(&self.url, "").await?);
         Ok(())
     }
 
-    async fn fetch_version(&mut self) -> Result<String, Error> {
+    async fn fetch_version(&mut self) -> anyhow::Result<String> {
         let document = self.execute_for_db("buildInfo").await?;
         Ok(String::from(
             document
@@ -40,37 +41,37 @@ impl Fetcher for MongoFetcher {
     async fn fetch_configuration(
         &mut self,
         _config_keys: Vec<String>,
-    ) -> Result<HashMap<String, String>, Error> {
+    ) -> anyhow::Result<HashMap<String, String>> {
         Ok(HashMap::new())
     }
 
-    async fn fetch_databases(&mut self) -> Result<Vec<Database>, Error> {
+    async fn fetch_databases(&mut self) -> anyhow::Result<Vec<Database>> {
         Ok(vec![])
     }
 
-    async fn fetch_schemas(&mut self) -> Result<Vec<Schema>, Error> {
+    async fn fetch_schemas(&mut self) -> anyhow::Result<Vec<Schema>> {
         Ok(vec![])
     }
 
-    async fn fetch_tables(&mut self) -> Result<Vec<Table>, Error> {
+    async fn fetch_tables(&mut self) -> anyhow::Result<Vec<Table>> {
         Ok(vec![])
     }
 
-    async fn fetch_constraints(&mut self) -> Result<Vec<Constraint>, Error> {
+    async fn fetch_constraints(&mut self) -> anyhow::Result<Vec<Constraint>> {
         Ok(vec![])
     }
 }
 
 impl MongoFetcher {
-    pub async fn execute_for_db(&self, command: &str) -> Result<Document, Error> {
+    pub async fn execute_for_db(&self, command: &str) -> anyhow::Result<Document> {
         let client = match &self.pool {
             Some(pool) => pool,
-            None => return Err(Error::PreCheckError("client is closed.".into())),
+            None => bail! {"client is closed."},
         };
 
         let dbs = client.list_databases(None, None).await?;
         if dbs.is_empty() {
-            return Err(Error::PreCheckError("no db exists in mongo.".into()));
+            bail! {"no db exists in mongo."};
         }
 
         let doc_command = doc! {command: 1};

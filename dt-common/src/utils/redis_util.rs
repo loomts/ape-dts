@@ -2,6 +2,7 @@ use crate::error::Error;
 use crate::meta::redis::cluster_node::ClusterNode;
 use crate::meta::redis::command::cmd_encoder::CmdEncoder;
 use crate::meta::redis::redis_object::RedisCmd;
+use anyhow::bail;
 use redis::{Connection, ConnectionLike, Value};
 use regex::Regex;
 use std::collections::HashMap;
@@ -12,7 +13,7 @@ pub struct RedisUtil {}
 const SLOTS_COUNT: usize = 16384;
 
 impl RedisUtil {
-    pub async fn create_redis_conn(url: &str) -> Result<redis::Connection, Error> {
+    pub async fn create_redis_conn(url: &str) -> anyhow::Result<redis::Connection> {
         let conn = redis::Client::open(url)
             .unwrap()
             .get_connection()
@@ -28,7 +29,7 @@ impl RedisUtil {
 
     pub fn get_cluster_master_nodes(
         conn: &mut redis::Connection,
-    ) -> Result<Vec<ClusterNode>, Error> {
+    ) -> anyhow::Result<Vec<ClusterNode>> {
         let cmd = RedisCmd::from_str_args(&["cluster", "nodes"]);
         let value = conn.req_packed_command(&CmdEncoder::encode(&cmd)).unwrap();
         if let redis::Value::Data(data) = value {
@@ -37,9 +38,9 @@ impl RedisUtil {
             let master_nodes = nodes.into_iter().filter(|i| i.is_master).collect();
             Ok(master_nodes)
         } else {
-            Err(Error::RedisResultError(
+            bail! {Error::RedisResultError(
                 "can not get redis cluster nodes".into(),
-            ))
+            )}
         }
     }
 
@@ -58,7 +59,7 @@ impl RedisUtil {
         slot_address_map
     }
 
-    pub fn get_redis_version(conn: &mut redis::Connection) -> Result<f32, Error> {
+    pub fn get_redis_version(conn: &mut redis::Connection) -> anyhow::Result<f32> {
         let cmd = RedisCmd::from_str_args(&["INFO"]);
         let value = conn.req_packed_command(&CmdEncoder::encode(&cmd)).unwrap();
         if let redis::Value::Data(data) = value {
@@ -69,9 +70,9 @@ impl RedisUtil {
             let version_str = cap[1].to_string();
             let tokens: Vec<&str> = version_str.split('.').collect();
             if tokens.is_empty() {
-                return Err(Error::RedisResultError(
+                bail! {Error::RedisResultError(
                     "can not get redis version by INFO".into(),
-                ));
+                )}
             }
 
             let mut version = tokens[0].to_string();
@@ -80,12 +81,12 @@ impl RedisUtil {
             }
             return Ok(f32::from_str(&version).unwrap());
         }
-        Err(Error::RedisResultError(
+        bail! {Error::RedisResultError(
             "can not get redis version by INFO".into(),
-        ))
+        )}
     }
 
-    pub fn parse_result_as_string(value: Value) -> Result<Vec<String>, Error> {
+    pub fn parse_result_as_string(value: Value) -> anyhow::Result<Vec<String>> {
         let mut results = Vec::new();
         match value {
             Value::Data(data) => {
@@ -104,15 +105,15 @@ impl RedisUtil {
             Value::Status(data) => results.push(data),
 
             _ => {
-                return Err(Error::RedisResultError(
+                bail! {Error::RedisResultError(
                     "redis result type can not be parsed as string".into(),
-                ))
+                )}
             }
         }
         Ok(results)
     }
 
-    fn parse_cluster_nodes(nodes_str: &str) -> Result<Vec<ClusterNode>, Error> {
+    fn parse_cluster_nodes(nodes_str: &str) -> anyhow::Result<Vec<ClusterNode>> {
         // refer: https://github.com/tair-opensource/RedisShake/blob/v4/internal/utils/cluster_nodes.go
 
         let mut all_slots_count = 0;
@@ -127,10 +128,10 @@ impl RedisUtil {
             let words: Vec<&str> = line.split_whitespace().collect();
 
             if words.len() < 8 {
-                return Err(Error::MetadataError(format!(
+                bail! {Error::MetadataError(format!(
                     "invalid cluster nodes line: {}",
                     line
-                )));
+                ))}
             }
 
             let id = words[0].to_string();
@@ -200,10 +201,10 @@ impl RedisUtil {
         }
 
         if all_slots_count != SLOTS_COUNT {
-            Err(Error::MetadataError(format!(
+            bail! {Error::MetadataError(format!(
                 "invalid cluster nodes slots. slots_count={}, cluster_nodes={}",
                 all_slots_count, nodes_str
-            )))
+            ))}
         } else {
             Ok(parsed_nodes)
         }

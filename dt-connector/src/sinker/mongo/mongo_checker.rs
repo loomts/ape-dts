@@ -10,7 +10,7 @@ use mongodb::{
     Client,
 };
 
-use dt_common::{error::Error, log_error, monitor::monitor::Monitor};
+use dt_common::{log_error, monitor::monitor::Monitor};
 
 use dt_common::meta::{
     col_value::ColValue,
@@ -37,7 +37,7 @@ pub struct MongoChecker {
 
 #[async_trait]
 impl Sinker for MongoChecker {
-    async fn sink_dml(&mut self, mut data: Vec<RowData>, _batch: bool) -> Result<(), Error> {
+    async fn sink_dml(&mut self, mut data: Vec<RowData>, _batch: bool) -> anyhow::Result<()> {
         if data.is_empty() {
             return Ok(());
         }
@@ -46,7 +46,7 @@ impl Sinker for MongoChecker {
         Ok(())
     }
 
-    async fn close(&mut self) -> Result<(), Error> {
+    async fn close(&mut self) -> anyhow::Result<()> {
         self.mongo_client.clone().shutdown().await;
         Ok(())
     }
@@ -58,7 +58,7 @@ impl MongoChecker {
         data: &mut [RowData],
         start_index: usize,
         batch_size: usize,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let start_time = Instant::now();
 
         let schema = &data[0].schema;

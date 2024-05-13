@@ -1,3 +1,4 @@
+use anyhow::bail;
 use dt_common::error::Error;
 use dt_common::meta::redis::redis_object::{RedisString, ZSetEntry, ZsetObject};
 
@@ -10,7 +11,7 @@ impl ZsetParser {
         reader: &mut RdbReader,
         key: RedisString,
         type_byte: u8,
-    ) -> Result<ZsetObject, Error> {
+    ) -> anyhow::Result<ZsetObject> {
         let mut obj = ZsetObject::new();
         obj.key = key;
 
@@ -20,10 +21,10 @@ impl ZsetParser {
             super::RDB_TYPE_ZSET_ZIPLIST => Self::read_zset_zip_list(&mut obj, reader)?,
             super::RDB_TYPE_ZSET_LISTPACK => Self::read_zset_list_pack(&mut obj, reader)?,
             _ => {
-                return Err(Error::RedisRdbError(format!(
+                bail! {Error::RedisRdbError(format!(
                     "unknown zset type. type_byte=[{}]",
                     type_byte
-                )));
+                ))}
             }
         }
         Ok(obj)
@@ -33,7 +34,7 @@ impl ZsetParser {
         obj: &mut ZsetObject,
         reader: &mut RdbReader,
         is_zset_2: bool,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let size = reader.read_length()?;
         for _ in 0..size {
             let member = reader.read_string()?;
@@ -52,23 +53,23 @@ impl ZsetParser {
         Ok(())
     }
 
-    fn read_zset_zip_list(obj: &mut ZsetObject, reader: &mut RdbReader) -> Result<(), Error> {
+    fn read_zset_zip_list(obj: &mut ZsetObject, reader: &mut RdbReader) -> anyhow::Result<()> {
         let list = reader.read_zip_list()?;
         Self::parse_zset_result(obj, list)
     }
 
-    fn read_zset_list_pack(obj: &mut ZsetObject, reader: &mut RdbReader) -> Result<(), Error> {
+    fn read_zset_list_pack(obj: &mut ZsetObject, reader: &mut RdbReader) -> anyhow::Result<()> {
         let list = reader.read_list_pack()?;
         Self::parse_zset_result(obj, list)
     }
 
-    fn parse_zset_result(obj: &mut ZsetObject, list: Vec<RedisString>) -> Result<(), Error> {
+    fn parse_zset_result(obj: &mut ZsetObject, list: Vec<RedisString>) -> anyhow::Result<()> {
         let size = list.len();
         if size % 2 != 0 {
-            return Err(Error::RedisRdbError(format!(
+            bail! {Error::RedisRdbError(format!(
                 "zset list pack size is not even. size=[{}]",
                 size
-            )));
+            ))}
         }
 
         for i in (0..size).step_by(2) {

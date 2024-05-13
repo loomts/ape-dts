@@ -3,8 +3,8 @@ use crate::{extractor::base_extractor::BaseExtractor, Extractor};
 use async_trait::async_trait;
 use std::sync::{Arc, Mutex};
 
+use dt_common::log_info;
 use dt_common::meta::{avro::avro_converter::AvroConverter, position::Position, syncer::Syncer};
-use dt_common::{error::Error, log_info};
 use rdkafka::{
     consumer::{Consumer, StreamConsumer},
     ClientConfig, Message, Offset, TopicPartitionList,
@@ -25,7 +25,7 @@ pub struct KafkaExtractor {
 
 #[async_trait]
 impl Extractor for KafkaExtractor {
-    async fn extract(&mut self) -> Result<(), Error> {
+    async fn extract(&mut self) -> anyhow::Result<()> {
         if let Position::Kafka { offset, .. } = &self.resumer.position {
             self.offset = offset.to_owned();
         };
@@ -42,7 +42,7 @@ impl Extractor for KafkaExtractor {
 }
 
 impl KafkaExtractor {
-    async fn extract_avro(&mut self, consumer: StreamConsumer) -> Result<(), Error> {
+    async fn extract_avro(&mut self, consumer: StreamConsumer) -> anyhow::Result<()> {
         loop {
             let msg = consumer.recv().await.unwrap();
             if let Some(payload) = msg.payload() {

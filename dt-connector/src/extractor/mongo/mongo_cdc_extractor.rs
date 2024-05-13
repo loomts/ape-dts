@@ -18,7 +18,7 @@ use dt_common::meta::{
     syncer::Syncer,
 };
 use dt_common::{
-    config::config_enums::DbType, error::Error, log_error, log_info, rdb_filter::RdbFilter,
+    config::config_enums::DbType, log_error, log_info, rdb_filter::RdbFilter,
     utils::time_util::TimeUtil,
 };
 use mongodb::{
@@ -52,7 +52,7 @@ pub struct MongoCdcExtractor {
 
 #[async_trait]
 impl Extractor for MongoCdcExtractor {
-    async fn extract(&mut self) -> Result<(), Error> {
+    async fn extract(&mut self) -> anyhow::Result<()> {
         if let Position::MongoCdc {
             resume_token,
             operation_time,
@@ -81,14 +81,14 @@ impl Extractor for MongoCdcExtractor {
         self.base_extractor.wait_task_finish().await
     }
 
-    async fn close(&mut self) -> Result<(), Error> {
+    async fn close(&mut self) -> anyhow::Result<()> {
         self.mongo_client.clone().shutdown().await;
         Ok(())
     }
 }
 
 impl MongoCdcExtractor {
-    async fn extract_oplog(&mut self) -> Result<(), Error> {
+    async fn extract_oplog(&mut self) -> anyhow::Result<()> {
         let start_timestamp = self.parse_start_timestamp();
         let filter = doc! {
             "ts": { "$gte": start_timestamp }
@@ -323,7 +323,7 @@ impl MongoCdcExtractor {
         (row_data, position)
     }
 
-    async fn extract_change_stream(&mut self) -> Result<(), Error> {
+    async fn extract_change_stream(&mut self) -> anyhow::Result<()> {
         let (resume_token, start_timestamp) = if self.resume_token.is_empty() {
             (None, Some(self.parse_start_timestamp()))
         } else {
@@ -420,7 +420,7 @@ impl MongoCdcExtractor {
         &mut self,
         row_data: RowData,
         position: Position,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         if SYSTEM_DBS.contains(&row_data.schema.as_str())
             || self.filter.filter_event(
                 &row_data.schema,
@@ -442,7 +442,7 @@ impl MongoCdcExtractor {
         Timestamp { time, increment: 0 }
     }
 
-    fn start_heartbeat(&mut self, shut_down: Arc<AtomicBool>) -> Result<(), Error> {
+    fn start_heartbeat(&mut self, shut_down: Arc<AtomicBool>) -> anyhow::Result<()> {
         let db_tb = self.base_extractor.precheck_heartbeat(
             self.heartbeat_interval_secs,
             &self.heartbeat_tb,
@@ -483,7 +483,7 @@ impl MongoCdcExtractor {
         tb: &str,
         syncer: &Arc<Mutex<Syncer>>,
         client: &Client,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let (received_resume_token, received_operation_time, received_timestamp) =
             if let Position::MongoCdc {
                 resume_token,

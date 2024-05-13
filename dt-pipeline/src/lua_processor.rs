@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use dt_common::error::Error;
 use dt_common::meta::col_value::ColValue;
 use dt_common::meta::row_data::RowData;
 use dt_common::meta::row_type::RowType;
@@ -12,7 +11,7 @@ pub struct LuaProcessor {
 }
 
 impl LuaProcessor {
-    pub fn process(&self, data: Vec<RowData>) -> Result<Vec<RowData>, Error> {
+    pub fn process(&self, data: Vec<RowData>) -> anyhow::Result<Vec<RowData>> {
         let mut new_data = Vec::new();
         let lua = Lua::new();
 
@@ -57,7 +56,7 @@ impl LuaProcessor {
         &'lua self,
         col_values: Option<HashMap<String, ColValue>>,
         lua: &'lua mlua::Lua,
-    ) -> Result<(mlua::Table, HashMap<String, ColValue>), Error> {
+    ) -> anyhow::Result<(mlua::Table, HashMap<String, ColValue>)> {
         let lua_table = lua.create_table()?;
         let mut blob_col_values = HashMap::new();
 
@@ -82,7 +81,7 @@ impl LuaProcessor {
         &self,
         lua_table: mlua::Table,
         blob_col_values: HashMap<String, ColValue>,
-    ) -> Result<Option<HashMap<String, ColValue>>, Error> {
+    ) -> anyhow::Result<Option<HashMap<String, ColValue>>> {
         if lua_table.is_empty() {
             return Ok(None);
         }
@@ -115,7 +114,7 @@ impl LuaProcessor {
         &'lua self,
         col_value: ColValue,
         lua: &'lua mlua::Lua,
-    ) -> Result<mlua::Value, Error> {
+    ) -> anyhow::Result<mlua::Value> {
         let lua_value = match col_value {
             ColValue::Bool(v) => mlua::Value::Boolean(v),
             ColValue::Tiny(v) => mlua::Value::Integer(v as i64),
@@ -153,7 +152,7 @@ impl LuaProcessor {
         Ok(lua_value)
     }
 
-    fn lua_value_to_col_value(&self, lua_value: mlua::Value) -> Result<ColValue, Error> {
+    fn lua_value_to_col_value(&self, lua_value: mlua::Value) -> anyhow::Result<ColValue> {
         let col_value = match lua_value {
             mlua::Value::Boolean(v) => ColValue::Bool(v),
             mlua::Value::Integer(v) => ColValue::LongLong(v),

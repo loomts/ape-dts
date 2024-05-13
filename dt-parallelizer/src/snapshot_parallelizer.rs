@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
-use dt_common::error::Error;
 use dt_common::meta::{ddl_data::DdlData, dt_data::DtItem, row_data::RowData};
 use dt_connector::Sinker;
 
@@ -21,7 +20,7 @@ impl Parallelizer for SnapshotParallelizer {
         "SnapshotParallelizer".to_string()
     }
 
-    async fn drain(&mut self, buffer: &ConcurrentQueue<DtItem>) -> Result<Vec<DtItem>, Error> {
+    async fn drain(&mut self, buffer: &ConcurrentQueue<DtItem>) -> anyhow::Result<Vec<DtItem>> {
         self.base_parallelizer.drain(buffer).await
     }
 
@@ -29,7 +28,7 @@ impl Parallelizer for SnapshotParallelizer {
         &mut self,
         data: Vec<RowData>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let sub_datas = Self::partition(data, self.parallel_size)?;
         self.base_parallelizer
             .sink_dml(sub_datas, sinkers, self.parallel_size, true)
@@ -40,7 +39,7 @@ impl Parallelizer for SnapshotParallelizer {
         &mut self,
         _data: Vec<DdlData>,
         _sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         Ok(())
     }
 }
@@ -49,7 +48,7 @@ impl SnapshotParallelizer {
     pub fn partition(
         data: Vec<RowData>,
         parallele_size: usize,
-    ) -> Result<Vec<Vec<RowData>>, Error> {
+    ) -> anyhow::Result<Vec<Vec<RowData>>> {
         let mut sub_datas = Vec::new();
         if parallele_size <= 1 {
             sub_datas.push(data);

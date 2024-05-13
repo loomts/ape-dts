@@ -1,3 +1,4 @@
+use anyhow::bail;
 use dt_common::error::Error;
 use dt_common::meta::redis::redis_object::RedisString;
 
@@ -11,7 +12,7 @@ const RDB_ENC_INT32: u8 = 2;
 const RDB_ENC_LZF: u8 = 3;
 
 impl RdbReader<'_> {
-    pub fn read_string(&mut self) -> Result<RedisString, Error> {
+    pub fn read_string(&mut self) -> anyhow::Result<RedisString> {
         let (len, special) = self.read_encoded_length()?;
         let bytes = if special {
             match len as u8 {
@@ -29,10 +30,10 @@ impl RdbReader<'_> {
                 }
 
                 _ => {
-                    return Err(Error::RedisRdbError(format!(
+                    bail! {Error::RedisRdbError(format!(
                         "Unknown string encode type {}",
                         len
-                    )))
+                    ))}
                 }
             }
         } else {
@@ -41,7 +42,7 @@ impl RdbReader<'_> {
         Ok(RedisString { bytes })
     }
 
-    fn lzf_decompress(&self, in_buf: &[u8], out_len: usize) -> Result<Vec<u8>, Error> {
+    fn lzf_decompress(&self, in_buf: &[u8], out_len: usize) -> anyhow::Result<Vec<u8>> {
         let mut out = vec![0u8; out_len];
 
         let mut i = 0;
@@ -74,10 +75,10 @@ impl RdbReader<'_> {
         }
 
         if o != out_len {
-            Err(Error::RedisRdbError(format!(
+            bail! {Error::RedisRdbError(format!(
                 "lzf decompress failed: out_len: {}, o: {}",
                 out_len, o
-            )))
+            ))}
         } else {
             Ok(out)
         }

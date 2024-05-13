@@ -4,7 +4,6 @@ use super::base_test_runner::BaseTestRunner;
 use super::rdb_test_runner::RdbTestRunner;
 use dt_common::config::sinker_config::SinkerConfig;
 use dt_common::config::task_config::TaskConfig;
-use dt_common::error::Error;
 use dt_common::utils::time_util::TimeUtil;
 use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
 use rdkafka::client::DefaultClientContext;
@@ -25,7 +24,7 @@ pub struct RdbKafkaRdbTestRunner {
 
 #[allow(dead_code)]
 impl RdbKafkaRdbTestRunner {
-    pub async fn new(relative_test_dir: &str) -> Result<Self, Error> {
+    pub async fn new(relative_test_dir: &str) -> anyhow::Result<Self> {
         let src_to_dst_runner =
             RdbTestRunner::new_default(&format!("{}/src_to_dst", relative_test_dir)).await?;
         let src_to_kafka_runner =
@@ -54,7 +53,7 @@ impl RdbKafkaRdbTestRunner {
         &self,
         start_millis: u64,
         parse_millis: u64,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         self.src_to_dst_runner.execute_prepare_sqls().await?;
         self.prepare_kafka().await?;
         // wait for topic creation
@@ -92,7 +91,7 @@ impl RdbKafkaRdbTestRunner {
         Ok(())
     }
 
-    pub async fn run_cdc_test(&self, start_millis: u64, parse_millis: u64) -> Result<(), Error> {
+    pub async fn run_cdc_test(&self, start_millis: u64, parse_millis: u64) -> anyhow::Result<()> {
         self.src_to_dst_runner.execute_prepare_sqls().await?;
         self.prepare_kafka().await?;
         TimeUtil::sleep_millis(start_millis).await;
@@ -125,7 +124,7 @@ impl RdbKafkaRdbTestRunner {
         Ok(())
     }
 
-    async fn prepare_kafka(&self) -> Result<(), Error> {
+    async fn prepare_kafka(&self) -> anyhow::Result<()> {
         let mut topics: Vec<String> = vec![];
         for sql in self.src_to_kafka_runner.dst_prepare_sqls.iter() {
             let re = Regex::new(r"create topic ([\w\W]+)").unwrap();

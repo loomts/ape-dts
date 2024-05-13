@@ -3,10 +3,7 @@ use std::{
     time::Instant,
 };
 
-use dt_common::{
-    error::Error,
-    monitor::{counter_type::CounterType, monitor::Monitor},
-};
+use dt_common::monitor::{counter_type::CounterType, monitor::Monitor};
 
 pub struct BaseSinker {}
 
@@ -16,7 +13,7 @@ impl BaseSinker {
         batch_size: usize,
         data_size: usize,
         start_time: Instant,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         monitor
             .lock()
             .unwrap()
@@ -35,7 +32,7 @@ impl BaseSinker {
         record_count: usize,
         data_size: usize,
         start_time: Instant,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         monitor
             .lock()
             .unwrap()

@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use dt_common::{error::Error, rdb_filter::RdbFilter, utils::redis_util::RedisUtil};
+use dt_common::{rdb_filter::RdbFilter, utils::redis_util::RedisUtil};
 
 use crate::fetcher::traits::Fetcher;
 
@@ -12,12 +12,12 @@ pub struct RedisFetcher {
 
 #[async_trait]
 impl Fetcher for RedisFetcher {
-    async fn build_connection(&mut self) -> Result<(), Error> {
+    async fn build_connection(&mut self) -> anyhow::Result<()> {
         self.conn = Some(RedisUtil::create_redis_conn(&self.url).await?);
         Ok(())
     }
 
-    async fn fetch_version(&mut self) -> Result<String, Error> {
+    async fn fetch_version(&mut self) -> anyhow::Result<String> {
         let conn = self.conn.as_mut().unwrap();
         let version = RedisUtil::get_redis_version(conn)?;
         Ok(version.to_string())

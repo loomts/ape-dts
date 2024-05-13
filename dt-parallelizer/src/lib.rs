@@ -14,7 +14,6 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
-use dt_common::error::Error;
 use dt_common::meta::{
     ddl_data::DdlData,
     dt_data::{DtData, DtItem},
@@ -27,7 +26,7 @@ use merge_parallelizer::TbMergedData;
 pub trait Parallelizer {
     fn get_name(&self) -> String;
 
-    async fn drain(&mut self, _buffer: &ConcurrentQueue<DtItem>) -> Result<Vec<DtItem>, Error> {
+    async fn drain(&mut self, _buffer: &ConcurrentQueue<DtItem>) -> anyhow::Result<Vec<DtItem>> {
         Ok(Vec::new())
     }
 
@@ -35,7 +34,7 @@ pub trait Parallelizer {
         &mut self,
         _data: Vec<DdlData>,
         _sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         Ok(())
     }
 
@@ -43,7 +42,7 @@ pub trait Parallelizer {
         &mut self,
         _data: Vec<RowData>,
         _sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         Ok(())
     }
 
@@ -51,20 +50,20 @@ pub trait Parallelizer {
         &mut self,
         _data: Vec<DtData>,
         _sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         Ok(())
     }
 
-    async fn close(&mut self) -> Result<(), Error> {
+    async fn close(&mut self) -> anyhow::Result<()> {
         Ok(())
     }
 }
 
 #[async_trait]
 pub trait Merger {
-    async fn merge(&mut self, data: Vec<RowData>) -> Result<Vec<TbMergedData>, Error>;
+    async fn merge(&mut self, data: Vec<RowData>) -> anyhow::Result<Vec<TbMergedData>>;
 
-    async fn close(&mut self) -> Result<(), Error> {
+    async fn close(&mut self) -> anyhow::Result<()> {
         Ok(())
     }
 }

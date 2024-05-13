@@ -1,3 +1,4 @@
+use anyhow::bail;
 use async_recursion::async_recursion;
 use async_trait::async_trait;
 use sqlx::{mysql::MySqlArguments, query::Query, MySql, Pool};
@@ -60,7 +61,7 @@ const QUERY_BEGIN: &str = "BEGIN";
 
 #[async_trait]
 impl Extractor for MysqlCdcExtractor {
-    async fn extract(&mut self) -> Result<(), Error> {
+    async fn extract(&mut self) -> anyhow::Result<()> {
         if self.time_filter.start_timestamp > 0 {
             self.binlog_filename = BinlogUtil::find_last_binlog_before_timestamp(
                 self.time_filter.start_timestamp,
@@ -92,14 +93,14 @@ impl Extractor for MysqlCdcExtractor {
         self.base_extractor.wait_task_finish().await
     }
 
-    async fn close(&mut self) -> Result<(), Error> {
+    async fn close(&mut self) -> anyhow::Result<()> {
         self.meta_manager.close().await?;
         return close_conn_pool!(self);
     }
 }
 
 impl MysqlCdcExtractor {
-    async fn extract_internal(&mut self) -> Result<(), Error> {
+    async fn extract_internal(&mut self) -> anyhow::Result<()> {
         let mut client = BinlogClient {
             url: self.url.clone(),
             binlog_filename: self.binlog_filename.clone(),
@@ -141,7 +142,7 @@ impl MysqlCdcExtractor {
         data: EventData,
         binlog_filename: &str,
         table_map_event_map: &mut HashMap<u64, TableMapEvent>,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let position = Position::MysqlCdc {
             // TODO, get server_id from source mysql
             server_id: String::new(),
@@ -260,7 +261,7 @@ impl MysqlCdcExtractor {
         &mut self,
         row_data: RowData,
         position: Position,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         if !self.time_filter.started {
             return Ok(());
         }
@@ -271,7 +272,7 @@ impl MysqlCdcExtractor {
         &mut self,
         dt_data: DtData,
         position: Position,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         if !self.time_filter.started {
             return Ok(());
         }
@@ -283,7 +284,7 @@ impl MysqlCdcExtractor {
         table_map_event: &TableMapEvent,
         included_columns: &[bool],
         event: &mut RowEvent,
-    ) -> Result<HashMap<String, ColValue>, Error> {
+    ) -> anyhow::Result<HashMap<String, ColValue>> {
         if !self.time_filter.started {
             return Ok(HashMap::new());
         }
@@ -294,9 +295,9 @@ impl MysqlCdcExtractor {
             .await?;
 
         if included_columns.len() != event.column_values.len() {
-            return Err(Error::ExtractorError(
+            bail! {Error::ExtractorError(
                 "included_columns not match column_values in binlog".into(),
-            ));
+            )}
         }
 
         let mut data = HashMap::new();
@@ -319,7 +320,7 @@ impl MysqlCdcExtractor {
         &mut self,
         query: QueryEvent,
         position: Position,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         // TODO, currently we do not parse ddl if filtered,
         // but we should always try to parse ddl in the future
         if self.filter.filter_all_ddl() {
@@ -362,7 +363,7 @@ impl MysqlCdcExtractor {
         filtered
     }
 
-    fn start_heartbeat(&mut self, shut_down: Arc<AtomicBool>) -> Result<(), Error> {
+    fn start_heartbeat(&mut self, shut_down: Arc<AtomicBool>) -> anyhow::Result<()> {
         let db_tb = self.base_extractor.precheck_heartbeat(
             self.heartbeat_interval_secs,
             &self.heartbeat_tb,
@@ -403,7 +404,7 @@ impl MysqlCdcExtractor {
         tb: &str,
         syncer: &Arc<Mutex<Syncer>>,
         conn_pool: &Pool<MySql>,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let (received_binlog_filename, received_next_event_position, received_timestamp) =
             if let Position::MysqlCdc {
                 binlog_filename,

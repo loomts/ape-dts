@@ -1,5 +1,5 @@
+use dt_common::log_debug;
 use dt_common::meta::{rdb_meta_manager::RdbMetaManager, row_data::RowData, row_type::RowType};
-use dt_common::{error::Error, log_debug};
 
 pub struct RdbPartitioner {
     pub meta_manager: RdbMetaManager,
@@ -10,7 +10,7 @@ impl RdbPartitioner {
         &mut self,
         data: Vec<RowData>,
         partition_count: usize,
-    ) -> Result<Vec<Vec<RowData>>, Error> {
+    ) -> anyhow::Result<Vec<Vec<RowData>>> {
         let mut sub_datas = Vec::new();
         if partition_count <= 1 {
             sub_datas.push(data);
@@ -29,7 +29,7 @@ impl RdbPartitioner {
         Ok(sub_datas)
     }
 
-    pub async fn can_be_partitioned<'a>(&mut self, row_data: &'a RowData) -> Result<bool, Error> {
+    pub async fn can_be_partitioned<'a>(&mut self, row_data: &'a RowData) -> anyhow::Result<bool> {
         if row_data.row_type != RowType::Update {
             return Ok(true);
         }
@@ -85,7 +85,7 @@ impl RdbPartitioner {
         &mut self,
         row_data: &RowData,
         slice_count: usize,
-    ) -> Result<usize, Error> {
+    ) -> anyhow::Result<usize> {
         if slice_count <= 1 {
             return Ok(0);
         }
@@ -106,7 +106,7 @@ impl RdbPartitioner {
         }
     }
 
-    pub async fn close(&mut self) -> Result<(), Error> {
+    pub async fn close(&mut self) -> anyhow::Result<()> {
         self.meta_manager.close().await
     }
 }

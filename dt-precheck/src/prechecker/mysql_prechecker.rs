@@ -1,10 +1,8 @@
 use std::collections::HashSet;
 
+use anyhow::bail;
 use async_trait::async_trait;
-use dt_common::{
-    config::{config_enums::DbType, filter_config::FilterConfig},
-    error::Error,
-};
+use dt_common::config::{config_enums::DbType, filter_config::FilterConfig};
 use regex::Regex;
 
 use crate::{
@@ -26,7 +24,7 @@ pub struct MySqlPrechecker {
 
 #[async_trait]
 impl Prechecker for MySqlPrechecker {
-    async fn build_connection(&mut self) -> Result<CheckResult, Error> {
+    async fn build_connection(&mut self) -> anyhow::Result<CheckResult> {
         self.fetcher.build_connection().await?;
         Ok(CheckResult::build_with_err(
             CheckItem::CheckDatabaseConnection,
@@ -37,18 +35,18 @@ impl Prechecker for MySqlPrechecker {
     }
 
     // support MySQL 8.*
-    async fn check_database_version(&mut self) -> Result<CheckResult, Error> {
-        let mut check_error: Option<Error> = None;
+    async fn check_database_version(&mut self) -> anyhow::Result<CheckResult> {
+        let mut check_error = None;
 
         let result = self.fetcher.fetch_version().await;
         match result {
             Ok(version) => {
                 if version.is_empty() {
-                    check_error = Some(Error::PreCheckError("found no version info.".into()));
+                    check_error = Some(anyhow::Error::msg("found no version info."));
                 } else {
                     let re = Regex::new(MYSQL_SUPPORT_DB_VERSION_REGEX).unwrap();
                     if !re.is_match(version.as_str()) {
-                        check_error = Some(Error::PreCheckError(format!(
+                        check_error = Some(anyhow::Error::msg(format!(
                             "mysql version:[{}] is invalid.",
                             version
                         )));
@@ -66,15 +64,15 @@ impl Prechecker for MySqlPrechecker {
         ))
     }
 
-    async fn check_permission(&mut self) -> Result<CheckResult, Error> {
+    async fn check_permission(&mut self) -> anyhow::Result<CheckResult> {
         Ok(CheckResult::build(
             CheckItem::CheckAccountPermission,
             self.is_source,
         ))
     }
 
-    async fn check_cdc_supported(&mut self) -> Result<CheckResult, Error> {
-        let mut check_error: Option<Error> = None;
+    async fn check_cdc_supported(&mut self) -> anyhow::Result<CheckResult> {
+        let mut check_error = None;
 
         if !self.is_source {
             // do nothing when the database is a target
@@ -121,17 +119,16 @@ impl Prechecker for MySqlPrechecker {
                             }
                         }
                         _ => {
-                            return Err(Error::PreCheckError(
-                                "find database cdc settings meet unknown error".into(),
-                            ))
+                            bail! {
+                            "find database cdc settings meet unknown error"}
                         }
                     }
                 }
             }
-            Err(e) => return Err(e),
+            Err(e) => bail! {e},
         }
         if !errs.is_empty() {
-            check_error = Some(Error::PreCheckError(errs.join(";")))
+            check_error = Some(anyhow::Error::msg(errs.join(";")))
         }
 
         Ok(CheckResult::build_with_err(
@@ -142,8 +139,8 @@ impl Prechecker for MySqlPrechecker {
         ))
     }
 
-    async fn check_struct_existed_or_not(&mut self) -> Result<CheckResult, Error> {
-        let mut check_error: Option<Error> = None;
+    async fn check_struct_existed_or_not(&mut self) -> anyhow::Result<CheckResult> {
+        let mut check_error = None;
 
         let (mut models, mut err_msgs): (Vec<DbTable>, Vec<String>) = (Vec::new(), Vec::new());
         if !self.filter_config.do_tbs.is_empty() {
@@ -170,7 +167,7 @@ impl Prechecker for MySqlPrechecker {
                         .iter()
                         .map(|t| format!("{}.{}", t.database_name, t.table_name))
                         .collect(),
-                    Err(e) => return Err(e),
+                    Err(e) => bail! {e},
                 };
                 for tb in tbs {
                     if !current_tbs.contains(&tb) {
@@ -195,7 +192,7 @@ impl Prechecker for MySqlPrechecker {
                 let dbs_result = self.fetcher.fetch_databases().await;
                 let current_dbs: HashSet<String> = match dbs_result {
                     Ok(dbs) => dbs.iter().map(|d| d.database_name.clone()).collect(),
-                    Err(e) => return Err(e),
+                    Err(e) => bail! {e},
                 };
                 for db_name in all_db_names {
                     if !current_dbs.contains(db_name) {
@@ -216,7 +213,7 @@ impl Prechecker for MySqlPrechecker {
         }
 
         if !err_msgs.is_empty() {
-            check_error = Some(Error::PreCheckError(err_msgs.join(".")))
+            check_error = Some(anyhow::Error::msg(err_msgs.join(".")))
         }
 
         Ok(CheckResult::build_with_err(
@@ -227,8 +224,8 @@ impl Prechecker for MySqlPrechecker {
         ))
     }
 
-    async fn check_table_structs(&mut self) -> Result<CheckResult, Error> {
-        let mut check_error: Option<Error> = None;
+    async fn check_table_structs(&mut self) -> anyhow::Result<CheckResult> {
+        let mut check_error = None;
 
         if !self.is_source && self.precheck_config.do_struct_init {
             // do nothing when the database is a target
@@ -288,7 +285,7 @@ impl Prechecker for MySqlPrechecker {
                     };
                 }
             }
-            Err(e) => return Err(e),
+            Err(e) => bail! {e},
         }
 
         let tables_result = self.fetcher.fetch_tables().await;
@@ -301,7 +298,7 @@ impl Prechecker for MySqlPrechecker {
                     }
                 }
             }
-            Err(e) => return Err(e),
+            Err(e) => bail! {e},
         }
 
         if !fkref_nonexists_tables.is_empty() {
@@ -326,7 +323,7 @@ impl Prechecker for MySqlPrechecker {
             ))
         }
         if !err_msgs.is_empty() {
-            check_error = Some(Error::PreCheckError(err_msgs.join(";")))
+            check_error = Some(anyhow::Error::msg(err_msgs.join(";")))
         }
 
         Ok(CheckResult::build_with_err(

@@ -4,7 +4,7 @@ use crate::{
     Sinker,
 };
 
-use dt_common::{config::config_enums::ConflictPolicyEnum, error::Error, rdb_filter::RdbFilter};
+use dt_common::{config::config_enums::ConflictPolicyEnum, rdb_filter::RdbFilter};
 
 use dt_common::meta::ddl_data::DdlData;
 
@@ -20,7 +20,7 @@ pub struct PgStructSinker {
 
 #[async_trait]
 impl Sinker for PgStructSinker {
-    async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> Result<(), Error> {
+    async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> anyhow::Result<()> {
         BaseStructSinker::sink_ddl(
             &DBConnPool::PostgreSQL(self.conn_pool.clone()),
             &self.conflict_policy,
@@ -30,7 +30,7 @@ impl Sinker for PgStructSinker {
         .await
     }
 
-    async fn close(&mut self) -> Result<(), Error> {
+    async fn close(&mut self) -> anyhow::Result<()> {
         return close_conn_pool!(self);
     }
 }

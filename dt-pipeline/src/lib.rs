@@ -2,15 +2,14 @@ pub mod base_pipeline;
 pub mod lua_processor;
 
 use async_trait::async_trait;
-use dt_common::error::Error;
 
 #[async_trait]
 pub trait Pipeline {
-    async fn start(&mut self) -> Result<(), Error> {
+    async fn start(&mut self) -> anyhow::Result<()> {
         Ok(())
     }
 
-    async fn stop(&mut self) -> Result<(), Error> {
+    async fn stop(&mut self) -> anyhow::Result<()> {
         Ok(())
     }
 }

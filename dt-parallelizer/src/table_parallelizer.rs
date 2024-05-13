@@ -3,7 +3,6 @@ use std::{collections::HashMap, sync::Arc};
 use crate::Parallelizer;
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
-use dt_common::error::Error;
 use dt_common::meta::{ddl_data::DdlData, dt_data::DtItem, row_data::RowData};
 use dt_connector::Sinker;
 
@@ -20,7 +19,7 @@ impl Parallelizer for TableParallelizer {
         "TableParallelizer".to_string()
     }
 
-    async fn drain(&mut self, buffer: &ConcurrentQueue<DtItem>) -> Result<Vec<DtItem>, Error> {
+    async fn drain(&mut self, buffer: &ConcurrentQueue<DtItem>) -> anyhow::Result<Vec<DtItem>> {
         self.base_parallelizer.drain(buffer).await
     }
 
@@ -28,7 +27,7 @@ impl Parallelizer for TableParallelizer {
         &mut self,
         data: Vec<RowData>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let sub_datas = Self::partition_dml(data)?;
         self.base_parallelizer
             .sink_dml(sub_datas, sinkers, self.parallel_size, false)
@@ -39,7 +38,7 @@ impl Parallelizer for TableParallelizer {
         &mut self,
         data: Vec<DdlData>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let sub_datas = Self::partition_ddl(data)?;
         self.base_parallelizer
             .sink_ddl(sub_datas, sinkers, self.parallel_size, false)
@@ -49,7 +48,7 @@ impl Parallelizer for TableParallelizer {
 
 impl TableParallelizer {
     /// partition dml vec into sub vecs by full table name
-    pub fn partition_dml(data: Vec<RowData>) -> Result<Vec<Vec<RowData>>, Error> {
+    pub fn partition_dml(data: Vec<RowData>) -> anyhow::Result<Vec<Vec<RowData>>> {
         let mut sub_data_map: HashMap<String, Vec<RowData>> = HashMap::new();
         for row_data in data {
             let full_tb = format!("{}.{}", row_data.schema, row_data.tb);
@@ -64,7 +63,7 @@ impl TableParallelizer {
     }
 
     /// partition ddl vec into sub vecs by schema
-    pub fn partition_ddl(data: Vec<DdlData>) -> Result<Vec<Vec<DdlData>>, Error> {
+    pub fn partition_ddl(data: Vec<DdlData>) -> anyhow::Result<Vec<Vec<DdlData>>> {
         let mut sub_data_map: HashMap<String, Vec<DdlData>> = HashMap::new();
         for ddl in data {
             if let Some(sub_data) = sub_data_map.get_mut(&ddl.schema) {

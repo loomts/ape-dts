@@ -8,7 +8,6 @@ use crate::extractor::redis::rdb::reader::rdb_reader::RdbReader;
 use crate::extractor::redis::redis_psync_extractor::RedisPsyncExtractor;
 use crate::Extractor;
 use async_trait::async_trait;
-use dt_common::error::Error;
 use dt_common::log_info;
 use dt_common::meta::position::Position;
 use dt_common::rdb_filter::RdbFilter;
@@ -25,7 +24,7 @@ struct RdbFileReader {
 
 #[async_trait]
 impl Extractor for RedisSnapshotFileExtractor {
-    async fn extract(&mut self) -> Result<(), Error> {
+    async fn extract(&mut self) -> anyhow::Result<()> {
         let file = File::open(&self.file_path).expect("rdb file not found");
         let metadata = fs::metadata(&self.file_path).expect("rdb file with wrong meta");
         let mut file_reader = RdbFileReader { file };
@@ -76,7 +75,7 @@ impl Extractor for RedisSnapshotFileExtractor {
 }
 
 impl StreamReader for RdbFileReader {
-    fn read_bytes(&mut self, size: usize) -> Result<Vec<u8>, Error> {
+    fn read_bytes(&mut self, size: usize) -> anyhow::Result<Vec<u8>> {
         let mut buf = vec![0; size];
         self.file.read_exact(&mut buf).unwrap();
         Ok(buf)

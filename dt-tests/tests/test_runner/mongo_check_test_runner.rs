@@ -1,4 +1,4 @@
-use dt_common::error::Error;
+
 
 use super::{check_util::CheckUtil, mongo_test_runner::MongoTestRunner};
 
@@ -9,7 +9,7 @@ pub struct MongoCheckTestRunner {
 }
 
 impl MongoCheckTestRunner {
-    pub async fn new(relative_test_dir: &str) -> Result<Self, Error> {
+    pub async fn new(relative_test_dir: &str) -> anyhow::Result<Self> {
         let base = MongoTestRunner::new(relative_test_dir).await.unwrap();
         let (expect_check_log_dir, dst_check_log_dir) =
             CheckUtil::get_check_log_dir(&base.base, "");
@@ -20,7 +20,7 @@ impl MongoCheckTestRunner {
         })
     }
 
-    pub async fn run_check_test(&self) -> Result<(), Error> {
+    pub async fn run_check_test(&self) -> anyhow::Result<()> {
         // clear existed check logs
         CheckUtil::clear_check_log(&self.dst_check_log_dir);
 
@@ -33,12 +33,12 @@ impl MongoCheckTestRunner {
         CheckUtil::validate_check_log(&self.expect_check_log_dir, &self.dst_check_log_dir)
     }
 
-    pub async fn run_revise_test(&self) -> Result<(), Error> {
+    pub async fn run_revise_test(&self) -> anyhow::Result<()> {
         CheckUtil::clear_check_log(&self.dst_check_log_dir);
         self.base.run_snapshot_test(true).await
     }
 
-    pub async fn run_review_test(&self) -> Result<(), Error> {
+    pub async fn run_review_test(&self) -> anyhow::Result<()> {
         CheckUtil::clear_check_log(&self.dst_check_log_dir);
         self.run_check_test().await
     }

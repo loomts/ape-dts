@@ -9,7 +9,7 @@ use crate::{
     rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker,
 };
 
-use dt_common::{error::Error, log_error, log_info, monitor::monitor::Monitor};
+use dt_common::{log_error, log_info, monitor::monitor::Monitor};
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     Executor, Pool, Postgres,
@@ -35,7 +35,7 @@ pub struct PgSinker {
 
 #[async_trait]
 impl Sinker for PgSinker {
-    async fn sink_dml(&mut self, mut data: Vec<RowData>, batch: bool) -> Result<(), Error> {
+    async fn sink_dml(&mut self, mut data: Vec<RowData>, batch: bool) -> anyhow::Result<()> {
         if data.is_empty() {
             return Ok(());
         }
@@ -56,7 +56,7 @@ impl Sinker for PgSinker {
         Ok(())
     }
 
-    async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> Result<(), Error> {
+    async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> anyhow::Result<()> {
         for ddl_data in data.iter() {
             log_info!("sink ddl: {}", ddl_data.query);
 
@@ -82,7 +82,7 @@ impl Sinker for PgSinker {
         Ok(())
     }
 
-    async fn refresh_meta(&mut self, data: Vec<DdlData>) -> Result<(), Error> {
+    async fn refresh_meta(&mut self, data: Vec<DdlData>) -> anyhow::Result<()> {
         for ddl_data in data.iter() {
             self.meta_manager
                 .invalidate_cache(&ddl_data.schema, &ddl_data.tb);
@@ -90,14 +90,14 @@ impl Sinker for PgSinker {
         Ok(())
     }
 
-    async fn close(&mut self) -> Result<(), Error> {
+    async fn close(&mut self) -> anyhow::Result<()> {
         self.meta_manager.close().await?;
         return close_conn_pool!(self);
     }
 }
 
 impl PgSinker {
-    async fn serial_sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
+    async fn serial_sink(&mut self, data: Vec<RowData>) -> anyhow::Result<()> {
         let start_time = Instant::now();
         let mut data_size = 0;
 
@@ -126,7 +126,7 @@ impl PgSinker {
         data: &mut [RowData],
         start_index: usize,
         batch_size: usize,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let start_time = Instant::now();
 
         let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&data[0]).await?;
@@ -153,7 +153,7 @@ impl PgSinker {
         data: &mut [RowData],
         start_index: usize,
         batch_size: usize,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let start_time = Instant::now();
 
         let tb_meta = self

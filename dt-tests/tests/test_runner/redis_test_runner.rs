@@ -1,6 +1,7 @@
 use crate::test_runner::redis_test_util::RedisTestUtil;
 
 use super::{base_test_runner::BaseTestRunner, redis_cluster_connection::RedisClusterConnection};
+use anyhow::bail;
 use dt_common::{
     config::{
         config_enums::DbType, config_token_parser::ConfigTokenParser,
@@ -22,14 +23,14 @@ pub struct RedisTestRunner {
 }
 
 impl RedisTestRunner {
-    pub async fn new_default(relative_test_dir: &str) -> Result<Self, Error> {
+    pub async fn new_default(relative_test_dir: &str) -> anyhow::Result<Self> {
         Self::new(relative_test_dir, vec![('"', '"')]).await
     }
 
     pub async fn new(
         relative_test_dir: &str,
         escape_pairs: Vec<(char, char)>,
-    ) -> Result<Self, Error> {
+    ) -> anyhow::Result<Self> {
         let base = BaseTestRunner::new(relative_test_dir).await.unwrap();
 
         let config = TaskConfig::new(&base.task_config_file);
@@ -38,7 +39,7 @@ impl RedisTestRunner {
                 RedisUtil::create_redis_conn(&url).await.unwrap()
             }
             _ => {
-                return Err(Error::ConfigError("unsupported extractor config".into()));
+                bail! {Error::ConfigError("unsupported extractor config".into())};
             }
         };
 
@@ -47,7 +48,7 @@ impl RedisTestRunner {
                 url, is_cluster, ..
             } => RedisClusterConnection::new(&url, is_cluster).await.unwrap(),
             _ => {
-                return Err(Error::ConfigError("unsupported sinker config".into()));
+                bail! {Error::ConfigError("unsupported sinker config".into())};
             }
         };
 
@@ -62,7 +63,7 @@ impl RedisTestRunner {
         })
     }
 
-    pub async fn run_snapshot_test(&mut self) -> Result<(), Error> {
+    pub async fn run_snapshot_test(&mut self) -> anyhow::Result<()> {
         self.execute_prepare_sqls()?;
 
         self.print_version_info();
@@ -76,7 +77,7 @@ impl RedisTestRunner {
         &mut self,
         start_millis: u64,
         parse_millis: u64,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         self.execute_prepare_sqls()?;
 
         let task = self.base.spawn_task().await?;
@@ -95,7 +96,7 @@ impl RedisTestRunner {
         &mut self,
         start_millis: u64,
         _parse_millis: u64,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let config = TaskConfig::new(&self.base.task_config_file);
         let heartbeat_key = match config.extractor {
             ExtractorConfig::RedisCdc { heartbeat_key, .. } => heartbeat_key.clone(),
@@ -128,7 +129,7 @@ impl RedisTestRunner {
         Ok(())
     }
 
-    pub fn execute_prepare_sqls(&mut self) -> Result<(), Error> {
+    pub fn execute_prepare_sqls(&mut self) -> anyhow::Result<()> {
         self.redis_util
             .execute_cmds(&mut self.src_conn, &self.base.src_prepare_sqls.clone());
         self.redis_util
@@ -136,13 +137,13 @@ impl RedisTestRunner {
         Ok(())
     }
 
-    pub fn execute_test_sqls(&mut self) -> Result<(), Error> {
+    pub fn execute_test_sqls(&mut self) -> anyhow::Result<()> {
         self.redis_util
             .execute_cmds(&mut self.src_conn, &self.base.src_test_sqls.clone());
         Ok(())
     }
 
-    pub fn compare_all_data(&mut self) -> Result<(), Error> {
+    pub fn compare_all_data(&mut self) -> anyhow::Result<()> {
         let dbs = if self.dst_conn.is_cluster() {
             // a redis cluster strictly supports only database 0
             vec!["0".to_string()]
@@ -156,7 +157,7 @@ impl RedisTestRunner {
         Ok(())
     }
 
-    fn compare_data(&mut self, db: &str) -> Result<(), Error> {
+    fn compare_data(&mut self, db: &str) -> anyhow::Result<()> {
         self.redis_util
             .execute_cmd(&mut self.src_conn, &format!("SELECT {}", db));
         self.redis_util

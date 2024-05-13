@@ -1,4 +1,5 @@
 use crate::error::Error;
+use anyhow::bail;
 use nom::{
     branch::alt,
     bytes::complete::{tag, tag_no_case, take_while1},
@@ -29,7 +30,7 @@ use super::keywords::keyword_s_to_z;
 pub struct DdlParser {}
 
 impl DdlParser {
-    pub fn parse(sql: &str) -> Result<(DdlType, Option<String>, Option<String>), Error> {
+    pub fn parse(sql: &str) -> anyhow::Result<(DdlType, Option<String>, Option<String>)> {
         let sql = Self::remove_comments(sql);
         let input = sql.trim().as_bytes();
         match sql_query(input) {
@@ -46,7 +47,7 @@ impl DdlParser {
                 };
                 Ok((o.0, database, table))
             }
-            Err(_) => Err(Error::Unexpected(format!("failed to parse sql: {}", sql))),
+            Err(_) => bail! {Error::Unexpected(format!("failed to parse sql: {}", sql))},
         }
     }
 

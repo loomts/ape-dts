@@ -2,7 +2,6 @@ use std::collections::HashSet;
 
 use dt_common::{
     config::{config_enums::DbType, data_marker_config::DataMarkerConfig},
-    error::Error,
     meta::dt_data::DtData,
 };
 
@@ -29,7 +28,7 @@ pub struct DataMarker {
 const DATA_ORIGIN_NODE: &str = "data_origin_node";
 
 impl DataMarker {
-    pub fn from_config(config: &DataMarkerConfig, db_type: &DbType) -> Result<Self, Error> {
+    pub fn from_config(config: &DataMarkerConfig, db_type: &DbType) -> anyhow::Result<Self> {
         let topo_nodes: Vec<String> = config
             .topo_nodes
             .split(',')

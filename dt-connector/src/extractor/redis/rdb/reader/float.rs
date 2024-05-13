@@ -1,12 +1,11 @@
 use byteorder::{ByteOrder, LittleEndian};
-use dt_common::error::Error;
 
 use crate::extractor::redis::StreamReader;
 
 use super::rdb_reader::RdbReader;
 
 impl RdbReader<'_> {
-    pub fn read_float(&mut self) -> Result<f64, Error> {
+    pub fn read_float(&mut self) -> anyhow::Result<f64> {
         let n = self.read_u8()?;
         let v = match n {
             253 => f64::NAN,
@@ -22,7 +21,7 @@ impl RdbReader<'_> {
         Ok(v)
     }
 
-    pub fn read_double(&mut self) -> Result<f64, Error> {
+    pub fn read_double(&mut self) -> anyhow::Result<f64> {
         let buf = self.read_bytes(8)?;
         Ok(LittleEndian::read_f64(&buf))
     }

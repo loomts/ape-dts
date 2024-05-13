@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use async_trait::async_trait;
 use dt_common::{
-    error::Error,
     log_debug, log_info,
     meta::redis::{
         cluster_node::ClusterNode, command::cmd_encoder::CmdEncoder, redis_object::RedisCmd,
@@ -25,7 +24,7 @@ pub struct RedisReshardExtractor {
 
 #[async_trait]
 impl Extractor for RedisReshardExtractor {
-    async fn extract(&mut self) -> Result<(), Error> {
+    async fn extract(&mut self) -> anyhow::Result<()> {
         log_info!("RedisReshardExtractor starts");
         self.reshard().await.unwrap();
         self.base_extractor.wait_task_finish().await
@@ -33,7 +32,7 @@ impl Extractor for RedisReshardExtractor {
 }
 
 impl RedisReshardExtractor {
-    pub async fn reshard(&self) -> Result<(), Error> {
+    pub async fn reshard(&self) -> anyhow::Result<()> {
         let mut conn = RedisUtil::create_redis_conn(&self.url).await?;
         let nodes = RedisUtil::get_cluster_master_nodes(&mut conn)?;
         let slot_address_map = RedisUtil::get_slot_address_map(&nodes);
@@ -88,7 +87,7 @@ impl RedisReshardExtractor {
         nodes: &[ClusterNode],
         node_move_in_slots: &HashMap<String, Vec<u16>>,
         slot_address_map: &HashMap<u16, &str>,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         for (dst_node_id, move_in_slots) in node_move_in_slots.iter() {
             // get dst_node by id
             let dst_node = nodes.iter().find(|i| i.id == *dst_node_id).unwrap();
@@ -131,7 +130,7 @@ impl RedisReshardExtractor {
         src_conn: &mut Connection,
         dst_conn: &mut Connection,
         slot: u16,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         log_info!(
             "moving slot {} from {} to {}",
             slot,
@@ -213,7 +212,7 @@ impl RedisReshardExtractor {
         Ok(())
     }
 
-    fn get_keys_in_slot(conn: &mut Connection, slot: u16) -> Result<Vec<String>, Error> {
+    fn get_keys_in_slot(conn: &mut Connection, slot: u16) -> anyhow::Result<Vec<String>> {
         // get all keys in slot
         let cmd =
             RedisCmd::from_str_args(&["cluster", "getkeysinslot", &slot.to_string(), "100000000"]);
@@ -222,7 +221,7 @@ impl RedisReshardExtractor {
         RedisUtil::parse_result_as_string(result)
     }
 
-    async fn get_node_conn(&self, node: &ClusterNode) -> Result<Connection, Error> {
+    async fn get_node_conn(&self, node: &ClusterNode) -> anyhow::Result<Connection> {
         let url_info = Url::parse(&self.url).unwrap();
         let username = url_info.username();
         let password = url_info.password().unwrap_or("").to_string();

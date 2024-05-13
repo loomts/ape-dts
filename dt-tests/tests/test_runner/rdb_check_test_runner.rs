@@ -1,4 +1,3 @@
-use dt_common::error::Error;
 
 use super::{check_util::CheckUtil, rdb_test_runner::RdbTestRunner};
 
@@ -9,7 +8,7 @@ pub struct RdbCheckTestRunner {
 }
 
 impl RdbCheckTestRunner {
-    pub async fn new(relative_test_dir: &str) -> Result<Self, Error> {
+    pub async fn new(relative_test_dir: &str) -> anyhow::Result<Self> {
         let base = RdbTestRunner::new_default(relative_test_dir).await.unwrap();
         let version = base.get_dst_mysql_version().await;
         let (expect_check_log_dir, dst_check_log_dir) =
@@ -21,11 +20,11 @@ impl RdbCheckTestRunner {
         })
     }
 
-    pub async fn close(&self) -> Result<(), Error> {
+    pub async fn close(&self) -> anyhow::Result<()> {
         self.base.close().await
     }
 
-    pub async fn run_check_test(&self) -> Result<(), Error> {
+    pub async fn run_check_test(&self) -> anyhow::Result<()> {
         // clear existed check logs
         CheckUtil::clear_check_log(&self.dst_check_log_dir);
 
@@ -43,12 +42,12 @@ impl RdbCheckTestRunner {
         Ok(())
     }
 
-    pub async fn run_revise_test(&self) -> Result<(), Error> {
+    pub async fn run_revise_test(&self) -> anyhow::Result<()> {
         CheckUtil::clear_check_log(&self.dst_check_log_dir);
         self.base.run_snapshot_test(true).await
     }
 
-    pub async fn run_review_test(&self) -> Result<(), Error> {
+    pub async fn run_review_test(&self) -> anyhow::Result<()> {
         CheckUtil::clear_check_log(&self.dst_check_log_dir);
         self.run_check_test().await
     }

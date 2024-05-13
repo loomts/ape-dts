@@ -1,3 +1,4 @@
+use anyhow::bail;
 use dt_common::error::Error;
 use dt_common::{log_info, log_warn};
 use postgres_types::PgLsn;
@@ -14,7 +15,7 @@ pub struct PgCdcClient {
 }
 
 impl PgCdcClient {
-    pub async fn connect(&mut self) -> Result<(LogicalReplicationStream, String), Error> {
+    pub async fn connect(&mut self) -> anyhow::Result<(LogicalReplicationStream, String)> {
         let url_info = Url::parse(&self.url).unwrap();
         let host = url_info.host_str().unwrap().to_string();
         let port = format!("{}", url_info.port().unwrap());
@@ -39,7 +40,7 @@ impl PgCdcClient {
     async fn start_replication(
         &mut self,
         client: &Client,
-    ) -> Result<(LogicalReplicationStream, String), Error> {
+    ) -> anyhow::Result<(LogicalReplicationStream, String)> {
         let mut start_lsn = self.start_lsn.clone();
 
         // set extra_float_digits to max so no precision will lose
@@ -125,10 +126,10 @@ impl PgCdcClient {
             start_lsn = if let Row(row) = &res[0] {
                 row.get("consistent_point").unwrap().to_string()
             } else {
-                return Err(Error::ExtractorError(format!(
+                bail! {Error::ExtractorError(format!(
                     "failed to create replication slot by query: {}",
                     query
-                )));
+                ))}
             };
 
             log_info!(

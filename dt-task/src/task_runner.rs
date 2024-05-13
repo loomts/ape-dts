@@ -8,6 +8,7 @@ use std::{
     time::Duration,
 };
 
+use anyhow::bail;
 use concurrent_queue::ConcurrentQueue;
 use dt_common::meta::{dt_data::DtItem, position::Position, row_type::RowType, syncer::Syncer};
 use dt_common::{
@@ -57,7 +58,7 @@ impl TaskRunner {
         }
     }
 
-    pub async fn start_task(&self, enable_log4rs: bool) -> Result<(), Error> {
+    pub async fn start_task(&self, enable_log4rs: bool) -> anyhow::Result<()> {
         if enable_log4rs {
             self.init_log4rs()?;
         }
@@ -97,7 +98,7 @@ impl TaskRunner {
         router: &RdbRouter,
         snapshot_resumer: &SnapshotResumer,
         cdc_resumer: &CdcResumer,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let db_type = &self.config.extractor_basic.db_type;
         let mut filter = RdbFilter::from_config(&self.config.filter, db_type)?;
 
@@ -174,7 +175,7 @@ impl TaskRunner {
                     }
 
                     _ => {
-                        return Err(Error::ConfigError("unsupported extractor config".into()));
+                        bail! {Error::ConfigError("unsupported extractor config".into())};
                     }
                 };
 
@@ -191,7 +192,7 @@ impl TaskRunner {
         router: &RdbRouter,
         snapshot_resumer: &SnapshotResumer,
         cdc_resumer: &CdcResumer,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let buffer = Arc::new(ConcurrentQueue::bounded(self.config.pipeline.buffer_size));
         let shut_down = Arc::new(AtomicBool::new(false));
         let syncer = Arc::new(Mutex::new(Syncer {
@@ -305,7 +306,7 @@ impl TaskRunner {
         sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
         monitor: Arc<Mutex<Monitor>>,
         data_marker: Option<Arc<RwLock<DataMarker>>>,
-    ) -> Result<Box<dyn Pipeline + Send>, Error> {
+    ) -> anyhow::Result<Box<dyn Pipeline + Send>> {
         let rps_limiter = if self.config.pipeline.max_rps > 0 {
             Some(
                 Ratelimiter::builder(self.config.pipeline.max_rps, Duration::from_secs(1))
@@ -347,7 +348,7 @@ impl TaskRunner {
         Ok(Box::new(pipeline))
     }
 
-    fn init_log4rs(&self) -> Result<(), Error> {
+    fn init_log4rs(&self) -> anyhow::Result<()> {
         let log4rs_file = &self.config.runtime.log4rs_file;
         if fs::metadata(log4rs_file).is_err() {
             return Ok(());
@@ -414,7 +415,7 @@ impl TaskRunner {
         }
     }
 
-    async fn pre_single_task(&self, sinker_data_marker: Option<DataMarker>) -> Result<(), Error> {
+    async fn pre_single_task(&self, sinker_data_marker: Option<DataMarker>) -> anyhow::Result<()> {
         // create heartbeat table
         let db_tb = match &self.config.extractor {
             ExtractorConfig::MysqlCdc { heartbeat_tb, .. }

@@ -2,7 +2,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use async_trait::async_trait;
-use dt_common::error::Error;
 use dt_common::log_statistic;
 use dt_common::meta::dt_data::DtData;
 use dt_common::meta::redis::redis_statistic_type::RedisStatisticType;
@@ -36,7 +35,7 @@ struct HotKeyInfo {
 
 #[async_trait]
 impl Sinker for RedisStatisticSinker {
-    async fn sink_raw(&mut self, mut data: Vec<DtData>, _batch: bool) -> Result<(), Error> {
+    async fn sink_raw(&mut self, mut data: Vec<DtData>, _batch: bool) -> anyhow::Result<()> {
         for dt_data in data.iter_mut() {
             if let DtData::Redis { entry } = dt_data {
                 match self.statistic_type {

@@ -6,7 +6,6 @@ use dt_common::{
         config_enums::DbType, extractor_config::ExtractorConfig, sinker_config::SinkerConfig,
         task_config::TaskConfig,
     },
-    error::Error,
     utils::time_util::TimeUtil,
 };
 use dt_connector::rdb_router::RdbRouter;
@@ -35,7 +34,7 @@ pub const DST: &str = "dst";
 
 #[allow(dead_code)]
 impl MongoTestRunner {
-    pub async fn new(relative_test_dir: &str) -> Result<Self, Error> {
+    pub async fn new(relative_test_dir: &str) -> anyhow::Result<Self> {
         let base = BaseTestRunner::new(relative_test_dir).await.unwrap();
 
         let mut src_mongo_client = None;
@@ -80,7 +79,7 @@ impl MongoTestRunner {
         &self,
         start_millis: u64,
         parse_millis: u64,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         self.execute_prepare_sqls().await?;
 
         // update start_timestamp to make sure the subsequent cdc task can get old events
@@ -138,7 +137,7 @@ impl MongoTestRunner {
         self.base.abort_task(&task).await
     }
 
-    pub async fn run_cdc_test(&self, start_millis: u64, parse_millis: u64) -> Result<(), Error> {
+    pub async fn run_cdc_test(&self, start_millis: u64, parse_millis: u64) -> anyhow::Result<()> {
         self.execute_prepare_sqls().await?;
 
         let task = self.base.spawn_task().await?;
@@ -174,7 +173,7 @@ impl MongoTestRunner {
         self.base.abort_task(&task).await
     }
 
-    pub async fn run_snapshot_test(&self, compare_data: bool) -> Result<(), Error> {
+    pub async fn run_snapshot_test(&self, compare_data: bool) -> anyhow::Result<()> {
         self.execute_prepare_sqls().await?;
         self.execute_test_sqls().await?;
 
@@ -193,7 +192,7 @@ impl MongoTestRunner {
         &self,
         start_millis: u64,
         _parse_millis: u64,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         self.execute_prepare_sqls().await?;
 
         let config = TaskConfig::new(&self.base.task_config_file);
@@ -217,7 +216,7 @@ impl MongoTestRunner {
         self.base.abort_task(&task).await
     }
 
-    pub async fn execute_prepare_sqls(&self) -> Result<(), Error> {
+    pub async fn execute_prepare_sqls(&self) -> anyhow::Result<()> {
         let src_mongo_client = self.src_mongo_client.as_ref().unwrap();
         let dst_mongo_client = self.dst_mongo_client.as_ref().unwrap();
 
@@ -235,7 +234,7 @@ impl MongoTestRunner {
         Ok(())
     }
 
-    pub async fn execute_test_sqls(&self) -> Result<(), Error> {
+    pub async fn execute_test_sqls(&self) -> anyhow::Result<()> {
         let sqls = MongoTestRunner::slice_sqls_by_db(&self.base.src_test_sqls);
         for (db, sqls) in sqls.iter() {
             self.execute_dmls(&self.src_mongo_client.as_ref().unwrap(), db, sqls)
@@ -257,7 +256,7 @@ impl MongoTestRunner {
         client: &Client,
         db: &str,
         sqls: &Vec<String>,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         for sql in sqls.iter() {
             if sql.contains("dropDatabase") {
                 self.execute_drop_database(client, &db).await.unwrap();
@@ -275,7 +274,7 @@ impl MongoTestRunner {
         client: &Client,
         db: &str,
         sqls: &Vec<String>,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         for sql in sqls.iter() {
             if sql.contains("insert") {
                 self.execute_insert(client, &db, sql).await?;
@@ -296,7 +295,7 @@ impl MongoTestRunner {
         cap.get(1).unwrap().as_str().to_string()
     }
 
-    async fn execute_drop(&self, client: &Client, db: &str, sql: &str) -> Result<(), Error> {
+    async fn execute_drop(&self, client: &Client, db: &str, sql: &str) -> anyhow::Result<()> {
         let re = Regex::new(r"db.(\w+).drop()").unwrap();
         let cap = re.captures(sql).unwrap();
         let tb = cap.get(1).unwrap().as_str();
@@ -310,12 +309,12 @@ impl MongoTestRunner {
         Ok(())
     }
 
-    async fn execute_drop_database(&self, client: &Client, db: &str) -> Result<(), Error> {
+    async fn execute_drop_database(&self, client: &Client, db: &str) -> anyhow::Result<()> {
         client.database(db).drop(None).await.unwrap();
         Ok(())
     }
 
-    async fn execute_create(&self, client: &Client, db: &str, sql: &str) -> Result<(), Error> {
+    async fn execute_create(&self, client: &Client, db: &str, sql: &str) -> anyhow::Result<()> {
         let re = Regex::new(r#"db.createCollection\("(\w+)"\)"#).unwrap();
         let cap = re.captures(sql).unwrap();
         let tb = cap.get(1).unwrap().as_str();
@@ -328,7 +327,7 @@ impl MongoTestRunner {
         Ok(())
     }
 
-    async fn execute_insert(&self, client: &Client, db: &str, sql: &str) -> Result<(), Error> {
+    async fn execute_insert(&self, client: &Client, db: &str, sql: &str) -> anyhow::Result<()> {
         // example: db.tb_2.insertOne({ "name": "a", "age": "1" })
         let re = Regex::new(r"db.(\w+).insert(One|Many)\(([\w\W]+)\)").unwrap();
         let cap = re.captures(sql).unwrap();
@@ -346,7 +345,7 @@ impl MongoTestRunner {
         Ok(())
     }
 
-    async fn execute_delete(&self, client: &Client, db: &str, sql: &str) -> Result<(), Error> {
+    async fn execute_delete(&self, client: &Client, db: &str, sql: &str) -> anyhow::Result<()> {
         let re = Regex::new(r"db.(\w+).delete(One|Many)\(([\w\W]+)\)").unwrap();
         let cap = re.captures(sql).unwrap();
         let tb = cap.get(1).unwrap().as_str();
@@ -362,7 +361,7 @@ impl MongoTestRunner {
         Ok(())
     }
 
-    async fn execute_update(&self, client: &Client, db: &str, sql: &str) -> Result<(), Error> {
+    async fn execute_update(&self, client: &Client, db: &str, sql: &str) -> anyhow::Result<()> {
         let re = Regex::new(r"db.(\w+).update(One|Many)\(([\w\W]+),([\w\W]+)\)").unwrap();
         let cap = re.captures(sql).unwrap();
         let tb = cap.get(1).unwrap().as_str();

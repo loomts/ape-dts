@@ -9,7 +9,7 @@ use crate::{
     rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker,
 };
 
-use dt_common::{error::Error, log_error, log_info, monitor::monitor::Monitor};
+use dt_common::{log_error, log_info, monitor::monitor::Monitor};
 
 use dt_common::meta::{
     ddl_data::DdlData, ddl_type::DdlType, mysql::mysql_meta_manager::MysqlMetaManager,
@@ -36,7 +36,7 @@ pub struct MysqlSinker {
 
 #[async_trait]
 impl Sinker for MysqlSinker {
-    async fn sink_dml(&mut self, mut data: Vec<RowData>, batch: bool) -> Result<(), Error> {
+    async fn sink_dml(&mut self, mut data: Vec<RowData>, batch: bool) -> anyhow::Result<()> {
         if data.is_empty() {
             return Ok(());
         }
@@ -58,7 +58,7 @@ impl Sinker for MysqlSinker {
         Ok(())
     }
 
-    async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> Result<(), Error> {
+    async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> anyhow::Result<()> {
         for ddl_data in data.iter() {
             log_info!("sink ddl: {}", ddl_data.query);
             let query = sqlx::query(&ddl_data.query);
@@ -80,12 +80,12 @@ impl Sinker for MysqlSinker {
         Ok(())
     }
 
-    async fn close(&mut self) -> Result<(), Error> {
+    async fn close(&mut self) -> anyhow::Result<()> {
         self.meta_manager.close().await?;
         return close_conn_pool!(self);
     }
 
-    async fn refresh_meta(&mut self, data: Vec<DdlData>) -> Result<(), Error> {
+    async fn refresh_meta(&mut self, data: Vec<DdlData>) -> anyhow::Result<()> {
         for ddl_data in data.iter() {
             self.meta_manager
                 .invalidate_cache(&ddl_data.schema, &ddl_data.tb);
@@ -95,7 +95,7 @@ impl Sinker for MysqlSinker {
 }
 
 impl MysqlSinker {
-    async fn serial_sink(&mut self, data: Vec<RowData>) -> Result<(), Error> {
+    async fn serial_sink(&mut self, data: Vec<RowData>) -> anyhow::Result<()> {
         let start_time = Instant::now();
         let mut data_size = 0;
 
@@ -123,7 +123,7 @@ impl MysqlSinker {
         data: &mut [RowData],
         start_index: usize,
         batch_size: usize,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let start_time = Instant::now();
 
         let tb_meta = self
@@ -153,7 +153,7 @@ impl MysqlSinker {
         data: &mut [RowData],
         start_index: usize,
         batch_size: usize,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let start_time = Instant::now();
 
         let tb_meta = self

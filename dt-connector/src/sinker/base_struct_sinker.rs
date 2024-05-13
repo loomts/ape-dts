@@ -1,3 +1,4 @@
+use anyhow::bail;
 use dt_common::meta::ddl_data::DdlData;
 use dt_common::{
     config::config_enums::ConflictPolicyEnum, error::Error, log_info, rdb_filter::RdbFilter,
@@ -17,7 +18,7 @@ impl BaseStructSinker {
         conflict_policy: &ConflictPolicyEnum,
         data: Vec<DdlData>,
         filter: &RdbFilter,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         for ddl_data in data {
             let mut statement = ddl_data.statement.unwrap();
             for (_, sql) in statement.to_sqls(filter).iter() {
@@ -30,7 +31,7 @@ impl BaseStructSinker {
                     Err(error) => {
                         log_info!("ddl failed, error: {}", error);
                         match conflict_policy {
-                            ConflictPolicyEnum::Interrupt => return Err(error),
+                            ConflictPolicyEnum::Interrupt => bail! {error},
                             ConflictPolicyEnum::Ignore => {}
                         }
                     }
@@ -40,15 +41,15 @@ impl BaseStructSinker {
         Ok(())
     }
 
-    async fn execute(pool: &DBConnPool, sql: &str) -> Result<(), Error> {
+    async fn execute(pool: &DBConnPool, sql: &str) -> anyhow::Result<()> {
         match pool {
             DBConnPool::MySQL(pool) => match query(sql).execute(pool).await {
                 Ok(_) => Ok(()),
-                Err(error) => Err(Error::SqlxError(error)),
+                Err(error) => bail! {Error::SqlxError(error)},
             },
             DBConnPool::PostgreSQL(pool) => match query(sql).execute(pool).await {
                 Ok(_) => Ok(()),
-                Err(error) => Err(Error::SqlxError(error)),
+                Err(error) => bail! {Error::SqlxError(error)},
             },
         }
     }

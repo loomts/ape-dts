@@ -2,7 +2,6 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use dt_common::{
-    error::Error,
     log_sql,
     meta::{rdb_meta_manager::RdbMetaManager, row_data::RowData},
     monitor::monitor::Monitor,
@@ -20,7 +19,7 @@ pub struct SqlSinker {
 
 #[async_trait]
 impl Sinker for SqlSinker {
-    async fn sink_dml(&mut self, data: Vec<RowData>, _batch: bool) -> Result<(), Error> {
+    async fn sink_dml(&mut self, data: Vec<RowData>, _batch: bool) -> anyhow::Result<()> {
         if data.is_empty() {
             return Ok(());
         }
@@ -50,7 +49,7 @@ impl Sinker for SqlSinker {
         Ok(())
     }
 
-    async fn close(&mut self) -> Result<(), Error> {
+    async fn close(&mut self) -> anyhow::Result<()> {
         self.meta_manager.close().await
     }
 }

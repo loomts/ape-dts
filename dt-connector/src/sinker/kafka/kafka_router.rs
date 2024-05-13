@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use anyhow::bail;
 use dt_common::config::router_config::RouterConfig;
 
 use dt_common::error::Error;
@@ -12,7 +13,7 @@ pub struct KafkaRouter {
 }
 
 impl KafkaRouter {
-    pub fn from_config(config: &RouterConfig) -> Result<Self, Error> {
+    pub fn from_config(config: &RouterConfig) -> anyhow::Result<Self> {
         match config {
             RouterConfig::Rdb { db_map, tb_map, .. } => Ok(Self {
                 db_map: Self::parse_str(db_map)?,
@@ -41,7 +42,7 @@ impl KafkaRouter {
         return self.db_map.get("*").unwrap().to_string();
     }
 
-    fn parse_str(config_str: &str) -> Result<HashMap<String, String>, Error> {
+    fn parse_str(config_str: &str) -> anyhow::Result<HashMap<String, String>> {
         let mut map = HashMap::new();
         if config_str.is_empty() {
             return Ok(map);
@@ -51,10 +52,10 @@ impl KafkaRouter {
             let tokens: Vec<&str> = name.split(':').collect();
 
             if tokens.len() != 2 {
-                return Err(Error::ConfigError(format!(
+                bail! {Error::ConfigError(format!(
                     "invalid router config, check error near: {}",
                     name
-                )));
+                ))}
             }
             map.insert(
                 tokens.first().unwrap().to_string(),

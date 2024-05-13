@@ -1,5 +1,3 @@
-use dt_common::error::Error;
-
 pub struct DbTable {
     pub database_name: String,
     pub is_all: bool,
@@ -32,7 +30,7 @@ impl DbTable {
         }
     }
 
-    pub fn get_db_names(arr: &[DbTable]) -> Result<Vec<String>, Error> {
+    pub fn get_db_names(arr: &[DbTable]) -> anyhow::Result<Vec<String>> {
         Ok(arr
             .iter()
             .filter(|x| !x.database_name.is_empty())
@@ -40,7 +38,7 @@ impl DbTable {
             .collect())
     }
 
-    pub fn get_tb_names(arr: &[DbTable]) -> Result<(Vec<String>, Vec<String>), Error> {
+    pub fn get_tb_names(arr: &[DbTable]) -> anyhow::Result<(Vec<String>, Vec<String>)> {
         Ok((
             arr.iter()
                 .filter(|x| !x.is_all && !x.table_name.is_empty())
@@ -57,7 +55,7 @@ impl DbTable {
     #[allow(clippy::type_complexity)]
     pub fn get_config_maps(
         arr: &[DbTable],
-    ) -> Result<(Vec<String>, Vec<String>, Vec<String>), Error> {
+    ) -> anyhow::Result<(Vec<String>, Vec<String>, Vec<String>)> {
         Ok((
             arr.iter()
                 .filter(|x| !x.database_name.is_empty() && x.is_all)

@@ -1,5 +1,5 @@
 use dt_common::{
-    config::resumer_config::ResumerConfig, error::Error, log_info, meta::position::Position,
+    config::resumer_config::ResumerConfig, log_info, meta::position::Position,
     utils::file_util::FileUtil,
 };
 
@@ -11,7 +11,7 @@ pub struct CdcResumer {
 }
 
 impl CdcResumer {
-    pub fn from_config(config: &ResumerConfig) -> Result<Self, Error> {
+    pub fn from_config(config: &ResumerConfig) -> anyhow::Result<Self> {
         let mut position = Position::None;
         if !config.resume_from_log {
             return Ok(Self { position });

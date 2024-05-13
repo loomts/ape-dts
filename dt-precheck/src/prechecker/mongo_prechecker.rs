@@ -1,8 +1,5 @@
 use async_trait::async_trait;
-use dt_common::{
-    config::{config_enums::DbType, filter_config::FilterConfig},
-    error::Error,
-};
+use dt_common::config::{config_enums::DbType, filter_config::FilterConfig};
 use mongodb::bson::Bson;
 use regex::Regex;
 
@@ -25,7 +22,7 @@ pub struct MongoPrechecker {
 
 #[async_trait]
 impl Prechecker for MongoPrechecker {
-    async fn build_connection(&mut self) -> Result<CheckResult, Error> {
+    async fn build_connection(&mut self) -> anyhow::Result<CheckResult> {
         self.fetcher.build_connection().await?;
         Ok(CheckResult::build_with_err(
             CheckItem::CheckDatabaseConnection,
@@ -35,13 +32,13 @@ impl Prechecker for MongoPrechecker {
         ))
     }
 
-    async fn check_database_version(&mut self) -> Result<CheckResult, Error> {
-        let mut check_error: Option<Error> = None;
+    async fn check_database_version(&mut self) -> anyhow::Result<CheckResult> {
+        let mut check_error = None;
 
         let version = self.fetcher.fetch_version().await?;
         let reg = Regex::new(MONGO_SUPPORTED_VERSION_REGEX).unwrap();
         if !reg.is_match(version.as_str()) {
-            check_error = Some(Error::PreCheckError(format!(
+            check_error = Some(anyhow::Error::msg(format!(
                 "mongo version:[{}] is invalid.",
                 version
             )));
@@ -55,15 +52,15 @@ impl Prechecker for MongoPrechecker {
         ))
     }
 
-    async fn check_permission(&mut self) -> Result<CheckResult, Error> {
+    async fn check_permission(&mut self) -> anyhow::Result<CheckResult> {
         Ok(CheckResult::build(
             CheckItem::CheckAccountPermission,
             self.is_source,
         ))
     }
 
-    async fn check_cdc_supported(&mut self) -> Result<CheckResult, Error> {
-        let mut check_error: Option<Error> = None;
+    async fn check_cdc_supported(&mut self) -> anyhow::Result<CheckResult> {
+        let mut check_error = None;
 
         if !self.is_source {
             // do nothing when the database is a target
@@ -99,7 +96,7 @@ impl Prechecker for MongoPrechecker {
         }
 
         if !err_msg.is_empty() {
-            check_error = Some(Error::PreCheckError(err_msg.into()));
+            check_error = Some(anyhow::Error::msg(err_msg));
         }
 
         Ok(CheckResult::build_with_err(
@@ -110,7 +107,7 @@ impl Prechecker for MongoPrechecker {
         ))
     }
 
-    async fn check_struct_existed_or_not(&mut self) -> Result<CheckResult, Error> {
+    async fn check_struct_existed_or_not(&mut self) -> anyhow::Result<CheckResult> {
         Ok(CheckResult::build_with_err(
             CheckItem::CheckIfStructExisted,
             self.is_source,
@@ -119,14 +116,14 @@ impl Prechecker for MongoPrechecker {
         ))
     }
 
-    async fn check_table_structs(&mut self) -> Result<CheckResult, Error> {
-        let mut check_error: Option<Error> = None;
+    async fn check_table_structs(&mut self) -> anyhow::Result<CheckResult> {
+        let mut check_error = None;
 
         let invalid_dbs = vec!["admin", "local"];
         for db in invalid_dbs {
             if !self.fetcher.filter.filter_db(db) {
-                check_error = Some(Error::PreCheckError(
-                    "database 'admin' and 'local' are not supported as source and target.".into(),
+                check_error = Some(anyhow::Error::msg(
+                    "database 'admin' and 'local' are not supported as source and target.",
                 ));
                 break;
             }

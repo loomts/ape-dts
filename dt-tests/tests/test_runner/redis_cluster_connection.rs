@@ -1,9 +1,7 @@
-use std::collections::{HashMap, HashSet};
-
-use dt_common::error::Error;
 use dt_common::meta::redis::command::key_parser::KeyParser;
 use dt_common::utils::redis_util::RedisUtil;
 use redis::Connection;
+use std::collections::{HashMap, HashSet};
 use url::Url;
 
 pub struct RedisClusterConnection {
@@ -14,7 +12,7 @@ pub struct RedisClusterConnection {
 }
 
 impl RedisClusterConnection {
-    pub async fn new(url: &str, is_cluster: bool) -> Result<Self, Error> {
+    pub async fn new(url: &str, is_cluster: bool) -> anyhow::Result<Self> {
         let mut slot_node_map = HashMap::new();
         let mut node_conn_map = HashMap::new();
         let mut conn = RedisUtil::create_redis_conn(url).await?;

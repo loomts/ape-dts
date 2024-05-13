@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use anyhow::bail;
 use async_trait::async_trait;
 use dt_common::{error::Error, rdb_filter::RdbFilter};
 use dt_task::task_util::TaskUtil;
@@ -20,12 +21,12 @@ pub struct MysqlFetcher {
 
 #[async_trait]
 impl Fetcher for MysqlFetcher {
-    async fn build_connection(&mut self) -> Result<(), Error> {
+    async fn build_connection(&mut self) -> anyhow::Result<()> {
         self.pool = Some(TaskUtil::create_mysql_conn_pool(&self.url, 1, true).await?);
         Ok(())
     }
 
-    async fn fetch_version(&mut self) -> Result<String, Error> {
+    async fn fetch_version(&mut self) -> anyhow::Result<String> {
         let sql = "SELECT version() AS VERSION".to_string();
         let mut version: String = String::from("");
 
@@ -37,7 +38,7 @@ impl Fetcher for MysqlFetcher {
                     version = version_str;
                 }
             }
-            Err(e) => return Err(e),
+            Err(e) => bail! {e},
         }
 
         Ok(version)
@@ -46,7 +47,7 @@ impl Fetcher for MysqlFetcher {
     async fn fetch_configuration(
         &mut self,
         config_keys: Vec<String>,
-    ) -> Result<HashMap<String, String>, Error> {
+    ) -> anyhow::Result<HashMap<String, String>> {
         if config_keys.is_empty() {
             return Ok(HashMap::new());
         }
@@ -73,13 +74,13 @@ impl Fetcher for MysqlFetcher {
                     }
                 }
             }
-            Err(e) => return Err(e),
+            Err(e) => bail! {e},
         }
 
         Ok(result_map)
     }
 
-    async fn fetch_databases(&mut self) -> Result<Vec<Database>, Error> {
+    async fn fetch_databases(&mut self) -> anyhow::Result<Vec<Database>> {
         let mut results: Vec<Database> = vec![];
         let query_db = "SELECT SCHEMA_NAME FROM information_schema.schemata";
 
@@ -95,17 +96,17 @@ impl Fetcher for MysqlFetcher {
                     }
                 }
             }
-            Err(e) => return Err(e),
+            Err(e) => bail! {e},
         }
 
         Ok(results)
     }
 
-    async fn fetch_schemas(&mut self) -> Result<Vec<Schema>, Error> {
+    async fn fetch_schemas(&mut self) -> anyhow::Result<Vec<Schema>> {
         Ok(vec![])
     }
 
-    async fn fetch_tables(&mut self) -> Result<Vec<Table>, Error> {
+    async fn fetch_tables(&mut self) -> anyhow::Result<Vec<Table>> {
         let mut results: Vec<Table> = vec![];
         let query_tb = "SELECT TABLE_SCHEMA, TABLE_NAME FROM information_schema.tables where TABLE_TYPE = 'BASE TABLE'";
 
@@ -124,13 +125,13 @@ impl Fetcher for MysqlFetcher {
                     }
                 }
             }
-            Err(e) => return Err(e),
+            Err(e) => bail! {e},
         }
 
         Ok(results)
     }
 
-    async fn fetch_constraints(&mut self) -> Result<Vec<Constraint>, Error> {
+    async fn fetch_constraints(&mut self) -> anyhow::Result<Vec<Constraint>> {
         let mut results: Vec<Constraint> = vec![];
         let sys_dbs = MysqlFetcher::get_system_databases();
 
@@ -192,7 +193,7 @@ impl Fetcher for MysqlFetcher {
                     }
                 }
             }
-            Err(e) => return Err(e),
+            Err(e) => bail! {e},
         }
 
         Ok(results)
@@ -220,14 +221,14 @@ impl MysqlFetcher {
         &self,
         sql: &'a str,
         mut sql_msg: &str,
-    ) -> Result<impl Stream<Item = Result<MySqlRow, sqlx::Error>> + 'a, Error> {
+    ) -> anyhow::Result<impl Stream<Item = anyhow::Result<MySqlRow, sqlx::Error>> + 'a> {
         match &self.pool {
             Some(pool) => {
                 sql_msg = if sql_msg.is_empty() { "sql" } else { sql_msg };
                 println!("{}: {}", sql_msg, sql);
                 Ok(query(sql).fetch(pool))
             }
-            None => Err(Error::from(sqlx::Error::PoolClosed)),
+            None => bail! {Error::from(sqlx::Error::PoolClosed)},
         }
     }
 
@@ -236,7 +237,7 @@ impl MysqlFetcher {
         return dbs.iter().map(|d| d.to_string()).collect();
     }
 
-    fn get_str_with_null(row: &MySqlRow, col_name: &str) -> Result<String, Error> {
+    fn get_str_with_null(row: &MySqlRow, col_name: &str) -> anyhow::Result<String> {
         let mut str_val = String::new();
         let str_val_option = row.get(col_name);
         if let Some(s) = str_val_option {

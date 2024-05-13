@@ -1,10 +1,8 @@
 use std::collections::HashSet;
 
+use anyhow::bail;
 use async_trait::async_trait;
-use dt_common::{
-    config::{config_enums::DbType, filter_config::FilterConfig},
-    error::Error,
-};
+use dt_common::config::{config_enums::DbType, filter_config::FilterConfig};
 
 use crate::{
     config::precheck_config::PrecheckConfig,
@@ -29,7 +27,7 @@ pub struct PostgresqlPrechecker {
 
 #[async_trait]
 impl Prechecker for PostgresqlPrechecker {
-    async fn build_connection(&mut self) -> Result<CheckResult, Error> {
+    async fn build_connection(&mut self) -> anyhow::Result<CheckResult> {
         let mut check_error = None;
         let result = self.fetcher.build_connection().await;
         match result {
@@ -46,20 +44,20 @@ impl Prechecker for PostgresqlPrechecker {
     }
 
     // Supported PostgreSQL 14.*
-    async fn check_database_version(&mut self) -> Result<CheckResult, Error> {
-        let mut check_error: Option<Error> = None;
+    async fn check_database_version(&mut self) -> anyhow::Result<CheckResult> {
+        let mut check_error = None;
 
         let result = self.fetcher.fetch_version().await;
         match result {
             Ok(version) => {
                 if version.is_empty() {
-                    check_error = Some(Error::PreCheckError("found no version info".into()));
+                    check_error = Some(anyhow::Error::msg("found no version info"));
                 } else {
                     let version_i32: i32 = version.parse().unwrap();
                     if !(PG_SUPPORT_DB_VERSION_NUM_MIN..=PG_SUPPORT_DB_VERSION_NUM_MAX)
                         .contains(&version_i32)
                     {
-                        check_error = Some(Error::PreCheckError(format!(
+                        check_error = Some(anyhow::Error::msg(format!(
                             "version:{} is not supported yet",
                             version_i32
                         )));
@@ -77,15 +75,15 @@ impl Prechecker for PostgresqlPrechecker {
         ))
     }
 
-    async fn check_permission(&mut self) -> Result<CheckResult, Error> {
+    async fn check_permission(&mut self) -> anyhow::Result<CheckResult> {
         Ok(CheckResult::build(
             CheckItem::CheckAccountPermission,
             self.is_source,
         ))
     }
 
-    async fn check_cdc_supported(&mut self) -> Result<CheckResult, Error> {
-        let mut check_error: Option<Error> = None;
+    async fn check_cdc_supported(&mut self) -> anyhow::Result<CheckResult> {
+        let mut check_error = None;
 
         if !self.is_source {
             // do nothing when the database is target
@@ -138,10 +136,10 @@ impl Prechecker for PostgresqlPrechecker {
                     }
                 }
             }
-            Err(e) => return Err(e),
+            Err(e) => bail! {e},
         }
         if !err_msgs.is_empty() {
-            check_error = Some(Error::PreCheckError(err_msgs.join(";")));
+            check_error = Some(anyhow::Error::msg(err_msgs.join(";")));
         }
 
         if check_error.is_none() {
@@ -150,7 +148,7 @@ impl Prechecker for PostgresqlPrechecker {
             match slot_result {
                 Ok(slots) => {
                     if max_replication_slots_i32 == (slots.len() as i32) {
-                        check_error = Some(Error::PreCheckError ( format!("the current number of slots:[{}] has reached max_replication_slots, and new slots cannot be created", max_replication_slots_i32) ));
+                        check_error = Some(anyhow::Error::msg(  format!("the current number of slots:[{}] has reached max_replication_slots, and new slots cannot be created", max_replication_slots_i32) ));
                     }
                 }
                 Err(e) => check_error = Some(e),
@@ -165,8 +163,8 @@ impl Prechecker for PostgresqlPrechecker {
         ))
     }
 
-    async fn check_struct_existed_or_not(&mut self) -> Result<CheckResult, Error> {
-        let mut check_error: Option<Error> = None;
+    async fn check_struct_existed_or_not(&mut self) -> anyhow::Result<CheckResult> {
+        let mut check_error = None;
 
         let (mut db_tables, mut err_msgs): (Vec<DbTable>, Vec<String>) = (Vec::new(), Vec::new());
         if !self.filter_config.do_tbs.is_empty() {
@@ -193,7 +191,7 @@ impl Prechecker for PostgresqlPrechecker {
                         .iter()
                         .map(|t| format!("{}.{}", t.schema_name, t.table_name))
                         .collect(),
-                    Err(e) => return Err(e),
+                    Err(e) => bail! {e},
                 };
                 for tb_key in tbs {
                     if !current_tbs.contains(&tb_key) {
@@ -217,7 +215,7 @@ impl Prechecker for PostgresqlPrechecker {
                 let schema_result = self.fetcher.fetch_schemas().await;
                 let current_schemas: HashSet<String> = match schema_result {
                     Ok(schemas) => schemas.iter().map(|s| s.schema_name.clone()).collect(),
-                    Err(e) => return Err(e),
+                    Err(e) => bail! {e},
                 };
 
                 for schema in all_schemas {
@@ -239,7 +237,7 @@ impl Prechecker for PostgresqlPrechecker {
         }
 
         if !err_msgs.is_empty() {
-            check_error = Some(Error::PreCheckError(err_msgs.join(".")))
+            check_error = Some(anyhow::Error::msg(err_msgs.join(".")))
         }
 
         Ok(CheckResult::build_with_err(
@@ -250,9 +248,9 @@ impl Prechecker for PostgresqlPrechecker {
         ))
     }
 
-    async fn check_table_structs(&mut self) -> Result<CheckResult, Error> {
+    async fn check_table_structs(&mut self) -> anyhow::Result<CheckResult> {
         // all tables have a pk, and have no fk
-        let mut check_error: Option<Error> = None;
+        let mut check_error = None;
 
         if !self.is_source && self.precheck_config.do_struct_init {
             // do nothing when the database is a target
@@ -277,9 +275,8 @@ impl Prechecker for PostgresqlPrechecker {
         all_schemas.extend(&tb_schemas);
         if all_schemas.is_empty() {
             println!("found no schema need to do migrate, very strange");
-            return Err(Error::PreCheckError(
-                "found no schema need to do migrate".into(),
-            ));
+            bail! {
+            "found no schema need to do migrate"};
         }
 
         let (mut has_pkuk_tables, mut fkref_nonexists_tables): (HashSet<String>, HashSet<String>) =
@@ -291,7 +288,7 @@ impl Prechecker for PostgresqlPrechecker {
                 .iter()
                 .map(|t| format!("{}.{}", t.schema_name, t.table_name))
                 .collect(),
-            Err(e) => return Err(e),
+            Err(e) => bail! {e},
         };
 
         let constraint_result = self.fetcher.fetch_constraints().await;
@@ -313,7 +310,7 @@ impl Prechecker for PostgresqlPrechecker {
                     }
                 }
             }
-            Err(e) => return Err(e),
+            Err(e) => bail! {e},
         }
 
         if !fkref_nonexists_tables.is_empty() {
@@ -344,7 +341,7 @@ impl Prechecker for PostgresqlPrechecker {
             ));
         }
         if !err_msgs.is_empty() {
-            check_error = Some(Error::PreCheckError(err_msgs.join(";")))
+            check_error = Some(anyhow::Error::msg(err_msgs.join(";")))
         }
 
         Ok(CheckResult::build_with_err(

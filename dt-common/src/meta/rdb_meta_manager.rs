@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use anyhow::bail;
+
 use crate::error::Error;
 
 use super::{
@@ -28,7 +30,7 @@ impl RdbMetaManager {
         }
     }
 
-    pub async fn close(&self) -> Result<(), Error> {
+    pub async fn close(&self) -> anyhow::Result<()> {
         if let Some(mysql_meta_manager) = &self.mysql_meta_manager {
             mysql_meta_manager.close().await?;
         }
@@ -42,7 +44,7 @@ impl RdbMetaManager {
         &'a mut self,
         schema: &str,
         tb: &str,
-    ) -> Result<&'a RdbTbMeta, Error> {
+    ) -> anyhow::Result<&'a RdbTbMeta> {
         if let Some(mysql_meta_manager) = self.mysql_meta_manager.as_mut() {
             let tb_meta = mysql_meta_manager.get_tb_meta(schema, tb).await?;
             return Ok(&tb_meta.basic);
@@ -53,15 +55,15 @@ impl RdbMetaManager {
             return Ok(&tb_meta.basic);
         }
 
-        Err(Error::Unexpected(
+        bail! {Error::Unexpected(
             "no available meta_manager in partitioner".into(),
-        ))
+        )}
     }
 
     pub fn parse_rdb_cols(
         key_map: &HashMap<String, Vec<String>>,
         cols: &[String],
-    ) -> Result<(Option<String>, String, Vec<String>), Error> {
+    ) -> anyhow::Result<(Option<String>, String, Vec<String>)> {
         let mut id_cols = Vec::new();
         if let Some(cols) = key_map.get("primary") {
             // use primary key

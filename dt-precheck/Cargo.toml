@@ -23,3 +23,4 @@ regex = { workspace = true }
 mongodb = { workspace = true }
 concurrent-queue = { workspace = true }
 redis = { workspace = true }
+anyhow = { workspace = true }

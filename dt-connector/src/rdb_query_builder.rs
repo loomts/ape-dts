@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use anyhow::bail;
 use dt_common::meta::{
     adaptor::{
         pg_col_value_convertor::PgColValueConvertor,
@@ -85,11 +86,11 @@ impl RdbQueryBuilder<'_> {
         &self,
         row_data: &'a RowData,
         replace: bool,
-    ) -> Result<RdbQueryInfo<'a>, Error> {
+    ) -> anyhow::Result<RdbQueryInfo<'a>> {
         self.get_query_info_internal(row_data, replace, true)
     }
 
-    pub fn get_query_sql(&self, row_data: &RowData, replace: bool) -> Result<String, Error> {
+    pub fn get_query_sql(&self, row_data: &RowData, replace: bool) -> anyhow::Result<String> {
         let query_info = self.get_query_info_internal(row_data, replace, false)?;
         Ok(query_info.sql + ";")
     }
@@ -99,7 +100,7 @@ impl RdbQueryBuilder<'_> {
         row_data: &'a RowData,
         replace: bool,
         placeholder: bool,
-    ) -> Result<RdbQueryInfo<'a>, Error> {
+    ) -> anyhow::Result<RdbQueryInfo<'a>> {
         match row_data.row_type {
             RowType::Insert => {
                 if replace {
@@ -118,7 +119,7 @@ impl RdbQueryBuilder<'_> {
         data: &'a [RowData],
         start_index: usize,
         batch_size: usize,
-    ) -> Result<(RdbQueryInfo<'a>, usize), Error> {
+    ) -> anyhow::Result<(RdbQueryInfo<'a>, usize)> {
         let mut data_size = 0;
         let mut all_placeholders = Vec::new();
         let mut placeholder_index = 1;
@@ -148,10 +149,10 @@ impl RdbQueryBuilder<'_> {
                 cols.push(col.clone());
                 let col_value = before.get(col);
                 if *col_value.unwrap() == ColValue::None {
-                    return Err(Error::Unexpected(format!(
-                            "db: {}, tb: {}, where col: {} is NULL, which should not happen in batch delete",
-                            self.rdb_tb_meta.schema, self.rdb_tb_meta.tb, col
-                        )));
+                    bail! {Error::Unexpected(format!(
+                        "db: {}, tb: {}, where col: {} is NULL, which should not happen in batch delete",
+                        self.rdb_tb_meta.schema, self.rdb_tb_meta.tb, col
+                    ))}
                 }
                 binds.push(col_value);
             }
@@ -164,7 +165,7 @@ impl RdbQueryBuilder<'_> {
         data: &'a [RowData],
         start_index: usize,
         batch_size: usize,
-    ) -> Result<(RdbQueryInfo<'a>, usize), Error> {
+    ) -> anyhow::Result<(RdbQueryInfo<'a>, usize)> {
         let mut malloc_size = 0;
         let mut placeholder_index = 1;
         let mut row_values = Vec::new();
@@ -206,7 +207,7 @@ impl RdbQueryBuilder<'_> {
         &self,
         row_data: &'a RowData,
         placeholder: bool,
-    ) -> Result<RdbQueryInfo<'a>, Error> {
+    ) -> anyhow::Result<RdbQueryInfo<'a>> {
         let mut query_info = self.get_insert_query(row_data, placeholder)?;
         if self.pg_tb_meta.is_some() {
             let mut index = query_info.cols.len() + 1;
@@ -238,7 +239,7 @@ impl RdbQueryBuilder<'_> {
         &self,
         row_data: &'a RowData,
         placeholder: bool,
-    ) -> Result<RdbQueryInfo<'a>, Error> {
+    ) -> anyhow::Result<RdbQueryInfo<'a>> {
         let mut cols = Vec::new();
         let mut binds = Vec::new();
         let after = row_data.after.as_ref().unwrap();
@@ -269,7 +270,7 @@ impl RdbQueryBuilder<'_> {
         &self,
         row_data: &'a RowData,
         placeholder: bool,
-    ) -> Result<RdbQueryInfo<'a>, Error> {
+    ) -> anyhow::Result<RdbQueryInfo<'a>> {
         let before = row_data.before.as_ref().unwrap();
         let (where_sql, not_null_cols) = self.get_where_info(1, before, placeholder)?;
         let mut sql = format!(
@@ -295,7 +296,7 @@ impl RdbQueryBuilder<'_> {
         &self,
         row_data: &'a RowData,
         placeholder: bool,
-    ) -> Result<RdbQueryInfo<'a>, Error> {
+    ) -> anyhow::Result<RdbQueryInfo<'a>> {
         let before = row_data.before.as_ref().unwrap();
         let after = row_data.after.as_ref().unwrap();
 
@@ -310,10 +311,10 @@ impl RdbQueryBuilder<'_> {
         }
 
         if set_pairs.is_empty() {
-            return Err(Error::Unexpected(format!(
+            bail! {Error::Unexpected(format!(
                 "db: {}, tb: {}, no cols in after, which should not happen in update",
                 self.rdb_tb_meta.schema, self.rdb_tb_meta.tb
-            )));
+            ))}
         }
 
         let (where_sql, not_null_cols) = self.get_where_info(index, before, placeholder)?;
@@ -340,7 +341,7 @@ impl RdbQueryBuilder<'_> {
         Ok(RdbQueryInfo { sql, cols, binds })
     }
 
-    pub fn get_select_query<'a>(&self, row_data: &'a RowData) -> Result<RdbQueryInfo<'a>, Error> {
+    pub fn get_select_query<'a>(&self, row_data: &'a RowData) -> anyhow::Result<RdbQueryInfo<'a>> {
         let after = row_data.after.as_ref().unwrap();
         let (where_sql, not_null_cols) = self.get_where_info(1, after, true)?;
         let mut sql = format!(
@@ -369,7 +370,7 @@ impl RdbQueryBuilder<'_> {
         data: &'a [RowData],
         start_index: usize,
         batch_size: usize,
-    ) -> Result<RdbQueryInfo<'a>, Error> {
+    ) -> anyhow::Result<RdbQueryInfo<'a>> {
         let where_sql = self.get_where_in_info(batch_size)?;
         let sql = format!(
             "SELECT {} FROM {}.{} WHERE {}",
@@ -387,10 +388,10 @@ impl RdbQueryBuilder<'_> {
                 cols.push(col.clone());
                 let col_value = after.get(col);
                 if *col_value.unwrap() == ColValue::None {
-                    return Err(Error::Unexpected(format!(
-                            "db: {}, tb: {}, where col: {} is NULL, which should not happen in batch select",
-                            self.rdb_tb_meta.schema, self.rdb_tb_meta.tb, col
-                        )));
+                    bail! {Error::Unexpected(format!(
+                        "db: {}, tb: {}, where col: {} is NULL, which should not happen in batch select",
+                        self.rdb_tb_meta.schema, self.rdb_tb_meta.tb, col
+                    ))}
                 }
                 binds.push(col_value);
             }
@@ -398,7 +399,7 @@ impl RdbQueryBuilder<'_> {
         Ok(RdbQueryInfo { sql, cols, binds })
     }
 
-    pub fn build_extract_cols_str(&self) -> Result<String, Error> {
+    pub fn build_extract_cols_str(&self) -> anyhow::Result<String> {
         if let Some(tb_meta) = self.pg_tb_meta {
             let mut extract_cols = Vec::new();
             for col in self.rdb_tb_meta.cols.iter() {
@@ -421,7 +422,7 @@ impl RdbQueryBuilder<'_> {
         mut index: usize,
         col_value_map: &HashMap<String, ColValue>,
         placeholder: bool,
-    ) -> Result<(String, Vec<String>), Error> {
+    ) -> anyhow::Result<(String, Vec<String>)> {
         let mut where_sql = String::new();
         let mut not_null_cols = Vec::new();
 
@@ -450,7 +451,7 @@ impl RdbQueryBuilder<'_> {
         Ok((where_sql.trim_start().into(), not_null_cols))
     }
 
-    fn get_where_in_info(&self, batch_size: usize) -> Result<String, Error> {
+    fn get_where_in_info(&self, batch_size: usize) -> anyhow::Result<String> {
         let mut all_placeholders = Vec::new();
         let mut placeholder_index = 1;
         for _ in 0..batch_size {

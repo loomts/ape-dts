@@ -6,7 +6,6 @@ use dt_common::{
         config_enums::DbType, config_token_parser::ConfigTokenParser,
         extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
     },
-    error::Error,
     utils::{sql_util::SqlUtil, time_util::TimeUtil},
 };
 
@@ -41,11 +40,11 @@ const UTC_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 
 #[allow(dead_code)]
 impl RdbTestRunner {
-    pub async fn new_default(relative_test_dir: &str) -> Result<Self, Error> {
+    pub async fn new_default(relative_test_dir: &str) -> anyhow::Result<Self> {
         Self::new(relative_test_dir, true).await
     }
 
-    pub async fn new(relative_test_dir: &str, recreate_pub_and_slot: bool) -> Result<Self, Error> {
+    pub async fn new(relative_test_dir: &str, recreate_pub_and_slot: bool) -> anyhow::Result<Self> {
         let mut base = BaseTestRunner::new(relative_test_dir).await.unwrap();
 
         // prepare conn pools
@@ -103,7 +102,7 @@ impl RdbTestRunner {
         })
     }
 
-    pub async fn close(&self) -> Result<(), Error> {
+    pub async fn close(&self) -> anyhow::Result<()> {
         if let Some(pool) = &self.src_conn_pool_mysql {
             pool.close().await;
         }
@@ -177,7 +176,7 @@ impl RdbTestRunner {
         (src_db_type, src_url, dst_db_type, dst_url)
     }
 
-    pub async fn run_snapshot_test(&self, compare_data: bool) -> Result<(), Error> {
+    pub async fn run_snapshot_test(&self, compare_data: bool) -> anyhow::Result<()> {
         // prepare src and dst tables
         self.execute_prepare_sqls().await?;
         self.execute_test_sqls().await?;
@@ -193,7 +192,7 @@ impl RdbTestRunner {
         Ok(())
     }
 
-    pub async fn run_ddl_test(&self, start_millis: u64, parse_millis: u64) -> Result<(), Error> {
+    pub async fn run_ddl_test(&self, start_millis: u64, parse_millis: u64) -> anyhow::Result<()> {
         self.execute_prepare_sqls().await?;
 
         self.update_cdc_task_config(start_millis, parse_millis);
@@ -217,7 +216,7 @@ impl RdbTestRunner {
         Ok(())
     }
 
-    pub async fn run_cdc_test(&self, start_millis: u64, parse_millis: u64) -> Result<(), Error> {
+    pub async fn run_cdc_test(&self, start_millis: u64, parse_millis: u64) -> anyhow::Result<()> {
         // prepare src and dst tables
         self.execute_prepare_sqls().await?;
 
@@ -233,7 +232,7 @@ impl RdbTestRunner {
         &self,
         _start_millis: u64,
         parse_millis: u64,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let config = TaskConfig::new(&self.base.task_config_file);
         let (heartbeat_tb, db_type) = match config.extractor {
             ExtractorConfig::PgCdc { heartbeat_tb, .. } => (heartbeat_tb.clone(), DbType::Pg),
@@ -272,7 +271,7 @@ impl RdbTestRunner {
         &self,
         start_millis: u64,
         parse_millis: u64,
-    ) -> Result<JoinHandle<()>, Error> {
+    ) -> anyhow::Result<JoinHandle<()>> {
         // start task
         let total_parse_millis = self.get_total_parse_millis(parse_millis);
         self.update_cdc_task_config(start_millis, total_parse_millis);
@@ -292,7 +291,7 @@ impl RdbTestRunner {
             * 2
     }
 
-    pub async fn execute_test_sqls_and_compare(&self, parse_millis: u64) -> Result<(), Error> {
+    pub async fn execute_test_sqls_and_compare(&self, parse_millis: u64) -> anyhow::Result<()> {
         // load dml sqls
         let (src_insert_sqls, src_update_sqls, src_delete_sqls) =
             Self::split_dml_sqls(&self.base.src_test_sqls);
@@ -340,22 +339,22 @@ impl RdbTestRunner {
         (insert_sqls, update_sqls, delete_sqls)
     }
 
-    pub async fn execute_test_sqls(&self) -> Result<(), Error> {
+    pub async fn execute_test_sqls(&self) -> anyhow::Result<()> {
         self.execute_src_sqls(&self.base.src_test_sqls).await?;
         self.execute_dst_sqls(&self.base.dst_test_sqls).await
     }
 
-    pub async fn execute_prepare_sqls(&self) -> Result<(), Error> {
+    pub async fn execute_prepare_sqls(&self) -> anyhow::Result<()> {
         self.execute_src_sqls(&self.base.src_prepare_sqls).await?;
         self.execute_dst_sqls(&self.base.dst_prepare_sqls).await
     }
 
-    pub async fn execute_clean_sqls(&self) -> Result<(), Error> {
+    pub async fn execute_clean_sqls(&self) -> anyhow::Result<()> {
         self.execute_src_sqls(&self.base.src_clean_sqls).await?;
         self.execute_dst_sqls(&self.base.dst_clean_sqls).await
     }
 
-    pub async fn execute_src_sqls(&self, sqls: &Vec<String>) -> Result<(), Error> {
+    pub async fn execute_src_sqls(&self, sqls: &Vec<String>) -> anyhow::Result<()> {
         if let Some(pool) = &self.src_conn_pool_mysql {
             RdbUtil::execute_sqls_mysql(pool, sqls).await?;
         }
@@ -365,7 +364,7 @@ impl RdbTestRunner {
         Ok(())
     }
 
-    pub async fn execute_dst_sqls(&self, sqls: &Vec<String>) -> Result<(), Error> {
+    pub async fn execute_dst_sqls(&self, sqls: &Vec<String>) -> anyhow::Result<()> {
         if let Some(pool) = &self.dst_conn_pool_mysql {
             RdbUtil::execute_sqls_mysql(pool, sqls).await?;
         }
@@ -379,7 +378,7 @@ impl RdbTestRunner {
         &self,
         src_db_tbs: &Vec<(String, String)>,
         dst_db_tbs: &Vec<(String, String)>,
-    ) -> Result<bool, Error> {
+    ) -> anyhow::Result<bool> {
         let filtered_db_tbs = self.get_filtered_db_tbs();
         for i in 0..src_db_tbs.len() {
             if filtered_db_tbs.contains(&src_db_tbs[i]) {
@@ -399,7 +398,7 @@ impl RdbTestRunner {
         &self,
         src_db_tb: &(String, String),
         dst_db_tb: &(String, String),
-    ) -> Result<bool, Error> {
+    ) -> anyhow::Result<bool> {
         let src_data = self.fetch_data(src_db_tb, SRC).await?;
         let dst_data = self.fetch_data(dst_db_tb, DST).await?;
         println!(
@@ -481,7 +480,7 @@ impl RdbTestRunner {
         &self,
         db_tb: &(String, String),
         from: &str,
-    ) -> Result<Vec<RowData>, Error> {
+    ) -> anyhow::Result<Vec<RowData>> {
         let (conn_pool_mysql, conn_pool_pg) = self.get_conn_pool(from);
         let data = if let Some(pool) = conn_pool_mysql {
             let db_type = self.get_db_type(from);
@@ -512,7 +511,7 @@ impl RdbTestRunner {
     /// get compare tbs
     pub fn get_compare_db_tbs(
         &self,
-    ) -> Result<(Vec<(String, String)>, Vec<(String, String)>), Error> {
+    ) -> anyhow::Result<(Vec<(String, String)>, Vec<(String, String)>)> {
         let mut src_db_tbs = Self::get_compare_db_tbs_from_sqls(&self.base.src_prepare_sqls)?;
         // since tables may be created/dropped in src_test.sql for ddl tests,
         // we also need to parse src_test.sql.
@@ -531,7 +530,7 @@ impl RdbTestRunner {
 
     pub fn get_compare_db_tbs_from_sqls(
         sqls: &Vec<String>,
-    ) -> Result<Vec<(String, String)>, Error> {
+    ) -> anyhow::Result<Vec<(String, String)>> {
         let mut db_tbs = vec![];
 
         for sql in sqls.iter() {
@@ -577,7 +576,7 @@ impl RdbTestRunner {
         &self,
         db_tb: &(String, String),
         from: &str,
-    ) -> Result<Vec<String>, Error> {
+    ) -> anyhow::Result<Vec<String>> {
         let db_tb = self.router.get_tb_map(&db_tb.0, &db_tb.1);
         let db_tb = &(db_tb.0.into(), db_tb.1.into());
 

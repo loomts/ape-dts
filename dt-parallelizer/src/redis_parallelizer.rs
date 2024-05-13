@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
+use anyhow::bail;
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
 use dt_common::meta::{
@@ -28,7 +29,7 @@ impl Parallelizer for RedisParallelizer {
         "RedisParallelizer".to_string()
     }
 
-    async fn drain(&mut self, buffer: &ConcurrentQueue<DtItem>) -> Result<Vec<DtItem>, Error> {
+    async fn drain(&mut self, buffer: &ConcurrentQueue<DtItem>) -> anyhow::Result<Vec<DtItem>> {
         self.base_parallelizer.drain(buffer).await
     }
 
@@ -36,7 +37,7 @@ impl Parallelizer for RedisParallelizer {
         &mut self,
         data: Vec<DtData>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         if self.slot_node_map.is_empty() {
             return self
                 .base_parallelizer
@@ -63,10 +64,10 @@ impl Parallelizer for RedisParallelizer {
                 let slots = entry.cal_slots(&self.key_parser);
                 for i in 1..slots.len() {
                     if slots[i] != slots[0] {
-                        return Err(Error::RedisCmdError(format!(
+                        bail! {Error::RedisCmdError(format!(
                             "multi keys don't hash to the same slot, cmd: {}",
                             entry.cmd
-                        )));
+                        ))};
                     }
                 }
 

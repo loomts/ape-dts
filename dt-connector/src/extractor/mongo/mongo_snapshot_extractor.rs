@@ -6,7 +6,7 @@ use dt_common::meta::{
     row_data::RowData,
     row_type::RowType,
 };
-use dt_common::{config::config_enums::DbType, error::Error, log_finished, log_info};
+use dt_common::{config::config_enums::DbType, log_finished, log_info};
 use mongodb::{
     bson::{doc, oid::ObjectId, Bson, Document},
     options::FindOptions,
@@ -29,7 +29,7 @@ pub struct MongoSnapshotExtractor {
 
 #[async_trait]
 impl Extractor for MongoSnapshotExtractor {
-    async fn extract(&mut self) -> Result<(), Error> {
+    async fn extract(&mut self) -> anyhow::Result<()> {
         log_info!(
             "MongoSnapshotExtractor starts, schema: {}, tb: {}",
             self.db,
@@ -39,14 +39,14 @@ impl Extractor for MongoSnapshotExtractor {
         self.base_extractor.wait_task_finish().await
     }
 
-    async fn close(&mut self) -> Result<(), Error> {
+    async fn close(&mut self) -> anyhow::Result<()> {
         self.mongo_client.clone().shutdown().await;
         Ok(())
     }
 }
 
 impl MongoSnapshotExtractor {
-    pub async fn extract_internal(&mut self) -> Result<(), Error> {
+    pub async fn extract_internal(&mut self) -> anyhow::Result<()> {
         log_info!("start extracting data from {}.{}", self.db, self.tb);
 
         let filter = if let Some(resume_value) =

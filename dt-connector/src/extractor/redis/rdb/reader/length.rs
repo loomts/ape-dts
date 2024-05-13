@@ -1,6 +1,7 @@
 use crate::extractor::redis::StreamReader;
 
 use super::rdb_reader::RdbReader;
+use anyhow::bail;
 use byteorder::{BigEndian, ByteOrder};
 use dt_common::error::Error;
 
@@ -12,16 +13,16 @@ const RDB_32_BIT_LEN: u8 = 0x80;
 const RDB_64_BIT_LEN: u8 = 0x81;
 
 impl RdbReader<'_> {
-    pub fn read_length(&mut self) -> Result<u64, Error> {
+    pub fn read_length(&mut self) -> anyhow::Result<u64> {
         let (len, special) = self.read_encoded_length()?;
         if special {
-            Err(Error::RedisRdbError("illegal length special=true".into()))
+            bail! {Error::RedisRdbError("illegal length special=true".into())}
         } else {
             Ok(len)
         }
     }
 
-    pub fn read_encoded_length(&mut self) -> Result<(u64, bool), Error> {
+    pub fn read_encoded_length(&mut self) -> anyhow::Result<(u64, bool)> {
         let first_byte = self.read_byte()?;
         let first_2_bits = (first_byte & 0xc0) >> 6;
         match first_2_bits {
@@ -49,10 +50,10 @@ impl RdbReader<'_> {
                     Ok((len, false))
                 }
 
-                _ => Err(Error::RedisRdbError(format!(
+                _ => bail! {Error::RedisRdbError(format!(
                     "illegal length encoding: {:x}",
                     first_byte
-                ))),
+                ))},
             },
 
             RDB_SPECIAL_LEN => {
@@ -60,10 +61,10 @@ impl RdbReader<'_> {
                 Ok((len, true))
             }
 
-            _ => Err(Error::RedisRdbError(format!(
+            _ => bail! {Error::RedisRdbError(format!(
                 "illegal length encoding: {:x}",
                 first_byte
-            ))),
+            ))},
         }
     }
 }

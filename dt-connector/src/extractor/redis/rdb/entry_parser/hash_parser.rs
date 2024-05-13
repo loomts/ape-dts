@@ -1,3 +1,4 @@
+use anyhow::bail;
 use dt_common::error::Error;
 use dt_common::meta::redis::redis_object::{HashObject, RedisString};
 
@@ -10,7 +11,7 @@ impl HashParser {
         reader: &mut RdbReader,
         key: RedisString,
         type_byte: u8,
-    ) -> Result<HashObject, Error> {
+    ) -> anyhow::Result<HashObject> {
         let mut obj = HashObject::new();
         obj.key = key;
 
@@ -20,16 +21,16 @@ impl HashParser {
             super::RDB_TYPE_HASH_ZIPLIST => Self::read_hash_zip_list(&mut obj, reader)?,
             super::RDB_TYPE_HASH_LISTPACK => Self::read_hash_list_pack(&mut obj, reader)?,
             _ => {
-                return Err(Error::RedisRdbError(format!(
+                bail! {Error::RedisRdbError(format!(
                     "unknown hash type. type_byte=[{}]",
                     type_byte
-                )))
+                ))}
             }
         }
         Ok(obj)
     }
 
-    fn read_hash(obj: &mut HashObject, reader: &mut RdbReader) -> Result<(), Error> {
+    fn read_hash(obj: &mut HashObject, reader: &mut RdbReader) -> anyhow::Result<()> {
         let size = reader.read_length()?;
         for _ in 0..size {
             let key = reader.read_string()?;
@@ -39,13 +40,13 @@ impl HashParser {
         Ok(())
     }
 
-    fn read_hash_zip_map(_obj: &mut HashObject, _reader: &mut RdbReader) -> Result<(), Error> {
-        Err(Error::RedisRdbError(
+    fn read_hash_zip_map(_obj: &mut HashObject, _reader: &mut RdbReader) -> anyhow::Result<()> {
+        bail! {Error::RedisRdbError(
             "not implemented rdb_type_zip_map".to_string(),
-        ))
+        )}
     }
 
-    fn read_hash_zip_list(obj: &mut HashObject, reader: &mut RdbReader) -> Result<(), Error> {
+    fn read_hash_zip_list(obj: &mut HashObject, reader: &mut RdbReader) -> anyhow::Result<()> {
         let list = reader.read_zip_list()?;
         let size = list.len();
         for i in (0..size).step_by(2) {
@@ -56,7 +57,7 @@ impl HashParser {
         Ok(())
     }
 
-    pub fn read_hash_list_pack(obj: &mut HashObject, reader: &mut RdbReader) -> Result<(), Error> {
+    pub fn read_hash_list_pack(obj: &mut HashObject, reader: &mut RdbReader) -> anyhow::Result<()> {
         let list = reader.read_list_pack()?;
         let size = list.len();
         for i in (0..size).step_by(2) {
