@@ -41,14 +41,14 @@ impl RdbParser<'_> {
     pub fn load_meta(&mut self) -> anyhow::Result<String> {
         // magic
         let mut buf = self.reader.read_bytes(5)?;
-        let magic = String::from_utf8(buf).unwrap();
+        let magic = String::from_utf8(buf)?;
         if magic != "REDIS" {
             bail! {Error::RedisRdbError("invalid rdb format".to_string())}
         }
 
         // version
         buf = self.reader.read_bytes(4)?;
-        let version = String::from_utf8(buf).unwrap();
+        let version = String::from_utf8(buf)?;
         Ok(version)
     }
 

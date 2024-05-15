@@ -77,7 +77,7 @@ impl Extractor for RedisSnapshotFileExtractor {
 impl StreamReader for RdbFileReader {
     fn read_bytes(&mut self, size: usize) -> anyhow::Result<Vec<u8>> {
         let mut buf = vec![0; size];
-        self.file.read_exact(&mut buf).unwrap();
+        self.file.read_exact(&mut buf)?;
         Ok(buf)
     }
 }

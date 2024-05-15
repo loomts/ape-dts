@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use anyhow::{bail, Context};
 use chrono::{DateTime, NaiveDateTime, Utc};
 
 pub struct TimeUtil {}
@@ -15,17 +16,18 @@ impl TimeUtil {
     #[inline(always)]
     pub fn datetime_from_utc_str(str: &str) -> anyhow::Result<DateTime<Utc>> {
         let datetime = NaiveDateTime::parse_from_str(str, "%Y-%m-%d %H:%M:%S")
-            .unwrap()
+            .with_context(|| format!("datetime_from_utc_str failed, input: [{}]", str))?
             .and_utc();
         Ok(datetime)
     }
 
     #[inline(always)]
-    pub fn timestamp_to_str(timestamp: u32) -> String {
-        DateTime::from_timestamp(timestamp as i64, 0)
-            .unwrap()
-            .format(UTC_FORMAT)
-            .to_string()
+    pub fn timestamp_to_str(timestamp: u32) -> anyhow::Result<String> {
+        if let Some(datetime) = DateTime::from_timestamp(timestamp as i64, 0) {
+            Ok(datetime.format(UTC_FORMAT).to_string())
+        } else {
+            bail!(format!("timestamp_to_str failed, input: [{}]", timestamp))
+        }
     }
 }
 

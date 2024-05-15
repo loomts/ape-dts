@@ -35,7 +35,7 @@ impl Sinker for MongoSinker {
         }
 
         if !batch {
-            self.serial_sink(data).await.unwrap();
+            self.serial_sink(data).await?;
         } else {
             match data[0].row_type {
                 RowType::Insert => {
@@ -44,7 +44,7 @@ impl Sinker for MongoSinker {
                 RowType::Delete => {
                     call_batch_fn!(self, data, Self::batch_delete);
                 }
-                _ => self.serial_sink(data).await.unwrap(),
+                _ => self.serial_sink(data).await?,
             }
         }
         Ok(())
@@ -76,9 +76,7 @@ impl MongoSinker {
                         let query_doc =
                             doc! {MongoConstants::ID: doc.get(MongoConstants::ID).unwrap()};
                         let update_doc = doc! {MongoConstants::SET: doc};
-                        self.upsert(&collection, query_doc, update_doc)
-                            .await
-                            .unwrap();
+                        self.upsert(&collection, query_doc, update_doc).await?;
                     }
                 }
 
@@ -87,7 +85,7 @@ impl MongoSinker {
                     if let Some(ColValue::MongoDoc(doc)) = before.remove(MongoConstants::DOC) {
                         let query_doc =
                             doc! {MongoConstants::ID: doc.get(MongoConstants::ID).unwrap()};
-                        collection.delete_one(query_doc, None).await.unwrap();
+                        collection.delete_one(query_doc, None).await?;
                     }
                 }
 
@@ -116,8 +114,7 @@ impl MongoSinker {
 
                     if query_doc.is_some() && update_doc.is_some() {
                         self.upsert(&collection, query_doc.unwrap(), update_doc.unwrap())
-                            .await
-                            .unwrap();
+                            .await?;
                     }
                 }
             }
@@ -156,7 +153,7 @@ impl MongoSinker {
                 "$in": ids
             }
         };
-        collection.delete_many(query, None).await.unwrap();
+        collection.delete_many(query, None).await?;
 
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
@@ -192,7 +189,7 @@ impl MongoSinker {
                 error.to_string()
             );
             let sub_data = &data[start_index..start_index + batch_size];
-            self.serial_sink(sub_data.to_vec()).await.unwrap();
+            self.serial_sink(sub_data.to_vec()).await?;
         }
 
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
@@ -207,8 +204,7 @@ impl MongoSinker {
         let options = UpdateOptions::builder().upsert(true).build();
         collection
             .update_one(query_doc, update_doc, Some(options))
-            .await
-            .unwrap();
+            .await?;
         Ok(())
     }
 }

@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
+use serde::Serialize;
+
 use crate::meta::foreign_key::ForeignKey;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct RdbTbMeta {
     pub schema: String,
     pub tb: String,

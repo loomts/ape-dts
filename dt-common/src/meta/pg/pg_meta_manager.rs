@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::error::Error;
-use anyhow::bail;
+use anyhow::{bail, Context};
 use futures::TryStreamExt;
 use sqlx::{Pool, Postgres, Row};
 
@@ -42,7 +42,13 @@ impl PgMetaManager {
     }
 
     pub fn get_col_type_by_oid(&mut self, oid: i32) -> anyhow::Result<PgColType> {
-        Ok(self.type_registry.oid_to_type.get(&oid).unwrap().clone())
+        Ok(self
+            .type_registry
+            .oid_to_type
+            .get(&oid)
+            .with_context(|| format!("no type found for oid: [{}]", oid))
+            .unwrap()
+            .clone())
     }
 
     pub fn update_tb_meta_by_oid(&mut self, oid: i32, tb_meta: PgTbMeta) -> anyhow::Result<()> {
@@ -53,7 +59,12 @@ impl PgMetaManager {
     }
 
     pub fn get_tb_meta_by_oid(&mut self, oid: i32) -> anyhow::Result<PgTbMeta> {
-        Ok(self.oid_to_tb_meta.get(&oid).unwrap().clone())
+        Ok(self
+            .oid_to_tb_meta
+            .get(&oid)
+            .with_context(|| format!("no tb_meta found for oid: [{}]", oid))
+            .unwrap()
+            .clone())
     }
 
     pub async fn get_tb_meta_by_row_data<'a>(

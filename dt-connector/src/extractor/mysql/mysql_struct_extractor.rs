@@ -45,21 +45,21 @@ impl MysqlStructExtractor {
         };
 
         // database
-        let database = pg_fetcher.get_create_database_statement().await.unwrap();
+        let database = pg_fetcher.get_create_database_statement().await?;
         let statement = StructStatement::MysqlCreateDatabase {
             statement: database,
         };
-        self.push_dt_data(statement).await;
+        self.push_dt_data(statement).await?;
 
         // tables
-        for statement in pg_fetcher.get_create_table_statements("").await.unwrap() {
+        for statement in pg_fetcher.get_create_table_statements("").await? {
             self.push_dt_data(StructStatement::MysqlCreateTable { statement })
-                .await;
+                .await?;
         }
         Ok(())
     }
 
-    pub async fn push_dt_data(&mut self, statement: StructStatement) {
+    pub async fn push_dt_data(&mut self, statement: StructStatement) -> anyhow::Result<()> {
         let ddl_data = DdlData {
             schema: self.db.clone(),
             tb: String::new(),
@@ -71,6 +71,5 @@ impl MysqlStructExtractor {
         self.base_extractor
             .push_dt_data(DtData::Ddl { ddl_data }, Position::None)
             .await
-            .unwrap()
     }
 }

@@ -48,18 +48,18 @@ impl Extractor for RedisScanExtractor {
 
             // select db
             let cmd = ["SELECT", &db];
-            if Value::Okay != RedisUtil::send_cmd(&mut self.conn, &cmd) {
+            if Value::Okay != RedisUtil::send_cmd(&mut self.conn, &cmd)? {
                 bail! {Error::RedisResultError(format!("\"SELECT {}\" failed", db))}
             }
 
             // scan
-            let db_id: i64 = db.parse().unwrap();
+            let db_id: i64 = db.parse()?;
             let mut cursor = 0;
             loop {
                 let cmd = ["SCAN", &cursor.to_string(), "COUNT", count];
                 let result = self.query(&cmd).await?;
 
-                cursor = result[0].parse().unwrap();
+                cursor = result[0].parse()?;
                 for key in result.iter().skip(1) {
                     match self.statistic_type {
                         RedisStatisticType::HotKey => self.analyze_hot_key(db_id, key).await?,
@@ -109,8 +109,7 @@ impl RedisScanExtractor {
             entry.freq = freq;
             self.base_extractor
                 .push_dt_data(DtData::Redis { entry }, Position::None)
-                .await
-                .unwrap();
+                .await?;
         }
         Ok(())
     }
@@ -118,7 +117,7 @@ impl RedisScanExtractor {
     async fn analyze_big_key(&mut self, db_id: i64, key: &str) -> anyhow::Result<()> {
         let cmd = ["MEMORY", "USAGE", key];
         let result = self.query(&cmd).await?;
-        let data_size: usize = result[0].parse().unwrap();
+        let data_size: usize = result[0].parse()?;
 
         let cmd = ["TYPE", key];
         let result = self.query(&cmd).await?;
@@ -136,7 +135,7 @@ impl RedisScanExtractor {
     }
 
     async fn query(&mut self, cmd: &[&str]) -> anyhow::Result<Vec<String>> {
-        let result = RedisUtil::send_cmd(&mut self.conn, cmd);
+        let result = RedisUtil::send_cmd(&mut self.conn, cmd)?;
         RedisUtil::parse_result_as_string(result)
     }
 }

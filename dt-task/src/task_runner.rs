@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::bail;
+use anyhow::{bail, Context};
 use concurrent_queue::ConcurrentQueue;
 use dt_common::meta::{dt_data::DtItem, position::Position, row_type::RowType, syncer::Syncer};
 use dt_common::{
@@ -52,10 +52,10 @@ const DEFAULT_CHECK_LOG_DIR_PLACEHODLER: &str = "LOG_DIR_PLACEHODLER/check";
 const DEFAULT_STATISTIC_LOG_DIR_PLACEHODLER: &str = "LOG_DIR_PLACEHODLER/statistic";
 
 impl TaskRunner {
-    pub async fn new(task_config_file: String) -> Self {
-        Self {
-            config: TaskConfig::new(&task_config_file),
-        }
+    pub fn new(task_config_file: &str) -> anyhow::Result<Self> {
+        let config = TaskConfig::new(task_config_file)
+            .with_context(|| format!("invalid configs in [{}]", task_config_file))?;
+        Ok(Self { config })
     }
 
     pub async fn start_task(&self, enable_log4rs: bool) -> anyhow::Result<()> {
@@ -204,11 +204,9 @@ impl TaskRunner {
             &self.config.data_marker
         {
             let extractor_data_marker =
-                DataMarker::from_config(data_marker_config, &self.config.extractor_basic.db_type)
-                    .unwrap();
+                DataMarker::from_config(data_marker_config, &self.config.extractor_basic.db_type)?;
             let sinker_data_marker =
-                DataMarker::from_config(data_marker_config, &self.config.sinker_basic.db_type)
-                    .unwrap();
+                DataMarker::from_config(data_marker_config, &self.config.sinker_basic.db_type)?;
             (Some(extractor_data_marker), Some(sinker_data_marker))
         } else {
             (None, None)
@@ -270,7 +268,7 @@ impl TaskRunner {
             .await?;
 
         // do pre operations before task starts
-        self.pre_single_task(sinker_data_marker).await.unwrap();
+        self.pre_single_task(sinker_data_marker).await?;
 
         // start threads
         let f1 = tokio::spawn(async move {
@@ -312,8 +310,7 @@ impl TaskRunner {
                 Ratelimiter::builder(self.config.pipeline.max_rps, Duration::from_secs(1))
                     .max_tokens(self.config.pipeline.max_rps)
                     .initial_available(self.config.pipeline.max_rps)
-                    .build()
-                    .unwrap(),
+                    .build()?,
             )
         } else {
             None
@@ -387,7 +384,7 @@ impl TaskRunner {
             .replace(LOG_LEVEL_PLACEHODLER, &self.config.runtime.log_level);
 
         let config: RawConfig = serde_yaml::from_str(&config_str)?;
-        log4rs::init_raw_config(config).unwrap();
+        log4rs::init_raw_config(config)?;
         Ok(())
     }
 

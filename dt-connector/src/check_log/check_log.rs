@@ -3,6 +3,7 @@ use std::{
     str::FromStr,
 };
 
+use anyhow::Context;
 use dt_common::error::Error;
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::json;
@@ -35,7 +36,9 @@ impl std::fmt::Display for CheckLog {
 impl FromStr for CheckLog {
     type Err = Error;
     fn from_str(str: &str) -> Result<Self, Self::Err> {
-        let me: Self = serde_json::from_str(str).unwrap();
+        let me: Self = serde_json::from_str(str)
+            .with_context(|| format!("invalid check log: [{}]", str))
+            .unwrap();
         Ok(me)
     }
 }

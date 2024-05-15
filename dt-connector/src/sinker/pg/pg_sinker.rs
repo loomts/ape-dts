@@ -9,6 +9,7 @@ use crate::{
     rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker,
 };
 
+use anyhow::Context;
 use dt_common::{log_error, log_info, monitor::monitor::Monitor};
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
@@ -41,7 +42,7 @@ impl Sinker for PgSinker {
         }
 
         if !batch {
-            self.serial_sink(data).await.unwrap();
+            self.serial_sink(data).await?;
         } else {
             match data[0].row_type {
                 RowType::Insert => {
@@ -50,7 +51,7 @@ impl Sinker for PgSinker {
                 RowType::Delete => {
                     call_batch_fn!(self, data, Self::batch_delete);
                 }
-                _ => self.serial_sink(data).await.unwrap(),
+                _ => self.serial_sink(data).await?,
             }
         }
         Ok(())
@@ -60,7 +61,7 @@ impl Sinker for PgSinker {
         for ddl_data in data.iter() {
             log_info!("sink ddl: {}", ddl_data.query);
 
-            let conn_options = PgConnectOptions::from_str(&self.url).unwrap();
+            let conn_options = PgConnectOptions::from_str(&self.url)?;
             let mut pool_options = PgPoolOptions::new().max_connections(1);
             let sql = format!("SET search_path = '{}';", ddl_data.schema);
 
@@ -74,9 +75,9 @@ impl Sinker for PgSinker {
                 });
             }
 
-            let conn_pool = pool_options.connect_with(conn_options).await.unwrap();
+            let conn_pool = pool_options.connect_with(conn_options).await?;
             let query = sqlx::query(&ddl_data.query);
-            query.execute(&conn_pool).await.unwrap();
+            query.execute(&conn_pool).await?;
             conn_pool.close().await;
         }
         Ok(())
@@ -101,9 +102,12 @@ impl PgSinker {
         let start_time = Instant::now();
         let mut data_size = 0;
 
-        let mut tx = self.conn_pool.begin().await.unwrap();
+        let mut tx = self.conn_pool.begin().await?;
         if let Some(sql) = self.get_data_marker_sql() {
-            sqlx::query(&sql).execute(&mut tx).await.unwrap();
+            sqlx::query(&sql)
+                .execute(&mut tx)
+                .await
+                .with_context(|| format!("failed to execute data marker sql: [{}]", sql))?;
         }
         for row_data in data.iter() {
             data_size += row_data.data_size;
@@ -113,9 +117,12 @@ impl PgSinker {
 
             let query_info = query_builder.get_query_info(row_data, true)?;
             let query = query_builder.create_pg_query(&query_info);
-            query.execute(&mut tx).await.unwrap();
+            query
+                .execute(&mut tx)
+                .await
+                .with_context(|| format!("serial sink failed, row_data: [{}]", row_data))?;
         }
-        tx.commit().await.unwrap();
+        tx.commit().await?;
 
         BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
             .await
@@ -137,12 +144,12 @@ impl PgSinker {
         let query = query_builder.create_pg_query(&query_info);
 
         if let Some(sql) = self.get_data_marker_sql() {
-            let mut tx = self.conn_pool.begin().await.unwrap();
-            sqlx::query(&sql).execute(&mut tx).await.unwrap();
-            query.execute(&mut tx).await.unwrap();
-            tx.commit().await.unwrap();
+            let mut tx = self.conn_pool.begin().await?;
+            sqlx::query(&sql).execute(&mut tx).await?;
+            query.execute(&mut tx).await?;
+            tx.commit().await?;
         } else {
-            query.execute(&self.conn_pool).await.unwrap();
+            query.execute(&self.conn_pool).await?;
         }
 
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
@@ -168,9 +175,9 @@ impl PgSinker {
         let query = query_builder.create_pg_query(&query_info);
 
         let exec_error = if let Some(sql) = self.get_data_marker_sql() {
-            let mut tx = self.conn_pool.begin().await.unwrap();
-            sqlx::query(&sql).execute(&mut tx).await.unwrap();
-            query.execute(&mut tx).await.unwrap();
+            let mut tx = self.conn_pool.begin().await?;
+            sqlx::query(&sql).execute(&mut tx).await?;
+            query.execute(&mut tx).await?;
             tx.commit().await
         } else {
             match query.execute(&self.conn_pool).await {
@@ -187,7 +194,7 @@ impl PgSinker {
                 error.to_string()
             );
             let sub_data = &data[start_index..start_index + batch_size];
-            self.serial_sink(sub_data.to_vec()).await.unwrap();
+            self.serial_sink(sub_data.to_vec()).await?;
         }
 
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await

@@ -99,7 +99,7 @@ impl RedisCdcExtractor {
             &SqlUtil::get_escape_pairs(&DbType::Redis),
         );
         let heartbeat_db_id = if heartbeat_db_key.len() == 2 {
-            heartbeat_db_key[0].parse().unwrap()
+            heartbeat_db_key[0].parse()?
         } else {
             i64::MIN
         };
@@ -111,8 +111,7 @@ impl RedisCdcExtractor {
                 &heartbeat_db_key[1],
                 self.base_extractor.shut_down.clone(),
             )
-            .await
-            .unwrap();
+            .await?;
         } else {
             log_warn!("heartbeat disabled, heartbeat_tb should be like db.key");
         }
@@ -126,23 +125,20 @@ impl RedisCdcExtractor {
                 start_time = Instant::now();
             }
 
-            let (value, n) = self.conn.read_with_len().await.unwrap();
+            let (value, n) = self.conn.read_with_len().await?;
             if Value::Nil == value {
                 continue;
             }
 
             self.repl_offset += n as u64;
-            let cmd = self.handle_redis_value(value).await.unwrap();
+            let cmd = self.handle_redis_value(value).await?;
 
             if !cmd.args.is_empty() {
                 let cmd_name = cmd.get_name().to_ascii_lowercase();
 
                 // switch db
                 if cmd_name == "select" {
-                    self.now_db_id = String::from_utf8(cmd.args[1].clone())
-                        .unwrap()
-                        .parse::<i64>()
-                        .unwrap();
+                    self.now_db_id = String::from_utf8(cmd.args[1].clone())?.parse::<i64>()?;
                     continue;
                 }
 
@@ -176,8 +172,7 @@ impl RedisCdcExtractor {
                     // 2, data_marker will be reset follwing EXEC.
                     self.base_extractor
                         .push_dt_data(DtData::Begin {}, position)
-                        .await
-                        .unwrap();
+                        .await?;
                     // ignore MULTI & EXEC, otherwise we may get error: "MULTI calls can not be nested"
                     continue;
                 }
@@ -186,8 +181,7 @@ impl RedisCdcExtractor {
                 if cmd_name == "exec" {
                     self.base_extractor
                         .push_dt_data(DtData::Commit { xid: String::new() }, position)
-                        .await
-                        .unwrap();
+                        .await?;
                     continue;
                 }
 
@@ -207,8 +201,7 @@ impl RedisCdcExtractor {
                     entry,
                     position,
                 )
-                .await
-                .unwrap();
+                .await?;
             }
         }
     }
@@ -305,7 +298,7 @@ impl RedisCdcExtractor {
 
     async fn heartbeat(key: &str, conn: &mut RedisClient) -> anyhow::Result<()> {
         // send `SET heartbeat_key current_timestamp` by another connecion to generate timestamp
-        let since_epoch = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+        let since_epoch = SystemTime::now().duration_since(UNIX_EPOCH)?;
         let timestamp =
             since_epoch.as_secs() * 1000 + since_epoch.subsec_nanos() as u64 / 1_000_000;
         let heartbeat_value = Position::format_timestamp_millis(timestamp as i64);

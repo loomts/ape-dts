@@ -30,13 +30,13 @@ impl Sinker for StarRocksSinker {
         }
 
         if !batch {
-            self.serial_sink(data).await.unwrap();
+            self.serial_sink(data).await?;
         } else {
             match data[0].row_type {
                 RowType::Insert | RowType::Delete => {
                     call_batch_fn!(self, data, Self::batch_sink);
                 }
-                _ => self.serial_sink(data).await.unwrap(),
+                _ => self.serial_sink(data).await?,
             }
         }
         Ok(())
@@ -51,7 +51,7 @@ impl StarRocksSinker {
         let data = data.as_mut_slice();
         for i in 0..data.len() {
             data_size += data[i].data_size;
-            self.send_data(data, i, 1).await.unwrap();
+            self.send_data(data, i, 1).await?;
         }
 
         BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
@@ -66,7 +66,7 @@ impl StarRocksSinker {
     ) -> anyhow::Result<()> {
         let start_time = Instant::now();
 
-        let data_size = self.send_data(data, start_index, batch_size).await.unwrap();
+        let data_size = self.send_data(data, start_index, batch_size).await?;
 
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
@@ -102,9 +102,9 @@ impl StarRocksSinker {
             "http://{}:{}/api/{}/{}/_stream_load",
             self.host, self.port, db, tb
         );
-        let request = self.build_request(&url, op, &body).unwrap();
-        let response = self.client.execute(request).await.unwrap();
-        Self::check_response(response).await.unwrap();
+        let request = self.build_request(&url, op, &body)?;
+        let response = self.client.execute(request).await?;
+        Self::check_response(response).await?;
 
         Ok(data_size)
     }
@@ -160,8 +160,8 @@ impl StarRocksSinker {
         //     "WriteDataTimeMs": 107,
         //     "CommitAndPublishTimeMs": 36
         // }
-        let load_result = &response.text().await.unwrap();
-        let json_value: Value = serde_json::from_str(load_result).unwrap();
+        let load_result = &response.text().await?;
+        let json_value: Value = serde_json::from_str(load_result)?;
         if json_value["Status"] != "Success" {
             let err = format!(
                 "stream load request failed, status_code: {}, load_result: {}",

@@ -41,15 +41,13 @@ impl BaseChecker {
                         extractor_meta_manager,
                         reverse_router,
                     )
-                    .await
-                    .unwrap();
+                    .await?;
                     diff.push(diff_log);
                 }
             } else {
                 let miss_log =
                     Self::build_miss_log(src_row_data, extractor_meta_manager, reverse_router)
-                        .await
-                        .unwrap();
+                        .await?;
                 miss.push(miss_log);
             }
         }
@@ -163,9 +161,8 @@ impl BaseChecker {
         reverse_router: &RdbRouter,
     ) -> anyhow::Result<CheckLog> {
         // share same logic to fill basic CheckLog fields as miss log
-        let miss_log = Self::build_miss_log(src_row_data, extractor_meta_manager, reverse_router)
-            .await
-            .unwrap();
+        let miss_log =
+            Self::build_miss_log(src_row_data, extractor_meta_manager, reverse_router).await?;
         let diff_col_values = if let Some(col_map) =
             reverse_router.get_col_map(&src_row_data.schema, &src_row_data.tb)
         {

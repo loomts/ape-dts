@@ -36,7 +36,7 @@ impl Extractor for MysqlCheckExtractor {
             check_log_dir: self.check_log_dir.clone(),
             batch_size: self.batch_size,
         };
-        base_check_extractor.extract(self).await.unwrap();
+        base_check_extractor.extract(self).await?;
         self.base_extractor.wait_task_finish().await
     }
 
@@ -74,8 +74,7 @@ impl BatchCheckExtractor for MysqlCheckExtractor {
 
             self.base_extractor
                 .push_row(row_data, Position::None)
-                .await
-                .unwrap();
+                .await?;
         }
         Ok(())
     }
@@ -90,7 +89,7 @@ impl MysqlCheckExtractor {
         for check_log in check_logs.iter() {
             let mut after = HashMap::new();
             for (col, value) in check_log.id_col_values.iter() {
-                let col_type = tb_meta.col_type_map.get(col).unwrap();
+                let col_type = tb_meta.get_col_type(col)?;
                 let col_value = if let Some(str) = value {
                     MysqlColValueConvertor::from_str(col_type, str)?
                 } else {

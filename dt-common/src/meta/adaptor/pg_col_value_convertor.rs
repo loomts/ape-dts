@@ -62,27 +62,27 @@ impl PgColValueConvertor {
             "bool" => ColValue::Bool("t" == value_str.to_lowercase()),
 
             "integer" | "int" | "int4" | "serial" | "serial2" | "serial4" => {
-                let res: i32 = value_str.parse().unwrap();
+                let res: i32 = value_str.parse()?;
                 ColValue::Long(res)
             }
 
             "int2" | "smallserial" | "smallint" => {
-                let value: i16 = value_str.parse().unwrap();
+                let value: i16 = value_str.parse()?;
                 ColValue::Short(value)
             }
 
             "bigint" | "bigserial" | "int8" | "oid" => {
-                let value: i64 = value_str.parse().unwrap();
+                let value: i64 = value_str.parse()?;
                 ColValue::LongLong(value)
             }
 
             "real" | "float4" => {
-                let value: f32 = value_str.parse().unwrap();
+                let value: f32 = value_str.parse()?;
                 ColValue::Float(value)
             }
 
             "float8" => {
-                let value: f64 = value_str.parse().unwrap();
+                let value: f64 = value_str.parse()?;
                 ColValue::Double(value)
             }
 
@@ -122,7 +122,7 @@ impl PgColValueConvertor {
         // include all types from https://www.postgresql.org/docs/current/static/datatype.html#DATATYPE-TABLE
         // plus aliases from the shorter names produced by older wal2json
         // let value = value.unwrap();
-        let value_str = std::str::from_utf8(value).unwrap();
+        let value_str = std::str::from_utf8(value)?;
         Self::from_str(col_type, value_str, meta_manager)
     }
 

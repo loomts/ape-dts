@@ -16,7 +16,7 @@ impl RdbReader<'_> {
 
 impl StreamReader for RdbReader<'_> {
     fn read_bytes(&mut self, length: usize) -> anyhow::Result<Vec<u8>> {
-        let buf = self.conn.read_bytes(length).unwrap();
+        let buf = self.conn.read_bytes(length)?;
         self.position += length;
         if self.copy_raw {
             self.raw_bytes.extend_from_slice(&buf);

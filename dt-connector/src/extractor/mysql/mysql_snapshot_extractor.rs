@@ -59,11 +59,11 @@ impl MysqlSnapshotExtractor {
             .to_owned();
 
         if let Some(order_col) = &tb_meta.basic.order_col {
-            let order_col_type = tb_meta.col_type_map.get(order_col).unwrap();
+            let order_col_type = tb_meta.get_col_type(order_col)?;
 
             let resume_value =
                 if let Some(value) = self.resumer.get_resume_value(&self.db, &self.tb, order_col) {
-                    MysqlColValueConvertor::from_str(order_col_type, &value).unwrap()
+                    MysqlColValueConvertor::from_str(order_col_type, &value)?
                 } else {
                     ColValue::None
                 };
@@ -99,8 +99,7 @@ impl MysqlSnapshotExtractor {
             let row_data = RowData::from_mysql_row(&row, tb_meta);
             self.base_extractor
                 .push_row(row_data, Position::None)
-                .await
-                .unwrap();
+                .await?;
         }
 
         log_info!(
@@ -147,8 +146,7 @@ impl MysqlSnapshotExtractor {
             let mut rows = query.fetch(&self.conn_pool);
             let mut slice_count = 0usize;
             while let Some(row) = rows.try_next().await.unwrap() {
-                start_value =
-                    MysqlColValueConvertor::from_query(&row, order_col, order_col_type).unwrap();
+                start_value = MysqlColValueConvertor::from_query(&row, order_col, order_col_type)?;
                 extracted_count += 1;
                 slice_count += 1;
                 // sampling may be used in check scenario
@@ -169,10 +167,7 @@ impl MysqlSnapshotExtractor {
                     Position::None
                 };
 
-                self.base_extractor
-                    .push_row(row_data, position)
-                    .await
-                    .unwrap();
+                self.base_extractor.push_row(row_data, position).await?;
             }
 
             // all data extracted

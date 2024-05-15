@@ -3,6 +3,7 @@ use std::{str::FromStr, time::Duration};
 use dt_common::config::{
     config_enums::DbType, sinker_config::SinkerConfig, task_config::TaskConfig,
 };
+use dt_common::log_info;
 use dt_common::meta::{
     mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
     rdb_meta_manager::RdbMetaManager,
@@ -26,6 +27,7 @@ impl TaskUtil {
         max_connections: u32,
         enable_sqlx_log: bool,
     ) -> anyhow::Result<Pool<MySql>> {
+        log_info!("mysql url: {}", url);
         let mut conn_options = MySqlConnectOptions::from_str(url)?;
         // The default character set is `utf8mb4`
         conn_options
@@ -48,6 +50,7 @@ impl TaskUtil {
         max_connections: u32,
         enable_sqlx_log: bool,
     ) -> anyhow::Result<Pool<Postgres>> {
+        log_info!("pg url: {}", url);
         let mut conn_options = PgConnectOptions::from_str(url)?;
         conn_options
             .log_statements(log::LevelFilter::Info)
@@ -115,11 +118,12 @@ impl TaskUtil {
     }
 
     pub async fn create_mongo_client(url: &str, app_name: &str) -> anyhow::Result<mongodb::Client> {
-        let mut client_options = ClientOptions::parse_async(url).await.unwrap();
+        log_info!("mongo url: {}", url);
+        let mut client_options = ClientOptions::parse_async(url).await?;
         // app_name only for debug usage
         client_options.app_name = Some(app_name.to_string());
         client_options.direct_connection = Some(true);
-        Ok(mongodb::Client::with_options(client_options).unwrap())
+        Ok(mongodb::Client::with_options(client_options)?)
     }
 
     pub fn check_enable_sqlx_log(log_level: &str) -> bool {
@@ -148,14 +152,19 @@ impl TaskUtil {
         Ok(tbs)
     }
 
-    pub async fn check_tb_exist(url: &str, db: &str, tb: &str, db_type: &DbType) -> bool {
-        let dbs = Self::list_dbs(url, db_type).await.unwrap();
+    pub async fn check_tb_exist(
+        url: &str,
+        db: &str,
+        tb: &str,
+        db_type: &DbType,
+    ) -> anyhow::Result<bool> {
+        let dbs = Self::list_dbs(url, db_type).await?;
         if !dbs.contains(&db.to_string()) {
-            return false;
+            return Ok(false);
         }
 
-        let tbs = Self::list_tbs(url, db, db_type).await.unwrap();
-        tbs.contains(&tb.to_string())
+        let tbs = Self::list_tbs(url, db, db_type).await?;
+        Ok(tbs.contains(&tb.to_string()))
     }
 
     pub async fn check_and_create_tb(
@@ -166,24 +175,30 @@ impl TaskUtil {
         tb_sql: &str,
         db_type: &DbType,
     ) -> anyhow::Result<()> {
-        if TaskUtil::check_tb_exist(url, db, tb, db_type).await {
+        log_info!(
+            "url: {}, db: {}, tb: {}, db_sql: {}, tb_sql: {}",
+            url,
+            db,
+            tb,
+            db_sql,
+            tb_sql
+        );
+        if TaskUtil::check_tb_exist(url, db, tb, db_type).await? {
             return Ok(());
         }
 
         match db_type {
             DbType::Mysql => {
-                let conn_pool = TaskUtil::create_mysql_conn_pool(url, 1, true)
-                    .await
-                    .unwrap();
-                sqlx::query(db_sql).execute(&conn_pool).await.unwrap();
-                sqlx::query(tb_sql).execute(&conn_pool).await.unwrap();
+                let conn_pool = Self::create_mysql_conn_pool(url, 1, true).await?;
+                sqlx::query(db_sql).execute(&conn_pool).await?;
+                sqlx::query(tb_sql).execute(&conn_pool).await?;
                 conn_pool.close().await
             }
 
             DbType::Pg => {
-                let conn_pool = TaskUtil::create_pg_conn_pool(url, 1, true).await.unwrap();
-                sqlx::query(db_sql).execute(&conn_pool).await.unwrap();
-                sqlx::query(tb_sql).execute(&conn_pool).await.unwrap();
+                let conn_pool = Self::create_pg_conn_pool(url, 1, true).await?;
+                sqlx::query(db_sql).execute(&conn_pool).await?;
+                sqlx::query(tb_sql).execute(&conn_pool).await?;
                 conn_pool.close().await
             }
 
@@ -250,7 +265,7 @@ impl TaskUtil {
 
     async fn list_mysql_tbs(url: &str, db: &str) -> anyhow::Result<Vec<String>> {
         let mut tbs = Vec::new();
-        let conn_pool = TaskUtil::create_mysql_conn_pool(url, 1, false).await?;
+        let conn_pool = Self::create_mysql_conn_pool(url, 1, false).await?;
 
         let sql = format!("SHOW TABLES IN `{}`", db);
         let mut rows = sqlx::query(&sql).fetch(&conn_pool);
@@ -263,19 +278,15 @@ impl TaskUtil {
     }
 
     async fn list_mongo_dbs(url: &str) -> anyhow::Result<Vec<String>> {
-        let client = TaskUtil::create_mongo_client(url, "").await.unwrap();
-        let dbs = client.list_database_names(None, None).await.unwrap();
+        let client = Self::create_mongo_client(url, "").await?;
+        let dbs = client.list_database_names(None, None).await?;
         client.shutdown().await;
         Ok(dbs)
     }
 
     async fn list_mongo_tbs(url: &str, db: &str) -> anyhow::Result<Vec<String>> {
-        let client = TaskUtil::create_mongo_client(url, "").await.unwrap();
-        let tbs = client
-            .database(db)
-            .list_collection_names(None)
-            .await
-            .unwrap();
+        let client = Self::create_mongo_client(url, "").await?;
+        let tbs = client.database(db).list_collection_names(None).await?;
         client.shutdown().await;
         Ok(tbs)
     }

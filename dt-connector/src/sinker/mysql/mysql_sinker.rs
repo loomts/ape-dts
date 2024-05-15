@@ -9,6 +9,7 @@ use crate::{
     rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker,
 };
 
+use anyhow::Context;
 use dt_common::{log_error, log_info, monitor::monitor::Monitor};
 
 use dt_common::meta::{
@@ -42,7 +43,7 @@ impl Sinker for MysqlSinker {
         }
 
         if !batch {
-            self.serial_sink(data).await.unwrap();
+            self.serial_sink(data).await?;
         } else {
             match data[0].row_type {
                 RowType::Insert => {
@@ -51,7 +52,7 @@ impl Sinker for MysqlSinker {
                 RowType::Delete => {
                     call_batch_fn!(self, data, Self::batch_delete);
                 }
-                _ => self.serial_sink(data).await.unwrap(),
+                _ => self.serial_sink(data).await?,
             }
         }
 
@@ -64,7 +65,7 @@ impl Sinker for MysqlSinker {
             let query = sqlx::query(&ddl_data.query);
 
             // create a tmp connection with databse since sqlx conn pool does NOT support `USE db`
-            let mut conn_options = MySqlConnectOptions::from_str(&self.url).unwrap();
+            let mut conn_options = MySqlConnectOptions::from_str(&self.url)?;
             if !ddl_data.schema.is_empty() && ddl_data.ddl_type != DdlType::CreateDatabase {
                 conn_options = conn_options.database(&ddl_data.schema);
             }
@@ -72,9 +73,8 @@ impl Sinker for MysqlSinker {
             let conn_pool = MySqlPoolOptions::new()
                 .max_connections(1)
                 .connect_with(conn_options)
-                .await
-                .unwrap();
-            query.execute(&conn_pool).await.unwrap();
+                .await?;
+            query.execute(&conn_pool).await?;
             conn_pool.close().await;
         }
         Ok(())
@@ -99,9 +99,12 @@ impl MysqlSinker {
         let start_time = Instant::now();
         let mut data_size = 0;
 
-        let mut tx = self.conn_pool.begin().await.unwrap();
+        let mut tx = self.conn_pool.begin().await?;
         if let Some(sql) = self.get_data_marker_sql() {
-            sqlx::query(&sql).execute(&mut tx).await.unwrap();
+            sqlx::query(&sql)
+                .execute(&mut tx)
+                .await
+                .with_context(|| format!("failed to execute data marker sql: [{}]", sql))?;
         }
         for row_data in data.iter() {
             data_size += row_data.data_size;
@@ -110,9 +113,12 @@ impl MysqlSinker {
 
             let query_info = query_builder.get_query_info(row_data, true)?;
             let query = query_builder.create_mysql_query(&query_info);
-            query.execute(&mut tx).await.unwrap();
+            query
+                .execute(&mut tx)
+                .await
+                .with_context(|| format!("serial sink failed, row_data: [{}]", row_data))?;
         }
-        tx.commit().await.unwrap();
+        tx.commit().await?;
 
         BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
             .await
@@ -137,12 +143,12 @@ impl MysqlSinker {
         let query = query_builder.create_mysql_query(&query_info);
 
         if let Some(sql) = self.get_data_marker_sql() {
-            let mut tx = self.conn_pool.begin().await.unwrap();
-            sqlx::query(&sql).execute(&mut tx).await.unwrap();
-            query.execute(&mut tx).await.unwrap();
-            tx.commit().await.unwrap();
+            let mut tx = self.conn_pool.begin().await?;
+            sqlx::query(&sql).execute(&mut tx).await?;
+            query.execute(&mut tx).await?;
+            tx.commit().await?;
         } else {
-            query.execute(&self.conn_pool).await.unwrap();
+            query.execute(&self.conn_pool).await?;
         }
 
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
@@ -168,9 +174,9 @@ impl MysqlSinker {
         let query = query_builder.create_mysql_query(&query_info);
 
         let exec_error = if let Some(sql) = self.get_data_marker_sql() {
-            let mut tx = self.conn_pool.begin().await.unwrap();
-            sqlx::query(&sql).execute(&mut tx).await.unwrap();
-            query.execute(&mut tx).await.unwrap();
+            let mut tx = self.conn_pool.begin().await?;
+            sqlx::query(&sql).execute(&mut tx).await?;
+            query.execute(&mut tx).await?;
             match tx.commit().await {
                 Err(e) => Some(e),
                 _ => None,
@@ -191,7 +197,7 @@ impl MysqlSinker {
             );
             // insert one by one
             let sub_data = &data[start_index..start_index + batch_size];
-            self.serial_sink(sub_data.to_vec()).await.unwrap();
+            self.serial_sink(sub_data.to_vec()).await?;
         }
 
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await

@@ -44,7 +44,7 @@ impl BaseTestRunner {
         // update extractor / sinker urls from .env
         TestConfigUtil::update_task_config_from_env(&dst_task_config_file, &dst_task_config_file);
 
-        let config = TaskConfig::new(&dst_task_config_file);
+        let config = TaskConfig::new(&dst_task_config_file).unwrap();
 
         let (
             src_test_sqls,
@@ -72,21 +72,19 @@ impl BaseTestRunner {
     }
 
     pub fn get_config(&self) -> TaskConfig {
-        TaskConfig::new(&self.task_config_file)
+        TaskConfig::new(&self.task_config_file).unwrap()
     }
 
     pub async fn start_task(&self) -> anyhow::Result<()> {
         let enable_log4rs = Self::get_enable_log4rs();
-        let task_config = self.task_config_file.clone();
-        TaskRunner::new(task_config)
-            .await
+        TaskRunner::new(&self.task_config_file)?
             .start_task(enable_log4rs)
             .await
     }
 
     pub async fn spawn_task(&self) -> anyhow::Result<JoinHandle<()>> {
         let enable_log4rs = Self::get_enable_log4rs();
-        let task_runner = TaskRunner::new(self.task_config_file.clone()).await;
+        let task_runner = TaskRunner::new(&self.task_config_file)?;
         let task =
             tokio::spawn(async move { task_runner.start_task(enable_log4rs).await.unwrap() });
         Ok(task)

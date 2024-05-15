@@ -1,8 +1,9 @@
 use crate::error::Error;
+use crate::log_info;
 use crate::meta::redis::cluster_node::ClusterNode;
 use crate::meta::redis::command::cmd_encoder::CmdEncoder;
 use crate::meta::redis::redis_object::RedisCmd;
-use anyhow::bail;
+use anyhow::{bail, Context};
 use redis::{Connection, ConnectionLike, Value};
 use regex::Regex;
 use std::collections::HashMap;
@@ -15,26 +16,26 @@ const SLOTS_COUNT: usize = 16384;
 impl RedisUtil {
     pub async fn create_redis_conn(url: &str) -> anyhow::Result<redis::Connection> {
         let conn = redis::Client::open(url)
-            .unwrap()
+            .with_context(|| format!("invalid redis url: [{}]", url))?
             .get_connection()
-            .unwrap_or_else(|_| panic!("can not connect: {}", url));
+            .with_context(|| format!("can not connect redis: [{}]", url))?;
         Ok(conn)
     }
 
-    pub fn send_cmd(conn: &mut Connection, cmd: &[&str]) -> Value {
+    pub fn send_cmd(conn: &mut Connection, cmd: &[&str]) -> anyhow::Result<Value> {
         let cmd = RedisCmd::from_str_args(cmd);
         let packed_cmd = CmdEncoder::encode(&cmd);
-        conn.req_packed_command(&packed_cmd).unwrap()
+        Ok(conn.req_packed_command(&packed_cmd)?)
     }
 
     pub fn get_cluster_master_nodes(
         conn: &mut redis::Connection,
     ) -> anyhow::Result<Vec<ClusterNode>> {
         let cmd = RedisCmd::from_str_args(&["cluster", "nodes"]);
-        let value = conn.req_packed_command(&CmdEncoder::encode(&cmd)).unwrap();
+        let value = conn.req_packed_command(&CmdEncoder::encode(&cmd))?;
         if let redis::Value::Data(data) = value {
-            let nodes_str = String::from_utf8(data).unwrap();
-            let nodes = Self::parse_cluster_nodes(&nodes_str).unwrap();
+            let nodes_str = String::from_utf8(data)?;
+            let nodes = Self::parse_cluster_nodes(&nodes_str)?;
             let master_nodes = nodes.into_iter().filter(|i| i.is_master).collect();
             Ok(master_nodes)
         } else {
@@ -61,9 +62,10 @@ impl RedisUtil {
 
     pub fn get_redis_version(conn: &mut redis::Connection) -> anyhow::Result<f32> {
         let cmd = RedisCmd::from_str_args(&["INFO"]);
-        let value = conn.req_packed_command(&CmdEncoder::encode(&cmd)).unwrap();
+        let value = conn.req_packed_command(&CmdEncoder::encode(&cmd))?;
         if let redis::Value::Data(data) = value {
-            let info = String::from_utf8(data).unwrap();
+            let info = String::from_utf8(data)?;
+            log_info!("redis INFO result: {}", info);
             let re = Regex::new(r"redis_version:(\S+)").unwrap();
             let cap = re.captures(&info).unwrap();
 
@@ -79,7 +81,7 @@ impl RedisUtil {
             if tokens.len() > 1 {
                 version = format!("{}.{}", tokens[0], tokens[1]);
             }
-            return Ok(f32::from_str(&version).unwrap());
+            return Ok(f32::from_str(&version)?);
         }
         bail! {Error::RedisResultError(
             "can not get redis version by INFO".into(),
@@ -115,11 +117,10 @@ impl RedisUtil {
 
     fn parse_cluster_nodes(nodes_str: &str) -> anyhow::Result<Vec<ClusterNode>> {
         // refer: https://github.com/tair-opensource/RedisShake/blob/v4/internal/utils/cluster_nodes.go
-
         let mut all_slots_count = 0;
-
         let mut parsed_nodes = Vec::new();
 
+        log_info!("cluster nodes: {}", nodes_str);
         // 5bafc7277da3038a8fbf01873179260351ed0a0a 172.28.0.13:6379@16379 master - 0 1712124938134 3 connected 12589-15758 15760-16383
         // 0e9d360631a20c27f629267bf3e01de8e8c4cbec 172.28.0.11:6379@16379 myself,master - 0 1712124940000 1 connected 1672-2267 2269-5460
         // 587ec020a7cd63397afe33d6e92ee975b4ab79a2 172.28.0.14:6379@16379 slave 5bafc7277da3038a8fbf01873179260351ed0a0a 0 1712124940213 3 connected

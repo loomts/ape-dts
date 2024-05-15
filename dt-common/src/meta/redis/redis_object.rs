@@ -272,13 +272,14 @@ impl RedisCmd {
         size
     }
 
-    pub fn parse_keys(&mut self, key_parser: &KeyParser) {
+    pub fn parse_keys(&mut self, key_parser: &KeyParser) -> anyhow::Result<()> {
         let args = self.args_to_string();
-        let (cmd_name, group, keys, keys_indexes) = key_parser.parse_key_from_argv(&args).unwrap();
+        let (cmd_name, group, keys, keys_indexes) = key_parser.parse_key_from_argv(&args)?;
         self.name = cmd_name;
         self.group = group;
         self.keys = keys;
         self.key_indexes = keys_indexes;
+        Ok(())
     }
 }
 

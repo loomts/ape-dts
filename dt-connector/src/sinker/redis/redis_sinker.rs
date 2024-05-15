@@ -86,7 +86,7 @@ impl RedisSinker {
             data_size += dt_data.get_data_size();
             cmds.extend_from_slice(&self.rewrite_entry(dt_data)?);
         }
-        self.batch_sink(cmds, batch_size).await.unwrap();
+        self.batch_sink(cmds, batch_size).await?;
 
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
@@ -98,7 +98,7 @@ impl RedisSinker {
         for dt_data in data.iter_mut() {
             data_size += dt_data.get_data_size();
             let cmds = self.rewrite_entry(dt_data)?;
-            self.serial_sink(cmds).await.unwrap()
+            self.serial_sink(cmds).await?;
         }
 
         BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
@@ -169,7 +169,7 @@ impl RedisSinker {
                 cmds.push(cmd);
             }
         }
-        self.batch_sink(cmds, batch_size).await.unwrap();
+        self.batch_sink(cmds, batch_size).await?;
 
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
@@ -286,7 +286,7 @@ impl RedisSinker {
             let mut packed_cmds = Vec::new();
             packed_cmds.extend_from_slice(&CmdEncoder::encode(&multi_cmd));
             packed_cmds.extend_from_slice(&CmdEncoder::encode(&data_marker_cmd));
-            self.conn.req_packed_commands(&packed_cmds, 0, 2).unwrap();
+            self.conn.req_packed_commands(&packed_cmds, 0, 2)?;
         }
 
         for cmd in cmds {
@@ -302,8 +302,7 @@ impl RedisSinker {
         if self.data_marker.is_some() {
             let exec_cmd = self.get_exec_cmd();
             self.conn
-                .req_packed_command(&CmdEncoder::encode(&exec_cmd))
-                .unwrap();
+                .req_packed_command(&CmdEncoder::encode(&exec_cmd))?;
         }
         Ok(())
     }

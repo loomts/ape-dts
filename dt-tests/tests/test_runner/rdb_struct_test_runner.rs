@@ -1,8 +1,8 @@
-use std::collections::{HashMap, HashSet};
 use dt_connector::meta_fetcher::{
     mysql::mysql_struct_check_fetcher::MysqlStructCheckFetcher,
     pg::pg_struct_check_fetcher::PgStructCheckFetcher,
 };
+use std::collections::{HashMap, HashSet};
 
 use super::{base_test_runner::BaseTestRunner, rdb_test_runner::RdbTestRunner};
 
@@ -110,10 +110,10 @@ impl RdbStructTestRunner {
         for i in 0..src_db_tbs.len() {
             let src_table = src_check_fetcher
                 .fetch_table(&src_db_tbs[i].0, &src_db_tbs[i].1)
-                .await;
+                .await?;
             let dst_table = dst_check_fetcher
                 .fetch_table(&dst_db_tbs[i].0, &dst_db_tbs[i].1)
-                .await;
+                .await?;
 
             println!(
                 "comparing src table: {:?} with dst table: {:?}\n",

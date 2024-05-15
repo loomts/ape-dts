@@ -40,16 +40,14 @@ impl Parallelizer for CheckParallelizer {
             let batch_sub_datas = SnapshotParallelizer::partition(batch_data, self.parallel_size)?;
             self.base_parallelizer
                 .sink_dml(batch_sub_datas, sinkers, self.parallel_size, true)
-                .await
-                .unwrap();
+                .await?;
 
             let serial_data = tb_merged_data.unmerged_rows;
             let serial_sub_datas =
                 SnapshotParallelizer::partition(serial_data, self.parallel_size)?;
             self.base_parallelizer
                 .sink_dml(serial_sub_datas, sinkers, self.parallel_size, false)
-                .await
-                .unwrap();
+                .await?;
         }
         Ok(())
     }

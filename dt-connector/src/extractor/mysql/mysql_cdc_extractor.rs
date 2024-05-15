@@ -107,21 +107,20 @@ impl MysqlCdcExtractor {
             binlog_position: self.binlog_position,
             server_id: self.server_id,
         };
-        let mut stream = client.connect().await.unwrap();
+        let mut stream = client.connect().await?;
         let mut table_map_event_map = HashMap::new();
         let mut binlog_filename = self.binlog_filename.clone();
 
         // start heartbeat
-        self.start_heartbeat(self.base_extractor.shut_down.clone())
-            .unwrap();
+        self.start_heartbeat(self.base_extractor.shut_down.clone())?;
 
         loop {
             if self.time_filter.ended {
-                stream.close().await.unwrap();
+                stream.close().await?;
                 return Ok(());
             }
 
-            let (header, data) = stream.read().await.unwrap();
+            let (header, data) = stream.read().await?;
             match data {
                 EventData::Rotate(r) => {
                     binlog_filename = r.binlog_filename;
@@ -308,7 +307,7 @@ impl MysqlCdcExtractor {
                 continue;
             }
 
-            let col_type = tb_meta.col_type_map.get(key).unwrap();
+            let col_type = tb_meta.get_col_type(key)?;
             let raw_value = event.column_values.remove(i);
             let value = MysqlColValueConvertor::from_binlog(col_type, raw_value)?;
             data.insert(key.clone(), value);

@@ -132,7 +132,7 @@ impl RdbKafkaRdbTestRunner {
             topics.push(cap.get(1).unwrap().as_str().into());
         }
 
-        let config = TaskConfig::new(&self.src_to_kafka_runner.task_config_file);
+        let config = TaskConfig::new(&self.src_to_kafka_runner.task_config_file).unwrap();
         match config.sinker {
             SinkerConfig::Kafka { url, .. } => {
                 let client = Self::create_kafka_admin_client(&url);

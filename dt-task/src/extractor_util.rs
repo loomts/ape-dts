@@ -132,7 +132,7 @@ impl ExtractorUtil {
             } => {
                 let conn_pool = TaskUtil::create_mysql_conn_pool(&url, 2, enable_sqlx_log).await?;
                 let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
-                let time_filter = TimeFilter::new(&start_time_utc, &end_time_utc);
+                let time_filter = TimeFilter::new(&start_time_utc, &end_time_utc)?;
                 let extractor = MysqlCdcExtractor {
                     meta_manager,
                     filter,
@@ -203,7 +203,7 @@ impl ExtractorUtil {
             } => {
                 let conn_pool = TaskUtil::create_pg_conn_pool(&url, 2, enable_sqlx_log).await?;
                 let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
-                let time_filter = TimeFilter::new(&start_time_utc, &end_time_utc);
+                let time_filter = TimeFilter::new(&start_time_utc, &end_time_utc)?;
                 let extractor = PgCdcExtractor {
                     meta_manager,
                     filter,
@@ -230,9 +230,7 @@ impl ExtractorUtil {
                 db,
                 tb,
             } => {
-                let mongo_client = TaskUtil::create_mongo_client(&url, &app_name)
-                    .await
-                    .unwrap();
+                let mongo_client = TaskUtil::create_mongo_client(&url, &app_name).await?;
                 let extractor = MongoSnapshotExtractor {
                     resumer: snapshot_resumer,
                     db,
@@ -252,9 +250,7 @@ impl ExtractorUtil {
                 heartbeat_interval_secs,
                 heartbeat_tb,
             } => {
-                let mongo_client = TaskUtil::create_mongo_client(&url, &app_name)
-                    .await
-                    .unwrap();
+                let mongo_client = TaskUtil::create_mongo_client(&url, &app_name).await?;
                 let extractor = MongoCdcExtractor {
                     filter,
                     resume_token,
@@ -277,9 +273,7 @@ impl ExtractorUtil {
                 check_log_dir,
                 batch_size,
             } => {
-                let mongo_client = TaskUtil::create_mongo_client(&url, &app_name)
-                    .await
-                    .unwrap();
+                let mongo_client = TaskUtil::create_mongo_client(&url, &app_name).await?;
                 let extractor = MongoCheckExtractor {
                     mongo_client,
                     check_log_dir,
@@ -314,7 +308,7 @@ impl ExtractorUtil {
             }
 
             ExtractorConfig::RedisSnapshot { url, repl_port } => {
-                let conn = RedisClient::new(&url).await.unwrap();
+                let conn = RedisClient::new(&url).await?;
                 let extractor = RedisSnapshotExtractor {
                     conn,
                     repl_port,
@@ -338,8 +332,8 @@ impl ExtractorUtil {
                 scan_count,
                 statistic_type,
             } => {
-                let conn = RedisUtil::create_redis_conn(&url).await.unwrap();
-                let statistic_type = RedisStatisticType::from_str(&statistic_type).unwrap();
+                let conn = RedisUtil::create_redis_conn(&url).await?;
+                let statistic_type = RedisStatisticType::from_str(&statistic_type)?;
                 let extractor = RedisScanExtractor {
                     conn,
                     statistic_type,
@@ -360,7 +354,7 @@ impl ExtractorUtil {
                 heartbeat_interval_secs,
                 heartbeat_key,
             } => {
-                let conn = RedisClient::new(&url).await.unwrap();
+                let conn = RedisClient::new(&url).await?;
                 let extractor = RedisCdcExtractor {
                     conn,
                     repl_id,

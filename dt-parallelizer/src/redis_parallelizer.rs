@@ -61,7 +61,7 @@ impl Parallelizer for RedisParallelizer {
         // for redis cluster
         for mut dt_data in data {
             let slots = if let DtData::Redis { entry } = &mut dt_data {
-                let slots = entry.cal_slots(&self.key_parser);
+                let slots = entry.cal_slots(&self.key_parser)?;
                 for i in 1..slots.len() {
                     if slots[i] != slots[0] {
                         bail! {Error::RedisCmdError(format!(
