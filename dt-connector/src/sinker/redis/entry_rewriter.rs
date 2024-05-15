@@ -1,3 +1,4 @@
+use anyhow::bail;
 use dt_common::error::Error;
 use dt_common::meta::redis::{
     redis_entry::RedisEntry,
@@ -268,7 +269,7 @@ const CRC64_TABLE: [u64; 256] = [
 pub struct EntryRewriter {}
 
 impl EntryRewriter {
-    pub fn rewrite_hash(obj: &mut HashObject) -> Result<Vec<RedisCmd>, Error> {
+    pub fn rewrite_hash(obj: &mut HashObject) -> anyhow::Result<Vec<RedisCmd>> {
         let mut cmds = vec![];
         for (k, v) in &obj.value {
             let mut cmd = RedisCmd::new();
@@ -281,7 +282,7 @@ impl EntryRewriter {
         Ok(cmds)
     }
 
-    pub fn rewrite_list(obj: &mut ListObject) -> Result<Vec<RedisCmd>, Error> {
+    pub fn rewrite_list(obj: &mut ListObject) -> anyhow::Result<Vec<RedisCmd>> {
         let mut cmds = vec![];
         for ele in &obj.elements {
             let mut cmd = RedisCmd::new();
@@ -293,13 +294,13 @@ impl EntryRewriter {
         Ok(cmds)
     }
 
-    pub fn rewrite_module(_obj: &mut ModuleObject) -> Result<Vec<RedisCmd>, Error> {
-        Err(Error::RedisRdbError(
+    pub fn rewrite_module(_obj: &mut ModuleObject) -> anyhow::Result<Vec<RedisCmd>> {
+        bail! {Error::RedisRdbError(
             "module rewrite not implemented".into(),
-        ))
+        )}
     }
 
-    pub fn rewrite_set(obj: &mut SetObject) -> Result<Vec<RedisCmd>, Error> {
+    pub fn rewrite_set(obj: &mut SetObject) -> anyhow::Result<Vec<RedisCmd>> {
         let mut cmds = vec![];
         for ele in &obj.elements {
             let mut cmd = RedisCmd::new();
@@ -311,7 +312,7 @@ impl EntryRewriter {
         Ok(cmds)
     }
 
-    pub fn rewrite_string(obj: &mut StringObject) -> Result<Vec<RedisCmd>, Error> {
+    pub fn rewrite_string(obj: &mut StringObject) -> anyhow::Result<Vec<RedisCmd>> {
         let mut cmd = RedisCmd::new();
         cmd.add_str_arg("set");
         cmd.add_redis_arg(&obj.key);
@@ -319,7 +320,7 @@ impl EntryRewriter {
         Ok(vec![cmd])
     }
 
-    pub fn rewrite_zset(obj: &mut ZsetObject) -> Result<Vec<RedisCmd>, Error> {
+    pub fn rewrite_zset(obj: &mut ZsetObject) -> anyhow::Result<Vec<RedisCmd>> {
         let mut cmds = vec![];
         for ele in obj.elements.iter() {
             let mut cmd = RedisCmd::new();
@@ -332,7 +333,7 @@ impl EntryRewriter {
         Ok(cmds)
     }
 
-    pub fn rewrite_as_restore(entry: &RedisEntry, version: f32) -> Result<RedisCmd, Error> {
+    pub fn rewrite_as_restore(entry: &RedisEntry, version: f32) -> anyhow::Result<RedisCmd> {
         let value = Self::create_value_dump(entry.value_type_byte, &entry.raw_bytes);
         let mut cmd = RedisCmd::new();
         cmd.add_str_arg("restore");
@@ -345,7 +346,7 @@ impl EntryRewriter {
         Ok(cmd)
     }
 
-    pub fn rewrite_expire(entry: &RedisEntry) -> Result<Option<RedisCmd>, Error> {
+    pub fn rewrite_expire(entry: &RedisEntry) -> anyhow::Result<Option<RedisCmd>> {
         if entry.expire_ms == 0 {
             return Ok(None);
         }

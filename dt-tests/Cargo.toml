@@ -33,5 +33,4 @@ redis = { workspace = true }
 rdkafka = { workspace = true }
 url = { workspace = true }
 chrono =  { workspace = true }
-
-mlua = { version = "0.9.7", features = ["lua54", "vendored"] }
+anyhow = { workspace = true }

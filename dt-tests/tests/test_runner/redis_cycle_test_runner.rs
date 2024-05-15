@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use dt_common::{error::Error, utils::time_util::TimeUtil};
+use dt_common::utils::time_util::TimeUtil;
 use tokio::task::JoinHandle;
 
 use crate::test_config_util::TestConfigUtil;
@@ -12,7 +12,7 @@ pub struct RedisCycleTestRunner {
 }
 
 impl RedisCycleTestRunner {
-    pub async fn new(relative_test_dir: &str) -> Result<Self, Error> {
+    pub async fn new(relative_test_dir: &str) -> anyhow::Result<Self> {
         Ok(Self {
             base: RedisTestRunner::new_default(relative_test_dir).await?,
         })

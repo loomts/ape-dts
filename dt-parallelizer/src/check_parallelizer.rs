@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
-use dt_common::error::Error;
 use dt_common::meta::{ddl_data::DdlData, dt_data::DtItem, row_data::RowData};
 use dt_connector::Sinker;
 
@@ -22,11 +21,11 @@ impl Parallelizer for CheckParallelizer {
         "CheckParallelizer".to_string()
     }
 
-    async fn close(&mut self) -> Result<(), Error> {
+    async fn close(&mut self) -> anyhow::Result<()> {
         self.merger.close().await
     }
 
-    async fn drain(&mut self, buffer: &ConcurrentQueue<DtItem>) -> Result<Vec<DtItem>, Error> {
+    async fn drain(&mut self, buffer: &ConcurrentQueue<DtItem>) -> anyhow::Result<Vec<DtItem>> {
         self.base_parallelizer.drain(buffer).await
     }
 
@@ -34,7 +33,7 @@ impl Parallelizer for CheckParallelizer {
         &mut self,
         data: Vec<RowData>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let mut merged_datas = self.merger.merge(data).await?;
         for tb_merged_data in merged_datas.drain(..) {
             let batch_data = tb_merged_data.insert_rows;
@@ -59,7 +58,7 @@ impl Parallelizer for CheckParallelizer {
         &mut self,
         data: Vec<DdlData>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         self.base_parallelizer
             .sink_ddl(vec![data], sinkers, 1, false)
             .await

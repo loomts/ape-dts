@@ -1,6 +1,6 @@
 use std::{collections::HashSet, fs::File};
 
-use dt_common::{config::sinker_config::SinkerConfig, error::Error};
+use dt_common::config::sinker_config::SinkerConfig;
 
 use super::base_test_runner::BaseTestRunner;
 
@@ -10,7 +10,7 @@ impl CheckUtil {
     pub fn validate_check_log(
         expect_check_log_dir: &str,
         dst_check_log_dir: &str,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         // check result
         let (expect_miss_logs, expect_diff_logs, expect_extra_logs) =
             Self::load_check_log(expect_check_log_dir);

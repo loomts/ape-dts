@@ -1,4 +1,4 @@
-use dt_common::{config::config_enums::DbType, error::Error};
+use dt_common::config::config_enums::DbType;
 
 use super::check_item::CheckItem;
 
@@ -28,7 +28,7 @@ impl CheckResult {
         check_item: CheckItem,
         is_source: bool,
         db_type: DbType,
-        err_option: Option<Error>,
+        err_option: Option<anyhow::Error>,
     ) -> Self {
         let check_desc;
         let mut advise_msg = String::new();

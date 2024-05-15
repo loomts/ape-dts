@@ -6,7 +6,6 @@ use std::{
 use concurrent_queue::ConcurrentQueue;
 use dt_common::{
     config::{extractor_config::ExtractorConfig, task_config::TaskConfig},
-    error::Error,
     meta::dt_data::DtItem,
     monitor::monitor::Monitor,
     rdb_filter::RdbFilter,
@@ -68,7 +67,7 @@ impl ExtractorUtil {
         router: RdbRouter,
         snapshot_resumer: SnapshotResumer,
         cdc_resumer: CdcResumer,
-    ) -> Result<Box<dyn Extractor + Send>, Error> {
+    ) -> anyhow::Result<Box<dyn Extractor + Send>> {
         let base_extractor = BaseExtractor {
             buffer,
             router,

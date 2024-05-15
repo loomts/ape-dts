@@ -1,5 +1,6 @@
 use std::io::Cursor;
 
+use anyhow::bail;
 use byteorder::{LittleEndian, ReadBytesExt};
 use dt_common::error::Error;
 use dt_common::meta::redis::redis_object::RedisString;
@@ -36,7 +37,7 @@ const LP_ENCODING_32BIT_STR_MASK: u8 = 0xFF; // 11111111
 const LP_ENCODING_32BIT_STR: u8 = 0xF0; // 11110000
 
 impl RdbReader<'_> {
-    pub fn read_list_pack(&mut self) -> Result<Vec<RedisString>, Error> {
+    pub fn read_list_pack(&mut self) -> anyhow::Result<Vec<RedisString>> {
         let buf = self.read_string()?;
         let mut reader = Cursor::new(buf.as_bytes());
 
@@ -51,15 +52,15 @@ impl RdbReader<'_> {
 
         let last_byte = reader.read_u8()?;
         if last_byte != 0xFF {
-            return Err(Error::RedisRdbError(
+            bail! {Error::RedisRdbError(
                 "read_listpack: last byte is not 0xFF".into(),
-            ));
+            )};
         }
         Ok(elements)
     }
 
     // https://github.com/redis/redis/blob/unstable/src/listpack.c lpGetWithSize
-    fn read_listpack_entry(reader: &mut Cursor<&[u8]>) -> Result<RedisString, Error> {
+    fn read_listpack_entry(reader: &mut Cursor<&[u8]>) -> anyhow::Result<RedisString> {
         let mut val: i64;
         let mut uval: u64;
         let negstart: u64;
@@ -130,10 +131,10 @@ impl RdbReader<'_> {
             // uval = 12345678900000000 + uint64(fireByte)
             // negstart = math.MaxUint64
             // negmax = 0
-            return Err(Error::RedisRdbError(format!(
+            bail! {Error::RedisRdbError(format!(
                 "unknown encoding: {}",
                 first_byte
-            )));
+            ))}
         }
 
         // We reach this code path only for integer encodings.

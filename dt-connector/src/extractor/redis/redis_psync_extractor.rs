@@ -1,3 +1,4 @@
+use anyhow::bail;
 use async_trait::async_trait;
 use dt_common::log_position;
 use dt_common::meta::dt_data::DtData;
@@ -29,7 +30,7 @@ pub struct RedisPsyncExtractor<'a> {
 
 #[async_trait]
 impl Extractor for RedisPsyncExtractor<'_> {
-    async fn extract(&mut self) -> Result<(), Error> {
+    async fn extract(&mut self) -> anyhow::Result<()> {
         log_info!(
             "RedisPsyncExtractor starts, repl_id: {}, repl_offset: {}, now_db_id: {}",
             self.repl_id,
@@ -45,7 +46,7 @@ impl Extractor for RedisPsyncExtractor<'_> {
 }
 
 impl RedisPsyncExtractor<'_> {
-    pub async fn start_psync(&mut self) -> Result<bool, Error> {
+    pub async fn start_psync(&mut self) -> anyhow::Result<bool> {
         // replconf listening-port [port]
         let repl_port = self.repl_port.to_string();
         let repl_cmd = RedisCmd::from_str_args(&["replconf", "listening-port", &repl_port]);
@@ -54,9 +55,9 @@ impl RedisPsyncExtractor<'_> {
         self.conn.send(&repl_cmd).await.unwrap();
         if let Value::Okay = self.conn.read().await.unwrap() {
         } else {
-            return Err(Error::ExtractorError(
+            bail! {Error::ExtractorError(
                 "replconf listening-port response is not Ok".into(),
-            ));
+            )}
         }
 
         let full_sync = self.repl_id.is_empty() && self.repl_offset == 0;
@@ -79,19 +80,19 @@ impl RedisPsyncExtractor<'_> {
                 self.repl_id = tokens[1].to_string();
                 self.repl_offset = tokens[2].parse::<u64>().unwrap();
             } else if s != "CONTINUE" {
-                return Err(Error::ExtractorError(
+                bail! {Error::ExtractorError(
                     "PSYNC command response is NOT CONTINUE".into(),
-                ));
+                )}
             }
         } else {
-            return Err(Error::ExtractorError(
+            bail! {Error::ExtractorError(
                 "PSYNC command response is NOT status".into(),
-            ));
+            )}
         };
         Ok(full_sync)
     }
 
-    async fn receive_rdb(&mut self) -> Result<(), Error> {
+    async fn receive_rdb(&mut self) -> anyhow::Result<()> {
         let mut stream_reader: Box<&mut (dyn StreamReader + Send)> = Box::new(self.conn);
         // format: \n\n\n$<length>\r\n<rdb>
         loop {
@@ -172,7 +173,7 @@ impl RedisPsyncExtractor<'_> {
         filter: &mut RdbFilter,
         mut entry: RedisEntry,
         position: Position,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         // currently only support db filter
         if filter.filter_db(&entry.db_id.to_string()) {
             return Ok(());

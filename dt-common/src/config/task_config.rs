@@ -4,6 +4,8 @@ use std::{
     str::FromStr,
 };
 
+use anyhow::bail;
+
 use crate::error::Error;
 
 use super::{
@@ -88,7 +90,7 @@ impl TaskConfig {
 
     fn load_extractor_config(
         loader: &IniLoader,
-    ) -> Result<(BasicExtractorConfig, ExtractorConfig), Error> {
+    ) -> anyhow::Result<(BasicExtractorConfig, ExtractorConfig)> {
         let db_type_str: String = loader.get_required(EXTRACTOR, DB_TYPE);
         let extract_type_str: String = loader.get_required(EXTRACTOR, "extract_type");
         let db_type = DbType::from_str(&db_type_str).unwrap();
@@ -107,10 +109,8 @@ impl TaskConfig {
             url: url.clone(),
         };
 
-        let not_supported_err = Err(Error::ConfigError(format!(
-            "extract type: {} not supported",
-            extract_type
-        )));
+        let not_supported_err =
+            Error::ConfigError(format!("extract type: {} not supported", extract_type));
 
         let sinker = match db_type {
             DbType::Mysql => match extract_type {
@@ -143,7 +143,7 @@ impl TaskConfig {
                     db: String::new(),
                 },
 
-                _ => return not_supported_err,
+                _ => bail! {not_supported_err},
             },
 
             DbType::Pg => match extract_type {
@@ -178,7 +178,7 @@ impl TaskConfig {
                     schema: String::new(),
                 },
 
-                _ => return not_supported_err,
+                _ => bail! { not_supported_err },
             },
 
             DbType::Mongo => {
@@ -209,7 +209,7 @@ impl TaskConfig {
                         batch_size: loader.get_with_default(EXTRACTOR, BATCH_SIZE, 200),
                     },
 
-                    _ => return not_supported_err,
+                    _ => bail! { not_supported_err },
                 }
             }
 
@@ -248,7 +248,7 @@ impl TaskConfig {
                     ExtractorConfig::RedisReshard { url, to_node_ids }
                 }
 
-                _ => return not_supported_err,
+                _ => bail! { not_supported_err },
             },
 
             DbType::Kafka => ExtractorConfig::Kafka {
@@ -261,16 +261,16 @@ impl TaskConfig {
             },
 
             db_type => {
-                return Err(Error::ConfigError(format!(
+                bail! {Error::ConfigError(format!(
                     "extractor db type: {} not supported",
                     db_type
-                )))
+                ))}
             }
         };
         Ok((basic, sinker))
     }
 
-    fn load_sinker_config(loader: &IniLoader) -> Result<(BasicSinkerConfig, SinkerConfig), Error> {
+    fn load_sinker_config(loader: &IniLoader) -> anyhow::Result<(BasicSinkerConfig, SinkerConfig)> {
         let db_type_str: String = loader.get_required(SINKER, DB_TYPE);
         let sink_type_str = loader.get_with_default(SINKER, "sink_type", "write".to_string());
         let db_type = DbType::from_str(&db_type_str).unwrap();
@@ -288,10 +288,8 @@ impl TaskConfig {
         let conflict_policy_str: String = loader.get_optional(SINKER, "conflict_policy");
         let conflict_policy = ConflictPolicyEnum::from_str(&conflict_policy_str).unwrap();
 
-        let not_supported_err = Err(Error::ConfigError(format!(
-            "sinker db type: {} not supported",
-            db_type
-        )));
+        let not_supported_err =
+            Error::ConfigError(format!("sinker db type: {} not supported", db_type));
 
         let sinker = match db_type {
             DbType::Mysql => match sink_type {
@@ -312,7 +310,7 @@ impl TaskConfig {
                     reverse: loader.get_optional(SINKER, REVERSE),
                 },
 
-                _ => return not_supported_err,
+                _ => bail! { not_supported_err },
             },
 
             DbType::Pg => match sink_type {
@@ -333,7 +331,7 @@ impl TaskConfig {
                     reverse: loader.get_optional(SINKER, REVERSE),
                 },
 
-                _ => return not_supported_err,
+                _ => bail! { not_supported_err },
             },
 
             DbType::Mongo => {
@@ -353,7 +351,7 @@ impl TaskConfig {
                         check_log_dir: loader.get_optional(SINKER, CHECK_LOG_DIR),
                     },
 
-                    _ => return not_supported_err,
+                    _ => bail! { not_supported_err },
                 }
             }
 
@@ -381,7 +379,7 @@ impl TaskConfig {
 
                 SinkType::Dummy => SinkerConfig::Dummy,
 
-                _ => return not_supported_err,
+                _ => bail! { not_supported_err },
             },
 
             DbType::StarRocks => SinkerConfig::Starrocks {
@@ -415,7 +413,7 @@ impl TaskConfig {
         }
     }
 
-    fn load_runtime_config(loader: &IniLoader) -> Result<RuntimeConfig, Error> {
+    fn load_runtime_config(loader: &IniLoader) -> anyhow::Result<RuntimeConfig> {
         Ok(RuntimeConfig {
             log_level: loader.get_with_default(RUNTIME, "log_level", "info".to_string()),
             log_dir: loader.get_with_default(RUNTIME, "log_dir", "./logs".to_string()),
@@ -427,7 +425,7 @@ impl TaskConfig {
         })
     }
 
-    fn load_filter_config(loader: &IniLoader) -> Result<FilterConfig, Error> {
+    fn load_filter_config(loader: &IniLoader) -> anyhow::Result<FilterConfig> {
         Ok(FilterConfig {
             do_dbs: loader.get_optional(FILTER, "do_dbs"),
             ignore_dbs: loader.get_optional(FILTER, "ignore_dbs"),
@@ -440,7 +438,7 @@ impl TaskConfig {
         })
     }
 
-    fn load_router_config(loader: &IniLoader) -> Result<RouterConfig, Error> {
+    fn load_router_config(loader: &IniLoader) -> anyhow::Result<RouterConfig> {
         Ok(RouterConfig::Rdb {
             db_map: loader.get_optional(ROUTER, "db_map"),
             tb_map: loader.get_optional(ROUTER, "tb_map"),
@@ -449,7 +447,7 @@ impl TaskConfig {
         })
     }
 
-    fn load_resumer_config(loader: &IniLoader) -> Result<ResumerConfig, Error> {
+    fn load_resumer_config(loader: &IniLoader) -> anyhow::Result<ResumerConfig> {
         let mut resume_log_dir: String = loader.get_optional(RESUMER, "resume_log_dir");
         if resume_log_dir.is_empty() {
             resume_log_dir = loader.get_with_default(RUNTIME, "log_dir", "./logs".to_string());
@@ -463,7 +461,7 @@ impl TaskConfig {
         })
     }
 
-    fn load_data_marker_config(loader: &IniLoader) -> Result<Option<DataMarkerConfig>, Error> {
+    fn load_data_marker_config(loader: &IniLoader) -> anyhow::Result<Option<DataMarkerConfig>> {
         if !loader.ini.sections().contains(&DATA_MARKER.to_string()) {
             return Ok(None);
         }
@@ -479,7 +477,7 @@ impl TaskConfig {
         }))
     }
 
-    fn load_processor_config(loader: &IniLoader) -> Result<Option<ProcessorConfig>, Error> {
+    fn load_processor_config(loader: &IniLoader) -> anyhow::Result<Option<ProcessorConfig>> {
         if !loader.ini.sections().contains(&PROCESSOR.to_string()) {
             return Ok(None);
         }

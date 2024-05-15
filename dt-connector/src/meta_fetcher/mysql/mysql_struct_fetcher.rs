@@ -1,5 +1,6 @@
 use std::{collections::HashMap, str::FromStr};
 
+use anyhow::bail;
 use dt_common::meta::{
     mysql::mysql_meta_manager::MysqlMetaManager,
     struct_meta::{
@@ -64,7 +65,7 @@ const CHECK_CLAUSE: &str = "CHECK_CLAUSE";
 impl MysqlStructFetcher {
     pub async fn get_create_database_statement(
         &mut self,
-    ) -> Result<MysqlCreateDatabaseStatement, Error> {
+    ) -> anyhow::Result<MysqlCreateDatabaseStatement> {
         let database = self.get_database().await?;
         Ok(MysqlCreateDatabaseStatement { database })
     }
@@ -72,7 +73,7 @@ impl MysqlStructFetcher {
     pub async fn get_create_table_statements(
         &mut self,
         tb: &str,
-    ) -> Result<Vec<MysqlCreateTableStatement>, Error> {
+    ) -> anyhow::Result<Vec<MysqlCreateTableStatement>> {
         let mut results = Vec::new();
 
         let tables = self.get_tables(tb).await.unwrap();
@@ -95,7 +96,7 @@ impl MysqlStructFetcher {
     }
 
     // Create Database: https://dev.mysql.com/doc/refman/8.0/en/create-database.html
-    async fn get_database(&mut self) -> Result<Database, Error> {
+    async fn get_database(&mut self) -> anyhow::Result<Database> {
         let sql = format!(
             "SELECT 
             SCHEMA_NAME, 
@@ -121,10 +122,10 @@ impl MysqlStructFetcher {
             return Ok(database);
         }
 
-        Err(Error::StructError(format!("db: {} not found", self.db)))
+        bail! {Error::StructError(format!("db: {} not found", self.db))}
     }
 
-    async fn get_tables(&mut self, tb: &str) -> Result<HashMap<String, Table>, Error> {
+    async fn get_tables(&mut self, tb: &str) -> anyhow::Result<HashMap<String, Table>> {
         let mut results: HashMap<String, Table> = HashMap::new();
 
         // Create Table: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
@@ -214,7 +215,7 @@ impl MysqlStructFetcher {
         Ok(results)
     }
 
-    async fn get_indexes(&mut self, tb: &str) -> Result<HashMap<String, Vec<Index>>, Error> {
+    async fn get_indexes(&mut self, tb: &str) -> anyhow::Result<HashMap<String, Vec<Index>>> {
         let mut index_map: HashMap<(String, String), Index> = HashMap::new();
 
         // Create Index: https://dev.mysql.com/doc/refman/8.0/en/create-index.html
@@ -291,7 +292,7 @@ impl MysqlStructFetcher {
     async fn get_check_constraints(
         &mut self,
         tb: &str,
-    ) -> Result<HashMap<String, Vec<Constraint>>, Error> {
+    ) -> anyhow::Result<HashMap<String, Vec<Constraint>>> {
         let mut results: HashMap<String, Vec<Constraint>> = HashMap::new();
         // mysql 5.7 does not support check constraints
         if self.meta_manager.version.starts_with("5.") {
@@ -345,7 +346,7 @@ impl MysqlStructFetcher {
     async fn get_foreign_key_constraints(
         &mut self,
         tb: &str,
-    ) -> Result<HashMap<String, Vec<Constraint>>, Error> {
+    ) -> anyhow::Result<HashMap<String, Vec<Constraint>>> {
         let mut results: HashMap<String, Vec<Constraint>> = HashMap::new();
 
         // Check Constraint: https://dev.mysql.com/doc/refman/8.0/en/create-table-check-constraints.html
@@ -403,7 +404,7 @@ impl MysqlStructFetcher {
         Ok(results)
     }
 
-    fn get_str_with_null(row: &MySqlRow, col_name: &str) -> Result<String, Error> {
+    fn get_str_with_null(row: &MySqlRow, col_name: &str) -> anyhow::Result<String> {
         let mut str_val = String::new();
         let str_val_option = row.get(col_name);
         if let Some(s) = str_val_option {
@@ -443,7 +444,7 @@ impl MysqlStructFetcher {
         }
     }
 
-    async fn unescape(&self, text: String) -> Result<String, Error> {
+    async fn unescape(&self, text: String) -> anyhow::Result<String> {
         // use mysql's native select 'xx' to remove the escape characters stored in the string by mysql
         if text.is_empty() {
             return Ok(text);
@@ -458,7 +459,7 @@ impl MysqlStructFetcher {
                 }
             }
             Err(error) => {
-                return Err(Error::SqlxError(error));
+                bail! {Error::SqlxError(error)}
             }
         }
         Ok(text)

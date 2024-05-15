@@ -3,6 +3,7 @@ use std::sync::{
     Arc,
 };
 
+use anyhow::bail;
 use concurrent_queue::ConcurrentQueue;
 
 use dt_common::{
@@ -43,7 +44,11 @@ impl BaseExtractor {
         false
     }
 
-    pub async fn push_dt_data(&mut self, dt_data: DtData, position: Position) -> Result<(), Error> {
+    pub async fn push_dt_data(
+        &mut self,
+        dt_data: DtData,
+        position: Position,
+    ) -> anyhow::Result<()> {
         while self.buffer.is_full() {
             TimeUtil::sleep_millis(1).await;
         }
@@ -90,13 +95,13 @@ impl BaseExtractor {
         Ok(())
     }
 
-    pub async fn push_row(&mut self, row_data: RowData, position: Position) -> Result<(), Error> {
+    pub async fn push_row(&mut self, row_data: RowData, position: Position) -> anyhow::Result<()> {
         let row_data = self.router.route_row(row_data);
         let dt_data = DtData::Dml { row_data };
         self.push_dt_data(dt_data, position).await
     }
 
-    pub async fn parse_ddl(&self, schema: &str, query: &str) -> Result<DdlData, Error> {
+    pub async fn parse_ddl(&self, schema: &str, query: &str) -> anyhow::Result<DdlData> {
         let mut ddl_data = DdlData {
             schema: schema.to_owned(),
             tb: String::new(),
@@ -109,7 +114,7 @@ impl BaseExtractor {
         if let Err(err) = parse_result {
             let error = format!("failed to parse ddl, will try ignore it, please execute the ddl manually in target, sql: {}, error: {}", query, err);
             log_error!("{}", error);
-            return Err(Error::StructError(error));
+            bail! {Error::StructError(error)}
         }
 
         // case 1, execute: use db_1; create table tb_1(id int);
@@ -169,7 +174,7 @@ impl BaseExtractor {
         }
     }
 
-    pub async fn wait_task_finish(&mut self) -> Result<(), Error> {
+    pub async fn wait_task_finish(&mut self) -> anyhow::Result<()> {
         // wait all data to be transfered
         while !self.buffer.is_empty() {
             TimeUtil::sleep_millis(1).await;

@@ -1,12 +1,11 @@
 use std::{str::FromStr, time::Duration};
 
+use dt_common::config::{
+    config_enums::DbType, sinker_config::SinkerConfig, task_config::TaskConfig,
+};
 use dt_common::meta::{
     mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
     rdb_meta_manager::RdbMetaManager,
-};
-use dt_common::{
-    config::{config_enums::DbType, sinker_config::SinkerConfig, task_config::TaskConfig},
-    error::Error,
 };
 use futures::TryStreamExt;
 use mongodb::options::ClientOptions;
@@ -26,7 +25,7 @@ impl TaskUtil {
         url: &str,
         max_connections: u32,
         enable_sqlx_log: bool,
-    ) -> Result<Pool<MySql>, Error> {
+    ) -> anyhow::Result<Pool<MySql>> {
         let mut conn_options = MySqlConnectOptions::from_str(url)?;
         // The default character set is `utf8mb4`
         conn_options
@@ -48,7 +47,7 @@ impl TaskUtil {
         url: &str,
         max_connections: u32,
         enable_sqlx_log: bool,
-    ) -> Result<Pool<Postgres>, Error> {
+    ) -> anyhow::Result<Pool<Postgres>> {
         let mut conn_options = PgConnectOptions::from_str(url)?;
         conn_options
             .log_statements(log::LevelFilter::Info)
@@ -67,7 +66,7 @@ impl TaskUtil {
 
     pub async fn create_rdb_meta_manager(
         config: &TaskConfig,
-    ) -> Result<Option<RdbMetaManager>, Error> {
+    ) -> anyhow::Result<Option<RdbMetaManager>> {
         let log_level = &config.runtime.log_level;
         let meta_manager = match &config.sinker {
             SinkerConfig::Mysql { url, .. } | SinkerConfig::MysqlCheck { url, .. } => {
@@ -98,7 +97,7 @@ impl TaskUtil {
         url: &str,
         log_level: &str,
         db_type: DbType,
-    ) -> Result<MysqlMetaManager, Error> {
+    ) -> anyhow::Result<MysqlMetaManager> {
         let enable_sqlx_log = Self::check_enable_sqlx_log(log_level);
         let conn_pool = Self::create_mysql_conn_pool(url, 1, enable_sqlx_log).await?;
         MysqlMetaManager::new_mysql_compatible(conn_pool.clone(), db_type)
@@ -109,13 +108,13 @@ impl TaskUtil {
     pub async fn create_pg_meta_manager(
         url: &str,
         log_level: &str,
-    ) -> Result<PgMetaManager, Error> {
+    ) -> anyhow::Result<PgMetaManager> {
         let enable_sqlx_log = Self::check_enable_sqlx_log(log_level);
         let conn_pool = Self::create_pg_conn_pool(url, 1, enable_sqlx_log).await?;
         PgMetaManager::new(conn_pool.clone()).init().await
     }
 
-    pub async fn create_mongo_client(url: &str, app_name: &str) -> Result<mongodb::Client, Error> {
+    pub async fn create_mongo_client(url: &str, app_name: &str) -> anyhow::Result<mongodb::Client> {
         let mut client_options = ClientOptions::parse_async(url).await.unwrap();
         // app_name only for debug usage
         client_options.app_name = Some(app_name.to_string());
@@ -127,7 +126,7 @@ impl TaskUtil {
         log_level == "debug" || log_level == "trace"
     }
 
-    pub async fn list_dbs(url: &str, db_type: &DbType) -> Result<Vec<String>, Error> {
+    pub async fn list_dbs(url: &str, db_type: &DbType) -> anyhow::Result<Vec<String>> {
         let mut dbs = match db_type {
             DbType::Mysql => Self::list_mysql_dbs(url).await?,
             DbType::Pg => Self::list_pg_schemas(url).await?,
@@ -138,7 +137,7 @@ impl TaskUtil {
         Ok(dbs)
     }
 
-    pub async fn list_tbs(url: &str, db: &str, db_type: &DbType) -> Result<Vec<String>, Error> {
+    pub async fn list_tbs(url: &str, db: &str, db_type: &DbType) -> anyhow::Result<Vec<String>> {
         let mut tbs = match db_type {
             DbType::Mysql => Self::list_mysql_tbs(url, db).await?,
             DbType::Pg => Self::list_pg_tbs(url, db).await?,
@@ -166,7 +165,7 @@ impl TaskUtil {
         db_sql: &str,
         tb_sql: &str,
         db_type: &DbType,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         if TaskUtil::check_tb_exist(url, db, tb, db_type).await {
             return Ok(());
         }
@@ -193,7 +192,7 @@ impl TaskUtil {
         Ok(())
     }
 
-    async fn list_pg_schemas(url: &str) -> Result<Vec<String>, Error> {
+    async fn list_pg_schemas(url: &str) -> anyhow::Result<Vec<String>> {
         let mut schemas = Vec::new();
         let conn_pool = TaskUtil::create_pg_conn_pool(url, 1, false).await?;
 
@@ -212,7 +211,7 @@ impl TaskUtil {
         Ok(schemas)
     }
 
-    async fn list_pg_tbs(url: &str, schema: &str) -> Result<Vec<String>, Error> {
+    async fn list_pg_tbs(url: &str, schema: &str) -> anyhow::Result<Vec<String>> {
         let mut tbs = Vec::new();
         let conn_pool = TaskUtil::create_pg_conn_pool(url, 1, false).await?;
 
@@ -232,7 +231,7 @@ impl TaskUtil {
         Ok(tbs)
     }
 
-    async fn list_mysql_dbs(url: &str) -> Result<Vec<String>, Error> {
+    async fn list_mysql_dbs(url: &str) -> anyhow::Result<Vec<String>> {
         let mut dbs = Vec::new();
         let conn_pool = TaskUtil::create_mysql_conn_pool(url, 1, false).await?;
 
@@ -249,7 +248,7 @@ impl TaskUtil {
         Ok(dbs)
     }
 
-    async fn list_mysql_tbs(url: &str, db: &str) -> Result<Vec<String>, Error> {
+    async fn list_mysql_tbs(url: &str, db: &str) -> anyhow::Result<Vec<String>> {
         let mut tbs = Vec::new();
         let conn_pool = TaskUtil::create_mysql_conn_pool(url, 1, false).await?;
 
@@ -263,14 +262,14 @@ impl TaskUtil {
         Ok(tbs)
     }
 
-    async fn list_mongo_dbs(url: &str) -> Result<Vec<String>, Error> {
+    async fn list_mongo_dbs(url: &str) -> anyhow::Result<Vec<String>> {
         let client = TaskUtil::create_mongo_client(url, "").await.unwrap();
         let dbs = client.list_database_names(None, None).await.unwrap();
         client.shutdown().await;
         Ok(dbs)
     }
 
-    async fn list_mongo_tbs(url: &str, db: &str) -> Result<Vec<String>, Error> {
+    async fn list_mongo_tbs(url: &str, db: &str) -> anyhow::Result<Vec<String>> {
         let client = TaskUtil::create_mongo_client(url, "").await.unwrap();
         let tbs = client
             .database(db)

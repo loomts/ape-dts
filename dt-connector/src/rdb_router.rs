@@ -1,10 +1,8 @@
 use std::collections::HashMap;
-
 use dt_common::{
     config::{
         config_enums::DbType, config_token_parser::ConfigTokenParser, router_config::RouterConfig,
     },
-    error::Error,
     utils::sql_util::SqlUtil,
 };
 
@@ -27,7 +25,7 @@ pub struct RdbRouter {
 }
 
 impl RdbRouter {
-    pub fn from_config(config: &RouterConfig, db_type: &DbType) -> Result<Self, Error> {
+    pub fn from_config(config: &RouterConfig, db_type: &DbType) -> anyhow::Result<Self> {
         match config {
             RouterConfig::Rdb {
                 db_map,
@@ -147,7 +145,7 @@ impl RdbRouter {
         row_data
     }
 
-    fn parse_db_map(config_str: &str, db_type: &DbType) -> Result<HashMap<String, String>, Error> {
+    fn parse_db_map(config_str: &str, db_type: &DbType) -> anyhow::Result<HashMap<String, String>> {
         // db_map=src_db_1:dst_db_1,src_db_2:dst_db_2
         let mut db_map = HashMap::new();
         let tokens = Self::parse_config(config_str, db_type)?;
@@ -163,7 +161,7 @@ impl RdbRouter {
     fn parse_tb_map(
         config_str: &str,
         db_type: &DbType,
-    ) -> Result<HashMap<(String, String), (String, String)>, Error> {
+    ) -> anyhow::Result<HashMap<(String, String), (String, String)>> {
         // tb_map=src_db_1.src_tb_1:dst_db_1.dst_tb_1,src_db_2.src_tb_2:dst_db_2.dst_tb_2
         let mut tb_map = HashMap::new();
         let tokens = Self::parse_config(config_str, db_type)?;
@@ -178,7 +176,7 @@ impl RdbRouter {
         Ok(tb_map)
     }
 
-    fn parse_tb_col_map(config_str: &str, db_type: &DbType) -> Result<(TbMap, TbColMap), Error> {
+    fn parse_tb_col_map(config_str: &str, db_type: &DbType) -> anyhow::Result<(TbMap, TbColMap)> {
         // col_map=src_db_1.src_tb_1.col_1:dst_db_1.dst_tb_1.dst_col_1,src_db_2.src_tb_2.dst_col_2:dst_db_2.dst_tb_2.dst_col_2
         let mut tb_map = TbMap::new();
         let mut tb_col_map = TbColMap::new();
@@ -208,7 +206,7 @@ impl RdbRouter {
     fn parse_topic_map(
         config_str: &str,
         db_type: &DbType,
-    ) -> Result<HashMap<(String, String), String>, Error> {
+    ) -> anyhow::Result<HashMap<(String, String), String>> {
         // topic_map=*.*:test,test_db_1.*:test2,test_db_1.no_pk_one_uk:test3
         let mut topic_map = HashMap::new();
         let tokens = Self::parse_config(config_str, db_type)?;
@@ -223,29 +221,19 @@ impl RdbRouter {
         Ok(topic_map)
     }
 
-    fn parse_config(config_str: &str, db_type: &DbType) -> Result<Vec<String>, Error> {
+    fn parse_config(config_str: &str, db_type: &DbType) -> anyhow::Result<Vec<String>> {
         let delimiters = vec![',', '.', ':'];
-        match ConfigTokenParser::parse_config(config_str, db_type, &delimiters) {
-            Ok(tokens) => {
-                let escape_pairs = SqlUtil::get_escape_pairs(db_type);
-                let mut results = Vec::new();
-                for t in tokens {
-                    let mut token = t;
-                    for escape_pair in escape_pairs.iter() {
-                        token = SqlUtil::unescape(&token, escape_pair);
-                    }
-                    results.push(token);
-                }
-                Ok(results)
+        let tokens = ConfigTokenParser::parse_config(config_str, db_type, &delimiters)?;
+        let escape_pairs = SqlUtil::get_escape_pairs(db_type);
+        let mut results = Vec::new();
+        for t in tokens {
+            let mut token = t;
+            for escape_pair in escape_pairs.iter() {
+                token = SqlUtil::unescape(&token, escape_pair);
             }
-
-            Err(Error::ConfigError(err)) => Err(Error::ConfigError(format!(
-                "invalid router config, {}",
-                err
-            ))),
-
-            _ => Err(Error::ConfigError("invalid router config".into())),
+            results.push(token);
         }
+        Ok(results)
     }
 }
 

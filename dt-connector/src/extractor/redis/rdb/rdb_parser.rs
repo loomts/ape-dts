@@ -1,3 +1,4 @@
+use anyhow::bail;
 use dt_common::meta::redis::{redis_entry::RedisEntry, redis_object::RedisCmd};
 use dt_common::{error::Error, log_debug, log_info};
 use sqlx::types::chrono;
@@ -37,12 +38,12 @@ pub struct RdbParser<'a> {
 }
 
 impl RdbParser<'_> {
-    pub fn load_meta(&mut self) -> Result<String, Error> {
+    pub fn load_meta(&mut self) -> anyhow::Result<String> {
         // magic
         let mut buf = self.reader.read_bytes(5)?;
         let magic = String::from_utf8(buf).unwrap();
         if magic != "REDIS" {
-            return Err(Error::RedisRdbError("invalid rdb format".to_string()));
+            bail! {Error::RedisRdbError("invalid rdb format".to_string())}
         }
 
         // version
@@ -51,7 +52,7 @@ impl RdbParser<'_> {
         Ok(version)
     }
 
-    pub fn load_entry(&mut self) -> Result<Option<RedisEntry>, Error> {
+    pub fn load_entry(&mut self) -> anyhow::Result<Option<RedisEntry>> {
         let type_byte = self.reader.read_byte()?;
         log_debug!("rdb type_byte: {}", type_byte);
 
@@ -83,10 +84,10 @@ impl RdbParser<'_> {
                             self.reader.read_string()?;
                         }
                         _ => {
-                            return Err(Error::RedisRdbError(format!(
+                            bail! {Error::RedisRdbError(format!(
                                 "module aux opcode not found. module_name=[{}], opcode=[{}]",
                                 module_name, opcode
-                            )));
+                            ))}
                         }
                     }
                     opcode = self.reader.read_length()?;
@@ -178,12 +179,12 @@ impl RdbParser<'_> {
                 self.reader.copy_raw = false;
 
                 if let Err(error) = value {
-                    return Err(Error::RedisRdbError(format!(
+                    bail! {Error::RedisRdbError(format!(
                         "parsing rdb failed, type_byte: {}, key: {}, error: {:?}",
                         type_byte,
                         String::from(key),
                         error
-                    )));
+                    ))}
                 } else {
                     let mut entry = RedisEntry::new();
                     entry.is_base = true;

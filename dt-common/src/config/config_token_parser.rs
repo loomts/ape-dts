@@ -1,3 +1,5 @@
+use anyhow::bail;
+
 use crate::{error::Error, utils::sql_util::SqlUtil};
 
 use super::config_enums::DbType;
@@ -9,7 +11,7 @@ impl ConfigTokenParser {
         config_str: &str,
         db_type: &DbType,
         delimiters: &[char],
-    ) -> Result<Vec<String>, Error> {
+    ) -> anyhow::Result<Vec<String>> {
         if config_str.is_empty() {
             return Ok(Vec::new());
         }
@@ -18,10 +20,10 @@ impl ConfigTokenParser {
         let tokens = Self::parse(config_str, delimiters, &escape_pairs);
         for token in tokens.iter() {
             if !SqlUtil::is_valid_token(token, db_type, &escape_pairs) {
-                return Err(Error::ConfigError(format!(
+                bail! {Error::ConfigError(format!(
                     "config error near: {}, try enclose database/table/column with escapes if there are special characters other than letters and numbers",
                     token
-                )));
+                ))}
             }
         }
         Ok(tokens)

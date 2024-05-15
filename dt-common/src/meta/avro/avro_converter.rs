@@ -1,6 +1,5 @@
 use std::{collections::HashMap, str::FromStr};
 
-use crate::error::Error;
 use apache_avro::{from_avro_datum, to_avro_datum, types::Value, Schema};
 
 use crate::meta::{
@@ -30,7 +29,7 @@ impl AvroConverter {
         }
     }
 
-    pub async fn row_data_to_avro_key(&mut self, row_data: &RowData) -> Result<String, Error> {
+    pub async fn row_data_to_avro_key(&mut self, row_data: &RowData) -> anyhow::Result<String> {
         if let Some(meta_manager) = self.meta_manager.as_mut() {
             let tb_meta = meta_manager
                 .get_tb_meta(&row_data.schema, &row_data.tb)
@@ -54,7 +53,7 @@ impl AvroConverter {
         Ok(String::new())
     }
 
-    pub fn row_data_to_avro_value(&self, row_data: RowData) -> Result<Vec<u8>, Error> {
+    pub fn row_data_to_avro_value(&self, row_data: RowData) -> anyhow::Result<Vec<u8>> {
         let mut cols = vec![];
         let mut merge_cols = |col_values: &Option<HashMap<String, ColValue>>| {
             if let Some(value) = col_values {
@@ -111,7 +110,7 @@ impl AvroConverter {
         Ok(to_avro_datum(&self.schema, value)?)
     }
 
-    pub fn avro_value_to_row_data(&self, payload: Vec<u8>) -> Result<RowData, Error> {
+    pub fn avro_value_to_row_data(&self, payload: Vec<u8>) -> anyhow::Result<RowData> {
         let mut reader = payload.as_slice();
         let value = from_avro_datum(&self.schema, &mut reader, None)?;
         let mut avro_map = Self::avro_to_map(value);

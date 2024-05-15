@@ -1,5 +1,6 @@
 use std::{any::type_name, fmt::Debug, fs::File, io::Read, str::FromStr};
 
+use anyhow::bail;
 use configparser::ini::Ini;
 
 use crate::error::Error;
@@ -54,19 +55,19 @@ impl IniLoader {
         default
     }
 
-    fn parse_value<T>(section: &str, key: &str, value: &str) -> Result<T, Error>
+    fn parse_value<T>(section: &str, key: &str, value: &str) -> anyhow::Result<T>
     where
         T: FromStr,
     {
         match value.parse::<T>() {
             Ok(v) => Ok(v),
-            Err(_) => Err(Error::ConfigError(format!(
+            Err(_) => bail! {Error::ConfigError(format!(
                 "config [{}].{}={}, can not be parsed as {}",
                 section,
                 key,
                 value,
                 type_name::<T>(),
-            ))),
+            ))},
         }
     }
 }

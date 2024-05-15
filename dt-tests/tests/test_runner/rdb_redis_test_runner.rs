@@ -1,3 +1,4 @@
+use anyhow::bail;
 use dt_common::meta::mysql::mysql_col_type::MysqlColType;
 use dt_common::utils::redis_util::RedisUtil;
 use dt_common::{
@@ -24,7 +25,7 @@ pub struct RdbRedisTestRunner {
 }
 
 impl RdbRedisTestRunner {
-    pub async fn new(relative_test_dir: &str) -> Result<Self, Error> {
+    pub async fn new(relative_test_dir: &str) -> anyhow::Result<Self> {
         let base = BaseTestRunner::new(relative_test_dir).await.unwrap();
         let config = TaskConfig::new(&base.task_config_file);
 
@@ -33,7 +34,7 @@ impl RdbRedisTestRunner {
         let redis_conn = match config.sinker {
             SinkerConfig::Redis { url, .. } => RedisUtil::create_redis_conn(&url).await.unwrap(),
             _ => {
-                return Err(Error::ConfigError("unsupported sinker config".into()));
+                bail! {Error::ConfigError("unsupported sinker config".into())};
             }
         };
         let redis_util = RedisTestUtil::new_default();
@@ -46,14 +47,14 @@ impl RdbRedisTestRunner {
         })
     }
 
-    pub async fn close(&self) -> Result<(), Error> {
+    pub async fn close(&self) -> anyhow::Result<()> {
         if let Some(pool) = &self.mysql_conn_pool {
             pool.close().await;
         }
         Ok(())
     }
 
-    pub async fn run_snapshot_test(&mut self) -> Result<(), Error> {
+    pub async fn run_snapshot_test(&mut self) -> anyhow::Result<()> {
         // src prepare
         self.execute_sqls(&self.base.src_prepare_sqls).await?;
         // dst prepare
@@ -72,7 +73,7 @@ impl RdbRedisTestRunner {
         &mut self,
         start_millis: u64,
         parse_millis: u64,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         self.execute_sqls(&self.base.src_prepare_sqls).await?;
         self.redis_util
             .execute_cmds(&mut self.redis_conn, &self.base.dst_prepare_sqls.clone());
@@ -114,7 +115,7 @@ impl RdbRedisTestRunner {
         self.base.abort_task(&task).await
     }
 
-    async fn execute_sqls(&self, sqls: &Vec<String>) -> Result<(), Error> {
+    async fn execute_sqls(&self, sqls: &Vec<String>) -> anyhow::Result<()> {
         if let Some(conn_pool) = &self.mysql_conn_pool {
             RdbUtil::execute_sqls_mysql(conn_pool, sqls).await?;
         }
@@ -127,7 +128,7 @@ impl RdbRedisTestRunner {
         }
     }
 
-    async fn compare_tb_data(&mut self, db_tb: &(String, String)) -> Result<bool, Error> {
+    async fn compare_tb_data(&mut self, db_tb: &(String, String)) -> anyhow::Result<bool> {
         if let Some(conn_pool) = &self.mysql_conn_pool {
             // mysql data
             let tb_meta = RdbUtil::get_tb_meta_mysql(conn_pool, db_tb).await?;

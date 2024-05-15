@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use anyhow::bail;
 use async_trait::async_trait;
 use dt_common::{error::Error, rdb_filter::RdbFilter};
 use dt_task::task_util::TaskUtil;
@@ -20,12 +21,12 @@ pub struct PgFetcher {
 
 #[async_trait]
 impl Fetcher for PgFetcher {
-    async fn build_connection(&mut self) -> Result<(), Error> {
+    async fn build_connection(&mut self) -> anyhow::Result<()> {
         self.pool = Some(TaskUtil::create_pg_conn_pool(&self.url, 1, true).await?);
         Ok(())
     }
 
-    async fn fetch_version(&mut self) -> Result<String, Error> {
+    async fn fetch_version(&mut self) -> anyhow::Result<String> {
         let sql = String::from("SELECT current_setting('server_version_num')::varchar");
         let mut version = String::from("");
 
@@ -36,7 +37,7 @@ impl Fetcher for PgFetcher {
                     version = rows.first().unwrap().get("current_setting");
                 }
             }
-            Err(e) => return Err(e),
+            Err(e) => bail! {e},
         }
         Ok(version)
     }
@@ -44,7 +45,7 @@ impl Fetcher for PgFetcher {
     async fn fetch_configuration(
         &mut self,
         config_keys: Vec<String>,
-    ) -> Result<HashMap<String, String>, Error> {
+    ) -> anyhow::Result<HashMap<String, String>> {
         if config_keys.is_empty() {
             return Ok(HashMap::new());
         }
@@ -72,17 +73,17 @@ impl Fetcher for PgFetcher {
                     }
                 }
             }
-            Err(e) => return Err(e),
+            Err(e) => bail! {e},
         }
 
         Ok(result_map)
     }
 
-    async fn fetch_databases(&mut self) -> Result<Vec<Database>, Error> {
+    async fn fetch_databases(&mut self) -> anyhow::Result<Vec<Database>> {
         Ok(vec![])
     }
 
-    async fn fetch_schemas(&mut self) -> Result<Vec<Schema>, Error> {
+    async fn fetch_schemas(&mut self) -> anyhow::Result<Vec<Schema>> {
         let mut schemas: Vec<Schema> = vec![];
         let sql = "select catalog_name,schema_name from information_schema.schemata";
 
@@ -100,13 +101,13 @@ impl Fetcher for PgFetcher {
                     }
                 }
             }
-            Err(e) => return Err(e),
+            Err(e) => bail! {e},
         }
 
         Ok(schemas)
     }
 
-    async fn fetch_tables(&mut self) -> Result<Vec<Table>, Error> {
+    async fn fetch_tables(&mut self) -> anyhow::Result<Vec<Table>> {
         let mut tables: Vec<Table> = vec![];
         let table_sql = "select distinct table_catalog, table_schema, table_name from information_schema.columns";
 
@@ -128,13 +129,13 @@ impl Fetcher for PgFetcher {
                     }
                 }
             }
-            Err(e) => return Err(e),
+            Err(e) => bail! {e},
         }
 
         Ok(tables)
     }
 
-    async fn fetch_constraints(&mut self) -> Result<Vec<Constraint>, Error> {
+    async fn fetch_constraints(&mut self) -> anyhow::Result<Vec<Constraint>> {
         let mut constraints: Vec<Constraint> = vec![];
         let sql = "SELECT
           con.conname,
@@ -187,7 +188,7 @@ impl Fetcher for PgFetcher {
                     }
                 }
             }
-            Err(e) => return Err(e),
+            Err(e) => bail! {e},
         }
 
         Ok(constraints)
@@ -195,10 +196,10 @@ impl Fetcher for PgFetcher {
 }
 
 impl PgFetcher {
-    async fn fetch_all(&self, sql: String, mut sql_msg: &str) -> Result<Vec<PgRow>, Error> {
+    async fn fetch_all(&self, sql: String, mut sql_msg: &str) -> anyhow::Result<Vec<PgRow>> {
         let pg_pool = match &self.pool {
             Some(pool) => pool,
-            None => return Err(Error::from(sqlx::Error::PoolClosed)),
+            None => bail! {Error::from(sqlx::Error::PoolClosed)},
         };
 
         sql_msg = if sql_msg.is_empty() { "sql" } else { sql_msg };
@@ -207,7 +208,7 @@ impl PgFetcher {
         let rows_result = query(&sql).fetch_all(pg_pool).await;
         match rows_result {
             Ok(rows) => Ok(rows),
-            Err(e) => Err(Error::from(e)),
+            Err(e) => bail! {Error::from(e)},
         }
     }
 
@@ -215,18 +216,18 @@ impl PgFetcher {
         &self,
         sql: &'a str,
         mut sql_msg: &str,
-    ) -> Result<impl Stream<Item = Result<PgRow, sqlx::Error>> + 'a, Error> {
+    ) -> anyhow::Result<impl Stream<Item = anyhow::Result<PgRow, sqlx::Error>> + 'a> {
         match &self.pool {
             Some(pool) => {
                 sql_msg = if sql_msg.is_empty() { "sql" } else { sql_msg };
                 println!("{}: {}", sql_msg, sql);
                 Ok(query(sql).fetch(pool))
             }
-            None => Err(Error::from(sqlx::Error::PoolClosed)),
+            None => bail! {Error::from(sqlx::Error::PoolClosed)},
         }
     }
 
-    pub async fn fetch_slot_names(&self) -> Result<Vec<String>, Error> {
+    pub async fn fetch_slot_names(&self) -> anyhow::Result<Vec<String>> {
         let mut slots: Vec<String> = vec![];
         let slot_query = "select slot_name from pg_catalog.pg_replication_slots".to_string();
 
@@ -238,12 +239,12 @@ impl PgFetcher {
                     slots.push(slot_name);
                 }
             }
-            Err(e) => return Err(e),
+            Err(e) => bail! {e},
         }
         Ok(slots)
     }
 
-    fn get_text_with_null(row: &PgRow, col_name: &str) -> Result<String, Error> {
+    fn get_text_with_null(row: &PgRow, col_name: &str) -> anyhow::Result<String> {
         let mut str_val = String::new();
 
         if let Some(s) = row.get(col_name) {

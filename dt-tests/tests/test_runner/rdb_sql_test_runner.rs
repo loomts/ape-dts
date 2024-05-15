@@ -1,7 +1,7 @@
 use std::fs::File;
 
 use chrono::{Duration, Utc};
-use dt_common::{config::config_enums::DbType, error::Error, utils::time_util::TimeUtil};
+use dt_common::{config::config_enums::DbType, utils::time_util::TimeUtil};
 
 use crate::test_config_util::TestConfigUtil;
 
@@ -22,7 +22,7 @@ const UTC_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 
 #[allow(dead_code)]
 impl RdbSqlTestRunner {
-    pub async fn new(relative_test_dir: &str, reverse: bool) -> Result<Self, Error> {
+    pub async fn new(relative_test_dir: &str, reverse: bool) -> anyhow::Result<Self> {
         let src_to_sql_runner =
             RdbTestRunner::new_default(&format!("{}/src_to_sql", relative_test_dir)).await?;
         let src_to_dst_runner =
@@ -34,7 +34,7 @@ impl RdbSqlTestRunner {
         })
     }
 
-    pub async fn close(&self) -> Result<(), Error> {
+    pub async fn close(&self) -> anyhow::Result<()> {
         self.src_to_sql_runner.close().await?;
         self.src_to_dst_runner.close().await
     }
@@ -43,7 +43,7 @@ impl RdbSqlTestRunner {
         &self,
         start_millis: u64,
         parse_millis: u64,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         self.src_to_sql_runner.execute_prepare_sqls().await?;
 
         let gernated_sqls = self
@@ -152,7 +152,7 @@ impl RdbSqlTestRunner {
         &self,
         start_millis: u64,
         parse_millis: u64,
-    ) -> Result<Vec<String>, Error> {
+    ) -> anyhow::Result<Vec<String>> {
         let config = self.src_to_sql_runner.base.get_config();
 
         // clear sql.log if exists
@@ -173,7 +173,7 @@ impl RdbSqlTestRunner {
         Ok(gernated_sqls)
     }
 
-    async fn start_mysql_task(&self, start_millis: u64) -> Result<(), Error> {
+    async fn start_mysql_task(&self, start_millis: u64) -> anyhow::Result<()> {
         let start_time_utc = Utc::now().format(UTC_FORMAT).to_string();
         // execute sqls in src
         TimeUtil::sleep_millis(start_millis).await;
@@ -189,7 +189,7 @@ impl RdbSqlTestRunner {
         self.src_to_sql_runner.base.start_task().await
     }
 
-    async fn start_pg_task(&self, start_millis: u64, parse_millis: u64) -> Result<(), Error> {
+    async fn start_pg_task(&self, start_millis: u64, parse_millis: u64) -> anyhow::Result<()> {
         let duration = Duration::try_milliseconds((start_millis + parse_millis) as i64).unwrap();
         let end_time_utc = (Utc::now() + duration).format(UTC_FORMAT).to_string();
         self.update_task_config(self.reverse, "", &end_time_utc);

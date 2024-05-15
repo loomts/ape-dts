@@ -2,11 +2,11 @@ use std::{cmp, sync::Arc};
 
 use async_trait::async_trait;
 use concurrent_queue::ConcurrentQueue;
+use dt_common::config::sinker_config::BasicSinkerConfig;
 use dt_common::meta::{
     ddl_data::DdlData, dt_data::DtItem, rdb_meta_manager::RdbMetaManager, row_data::RowData,
     row_type::RowType,
 };
-use dt_common::{config::sinker_config::BasicSinkerConfig, error::Error};
 use dt_connector::Sinker;
 
 use crate::{Merger, Parallelizer};
@@ -36,7 +36,7 @@ pub struct TbMergedData {
 
 #[async_trait]
 impl Parallelizer for MergeParallelizer {
-    async fn close(&mut self) -> Result<(), Error> {
+    async fn close(&mut self) -> anyhow::Result<()> {
         if let Some(meta_manager) = &self.meta_manager {
             meta_manager.close().await?;
         }
@@ -47,7 +47,7 @@ impl Parallelizer for MergeParallelizer {
         "MergeParallelizer".to_string()
     }
 
-    async fn drain(&mut self, buffer: &ConcurrentQueue<DtItem>) -> Result<Vec<DtItem>, Error> {
+    async fn drain(&mut self, buffer: &ConcurrentQueue<DtItem>) -> anyhow::Result<Vec<DtItem>> {
         self.base_parallelizer.drain(buffer).await
     }
 
@@ -55,7 +55,7 @@ impl Parallelizer for MergeParallelizer {
         &mut self,
         data: Vec<RowData>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let mut any_fk_tb = false;
         if let Some(rdb_meta_manager) = self.meta_manager.as_mut() {
             for row_data in data.iter() {
@@ -90,7 +90,7 @@ impl Parallelizer for MergeParallelizer {
         &mut self,
         data: Vec<DdlData>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         // ddl should always be excuted serially
         self.base_parallelizer
             .sink_ddl(vec![data], sinkers, 1, false)
@@ -104,7 +104,7 @@ impl MergeParallelizer {
         tb_merged_datas: &mut [TbMergedData],
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
         merge_type: MergeType,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let mut futures = Vec::new();
         for tb_merged_data in tb_merged_datas.iter_mut() {
             let data: Vec<RowData> = match merge_type {
@@ -157,7 +157,7 @@ impl MergeParallelizer {
     async fn sink_unmerged_rows(
         sinker: Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>,
         data: Vec<RowData>,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let mut start = 0;
         for i in 1..=data.len() {
             if i == data.len() || data[i].row_type != data[start].row_type {

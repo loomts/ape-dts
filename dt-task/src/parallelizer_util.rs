@@ -9,7 +9,6 @@ use dt_common::{
         sinker_config::SinkerConfig,
         task_config::TaskConfig,
     },
-    error::Error,
     monitor::monitor::Monitor,
 };
 use dt_common::{meta::redis::command::key_parser::KeyParser, utils::redis_util::RedisUtil};
@@ -32,7 +31,7 @@ impl ParallelizerUtil {
         config: &TaskConfig,
         monitor: Arc<Mutex<Monitor>>,
         rps_limiter: Option<Ratelimiter>,
-    ) -> Result<Box<dyn Parallelizer + Send>, Error> {
+    ) -> anyhow::Result<Box<dyn Parallelizer + Send>> {
         let parallel_size = config.parallelizer.parallel_size;
         let parallel_type = &config.parallelizer.parallel_type;
         let base_parallelizer = BaseParallelizer {
@@ -121,18 +120,18 @@ impl ParallelizerUtil {
 
     async fn create_rdb_merger(
         config: &TaskConfig,
-    ) -> Result<Box<dyn Merger + Send + Sync>, Error> {
+    ) -> anyhow::Result<Box<dyn Merger + Send + Sync>> {
         let meta_manager = TaskUtil::create_rdb_meta_manager(config).await?.unwrap();
         let rdb_merger = RdbMerger { meta_manager };
         Ok(Box::new(rdb_merger))
     }
 
-    async fn create_mongo_merger() -> Result<Box<dyn Merger + Send + Sync>, Error> {
+    async fn create_mongo_merger() -> anyhow::Result<Box<dyn Merger + Send + Sync>> {
         let mongo_merger = MongoMerger {};
         Ok(Box::new(mongo_merger))
     }
 
-    async fn create_rdb_partitioner(config: &TaskConfig) -> Result<RdbPartitioner, Error> {
+    async fn create_rdb_partitioner(config: &TaskConfig) -> anyhow::Result<RdbPartitioner> {
         let meta_manager = TaskUtil::create_rdb_meta_manager(config).await?.unwrap();
         Ok(RdbPartitioner { meta_manager })
     }

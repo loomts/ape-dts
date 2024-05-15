@@ -2,7 +2,6 @@ use std::{collections::HashSet, fs::File};
 
 use dt_common::{
     config::{extractor_config::ExtractorConfig, sinker_config::SinkerConfig},
-    error::Error,
     utils::redis_util::RedisUtil,
 };
 
@@ -15,12 +14,12 @@ pub struct RedisStatisticTestRunner {
 }
 
 impl RedisStatisticTestRunner {
-    pub async fn new(relative_test_dir: &str) -> Result<Self, Error> {
+    pub async fn new(relative_test_dir: &str) -> anyhow::Result<Self> {
         let base = BaseTestRunner::new(relative_test_dir).await.unwrap();
         Ok(Self { base })
     }
 
-    pub async fn run_statistic_test(&mut self) -> Result<(), Error> {
+    pub async fn run_statistic_test(&mut self) -> anyhow::Result<()> {
         let dst_statistic_file = match self.base.get_config().sinker {
             SinkerConfig::RedisStatistic {
                 statistic_log_dir, ..

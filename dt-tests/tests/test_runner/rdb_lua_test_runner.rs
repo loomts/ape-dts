@@ -1,4 +1,4 @@
-use dt_common::{error::Error, utils::time_util::TimeUtil};
+use dt_common::utils::time_util::TimeUtil;
 
 use super::rdb_test_runner::RdbTestRunner;
 
@@ -8,7 +8,7 @@ pub struct RdbLuaTestRunner {
 }
 
 impl RdbLuaTestRunner {
-    pub async fn new(relative_test_dir: &str) -> Result<Self, Error> {
+    pub async fn new(relative_test_dir: &str) -> anyhow::Result<Self> {
         let src_to_dst_runner =
             RdbTestRunner::new_default(&format!("{}/src_to_dst", relative_test_dir)).await?;
         let expect_to_dst_runner =
@@ -19,12 +19,12 @@ impl RdbLuaTestRunner {
         })
     }
 
-    pub async fn close(&self) -> Result<(), Error> {
+    pub async fn close(&self) -> anyhow::Result<()> {
         self.expect_to_dst_runner.close().await?;
         self.src_to_dst_runner.close().await
     }
 
-    pub async fn run_snapshot_test(&self) -> Result<(), Error> {
+    pub async fn run_snapshot_test(&self) -> anyhow::Result<()> {
         self.src_to_dst_runner.execute_prepare_sqls().await?;
         self.expect_to_dst_runner.execute_prepare_sqls().await?;
 
@@ -42,7 +42,7 @@ impl RdbLuaTestRunner {
         Ok(())
     }
 
-    pub async fn run_cdc_test(&self, start_millis: u64, parse_millis: u64) -> Result<(), Error> {
+    pub async fn run_cdc_test(&self, start_millis: u64, parse_millis: u64) -> anyhow::Result<()> {
         self.src_to_dst_runner.execute_prepare_sqls().await?;
         self.expect_to_dst_runner.execute_prepare_sqls().await?;
 

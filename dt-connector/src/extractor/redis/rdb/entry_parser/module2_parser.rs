@@ -1,3 +1,4 @@
+use anyhow::bail;
 use dt_common::error::Error;
 use dt_common::meta::redis::redis_object::{ModuleObject, RedisString};
 
@@ -13,21 +14,21 @@ impl ModuleParser {
         reader: &mut RdbReader,
         key: RedisString,
         type_byte: u8,
-    ) -> Result<ModuleObject, Error> {
+    ) -> anyhow::Result<ModuleObject> {
         if type_byte == super::RDB_TYPE_MODULE {
-            return Err(Error::RedisRdbError(format!(
+            bail! {Error::RedisRdbError(format!(
                 "module type with version 1 is not supported, key=[{}]",
                 String::from(key)
-            )));
+            ))}
         }
 
         let module_id = reader.read_length()?;
         let module_name = Self::module_type_name_by_id(module_id);
         // Not supported
-        Err(Error::RedisRdbError(format!(
+        bail! {Error::RedisRdbError(format!(
             "unsupported module type: [{}]",
             module_name
-        )))
+        ))}
     }
 
     pub fn module_type_name_by_id(module_id: u64) -> String {

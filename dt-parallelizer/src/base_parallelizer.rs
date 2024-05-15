@@ -1,3 +1,4 @@
+use anyhow::bail;
 use concurrent_queue::ConcurrentQueue;
 use dt_common::meta::{
     ddl_data::DdlData,
@@ -19,7 +20,7 @@ pub struct BaseParallelizer {
 }
 
 impl BaseParallelizer {
-    pub async fn drain(&mut self, buffer: &ConcurrentQueue<DtItem>) -> Result<Vec<DtItem>, Error> {
+    pub async fn drain(&mut self, buffer: &ConcurrentQueue<DtItem>) -> anyhow::Result<Vec<DtItem>> {
         let mut data = Vec::new();
         while let Some(item) = self.poped_data.pop_front() {
             data.push(item);
@@ -47,15 +48,15 @@ impl BaseParallelizer {
         &self,
         buffer: &ConcurrentQueue<DtItem>,
         record_size_counter: &mut Counter,
-    ) -> Result<DtItem, Error> {
+    ) -> anyhow::Result<DtItem> {
         // rps limit
         if let Some(rps_limiter) = &self.rps_limiter {
             // refer: https://docs.rs/ratelimit/0.7.1/ratelimit
             if let Err(_sleep) = rps_limiter.try_wait() {
-                return Err(Error::PipelineError(format!(
+                bail! {Error::PipelineError(format!(
                     "reach rps limit: {}",
                     rps_limiter.max_tokens(),
-                )));
+                ))};
             }
         }
 
@@ -65,7 +66,7 @@ impl BaseParallelizer {
                 record_size_counter.add(item.dt_data.get_data_size(), 1);
                 Ok(item)
             }
-            Err(error) => Err(Error::PipelineError(format!("buffer pop error: {}", error))),
+            Err(error) => bail! {Error::PipelineError(format!("buffer pop error: {}", error))},
         }
     }
 
@@ -85,7 +86,7 @@ impl BaseParallelizer {
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
         parallel_size: usize,
         batch: bool,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let mut futures = Vec::new();
         for i in 0..sub_datas.len() {
             let data = sub_datas.remove(0);
@@ -109,7 +110,7 @@ impl BaseParallelizer {
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
         parallel_size: usize,
         batch: bool,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let mut futures = Vec::new();
         for i in 0..sub_datas.len() {
             let data = sub_datas.remove(0);
@@ -133,7 +134,7 @@ impl BaseParallelizer {
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
         parallel_size: usize,
         batch: bool,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let mut futures = Vec::new();
         for i in 0..sub_datas.len() {
             let data = sub_datas.remove(0);

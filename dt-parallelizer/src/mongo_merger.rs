@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
-use dt_common::error::Error;
 use dt_common::meta::{
     col_value::ColValue,
     mongo::{mongo_constant::MongoConstants, mongo_key::MongoKey},
@@ -15,7 +14,7 @@ pub struct MongoMerger {}
 
 #[async_trait]
 impl Merger for MongoMerger {
-    async fn merge(&mut self, data: Vec<RowData>) -> Result<Vec<TbMergedData>, Error> {
+    async fn merge(&mut self, data: Vec<RowData>) -> anyhow::Result<Vec<TbMergedData>> {
         let mut tb_data_map: HashMap<String, Vec<RowData>> = HashMap::new();
         for row_data in data {
             let full_tb = format!("{}.{}", row_data.schema, row_data.tb);
@@ -46,7 +45,7 @@ impl MongoMerger {
     #[allow(clippy::type_complexity)]
     pub fn merge_row_data(
         mut data: Vec<RowData>,
-    ) -> Result<(Vec<RowData>, Vec<RowData>, Vec<RowData>), Error> {
+    ) -> anyhow::Result<(Vec<RowData>, Vec<RowData>, Vec<RowData>)> {
         let mut insert_map = HashMap::new();
         let mut delete_map = HashMap::new();
 

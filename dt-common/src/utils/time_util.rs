@@ -2,8 +2,6 @@ use std::time::Duration;
 
 use chrono::{DateTime, NaiveDateTime, Utc};
 
-use crate::error::Error;
-
 pub struct TimeUtil {}
 
 const UTC_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%z";
@@ -15,7 +13,7 @@ impl TimeUtil {
     }
 
     #[inline(always)]
-    pub fn datetime_from_utc_str(str: &str) -> Result<DateTime<Utc>, Error> {
+    pub fn datetime_from_utc_str(str: &str) -> anyhow::Result<DateTime<Utc>> {
         let datetime = NaiveDateTime::parse_from_str(str, "%Y-%m-%d %H:%M:%S")
             .unwrap()
             .and_utc();

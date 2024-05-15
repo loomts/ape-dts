@@ -9,7 +9,6 @@ use dt_common::{
         sinker_config::SinkerConfig,
         task_config::TaskConfig,
     },
-    error::Error,
     monitor::monitor::Monitor,
     rdb_filter::RdbFilter,
 };
@@ -55,7 +54,7 @@ impl SinkerUtil {
         task_config: &TaskConfig,
         monitor: Arc<Mutex<Monitor>>,
         data_marker: Option<Arc<RwLock<DataMarker>>>,
-    ) -> Result<Sinkers, Error> {
+    ) -> anyhow::Result<Sinkers> {
         let log_level = &task_config.runtime.log_level;
         let parallel_size = task_config.parallelizer.parallel_size;
 
@@ -280,7 +279,7 @@ impl SinkerUtil {
         Ok(sinkers)
     }
 
-    fn create_dummy_sinker(parallel_size: usize) -> Result<Sinkers, Error> {
+    fn create_dummy_sinker(parallel_size: usize) -> anyhow::Result<Sinkers> {
         let mut sub_sinkers: Sinkers = Vec::new();
         for _ in 0..parallel_size {
             let sinker = DummySinker {};
@@ -297,7 +296,7 @@ impl SinkerUtil {
         batch_size: usize,
         monitor: Arc<Mutex<Monitor>>,
         data_marker: Option<Arc<RwLock<DataMarker>>>,
-    ) -> Result<Sinkers, Error> {
+    ) -> anyhow::Result<Sinkers> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool =
             TaskUtil::create_mysql_conn_pool(url, parallel_size as u32 * 2, enable_sqlx_log)
@@ -332,7 +331,7 @@ impl SinkerUtil {
         parallel_size: usize,
         batch_size: usize,
         monitor: Arc<Mutex<Monitor>>,
-    ) -> Result<Sinkers, Error> {
+    ) -> anyhow::Result<Sinkers> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool =
             TaskUtil::create_mysql_conn_pool(url, parallel_size as u32 * 2, enable_sqlx_log)
@@ -363,7 +362,7 @@ impl SinkerUtil {
         batch_size: usize,
         monitor: Arc<Mutex<Monitor>>,
         data_marker: Option<Arc<RwLock<DataMarker>>>,
-    ) -> Result<Sinkers, Error> {
+    ) -> anyhow::Result<Sinkers> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool =
             TaskUtil::create_pg_conn_pool(url, parallel_size as u32 * 2, enable_sqlx_log).await?;
@@ -394,7 +393,7 @@ impl SinkerUtil {
         parallel_size: usize,
         batch_size: usize,
         monitor: Arc<Mutex<Monitor>>,
-    ) -> Result<Sinkers, Error> {
+    ) -> anyhow::Result<Sinkers> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool =
             TaskUtil::create_pg_conn_pool(url, parallel_size as u32 * 2, enable_sqlx_log).await?;
@@ -425,7 +424,7 @@ impl SinkerUtil {
         required_acks: &str,
         avro_converter: &AvroConverter,
         monitor: Arc<Mutex<Monitor>>,
-    ) -> Result<Sinkers, Error> {
+    ) -> anyhow::Result<Sinkers> {
         let brokers = vec![url.to_string()];
         let acks = match required_acks {
             "all" => RequiredAcks::All,
@@ -462,7 +461,7 @@ impl SinkerUtil {
         parallel_size: usize,
         batch_size: usize,
         monitor: Arc<Mutex<Monitor>>,
-    ) -> Result<Sinkers, Error> {
+    ) -> anyhow::Result<Sinkers> {
         let mut sub_sinkers: Sinkers = Vec::new();
         for _ in 0..parallel_size {
             let mongo_client = TaskUtil::create_mongo_client(url, app_name).await.unwrap();
@@ -484,7 +483,7 @@ impl SinkerUtil {
         parallel_size: usize,
         batch_size: usize,
         monitor: Arc<Mutex<Monitor>>,
-    ) -> Result<Sinkers, Error> {
+    ) -> anyhow::Result<Sinkers> {
         let mut sub_sinkers: Sinkers = Vec::new();
         for _ in 0..parallel_size {
             let mongo_client = TaskUtil::create_mongo_client(url, app_name).await.unwrap();
@@ -505,7 +504,7 @@ impl SinkerUtil {
         parallel_size: usize,
         conflict_policy: &ConflictPolicyEnum,
         filter: &RdbFilter,
-    ) -> Result<Sinkers, Error> {
+    ) -> anyhow::Result<Sinkers> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool =
             TaskUtil::create_mysql_conn_pool(url, parallel_size as u32 * 2, enable_sqlx_log)
@@ -529,7 +528,7 @@ impl SinkerUtil {
         parallel_size: usize,
         conflict_policy: &ConflictPolicyEnum,
         filter: &RdbFilter,
-    ) -> Result<Sinkers, Error> {
+    ) -> anyhow::Result<Sinkers> {
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
         let conn_pool =
             TaskUtil::create_pg_conn_pool(url, parallel_size as u32 * 2, enable_sqlx_log).await?;
@@ -555,7 +554,7 @@ impl SinkerUtil {
         monitor: Arc<Mutex<Monitor>>,
         data_marker: Option<Arc<RwLock<DataMarker>>>,
         is_cluster: bool,
-    ) -> Result<Sinkers, Error> {
+    ) -> anyhow::Result<Sinkers> {
         let mut sub_sinkers: Sinkers = Vec::new();
 
         let mut conn = RedisUtil::create_redis_conn(url).await?;
@@ -615,7 +614,7 @@ impl SinkerUtil {
         freq_threshold: i64,
         data_size_threshold: usize,
         monitor: Arc<Mutex<Monitor>>,
-    ) -> Result<Sinkers, Error> {
+    ) -> anyhow::Result<Sinkers> {
         let statistic_type = RedisStatisticType::from_str(statistic_type).unwrap();
         let mut sub_sinkers: Sinkers = Vec::new();
         for _ in 0..parallel_size {
@@ -635,7 +634,7 @@ impl SinkerUtil {
         parallel_size: usize,
         batch_size: usize,
         monitor: Arc<Mutex<Monitor>>,
-    ) -> Result<Sinkers, Error> {
+    ) -> anyhow::Result<Sinkers> {
         let mut sub_sinkers: Sinkers = Vec::new();
         for _ in 0..parallel_size {
             let url_info = Url::parse(stream_load_url).unwrap();
@@ -671,7 +670,7 @@ impl SinkerUtil {
         parallel_size: usize,
         reverse: bool,
         monitor: Arc<Mutex<Monitor>>,
-    ) -> Result<Sinkers, Error> {
+    ) -> anyhow::Result<Sinkers> {
         let mut sub_sinkers: Sinkers = Vec::new();
         for _ in 0..parallel_size {
             let meta_manager = Self::get_extractor_meta_manager(task_config)
@@ -690,7 +689,7 @@ impl SinkerUtil {
 
     async fn get_extractor_meta_manager(
         task_config: &TaskConfig,
-    ) -> Result<Option<RdbMetaManager>, Error> {
+    ) -> anyhow::Result<Option<RdbMetaManager>> {
         let extractor_url = &task_config.extractor_basic.url;
         let meta_manager = match task_config.extractor_basic.db_type {
             DbType::Mysql => {

@@ -1,5 +1,6 @@
 use std::io::Cursor;
 
+use anyhow::bail;
 use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
 use dt_common::error::Error;
 use dt_common::meta::redis::redis_object::RedisString;
@@ -21,7 +22,7 @@ const ZIP_INT_32B: u8 = 0xd0;
 const ZIP_INT_64B: u8 = 0xe0;
 
 impl RdbReader<'_> {
-    pub fn read_zip_list(&mut self) -> Result<Vec<RedisString>, Error> {
+    pub fn read_zip_list(&mut self) -> anyhow::Result<Vec<RedisString>> {
         // The general layout of the ziplist is as follows:
         // <zlbytes> <zltail> <zllen> <entry> <entry> ... <entry> <zlend>
 
@@ -52,10 +53,10 @@ impl RdbReader<'_> {
 
             let last_byte = reader.read_u8()?;
             if last_byte != 0xFF {
-                return Err(Error::RedisRdbError(format!(
+                bail! {Error::RedisRdbError(format!(
                     "invalid zipList lastByte encoding: {}",
                     last_byte
-                )));
+                ))}
             }
         }
 
@@ -65,7 +66,7 @@ impl RdbReader<'_> {
     fn read_zip_list_entry(
         reader: &mut Cursor<&[u8]>,
         first_byte: u8,
-    ) -> Result<RedisString, Error> {
+    ) -> anyhow::Result<RedisString> {
         // read prevlen
         if first_byte == 0xFE {
             let _prevlen = reader.read_u32::<LittleEndian>()?;
@@ -130,17 +131,17 @@ impl RdbReader<'_> {
         if first_byte >> 4 == ZIP_INT_04B {
             let v = (first_byte & 0x0f) as i8 - 1;
             if v < 0 || v > 12 {
-                return Err(Error::RedisRdbError(format!(
+                bail! {Error::RedisRdbError(format!(
                     "invalid zipInt04B encoding: {}",
                     v
-                )));
+                ))}
             }
             return Ok(RedisString::from(v.to_string()));
         }
 
-        Err(Error::RedisRdbError(format!(
+        bail! {Error::RedisRdbError(format!(
             "invalid encoding: {}",
             first_byte
-        )))
+        ))}
     }
 }

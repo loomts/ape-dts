@@ -1,6 +1,5 @@
 use dt_common::{
     config::{config_enums::DbType, task_config::TaskConfig},
-    error::Error,
     utils::time_util::TimeUtil,
 };
 use dt_connector::data_marker::DataMarker;
@@ -28,7 +27,7 @@ static mut LOG4RS_INITED: bool = false;
 
 #[allow(dead_code)]
 impl BaseTestRunner {
-    pub async fn new(relative_test_dir: &str) -> Result<Self, Error> {
+    pub async fn new(relative_test_dir: &str) -> anyhow::Result<Self> {
         let project_root = TestConfigUtil::get_project_root();
         let tmp_dir = format!("{}/tmp/{}", project_root, relative_test_dir);
         let test_dir = TestConfigUtil::get_absolute_path(relative_test_dir);
@@ -76,7 +75,7 @@ impl BaseTestRunner {
         TaskConfig::new(&self.task_config_file)
     }
 
-    pub async fn start_task(&self) -> Result<(), Error> {
+    pub async fn start_task(&self) -> anyhow::Result<()> {
         let enable_log4rs = Self::get_enable_log4rs();
         let task_config = self.task_config_file.clone();
         TaskRunner::new(task_config)
@@ -85,7 +84,7 @@ impl BaseTestRunner {
             .await
     }
 
-    pub async fn spawn_task(&self) -> Result<JoinHandle<()>, Error> {
+    pub async fn spawn_task(&self) -> anyhow::Result<JoinHandle<()>> {
         let enable_log4rs = Self::get_enable_log4rs();
         let task_runner = TaskRunner::new(self.task_config_file.clone()).await;
         let task =
@@ -93,7 +92,7 @@ impl BaseTestRunner {
         Ok(task)
     }
 
-    pub async fn abort_task(&self, task: &JoinHandle<()>) -> Result<(), Error> {
+    pub async fn abort_task(&self, task: &JoinHandle<()>) -> anyhow::Result<()> {
         task.abort();
         while !task.is_finished() {
             TimeUtil::sleep_millis(1).await;
@@ -101,7 +100,7 @@ impl BaseTestRunner {
         Ok(())
     }
 
-    pub async fn wait_task_finish(&self, task: &JoinHandle<()>) -> Result<(), Error> {
+    pub async fn wait_task_finish(&self, task: &JoinHandle<()>) -> anyhow::Result<()> {
         while !task.is_finished() {
             TimeUtil::sleep_millis(1).await;
         }

@@ -1,5 +1,4 @@
 use crate::extractor::redis::StreamReader;
-use dt_common::error::Error;
 
 pub struct RdbReader<'a> {
     pub conn: &'a mut Box<&'a mut (dyn StreamReader + Send + 'a)>,
@@ -16,7 +15,7 @@ impl RdbReader<'_> {
 }
 
 impl StreamReader for RdbReader<'_> {
-    fn read_bytes(&mut self, length: usize) -> Result<Vec<u8>, Error> {
+    fn read_bytes(&mut self, length: usize) -> anyhow::Result<Vec<u8>> {
         let buf = self.conn.read_bytes(length).unwrap();
         self.position += length;
         if self.copy_raw {

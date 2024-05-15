@@ -3,12 +3,10 @@ use std::{
     io::{Read, Seek, SeekFrom},
 };
 
-use crate::error::Error;
-
 pub struct FileUtil {}
 
 impl FileUtil {
-    pub fn tail(path: &str, n: usize) -> Result<Vec<String>, Error> {
+    pub fn tail(path: &str, n: usize) -> anyhow::Result<Vec<String>> {
         let mut file = File::open(path)?;
         file.seek(SeekFrom::End(0))?;
 

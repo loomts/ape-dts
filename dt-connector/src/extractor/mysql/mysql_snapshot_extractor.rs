@@ -13,7 +13,7 @@ use futures::TryStreamExt;
 
 use sqlx::{MySql, Pool};
 
-use dt_common::{config::config_enums::DbType, error::Error, log_finished, log_info};
+use dt_common::{config::config_enums::DbType, log_finished, log_info};
 
 use crate::{
     close_conn_pool,
@@ -34,7 +34,7 @@ pub struct MysqlSnapshotExtractor {
 
 #[async_trait]
 impl Extractor for MysqlSnapshotExtractor {
-    async fn extract(&mut self) -> Result<(), Error> {
+    async fn extract(&mut self) -> anyhow::Result<()> {
         log_info!(
             "MysqlSnapshotExtractor starts, schema: `{}`, tb: `{}`, slice_size: {}",
             self.db,
@@ -45,13 +45,13 @@ impl Extractor for MysqlSnapshotExtractor {
         self.base_extractor.wait_task_finish().await
     }
 
-    async fn close(&mut self) -> Result<(), Error> {
+    async fn close(&mut self) -> anyhow::Result<()> {
         close_conn_pool!(self)
     }
 }
 
 impl MysqlSnapshotExtractor {
-    async fn extract_internal(&mut self) -> Result<(), Error> {
+    async fn extract_internal(&mut self) -> anyhow::Result<()> {
         let tb_meta = self
             .meta_manager
             .get_tb_meta(&self.db, &self.tb)
@@ -86,7 +86,7 @@ impl MysqlSnapshotExtractor {
         Ok(())
     }
 
-    async fn extract_all(&mut self, tb_meta: &MysqlTbMeta) -> Result<(), Error> {
+    async fn extract_all(&mut self, tb_meta: &MysqlTbMeta) -> anyhow::Result<()> {
         log_info!(
             "start extracting data from `{}`.`{}` without slices",
             self.db,
@@ -118,7 +118,7 @@ impl MysqlSnapshotExtractor {
         order_col: &str,
         order_col_type: &MysqlColType,
         resume_value: ColValue,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         log_info!(
             "start extracting data from `{}`.`{}` by slices",
             self.db,

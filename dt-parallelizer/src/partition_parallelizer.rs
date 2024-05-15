@@ -7,7 +7,7 @@ use dt_common::meta::{
     dt_data::{DtData, DtItem},
     row_data::RowData,
 };
-use dt_common::{error::Error, monitor::counter::Counter};
+use dt_common::monitor::counter::Counter;
 use dt_connector::Sinker;
 
 use crate::Parallelizer;
@@ -26,11 +26,11 @@ impl Parallelizer for PartitionParallelizer {
         "PartitionParallelizer".to_string()
     }
 
-    async fn close(&mut self) -> Result<(), Error> {
+    async fn close(&mut self) -> anyhow::Result<()> {
         self.partitioner.close().await
     }
 
-    async fn drain(&mut self, buffer: &ConcurrentQueue<DtItem>) -> Result<Vec<DtItem>, Error> {
+    async fn drain(&mut self, buffer: &ConcurrentQueue<DtItem>) -> anyhow::Result<Vec<DtItem>> {
         let mut data = Vec::new();
         let mut record_size_counter = Counter::new(0, 0);
         while let Ok(item) = self.base_parallelizer.pop(buffer, &mut record_size_counter) {
@@ -64,7 +64,7 @@ impl Parallelizer for PartitionParallelizer {
         &mut self,
         data: Vec<RowData>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let sub_datas = self.partitioner.partition(data, self.parallel_size).await?;
         self.base_parallelizer
             .sink_dml(sub_datas, sinkers, self.parallel_size, false)
@@ -75,7 +75,7 @@ impl Parallelizer for PartitionParallelizer {
         &mut self,
         _data: Vec<DdlData>,
         _sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         Ok(())
     }
 }

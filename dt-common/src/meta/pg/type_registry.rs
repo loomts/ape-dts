@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use crate::error::Error;
 use futures::TryStreamExt;
 use sqlx::{postgres::PgRow, Pool, Postgres, Row};
 
@@ -22,7 +21,7 @@ impl TypeRegistry {
         }
     }
 
-    pub async fn init(mut self) -> Result<Self, Error> {
+    pub async fn init(mut self) -> anyhow::Result<Self> {
         // TODO check duplicate typename in pg_catalog.pg_type
         let sql = "SELECT t.oid AS oid,
                     t.typname AS name,
@@ -50,7 +49,7 @@ impl TypeRegistry {
         Ok(self)
     }
 
-    fn parse_col_meta(&mut self, row: &PgRow) -> Result<PgColType, Error> {
+    fn parse_col_meta(&mut self, row: &PgRow) -> anyhow::Result<PgColType> {
         let oid: i32 = row.get_unchecked("oid");
         // cast to short name
         let long_name: String = row.try_get("name")?;

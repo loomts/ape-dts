@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use dt_common::{error::Error, log_info, rdb_filter::RdbFilter};
+use dt_common::{log_info, rdb_filter::RdbFilter};
 
 use dt_common::meta::{
     ddl_data::DdlData, ddl_type::DdlType, dt_data::DtData, position::Position,
@@ -23,19 +23,19 @@ pub struct PgStructExtractor {
 
 #[async_trait]
 impl Extractor for PgStructExtractor {
-    async fn extract(&mut self) -> Result<(), Error> {
+    async fn extract(&mut self) -> anyhow::Result<()> {
         log_info!("PgStructExtractor starts, schema: {}", self.schema);
         self.extract_internal().await?;
         self.base_extractor.wait_task_finish().await
     }
 
-    async fn close(&mut self) -> Result<(), Error> {
+    async fn close(&mut self) -> anyhow::Result<()> {
         close_conn_pool!(self)
     }
 }
 
 impl PgStructExtractor {
-    pub async fn extract_internal(&mut self) -> Result<(), Error> {
+    pub async fn extract_internal(&mut self) -> anyhow::Result<()> {
         let mut pg_fetcher = PgStructFetcher {
             conn_pool: self.conn_pool.to_owned(),
             schema: self.schema.clone(),

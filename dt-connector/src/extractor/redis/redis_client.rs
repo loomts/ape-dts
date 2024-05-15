@@ -1,6 +1,7 @@
 use super::redis_resp_reader::RedisRespReader;
 use super::redis_resp_types::Value;
 use super::StreamReader;
+use anyhow::bail;
 use async_std::io::BufReader;
 use async_std::net::TcpStream;
 use async_std::prelude::*;
@@ -17,13 +18,13 @@ pub struct RedisClient {
 }
 
 impl StreamReader for RedisClient {
-    fn read_bytes(&mut self, size: usize) -> Result<Vec<u8>, Error> {
+    fn read_bytes(&mut self, size: usize) -> anyhow::Result<Vec<u8>> {
         block_on(self.read_bytes(size))
     }
 }
 
 impl RedisClient {
-    pub async fn new(url: &str) -> Result<Self, Error> {
+    pub async fn new(url: &str) -> anyhow::Result<Self> {
         let url_info = Url::parse(url).unwrap();
         let host = url_info.host_str().unwrap();
         let port = url_info.port().unwrap();
@@ -50,49 +51,49 @@ impl RedisClient {
             if let Ok(Value::Okay) = me.read().await {
                 return Ok(me);
             }
-            return Err(Error::RedisResultError(format!(
+            bail! {Error::RedisResultError(format!(
                 "can't connect redis: {}",
                 url
-            )));
+            ))}
         }
 
         Ok(me)
     }
 
-    pub async fn close(&mut self) -> Result<(), Error> {
+    pub async fn close(&mut self) -> anyhow::Result<()> {
         self.stream.get_mut().shutdown(std::net::Shutdown::Both)?;
         Ok(())
     }
 
-    pub async fn send_packed(&mut self, packed_cmd: &[u8]) -> Result<(), Error> {
+    pub async fn send_packed(&mut self, packed_cmd: &[u8]) -> anyhow::Result<()> {
         self.stream.get_mut().write_all(packed_cmd).await?;
         Ok(())
     }
 
-    pub async fn send(&mut self, cmd: &RedisCmd) -> Result<(), Error> {
+    pub async fn send(&mut self, cmd: &RedisCmd) -> anyhow::Result<()> {
         self.send_packed(&CmdEncoder::encode(cmd)).await
     }
 
-    pub async fn read(&mut self) -> Result<Value, Error> {
+    pub async fn read(&mut self) -> anyhow::Result<Value> {
         let mut resp_reader = RedisRespReader { read_len: 0 };
         match resp_reader.decode(&mut self.stream).await {
             Ok(value) => Ok(value),
-            Err(err) => Err(Error::RedisResultError(err)),
+            Err(err) => bail! {Error::RedisResultError(err.to_string())},
         }
     }
 
-    pub async fn read_as_string(&mut self) -> Result<Vec<String>, Error> {
+    pub async fn read_as_string(&mut self) -> anyhow::Result<Vec<String>> {
         let value = self.read().await?;
         Self::parse_result_as_string(value)
     }
 
-    pub async fn read_with_len(&mut self) -> Result<(Value, usize), String> {
+    pub async fn read_with_len(&mut self) -> anyhow::Result<(Value, usize)> {
         let mut resp_reader = RedisRespReader { read_len: 0 };
         let value = resp_reader.decode(&mut self.stream).await?;
         Ok((value, resp_reader.read_len))
     }
 
-    pub async fn read_bytes(&mut self, length: usize) -> Result<Vec<u8>, Error> {
+    pub async fn read_bytes(&mut self, length: usize) -> anyhow::Result<Vec<u8>> {
         let mut buf = vec![0; length];
         // if length is bigger than buffer size of BufReader, the buf will be filled by 0,
         // so here we must read from inner TcpStream instead of BufReader
@@ -106,7 +107,7 @@ impl RedisClient {
         Ok(buf)
     }
 
-    fn parse_result_as_string(value: Value) -> Result<Vec<String>, Error> {
+    fn parse_result_as_string(value: Value) -> anyhow::Result<Vec<String>> {
         let mut results = Vec::new();
         match value {
             Value::Data(data) => {
@@ -125,9 +126,9 @@ impl RedisClient {
             Value::Status(data) => results.push(data),
 
             _ => {
-                return Err(Error::RedisResultError(
+                bail! {Error::RedisResultError(
                     "redis result type can not be parsed as string".into(),
-                ))
+                )}
             }
         }
         Ok(results)

@@ -17,7 +17,6 @@ use dt_common::meta::{
 };
 use dt_common::{
     config::sinker_config::BasicSinkerConfig,
-    error::Error,
     log_info, log_position,
     monitor::{counter_type::CounterType, monitor::Monitor},
     utils::time_util::TimeUtil,
@@ -49,14 +48,14 @@ enum SinkMethod {
 
 #[async_trait]
 impl Pipeline for BasePipeline {
-    async fn stop(&mut self) -> Result<(), Error> {
+    async fn stop(&mut self) -> anyhow::Result<()> {
         for sinker in self.sinkers.iter_mut() {
             sinker.lock().await.close().await.unwrap();
         }
         self.parallelizer.close().await
     }
 
-    async fn start(&mut self) -> Result<(), Error> {
+    async fn start(&mut self) -> anyhow::Result<()> {
         log_info!(
             "{} starts, parallel_size: {}, checkpoint_interval_secs: {}",
             self.parallelizer.get_name(),
@@ -133,7 +132,7 @@ impl BasePipeline {
     async fn sink_raw(
         &mut self,
         all_data: Vec<DtItem>,
-    ) -> Result<(usize, Option<Position>, Option<Position>), Error> {
+    ) -> anyhow::Result<(usize, Option<Position>, Option<Position>)> {
         let (data, last_received_position, last_commit_position) = Self::fetch_raw(all_data);
         let count = data.len();
         if count > 0 {
@@ -148,7 +147,7 @@ impl BasePipeline {
     async fn sink_dml(
         &mut self,
         all_data: Vec<DtItem>,
-    ) -> Result<(usize, Option<Position>, Option<Position>), Error> {
+    ) -> anyhow::Result<(usize, Option<Position>, Option<Position>)> {
         let (mut data, last_received_position, last_commit_position) = Self::fetch_dml(all_data);
         let count = data.len();
         if count > 0 {
@@ -168,7 +167,7 @@ impl BasePipeline {
     async fn sink_ddl(
         &mut self,
         all_data: Vec<DtItem>,
-    ) -> Result<(usize, Option<Position>, Option<Position>), Error> {
+    ) -> anyhow::Result<(usize, Option<Position>, Option<Position>)> {
         let (data, last_received_position, last_commit_position) = Self::fetch_ddl(all_data);
         let count = data.len();
         if count > 0 {

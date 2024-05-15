@@ -1,4 +1,3 @@
-use crate::error::Error;
 use bytes::Bytes;
 use sqlx::{postgres::PgRow, Row};
 
@@ -48,7 +47,7 @@ impl PgColValueConvertor {
         col_type: &PgColType,
         value_str: &str,
         meta_manager: &mut PgMetaManager,
-    ) -> Result<ColValue, Error> {
+    ) -> anyhow::Result<ColValue> {
         if col_type.parent_oid != 0 {
             let parent_col_type = meta_manager.get_col_type_by_oid(col_type.parent_oid)?;
             return Self::from_str(&parent_col_type, value_str, meta_manager);
@@ -119,7 +118,7 @@ impl PgColValueConvertor {
         col_type: &PgColType,
         value: &Bytes,
         meta_manager: &mut PgMetaManager,
-    ) -> Result<ColValue, Error> {
+    ) -> anyhow::Result<ColValue> {
         // include all types from https://www.postgresql.org/docs/current/static/datatype.html#DATATYPE-TABLE
         // plus aliases from the shorter names produced by older wal2json
         // let value = value.unwrap();
@@ -131,7 +130,7 @@ impl PgColValueConvertor {
         row: &PgRow,
         col_name: &str,
         col_type: &PgColType,
-    ) -> Result<ColValue, Error> {
+    ) -> anyhow::Result<ColValue> {
         let value: Option<Vec<u8>> = row.get_unchecked(col_name);
         if value.is_none() {
             return Ok(ColValue::None);

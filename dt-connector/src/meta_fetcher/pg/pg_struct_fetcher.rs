@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use anyhow::bail;
 use dt_common::meta::struct_meta::{
     statement::{
         pg_create_schema_statement::PgCreateSchemaStatement,
@@ -40,7 +41,7 @@ enum ColType {
 }
 
 impl PgStructFetcher {
-    pub async fn get_create_schema_statement(&mut self) -> Result<PgCreateSchemaStatement, Error> {
+    pub async fn get_create_schema_statement(&mut self) -> anyhow::Result<PgCreateSchemaStatement> {
         let schema = self.get_schema().await.unwrap();
         Ok(PgCreateSchemaStatement { schema })
     }
@@ -48,7 +49,7 @@ impl PgStructFetcher {
     pub async fn get_create_table_statements(
         &mut self,
         tb: &str,
-    ) -> Result<Vec<PgCreateTableStatement>, Error> {
+    ) -> anyhow::Result<Vec<PgCreateTableStatement>> {
         let mut results = Vec::new();
 
         let tables = self.get_tables(tb).await.unwrap();
@@ -78,7 +79,7 @@ impl PgStructFetcher {
         Ok(results)
     }
 
-    async fn get_schema(&mut self) -> Result<Schema, Error> {
+    async fn get_schema(&mut self) -> anyhow::Result<Schema> {
         let sql = format!(
             "SELECT schema_name 
             FROM information_schema.schemata
@@ -93,13 +94,13 @@ impl PgStructFetcher {
             return Ok(schema);
         }
 
-        Err(Error::StructError(format!(
+        bail! {Error::StructError(format!(
             "schema: {} not found",
             self.schema
-        )))
+        ))}
     }
 
-    async fn get_sequences(&mut self, tb: &str) -> Result<HashMap<String, Vec<Sequence>>, Error> {
+    async fn get_sequences(&mut self, tb: &str) -> anyhow::Result<HashMap<String, Vec<Sequence>>> {
         let mut results: HashMap<String, Vec<Sequence>> = HashMap::new();
 
         let tb_filter = if !tb.is_empty() {
@@ -162,7 +163,7 @@ impl PgStructFetcher {
     async fn get_independent_sequences(
         &mut self,
         sequence_names: &[String],
-    ) -> Result<Vec<Sequence>, Error> {
+    ) -> anyhow::Result<Vec<Sequence>> {
         let filter_names: Vec<String> = sequence_names.iter().map(|i| format!("'{}'", i)).collect();
         let filter = format!("AND sequence_name IN ({})", filter_names.join(","));
         let sql = format!(
@@ -196,7 +197,7 @@ impl PgStructFetcher {
         &mut self,
         table: &Table,
         sequences: &mut HashMap<String, Vec<Sequence>>,
-    ) -> Result<Vec<Sequence>, Error> {
+    ) -> anyhow::Result<Vec<Sequence>> {
         let mut table_sequences = self.get_result(sequences, &table.table_name);
 
         let mut owned_sequence_names = HashSet::new();
@@ -262,7 +263,7 @@ impl PgStructFetcher {
     async fn get_sequence_owners(
         &mut self,
         tb: &str,
-    ) -> Result<HashMap<String, Vec<SequenceOwner>>, Error> {
+    ) -> anyhow::Result<HashMap<String, Vec<SequenceOwner>>> {
         let mut results = HashMap::new();
 
         let tb_filter = if !tb.is_empty() {
@@ -313,7 +314,7 @@ impl PgStructFetcher {
         Ok(results)
     }
 
-    async fn get_tables(&mut self, tb: &str) -> Result<HashMap<String, Table>, Error> {
+    async fn get_tables(&mut self, tb: &str) -> anyhow::Result<HashMap<String, Table>> {
         let mut results: HashMap<String, Table> = HashMap::new();
 
         let tb_filter = if !tb.is_empty() {
@@ -393,7 +394,7 @@ impl PgStructFetcher {
         Ok(results)
     }
 
-    async fn get_column_types(&mut self, tb: &str) -> Result<HashMap<String, String>, Error> {
+    async fn get_column_types(&mut self, tb: &str) -> anyhow::Result<HashMap<String, String>> {
         let fetcher = PgStructCheckFetcher {
             conn_pool: self.conn_pool.clone(),
         };
@@ -421,7 +422,7 @@ impl PgStructFetcher {
     async fn get_constraints(
         &mut self,
         tb: &str,
-    ) -> Result<HashMap<String, Vec<Constraint>>, Error> {
+    ) -> anyhow::Result<HashMap<String, Vec<Constraint>>> {
         let mut results = HashMap::new();
 
         let tb_filter = if !tb.is_empty() {
@@ -466,7 +467,7 @@ impl PgStructFetcher {
         Ok(results)
     }
 
-    async fn get_indexes(&mut self, tb: &str) -> Result<HashMap<String, Vec<Index>>, Error> {
+    async fn get_indexes(&mut self, tb: &str) -> anyhow::Result<HashMap<String, Vec<Index>>> {
         let mut results = HashMap::new();
 
         let tb_filter = if !tb.is_empty() {
@@ -508,7 +509,7 @@ impl PgStructFetcher {
     async fn get_table_comments(
         &mut self,
         tb: &str,
-    ) -> Result<HashMap<String, Vec<Comment>>, Error> {
+    ) -> anyhow::Result<HashMap<String, Vec<Comment>>> {
         let mut results = HashMap::new();
 
         let tb_filter = if !tb.is_empty() {
@@ -555,7 +556,7 @@ impl PgStructFetcher {
     async fn get_column_comments(
         &mut self,
         tb: &str,
-    ) -> Result<HashMap<String, Vec<Comment>>, Error> {
+    ) -> anyhow::Result<HashMap<String, Vec<Comment>>> {
         let mut results = HashMap::new();
 
         let tb_filter = if !tb.is_empty() {
@@ -612,11 +613,11 @@ impl PgStructFetcher {
         }
     }
 
-    fn get_str_with_null(row: &PgRow, col_name: &str) -> Result<String, Error> {
+    fn get_str_with_null(row: &PgRow, col_name: &str) -> anyhow::Result<String> {
         Self::get_with_null(row, col_name, ColType::Text)
     }
 
-    fn get_with_null(row: &PgRow, col_name: &str, col_type: ColType) -> Result<String, Error> {
+    fn get_with_null(row: &PgRow, col_name: &str, col_type: ColType) -> anyhow::Result<String> {
         let mut str_val = String::new();
         match col_type {
             ColType::Text => {

@@ -1,3 +1,4 @@
+use anyhow::bail;
 use async_trait::async_trait;
 use dt_common::{error::Error, log_info, rdb_filter::RdbFilter};
 use dt_common::{
@@ -26,16 +27,16 @@ pub struct RedisScanExtractor {
 
 #[async_trait]
 impl Extractor for RedisScanExtractor {
-    async fn extract(&mut self) -> Result<(), Error> {
+    async fn extract(&mut self) -> anyhow::Result<()> {
         log_info!("RedisScanExtractor starts");
 
         if let RedisStatisticType::HotKey = self.statistic_type {
             let maxmemory_policy = self.get_maxmemory_policy().await?;
             if maxmemory_policy != "allkeys-lfu" {
-                return Err(Error::MetadataError(format!(
+                bail! {Error::MetadataError(format!(
                     "maxmemory_policy is {}, should be allkeys-lfu",
                     maxmemory_policy
-                )));
+                ))}
             }
         }
 
@@ -48,7 +49,7 @@ impl Extractor for RedisScanExtractor {
             // select db
             let cmd = ["SELECT", &db];
             if Value::Okay != RedisUtil::send_cmd(&mut self.conn, &cmd) {
-                return Err(Error::RedisResultError(format!("\"SELECT {}\" failed", db)));
+                bail! {Error::RedisResultError(format!("\"SELECT {}\" failed", db))}
             }
 
             // scan
@@ -77,7 +78,7 @@ impl Extractor for RedisScanExtractor {
 }
 
 impl RedisScanExtractor {
-    async fn get_dbs(&mut self) -> Result<Vec<String>, Error> {
+    async fn get_dbs(&mut self) -> anyhow::Result<Vec<String>> {
         let mut dbs = Vec::new();
         let cmd = ["INFO", "keyspace"];
         let result = self.query(&cmd).await?;
@@ -89,7 +90,7 @@ impl RedisScanExtractor {
         Ok(dbs)
     }
 
-    async fn get_maxmemory_policy(&mut self) -> Result<String, Error> {
+    async fn get_maxmemory_policy(&mut self) -> anyhow::Result<String> {
         let cmd = ["CONFIG", "GET", "maxmemory-policy"];
         let result = self.query(&cmd).await?;
         if result.len() > 1 {
@@ -98,7 +99,7 @@ impl RedisScanExtractor {
         Ok(String::new())
     }
 
-    async fn analyze_hot_key(&mut self, db_id: i64, key: &str) -> Result<(), Error> {
+    async fn analyze_hot_key(&mut self, db_id: i64, key: &str) -> anyhow::Result<()> {
         let cmd = ["OBJECT", "FREQ", key];
         let result = self.query(&cmd).await?;
         if let Ok(freq) = result[0].parse() {
@@ -114,7 +115,7 @@ impl RedisScanExtractor {
         Ok(())
     }
 
-    async fn analyze_big_key(&mut self, db_id: i64, key: &str) -> Result<(), Error> {
+    async fn analyze_big_key(&mut self, db_id: i64, key: &str) -> anyhow::Result<()> {
         let cmd = ["MEMORY", "USAGE", key];
         let result = self.query(&cmd).await?;
         let data_size: usize = result[0].parse().unwrap();
@@ -134,7 +135,7 @@ impl RedisScanExtractor {
             .await
     }
 
-    async fn query(&mut self, cmd: &[&str]) -> Result<Vec<String>, Error> {
+    async fn query(&mut self, cmd: &[&str]) -> anyhow::Result<Vec<String>> {
         let result = RedisUtil::send_cmd(&mut self.conn, cmd);
         RedisUtil::parse_result_as_string(result)
     }

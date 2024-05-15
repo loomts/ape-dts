@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{config::config_enums::DbType, error::Error};
+use anyhow::bail;
 use futures::TryStreamExt;
 
 use sqlx::{mysql::MySqlRow, MySql, Pool, Row};
@@ -31,7 +32,7 @@ impl MysqlMetaManager {
         Self::new_mysql_compatible(conn_pool, DbType::Mysql)
     }
 
-    pub async fn close(&self) -> Result<(), Error> {
+    pub async fn close(&self) -> anyhow::Result<()> {
         self.conn_pool.close().await;
         Ok(())
     }
@@ -45,7 +46,7 @@ impl MysqlMetaManager {
         }
     }
 
-    pub async fn init(mut self) -> Result<Self, Error> {
+    pub async fn init(mut self) -> anyhow::Result<Self> {
         self.init_version().await?;
         Ok(self)
     }
@@ -63,7 +64,7 @@ impl MysqlMetaManager {
     pub async fn get_tb_meta_by_row_data<'a>(
         &'a mut self,
         row_data: &RowData,
-    ) -> Result<&'a MysqlTbMeta, Error> {
+    ) -> anyhow::Result<&'a MysqlTbMeta> {
         self.get_tb_meta(&row_data.schema, &row_data.tb).await
     }
 
@@ -71,7 +72,7 @@ impl MysqlMetaManager {
         &'a mut self,
         schema: &str,
         tb: &str,
-    ) -> Result<&'a MysqlTbMeta, Error> {
+    ) -> anyhow::Result<&'a MysqlTbMeta> {
         let full_name = format!("{}.{}", schema, tb);
         if !self.cache.contains_key(&full_name) {
             let (cols, col_type_map) =
@@ -107,7 +108,7 @@ impl MysqlMetaManager {
         version: &str,
         schema: &str,
         tb: &str,
-    ) -> Result<(Vec<String>, HashMap<String, MysqlColType>), Error> {
+    ) -> anyhow::Result<(Vec<String>, HashMap<String, MysqlColType>)> {
         let mut cols = Vec::new();
         let mut col_type_map = HashMap::new();
 
@@ -141,10 +142,10 @@ impl MysqlMetaManager {
         }
 
         if cols.is_empty() {
-            return Err(Error::MetadataError(format!(
+            bail! {Error::MetadataError(format!(
                 "failed to get table metadata for: `{}`.`{}`",
                 schema, tb
-            )));
+            )) }
         }
         Ok((cols, col_type_map))
     }
@@ -153,7 +154,7 @@ impl MysqlMetaManager {
         db_type: &DbType,
         version: &str,
         row: &MySqlRow,
-    ) -> Result<MysqlColType, Error> {
+    ) -> anyhow::Result<MysqlColType> {
         let column_type: String = row.try_get(COLUMN_TYPE)?;
         let data_type: String = row.try_get(DATA_TYPE)?;
 
@@ -252,7 +253,11 @@ impl MysqlMetaManager {
         Ok(col_type)
     }
 
-    async fn get_col_length(db_type: &DbType, version: &str, row: &MySqlRow) -> Result<u64, Error> {
+    async fn get_col_length(
+        db_type: &DbType,
+        version: &str,
+        row: &MySqlRow,
+    ) -> anyhow::Result<u64> {
         // with A expression, error will throw for mysql 8.0: ColumnDecode { index: "\"CHARACTER_MAXIMUM_LENGTH\"", source: "mismatched types; Rust type `u64` (as SQL type `BIGINT UNSIGNED`) is not compatible with SQL type `BIGINT`" }'
         // with B expression, error will throw for mysql 5.7: ColumnDecode { index: "\"CHARACTER_MAXIMUM_LENGTH\"", source: "mismatched types; Rust type `i64` (as SQL type `BIGINT`) is not compatible with SQL type `BIGINT UNSIGNED`" }'
         // no need to consider versions before 5.*
@@ -269,7 +274,7 @@ impl MysqlMetaManager {
         conn_pool: &Pool<MySql>,
         schema: &str,
         tb: &str,
-    ) -> Result<HashMap<String, Vec<String>>, Error> {
+    ) -> anyhow::Result<HashMap<String, Vec<String>>> {
         let mut key_map: HashMap<String, Vec<String>> = HashMap::new();
         let sql = format!("SHOW INDEXES FROM `{}`.`{}`", schema, tb);
         let mut rows = sqlx::query(&sql).disable_arguments().fetch(conn_pool);
@@ -297,7 +302,7 @@ impl MysqlMetaManager {
         db_type: &DbType,
         schema: &str,
         tb: &str,
-    ) -> Result<Vec<ForeignKey>, Error> {
+    ) -> anyhow::Result<Vec<ForeignKey>> {
         let mut foreign_keys = Vec::new();
         if db_type == &DbType::StarRocks {
             return Ok(foreign_keys);
@@ -336,7 +341,7 @@ impl MysqlMetaManager {
         Ok(foreign_keys)
     }
 
-    async fn init_version(&mut self) -> Result<(), Error> {
+    async fn init_version(&mut self) -> anyhow::Result<()> {
         let sql = "SELECT VERSION()";
         let mut rows = sqlx::query(sql).disable_arguments().fetch(&self.conn_pool);
         if let Some(row) = rows.try_next().await.unwrap() {
@@ -344,6 +349,6 @@ impl MysqlMetaManager {
             self.version = version.trim().into();
             return Ok(());
         }
-        Err(Error::MetadataError("failed to init mysql version".into()))
+        bail! {Error::MetadataError("failed to init mysql version".into())}
     }
 }

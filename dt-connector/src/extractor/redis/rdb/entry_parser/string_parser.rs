@@ -1,4 +1,3 @@
-use dt_common::error::Error;
 use dt_common::meta::redis::redis_object::{RedisString, StringObject};
 
 use crate::extractor::redis::rdb::reader::rdb_reader::RdbReader;
@@ -10,7 +9,7 @@ impl StringParser {
         reader: &mut RdbReader,
         key: RedisString,
         _type_byte: u8,
-    ) -> Result<StringObject, Error> {
+    ) -> anyhow::Result<StringObject> {
         let mut obj = StringObject::new();
         obj.key = key;
         obj.value = reader.read_string()?;

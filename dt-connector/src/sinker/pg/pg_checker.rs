@@ -9,7 +9,7 @@ use dt_common::meta::{
     ddl_data::DdlData, pg::pg_meta_manager::PgMetaManager, rdb_meta_manager::RdbMetaManager,
     row_data::RowData, struct_meta::statement::struct_statement::StructStatement,
 };
-use dt_common::{error::Error, monitor::monitor::Monitor, rdb_filter::RdbFilter};
+use dt_common::{ monitor::monitor::Monitor, rdb_filter::RdbFilter};
 use futures::TryStreamExt;
 use sqlx::{Pool, Postgres};
 
@@ -35,7 +35,7 @@ pub struct PgChecker {
 
 #[async_trait]
 impl Sinker for PgChecker {
-    async fn sink_dml(&mut self, mut data: Vec<RowData>, batch: bool) -> Result<(), Error> {
+    async fn sink_dml(&mut self, mut data: Vec<RowData>, batch: bool) -> anyhow::Result<()> {
         if data.is_empty() {
             return Ok(());
         }
@@ -48,13 +48,13 @@ impl Sinker for PgChecker {
         Ok(())
     }
 
-    async fn close(&mut self) -> Result<(), Error> {
+    async fn close(&mut self) -> anyhow::Result<()> {
         self.meta_manager.close().await?;
         self.extractor_meta_manager.close().await?;
         return close_conn_pool!(self);
     }
 
-    async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> Result<(), Error> {
+    async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> anyhow::Result<()> {
         if data.is_empty() {
             return Ok(());
         }
@@ -65,7 +65,7 @@ impl Sinker for PgChecker {
 }
 
 impl PgChecker {
-    async fn serial_check(&mut self, data: Vec<RowData>) -> Result<(), Error> {
+    async fn serial_check(&mut self, data: Vec<RowData>) -> anyhow::Result<()> {
         let start_time = Instant::now();
 
         if data.is_empty() {
@@ -114,7 +114,7 @@ impl PgChecker {
         data: &mut [RowData],
         start_index: usize,
         batch_size: usize,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let start_time = Instant::now();
 
         let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&data[0]).await?;
@@ -148,7 +148,7 @@ impl PgChecker {
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, 0, start_time).await
     }
 
-    async fn serial_ddl_check(&mut self, mut data: Vec<DdlData>) -> Result<(), Error> {
+    async fn serial_ddl_check(&mut self, mut data: Vec<DdlData>) -> anyhow::Result<()> {
         for src_data in data.iter_mut() {
             if src_data.statement.is_none() {
                 continue;

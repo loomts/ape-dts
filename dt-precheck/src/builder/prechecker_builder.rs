@@ -1,8 +1,8 @@
 use std::vec;
 
+use anyhow::bail;
 use dt_common::{
     config::{config_enums::DbType, task_config::TaskConfig},
-    error::Error,
     rdb_filter::RdbFilter,
 };
 
@@ -101,16 +101,16 @@ impl PrecheckerBuilder {
         checker
     }
 
-    pub async fn check(&self) -> Result<Vec<Result<CheckResult, Error>>, Error> {
+    pub async fn check(&self) -> anyhow::Result<Vec<anyhow::Result<CheckResult>>> {
         if !self.valid_config() {
-            return Err(Error::PreCheckError("config is invalid.".into()));
+            bail! {"config is invalid."};
         }
         let (source_checker_option, sink_checker_option) =
             (self.build_checker(true), self.build_checker(false));
         if source_checker_option.is_none() || sink_checker_option.is_none() {
-            return Err(Error::PreCheckError(
-                "config is invalid when build checker.maybe db_type is wrong.".into(),
-            ));
+            bail! {
+                "config is invalid when build checker.maybe db_type is wrong."
+            };
         }
         let (mut source_checker, mut sink_checker) =
             (source_checker_option.unwrap(), sink_checker_option.unwrap());
@@ -123,12 +123,12 @@ impl PrecheckerBuilder {
         if !check_source_connection.is_validate || !check_sink_connection.is_validate {
             check_source_connection.log();
             check_sink_connection.log();
-            return Err(Error::PreCheckError(
-                "connection failed, precheck not passed.".into(),
-            ));
+            bail! {
+                "connection failed, precheck not passed."
+            };
         }
 
-        let mut check_results: Vec<Result<CheckResult, Error>> = vec![];
+        let mut check_results: Vec<anyhow::Result<CheckResult>> = vec![];
         check_results.push(Ok(check_source_connection));
         check_results.push(Ok(check_sink_connection));
 
@@ -152,7 +152,7 @@ impl PrecheckerBuilder {
         Ok(check_results)
     }
 
-    pub async fn verify_check_result(&self) -> Result<(), Error> {
+    pub async fn verify_check_result(&self) -> anyhow::Result<()> {
         let check_results = self.check().await;
         match check_results {
             Ok(results) => {
@@ -166,11 +166,11 @@ impl PrecheckerBuilder {
                                 error_count += 1;
                             }
                         }
-                        Err(e) => return Err(e),
+                        Err(e) => bail! {e},
                     }
                 }
                 if error_count > 0 {
-                    Err(Error::PreCheckError("precheck not passed.".into()))
+                    bail! {"precheck not passed."}
                 } else {
                     Ok(())
                 }

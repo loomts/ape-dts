@@ -1,5 +1,6 @@
 use std::{fs::File, io::Read};
 
+use anyhow::bail;
 use configparser::ini::Ini;
 use dt_common::error::Error;
 
@@ -12,7 +13,7 @@ pub struct PrecheckTaskConfig {
 }
 
 impl PrecheckTaskConfig {
-    pub fn new(task_config_file: &str) -> Result<Self, Error> {
+    pub fn new(task_config_file: &str) -> anyhow::Result<Self> {
         let mut config_str = String::new();
         File::open(task_config_file)
             .unwrap()
@@ -27,7 +28,7 @@ impl PrecheckTaskConfig {
         })
     }
 
-    fn load_precheck_config(ini: &Ini) -> Result<PrecheckConfig, Error> {
+    fn load_precheck_config(ini: &Ini) -> anyhow::Result<PrecheckConfig> {
         let (do_struct_opt, do_cdc_opt): (Option<String>, Option<String>) = (
             ini.get(PRECHECK, "do_struct_init"),
             ini.get(PRECHECK, "do_cdc"),
@@ -38,9 +39,9 @@ impl PrecheckTaskConfig {
                 do_cdc: do_cdc.parse().unwrap(),
             })
         } else {
-            Err(Error::ConfigError(
+            bail! {Error::ConfigError(
                 "config is not valid for precheck.".into(),
-            ))
+            )}
         }
     }
 }

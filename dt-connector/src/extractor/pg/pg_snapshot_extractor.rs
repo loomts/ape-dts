@@ -13,8 +13,6 @@ use dt_common::meta::{
     row_data::RowData,
 };
 
-use dt_common::error::Error;
-
 use crate::close_conn_pool;
 use crate::{
     extractor::{base_extractor::BaseExtractor, resumer::snapshot_resumer::SnapshotResumer},
@@ -35,7 +33,7 @@ pub struct PgSnapshotExtractor {
 
 #[async_trait]
 impl Extractor for PgSnapshotExtractor {
-    async fn extract(&mut self) -> Result<(), Error> {
+    async fn extract(&mut self) -> anyhow::Result<()> {
         log_info!(
             r#"PgSnapshotExtractor starts, schema: "{}", tb: "{}", slice_size: {}"#,
             self.schema,
@@ -46,13 +44,13 @@ impl Extractor for PgSnapshotExtractor {
         self.base_extractor.wait_task_finish().await
     }
 
-    async fn close(&mut self) -> Result<(), Error> {
+    async fn close(&mut self) -> anyhow::Result<()> {
         close_conn_pool!(self)
     }
 }
 
 impl PgSnapshotExtractor {
-    async fn extract_internal(&mut self) -> Result<(), Error> {
+    async fn extract_internal(&mut self) -> anyhow::Result<()> {
         let tb_meta = self
             .meta_manager
             .get_tb_meta(&self.schema, &self.tb)
@@ -90,7 +88,7 @@ impl PgSnapshotExtractor {
         Ok(())
     }
 
-    async fn extract_all(&mut self, tb_meta: &PgTbMeta) -> Result<(), Error> {
+    async fn extract_all(&mut self, tb_meta: &PgTbMeta) -> anyhow::Result<()> {
         log_info!(
             r#"start extracting data from "{}"."{}" without slices"#,
             self.schema,
@@ -122,7 +120,7 @@ impl PgSnapshotExtractor {
         order_col: &str,
         order_col_type: &PgColType,
         resume_value: ColValue,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         log_info!(
             r#"start extracting data from "{}"."{}" by slices"#,
             self.schema,

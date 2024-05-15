@@ -37,3 +37,4 @@ strum = { workspace = true }
 serde_json = { workspace = true }
 redis = { workspace = true }
 ratelimit = { workspace = true }
+anyhow = { workspace = true }

@@ -1,3 +1,4 @@
+use anyhow::bail;
 use thiserror::Error;
 
 /// Represents a redis RESP protcol response
@@ -20,8 +21,6 @@ pub enum Value {
     Bulk(Vec<Value>),
 }
 
-pub type RedisResult<T> = std::result::Result<T, RedisError>;
-
 #[derive(Error, Debug)]
 #[error("RedisError (command: {command:?}, message: {message:?})")]
 pub struct RedisError {
@@ -29,54 +28,52 @@ pub struct RedisError {
     pub message: String,
 }
 
-type Result<T> = std::result::Result<T, String>;
-
 impl Value {
-    pub fn try_into<T: ParseFrom<Self>>(self) -> Result<T> {
+    pub fn try_into<T: ParseFrom<Self>>(self) -> anyhow::Result<T> {
         T::parse_from(self)
     }
 }
 
 pub trait ParseFrom<T>: Sized {
-    fn parse_from(value: T) -> Result<Self>;
+    fn parse_from(value: T) -> anyhow::Result<Self>;
 }
 
 impl ParseFrom<Value> for () {
-    fn parse_from(value: Value) -> Result<Self> {
+    fn parse_from(value: Value) -> anyhow::Result<Self> {
         match value {
             Value::Okay => Ok(()),
-            v => Err(format!("Failed parsing {:?}", v)),
+            v => bail! {format!("Failed parsing {:?}", v)},
         }
     }
 }
 
 impl ParseFrom<Value> for i64 {
-    fn parse_from(value: Value) -> Result<Self> {
+    fn parse_from(value: Value) -> anyhow::Result<Self> {
         match value {
             Value::Int(n) => Ok(n),
-            v => Err(format!("Failed parsing {:?}", v)),
+            v => bail! {format!("Failed parsing {:?}", v)},
         }
     }
 }
 
 impl ParseFrom<Value> for Vec<u8> {
-    fn parse_from(value: Value) -> Result<Self> {
+    fn parse_from(value: Value) -> anyhow::Result<Self> {
         match value {
             Value::Data(bytes) => Ok(bytes),
-            v => Err(format!("Failed parsing {:?}", v)),
+            v => bail! {format!("Failed parsing {:?}", v)},
         }
     }
 }
 
 impl ParseFrom<Value> for String {
-    fn parse_from(value: Value) -> Result<Self> {
+    fn parse_from(value: Value) -> anyhow::Result<Self> {
         match value {
             Value::Okay => Ok("Ok".to_owned()),
             Value::Nil => Ok(String::new()),
             Value::Int(n) => Ok(format!("{}", n)),
             Value::Status(s) => Ok(s),
-            Value::Data(bytes) => String::from_utf8(bytes.to_vec()).map_err(|e| e.to_string()),
-            v => Err(format!("Failed parsing {:?}", v)),
+            Value::Data(bytes) => Ok(String::from_utf8(bytes.to_vec())?),
+            v => bail! {format!("Failed parsing {:?}", v)},
         }
     }
 }
@@ -85,7 +82,7 @@ impl<T> ParseFrom<Value> for Vec<T>
 where
     T: ParseFrom<Value>,
 {
-    fn parse_from(v: Value) -> Result<Self> {
+    fn parse_from(v: Value) -> anyhow::Result<Self> {
         if let Value::Bulk(array) = v {
             let mut result = Vec::with_capacity(array.len());
             for e in array {
@@ -93,6 +90,6 @@ where
             }
             return Ok(result);
         }
-        Err(format!("Failed parsing {:?}", v))
+        bail! { format!("Failed parsing {:?}", v)}
     }
 }

@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use dt_common::{error::Error, log_info};
+use dt_common::log_info;
 
 use crate::{
     check_log::{check_log::CheckLog, log_reader::LogReader},
@@ -16,7 +16,7 @@ impl BaseCheckExtractor {
     pub async fn extract(
         &self,
         extractor: &mut (dyn BatchCheckExtractor + Send),
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         log_info!(
             "BaseCheckExtractor starts, check_log_dir: {}, batch_size: {}",
             self.check_log_dir,

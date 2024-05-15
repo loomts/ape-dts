@@ -21,3 +21,4 @@ futures = { workspace = true }
 regex = { workspace = true }
 async-std = { workspace = true }
 mlua = { workspace = true }
+anyhow = { workspace = true }

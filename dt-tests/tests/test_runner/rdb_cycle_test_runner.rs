@@ -1,4 +1,4 @@
-use dt_common::{error::Error, utils::time_util::TimeUtil};
+use dt_common::utils::time_util::TimeUtil;
 use dt_connector::data_marker::DataMarker;
 use std::collections::HashMap;
 use tokio::task::JoinHandle;
@@ -14,13 +14,13 @@ pub struct RdbCycleTestRunner {
 const DST: &str = "dst";
 
 impl RdbCycleTestRunner {
-    pub async fn new(relative_test_dir: &str) -> Result<Self, Error> {
+    pub async fn new(relative_test_dir: &str) -> anyhow::Result<Self> {
         Ok(Self {
             base: RdbTestRunner::new(relative_test_dir, false).await?,
         })
     }
 
-    pub async fn close(&self) -> Result<(), Error> {
+    pub async fn close(&self) -> anyhow::Result<()> {
         self.base.close().await
     }
 
@@ -116,7 +116,7 @@ impl RdbCycleTestRunner {
         &self,
         // HashMap<(src_node, dst_node, data_origin_node), expect_tx_count>
         expect_tx_count_map: &HashMap<(String, String, String), u8>,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let data_marker = self.get_data_marker();
         let mut db_tbs =
             RdbTestRunner::get_compare_db_tbs_from_sqls(&self.base.base.src_prepare_sqls)?;
@@ -136,7 +136,7 @@ impl RdbCycleTestRunner {
         &self,
         // HashMap<(src_node, dst_node, data_origin_node), expect_tx_count>
         expect_tx_count_map: &HashMap<(String, String, String), u8>,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let data_marker = self.get_data_marker();
         let result = self
             .base
@@ -176,7 +176,7 @@ impl RdbCycleTestRunner {
         Ok(())
     }
 
-    async fn init_data(&self) -> Result<(), Error> {
+    async fn init_data(&self) -> anyhow::Result<()> {
         let mut src_insert_sqls = Vec::new();
         let mut src_update_sqls = Vec::new();
         let mut src_delete_sqls = Vec::new();

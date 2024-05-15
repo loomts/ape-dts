@@ -3,7 +3,6 @@ use super::redis_psync_extractor::RedisPsyncExtractor;
 use crate::extractor::base_extractor::BaseExtractor;
 use crate::Extractor;
 use async_trait::async_trait;
-use dt_common::error::Error;
 use dt_common::rdb_filter::RdbFilter;
 
 pub struct RedisSnapshotExtractor {
@@ -15,7 +14,7 @@ pub struct RedisSnapshotExtractor {
 
 #[async_trait]
 impl Extractor for RedisSnapshotExtractor {
-    async fn extract(&mut self) -> Result<(), Error> {
+    async fn extract(&mut self) -> anyhow::Result<()> {
         let mut psync_extractor = RedisPsyncExtractor {
             base_extractor: &mut self.base_extractor,
             conn: &mut self.conn,
@@ -29,7 +28,7 @@ impl Extractor for RedisSnapshotExtractor {
         self.base_extractor.wait_task_finish().await
     }
 
-    async fn close(&mut self) -> Result<(), Error> {
+    async fn close(&mut self) -> anyhow::Result<()> {
         self.conn.close().await
     }
 }

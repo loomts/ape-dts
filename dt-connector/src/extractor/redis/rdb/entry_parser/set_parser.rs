@@ -1,5 +1,6 @@
 use std::io::Cursor;
 
+use anyhow::bail;
 use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
 use dt_common::error::Error;
 use dt_common::meta::redis::redis_object::{RedisString, SetObject};
@@ -13,7 +14,7 @@ impl SetParser {
         reader: &mut RdbReader,
         key: RedisString,
         type_byte: u8,
-    ) -> Result<SetObject, Error> {
+    ) -> anyhow::Result<SetObject> {
         let mut obj = SetObject::new();
         obj.key = key;
 
@@ -22,16 +23,16 @@ impl SetParser {
             super::RDB_TYPE_SET_INTSET => Self::read_int_set(&mut obj, reader)?,
             super::RDB_TYPE_SET_LISTPACK => obj.elements = reader.read_list_pack()?,
             _ => {
-                return Err(Error::RedisRdbError(format!(
+                bail! {Error::RedisRdbError(format!(
                     "unknown set type. type_byte=[{}]",
                     type_byte
-                )))
+                ))}
             }
         }
         Ok(obj)
     }
 
-    pub fn read_str_set(obj: &mut SetObject, reader: &mut RdbReader) -> Result<(), Error> {
+    pub fn read_str_set(obj: &mut SetObject, reader: &mut RdbReader) -> anyhow::Result<()> {
         let size = reader.read_length()? as usize;
         for _i in 0..size {
             obj.elements.push(reader.read_string()?);
@@ -39,7 +40,7 @@ impl SetParser {
         Ok(())
     }
 
-    pub fn read_int_set(obj: &mut SetObject, reader: &mut RdbReader) -> Result<(), Error> {
+    pub fn read_int_set(obj: &mut SetObject, reader: &mut RdbReader) -> anyhow::Result<()> {
         let buf = reader.read_string()?;
         let mut reader = Cursor::new(buf.as_bytes());
 
@@ -52,10 +53,10 @@ impl SetParser {
                 4 => LittleEndian::read_i32(&buf).to_string(),
                 8 => LittleEndian::read_i64(&buf).to_string(),
                 _ => {
-                    return Err(Error::RedisRdbError(format!(
+                    bail! {Error::RedisRdbError(format!(
                         "unknown int encoding type: {:x}",
                         encoding_type
-                    )));
+                    ))}
                 }
             };
             obj.elements.push(RedisString::from(int_str));

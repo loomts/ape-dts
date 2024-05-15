@@ -1,6 +1,4 @@
 use std::collections::{HashMap, HashSet};
-
-use dt_common::error::Error;
 use dt_connector::meta_fetcher::{
     mysql::mysql_struct_check_fetcher::MysqlStructCheckFetcher,
     pg::pg_struct_check_fetcher::PgStructCheckFetcher,
@@ -13,16 +11,16 @@ pub struct RdbStructTestRunner {
 }
 
 impl RdbStructTestRunner {
-    pub async fn new(relative_test_dir: &str) -> Result<Self, Error> {
+    pub async fn new(relative_test_dir: &str) -> anyhow::Result<Self> {
         let base = RdbTestRunner::new_default(relative_test_dir).await.unwrap();
         Ok(Self { base })
     }
 
-    pub async fn close(&self) -> Result<(), Error> {
+    pub async fn close(&self) -> anyhow::Result<()> {
         self.base.close().await
     }
 
-    pub async fn run_mysql_struct_test(&mut self) -> Result<(), Error> {
+    pub async fn run_mysql_struct_test(&mut self) -> anyhow::Result<()> {
         self.base.execute_prepare_sqls().await?;
         self.base.base.start_task().await?;
 
@@ -97,7 +95,7 @@ impl RdbStructTestRunner {
         Ok(())
     }
 
-    pub async fn run_pg_struct_test(&mut self) -> Result<(), Error> {
+    pub async fn run_pg_struct_test(&mut self) -> anyhow::Result<()> {
         self.base.execute_prepare_sqls().await?;
         self.base.base.start_task().await?;
 
@@ -130,7 +128,7 @@ impl RdbStructTestRunner {
         Ok(())
     }
 
-    pub async fn run_struct_test_without_check(&mut self) -> Result<(), Error> {
+    pub async fn run_struct_test_without_check(&mut self) -> anyhow::Result<()> {
         self.base.execute_prepare_sqls().await?;
         self.base.base.start_task().await
     }

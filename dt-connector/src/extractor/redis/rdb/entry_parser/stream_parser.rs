@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use anyhow::bail;
 use byteorder::{BigEndian, ByteOrder};
 use dt_common::error::Error;
 use dt_common::meta::redis::redis_object::{RedisCmd, RedisString, StreamObject};
@@ -13,7 +14,7 @@ impl StreamParser {
         reader: &mut RdbReader,
         master_key: RedisString,
         type_byte: u8,
-    ) -> Result<StreamObject, Error> {
+    ) -> anyhow::Result<StreamObject> {
         let mut obj = StreamObject::new();
         obj.key = master_key.clone();
 
@@ -44,10 +45,10 @@ impl StreamParser {
             // master entry end by zero
             let last_entry = String::from(Self::next(&mut inx, &elements).clone());
             if last_entry != "0" {
-                return Err(Error::RedisRdbError(format!(
+                bail! {Error::RedisRdbError(format!(
                     "master entry not ends by zero. lastEntry=[{}]",
                     last_entry
-                )));
+                ))}
             }
 
             // Parse entries

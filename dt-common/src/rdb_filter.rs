@@ -4,7 +4,6 @@ use crate::{
     config::{
         config_enums::DbType, config_token_parser::ConfigTokenParser, filter_config::FilterConfig,
     },
-    error::Error,
     utils::sql_util::SqlUtil,
 };
 
@@ -25,7 +24,7 @@ pub struct RdbFilter {
 }
 
 impl RdbFilter {
-    pub fn from_config(config: &FilterConfig, db_type: &DbType) -> Result<Self, Error> {
+    pub fn from_config(config: &FilterConfig, db_type: &DbType) -> anyhow::Result<Self> {
         Ok(Self {
             db_type: db_type.to_owned(),
             do_dbs: Self::parse_single_tokens(&config.do_dbs, db_type)?,
@@ -162,7 +161,7 @@ impl RdbFilter {
     fn parse_pair_tokens(
         config_str: &str,
         db_type: &DbType,
-    ) -> Result<HashSet<(String, String)>, Error> {
+    ) -> anyhow::Result<HashSet<(String, String)>> {
         let mut results = HashSet::new();
         let tokens = Self::parse_config(config_str, db_type)?;
         let mut i = 0;
@@ -173,22 +172,15 @@ impl RdbFilter {
         Ok(results)
     }
 
-    fn parse_single_tokens(config_str: &str, db_type: &DbType) -> Result<HashSet<String>, Error> {
+    fn parse_single_tokens(config_str: &str, db_type: &DbType) -> anyhow::Result<HashSet<String>> {
         let tokens = Self::parse_config(config_str, db_type)?;
         let results: HashSet<String> = HashSet::from_iter(tokens);
         Ok(results)
     }
 
-    fn parse_config(config_str: &str, db_type: &DbType) -> Result<Vec<String>, Error> {
+    fn parse_config(config_str: &str, db_type: &DbType) -> anyhow::Result<Vec<String>> {
         let delimiters = vec![',', '.'];
-        match ConfigTokenParser::parse_config(config_str, db_type, &delimiters) {
-            Ok(tokens) => Ok(tokens),
-            Err(Error::ConfigError(err)) => Err(Error::ConfigError(format!(
-                "invalid filter config, {}",
-                err
-            ))),
-            _ => Err(Error::ConfigError("invalid filter config".into())),
-        }
+        ConfigTokenParser::parse_config(config_str, db_type, &delimiters)
     }
 }
 

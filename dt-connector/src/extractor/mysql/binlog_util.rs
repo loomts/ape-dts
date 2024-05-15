@@ -1,4 +1,4 @@
-use dt_common::{error::Error, log_info, utils::time_util::TimeUtil};
+use dt_common::{log_info, utils::time_util::TimeUtil};
 use futures::TryStreamExt;
 use mysql_binlog_connector_rust::{binlog_client::BinlogClient, event::event_data::EventData};
 use sqlx::{MySql, Pool, Row};
@@ -11,7 +11,7 @@ impl BinlogUtil {
         url: &str,
         server_id: u64,
         conn_pool: &Pool<MySql>,
-    ) -> Result<String, Error> {
+    ) -> anyhow::Result<String> {
         let binlogs = Self::get_binary_logs(conn_pool).await?;
         if binlogs.is_empty() {
             log_info!("no binlogs found");
@@ -74,7 +74,7 @@ impl BinlogUtil {
         }
     }
 
-    async fn get_binary_logs(conn_pool: &Pool<MySql>) -> Result<Vec<String>, Error> {
+    async fn get_binary_logs(conn_pool: &Pool<MySql>) -> anyhow::Result<Vec<String>> {
         let mut binlogs = Vec::new();
         let sql = "SHOW BINARY LOGS";
 
@@ -90,7 +90,7 @@ impl BinlogUtil {
         url: &str,
         server_id: u64,
         binlog: &str,
-    ) -> Result<u32, Error> {
+    ) -> anyhow::Result<u32> {
         let timestamp;
         let mut client = BinlogClient {
             url: url.into(),

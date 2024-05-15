@@ -9,7 +9,6 @@ use dt_common::{
     config::{
         config_enums::DbType, config_token_parser::ConfigTokenParser, resumer_config::ResumerConfig,
     },
-    error::Error,
     utils::{file_util::FileUtil, sql_util::SqlUtil},
 };
 
@@ -25,7 +24,7 @@ type DbTb = (String, String);
 const TAIL_POSITION_COUNT: usize = 30;
 
 impl SnapshotResumer {
-    pub fn from_config(config: &ResumerConfig, db_type: &DbType) -> Result<Self, Error> {
+    pub fn from_config(config: &ResumerConfig, db_type: &DbType) -> anyhow::Result<Self> {
         let delimiters = ['.', ','];
 
         // tb_positions={"`d4`.`t4`.c4":"v4","d3.t3.`c3`":"v3"}

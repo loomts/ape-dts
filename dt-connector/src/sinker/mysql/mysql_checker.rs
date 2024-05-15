@@ -17,7 +17,7 @@ use crate::{
     Sinker,
 };
 
-use dt_common::{error::Error, monitor::monitor::Monitor, rdb_filter::RdbFilter};
+use dt_common::{monitor::monitor::Monitor, rdb_filter::RdbFilter};
 
 use dt_common::meta::{
     ddl_data::DdlData, mysql::mysql_meta_manager::MysqlMetaManager,
@@ -38,7 +38,7 @@ pub struct MysqlChecker {
 
 #[async_trait]
 impl Sinker for MysqlChecker {
-    async fn sink_dml(&mut self, mut data: Vec<RowData>, batch: bool) -> Result<(), Error> {
+    async fn sink_dml(&mut self, mut data: Vec<RowData>, batch: bool) -> anyhow::Result<()> {
         if data.is_empty() {
             return Ok(());
         }
@@ -51,13 +51,13 @@ impl Sinker for MysqlChecker {
         Ok(())
     }
 
-    async fn close(&mut self) -> Result<(), Error> {
+    async fn close(&mut self) -> anyhow::Result<()> {
         self.meta_manager.close().await?;
         self.extractor_meta_manager.close().await?;
         return close_conn_pool!(self);
     }
 
-    async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> Result<(), Error> {
+    async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> anyhow::Result<()> {
         if data.is_empty() {
             return Ok(());
         }
@@ -68,7 +68,7 @@ impl Sinker for MysqlChecker {
 }
 
 impl MysqlChecker {
-    async fn serial_check(&mut self, data: Vec<RowData>) -> Result<(), Error> {
+    async fn serial_check(&mut self, data: Vec<RowData>) -> anyhow::Result<()> {
         let start_time = Instant::now();
 
         if data.is_empty() {
@@ -117,7 +117,7 @@ impl MysqlChecker {
         data: &mut [RowData],
         start_index: usize,
         batch_size: usize,
-    ) -> Result<(), Error> {
+    ) -> anyhow::Result<()> {
         let start_time = Instant::now();
 
         let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&data[0]).await?;
@@ -151,7 +151,7 @@ impl MysqlChecker {
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, 0, start_time).await
     }
 
-    async fn serial_ddl_check(&mut self, mut data: Vec<DdlData>) -> Result<(), Error> {
+    async fn serial_ddl_check(&mut self, mut data: Vec<DdlData>) -> anyhow::Result<()> {
         for src_data in data.iter_mut() {
             if src_data.statement.is_none() {
                 continue;
