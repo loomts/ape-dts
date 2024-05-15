@@ -67,25 +67,25 @@ const APE_DTS: &str = "APE_DTS";
 const ASTRISK: &str = "*";
 
 impl TaskConfig {
-    pub fn new(task_config_file: &str) -> Self {
+    pub fn new(task_config_file: &str) -> anyhow::Result<Self> {
         let loader = IniLoader::new(task_config_file);
 
-        let (extractor_basic, extractor) = Self::load_extractor_config(&loader).unwrap();
-        let (sinker_basic, sinker) = Self::load_sinker_config(&loader).unwrap();
-        Self {
+        let (extractor_basic, extractor) = Self::load_extractor_config(&loader)?;
+        let (sinker_basic, sinker) = Self::load_sinker_config(&loader)?;
+        Ok(Self {
             extractor_basic,
             extractor,
-            parallelizer: Self::load_parallelizer_config(&loader),
+            parallelizer: Self::load_parallelizer_config(&loader)?,
             pipeline: Self::load_pipeline_config(&loader),
             sinker_basic,
             sinker,
-            runtime: Self::load_runtime_config(&loader).unwrap(),
-            filter: Self::load_filter_config(&loader).unwrap(),
-            router: Self::load_router_config(&loader).unwrap(),
-            resumer: Self::load_resumer_config(&loader).unwrap(),
-            data_marker: Self::load_data_marker_config(&loader).unwrap(),
-            processor: Self::load_processor_config(&loader).unwrap(),
-        }
+            runtime: Self::load_runtime_config(&loader)?,
+            filter: Self::load_filter_config(&loader)?,
+            router: Self::load_router_config(&loader)?,
+            resumer: Self::load_resumer_config(&loader)?,
+            data_marker: Self::load_data_marker_config(&loader)?,
+            processor: Self::load_processor_config(&loader)?,
+        })
     }
 
     fn load_extractor_config(
@@ -93,8 +93,8 @@ impl TaskConfig {
     ) -> anyhow::Result<(BasicExtractorConfig, ExtractorConfig)> {
         let db_type_str: String = loader.get_required(EXTRACTOR, DB_TYPE);
         let extract_type_str: String = loader.get_required(EXTRACTOR, "extract_type");
-        let db_type = DbType::from_str(&db_type_str).unwrap();
-        let extract_type = ExtractType::from_str(&extract_type_str).unwrap();
+        let db_type = DbType::from_str(&db_type_str)?;
+        let extract_type = ExtractType::from_str(&extract_type_str)?;
 
         let url: String = loader.get_optional(EXTRACTOR, URL);
         let heartbeat_interval_secs: u64 =
@@ -273,8 +273,8 @@ impl TaskConfig {
     fn load_sinker_config(loader: &IniLoader) -> anyhow::Result<(BasicSinkerConfig, SinkerConfig)> {
         let db_type_str: String = loader.get_required(SINKER, DB_TYPE);
         let sink_type_str = loader.get_with_default(SINKER, "sink_type", "write".to_string());
-        let db_type = DbType::from_str(&db_type_str).unwrap();
-        let sink_type = SinkType::from_str(&sink_type_str).unwrap();
+        let db_type = DbType::from_str(&db_type_str)?;
+        let sink_type = SinkType::from_str(&sink_type_str)?;
 
         let url: String = loader.get_optional(SINKER, URL);
         let batch_size: usize = loader.get_with_default(SINKER, BATCH_SIZE, 200);
@@ -286,7 +286,7 @@ impl TaskConfig {
         };
 
         let conflict_policy_str: String = loader.get_optional(SINKER, "conflict_policy");
-        let conflict_policy = ConflictPolicyEnum::from_str(&conflict_policy_str).unwrap();
+        let conflict_policy = ConflictPolicyEnum::from_str(&conflict_policy_str)?;
 
         let not_supported_err =
             Error::ConfigError(format!("sinker db type: {} not supported", db_type));
@@ -391,13 +391,13 @@ impl TaskConfig {
         Ok((basic, sinker))
     }
 
-    fn load_parallelizer_config(loader: &IniLoader) -> ParallelizerConfig {
+    fn load_parallelizer_config(loader: &IniLoader) -> anyhow::Result<ParallelizerConfig> {
         let parallel_type_str =
             loader.get_with_default(PARALLELIZER, "parallel_type", "serial".to_string());
-        ParallelizerConfig {
+        Ok(ParallelizerConfig {
             parallel_size: loader.get_with_default(PARALLELIZER, "parallel_size", 1),
-            parallel_type: ParallelType::from_str(&parallel_type_str).unwrap(),
-        }
+            parallel_type: ParallelType::from_str(&parallel_type_str)?,
+        })
     }
 
     fn load_pipeline_config(loader: &IniLoader) -> PipelineConfig {

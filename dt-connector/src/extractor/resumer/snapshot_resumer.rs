@@ -4,6 +4,7 @@ use std::{
     io::{BufRead, BufReader},
 };
 
+use anyhow::Context;
 use dt_common::meta::position::Position;
 use dt_common::{
     config::{
@@ -31,7 +32,8 @@ impl SnapshotResumer {
         let mut tb_positions: HashMap<DbTbCol, String> = HashMap::new();
         if !config.tb_positions.is_empty() {
             let raw_tb_positions: HashMap<String, String> =
-                serde_json::from_str(&config.tb_positions).unwrap();
+                serde_json::from_str(&config.tb_positions)
+                    .with_context(|| format!("invalid tb positions: [{}]", config.tb_positions))?;
             for (db_tb_col, value) in raw_tb_positions {
                 let tokens = ConfigTokenParser::parse_config(&db_tb_col, db_type, &['.'])
                     .expect("error config: [resumer]tb_positions");

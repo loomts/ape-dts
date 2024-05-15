@@ -69,7 +69,7 @@ impl RdbTestRunner {
             }
         }
 
-        let config = TaskConfig::new(&base.task_config_file);
+        let config = TaskConfig::new(&base.task_config_file).unwrap();
         let router = RdbRouter::from_config(&config.router, &dst_db_type).unwrap();
 
         // for pg cdc, recreate publication & slot before each test
@@ -135,7 +135,7 @@ impl RdbTestRunner {
         let mut dst_db_type = DbType::Mysql;
         let mut dst_url = String::new();
 
-        let config = TaskConfig::new(&base.task_config_file);
+        let config = TaskConfig::new(&base.task_config_file).unwrap();
         match config.extractor {
             ExtractorConfig::MysqlCdc { url, .. }
             | ExtractorConfig::MysqlSnapshot { url, .. }
@@ -233,7 +233,7 @@ impl RdbTestRunner {
         _start_millis: u64,
         parse_millis: u64,
     ) -> anyhow::Result<()> {
-        let config = TaskConfig::new(&self.base.task_config_file);
+        let config = TaskConfig::new(&self.base.task_config_file).unwrap();
         let (heartbeat_tb, db_type) = match config.extractor {
             ExtractorConfig::PgCdc { heartbeat_tb, .. } => (heartbeat_tb.clone(), DbType::Pg),
             ExtractorConfig::MysqlCdc { heartbeat_tb, .. } => (heartbeat_tb.clone(), DbType::Mysql),
@@ -602,7 +602,7 @@ impl RdbTestRunner {
     }
 
     fn get_db_type(&self, from: &str) -> DbType {
-        let config = TaskConfig::new(&self.base.task_config_file);
+        let config = TaskConfig::new(&self.base.task_config_file).unwrap();
         if from == SRC {
             config.extractor_basic.db_type
         } else {

@@ -86,7 +86,7 @@ impl Extractor for PgCdcExtractor {
             self.heartbeat_interval_secs,
             self.heartbeat_tb
         );
-        self.extract_internal().await.unwrap();
+        self.extract_internal().await?;
         self.base_extractor.wait_task_finish().await
     }
 
@@ -108,8 +108,7 @@ impl PgCdcExtractor {
         tokio::pin!(stream);
 
         // start heartbeat
-        self.start_heartbeat(self.base_extractor.shut_down.clone())
-            .unwrap();
+        self.start_heartbeat(self.base_extractor.shut_down.clone())?;
 
         let mut last_tx_end_lsn = actual_start_lsn.clone();
         let mut xid = String::new();
@@ -231,7 +230,7 @@ impl PgCdcExtractor {
 
         // Postgres epoch is 2000-01-01T00:00:00Z
         let pg_epoch = UNIX_EPOCH + Duration::from_secs(SECS_FROM_1970_TO_2000 as u64);
-        let ts = pg_epoch.elapsed().unwrap().as_micros() as i64;
+        let ts = pg_epoch.elapsed()?.as_micros() as i64;
         let result = stream
             .as_mut()
             .standby_status_update(lsn, lsn, lsn, ts, 1)
@@ -429,8 +428,7 @@ impl PgCdcExtractor {
                 &ddl_data.ddl_type.to_string(),
             ) {
                 self.push_dt_data_to_buf(DtData::Ddl { ddl_data }, position.to_owned())
-                    .await
-                    .unwrap();
+                    .await?;
             }
         }
         Ok(())
@@ -445,7 +443,7 @@ impl PgCdcExtractor {
         for i in 0..tuple_data.len() {
             let tuple_data = &tuple_data[i];
             let col = &tb_meta.basic.cols[i];
-            let col_type = tb_meta.col_type_map.get(col).unwrap();
+            let col_type = tb_meta.get_col_type(col)?;
 
             match tuple_data {
                 TupleData::Null => {

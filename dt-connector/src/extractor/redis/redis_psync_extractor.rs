@@ -52,8 +52,8 @@ impl RedisPsyncExtractor<'_> {
         let repl_cmd = RedisCmd::from_str_args(&["replconf", "listening-port", &repl_port]);
         log_info!("repl command: {}", repl_cmd.to_string());
 
-        self.conn.send(&repl_cmd).await.unwrap();
-        if let Value::Okay = self.conn.read().await.unwrap() {
+        self.conn.send(&repl_cmd).await?;
+        if let Value::Okay = self.conn.read().await? {
         } else {
             bail! {Error::ExtractorError(
                 "replconf listening-port response is not Ok".into(),
@@ -70,15 +70,15 @@ impl RedisPsyncExtractor<'_> {
         // PSYNC [repl_id] [offset]
         let psync_cmd = RedisCmd::from_str_args(&["PSYNC", &repl_id, &repl_offset]);
         log_info!("PSYNC command: {}", psync_cmd.to_string());
-        self.conn.send(&psync_cmd).await.unwrap();
-        let value = self.conn.read().await.unwrap();
+        self.conn.send(&psync_cmd).await?;
+        let value = self.conn.read().await?;
 
         if let Value::Status(s) = value {
             log_info!("PSYNC command response status: {:?}", s);
             if full_sync {
                 let tokens: Vec<&str> = s.split_whitespace().collect();
                 self.repl_id = tokens[1].to_string();
-                self.repl_offset = tokens[2].parse::<u64>().unwrap();
+                self.repl_offset = tokens[2].parse::<u64>()?;
             } else if s != "CONTINUE" {
                 bail! {Error::ExtractorError(
                     "PSYNC command response is NOT CONTINUE".into(),
@@ -96,7 +96,7 @@ impl RedisPsyncExtractor<'_> {
         let mut stream_reader: Box<&mut (dyn StreamReader + Send)> = Box::new(self.conn);
         // format: \n\n\n$<length>\r\n<rdb>
         loop {
-            let buf = stream_reader.read_bytes(1).unwrap();
+            let buf = stream_reader.read_bytes(1)?;
             if buf[0] == b'\n' {
                 continue;
             }
@@ -109,7 +109,7 @@ impl RedisPsyncExtractor<'_> {
         // length of rdb data
         let mut rdb_length_str = String::new();
         loop {
-            let buf = stream_reader.read_bytes(1).unwrap();
+            let buf = stream_reader.read_bytes(1)?;
             if buf[0] == b'\n' {
                 break;
             }
@@ -117,7 +117,7 @@ impl RedisPsyncExtractor<'_> {
                 rdb_length_str.push(buf[0] as char);
             }
         }
-        let rdb_length = rdb_length_str.parse::<usize>().unwrap();
+        let rdb_length = rdb_length_str.parse::<usize>()?;
 
         let reader = RdbReader {
             conn: &mut stream_reader,

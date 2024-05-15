@@ -27,7 +27,7 @@ pub struct RdbRedisTestRunner {
 impl RdbRedisTestRunner {
     pub async fn new(relative_test_dir: &str) -> anyhow::Result<Self> {
         let base = BaseTestRunner::new(relative_test_dir).await.unwrap();
-        let config = TaskConfig::new(&base.task_config_file);
+        let config = TaskConfig::new(&base.task_config_file).unwrap();
 
         let mysql_conn_pool =
             Some(TaskUtil::create_mysql_conn_pool(&config.extractor_basic.url, 1, false).await?);

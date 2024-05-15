@@ -1,3 +1,5 @@
+use anyhow::Context;
+
 use super::{
     command::key_parser::KeyParser,
     redis_object::{RedisCmd, RedisObject, RedisString},
@@ -62,19 +64,21 @@ impl RedisEntry {
         self.value.get_type()
     }
 
-    pub fn cal_slots(&mut self, key_parser: &KeyParser) -> Vec<u16> {
+    pub fn cal_slots(&mut self, key_parser: &KeyParser) -> anyhow::Result<Vec<u16>> {
         if self.is_base {
-            vec![KeyParser::calc_slot(self.key.as_bytes())]
+            Ok(vec![KeyParser::calc_slot(self.key.as_bytes())])
         } else {
             if self.cmd.keys.is_empty() {
-                self.cmd.parse_keys(key_parser);
+                self.cmd
+                    .parse_keys(key_parser)
+                    .with_context(|| format!("failed to parse keys for cmd: [{}]", self.cmd))?;
             }
 
             let mut slots = Vec::new();
             for key in self.cmd.keys.iter() {
                 slots.push(KeyParser::calc_slot(key.as_bytes()))
             }
-            slots
+            Ok(slots)
         }
     }
 }

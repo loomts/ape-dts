@@ -56,9 +56,9 @@ impl RdbQueryBuilder<'_> {
         query_info: &'a RdbQueryInfo,
     ) -> Query<'a, MySql, MySqlArguments> {
         let mut query: Query<MySql, MySqlArguments> = sqlx::query(&query_info.sql);
-        let col_type_map = &self.mysql_tb_meta.as_ref().unwrap().col_type_map;
+        let tb_meta = self.mysql_tb_meta.as_ref().unwrap();
         for i in 0..query_info.binds.len() {
-            let col_type = col_type_map.get(&query_info.cols[i]).unwrap();
+            let col_type = tb_meta.get_col_type(&query_info.cols[i]).unwrap();
             query = query.bind_col_value(query_info.binds[i], col_type);
         }
         query
@@ -70,13 +70,9 @@ impl RdbQueryBuilder<'_> {
         query_info: &'a RdbQueryInfo,
     ) -> Query<'a, Postgres, PgArguments> {
         let mut query: Query<Postgres, PgArguments> = sqlx::query(&query_info.sql);
+        let tb_meta = &self.pg_tb_meta.as_ref().unwrap();
         for i in 0..query_info.binds.len() {
-            let col_type = self
-                .pg_tb_meta
-                .unwrap()
-                .col_type_map
-                .get(&query_info.cols[i])
-                .unwrap();
+            let col_type = tb_meta.get_col_type(&query_info.cols[i]).unwrap();
             query = query.bind_col_value(query_info.binds[i], col_type);
         }
         query
@@ -126,7 +122,7 @@ impl RdbQueryBuilder<'_> {
         for _ in 0..batch_size {
             let mut placeholders = Vec::new();
             for col in self.rdb_tb_meta.id_cols.iter() {
-                placeholders.push(self.get_placeholder(placeholder_index, col));
+                placeholders.push(self.get_placeholder(placeholder_index, col)?);
                 placeholder_index += 1;
             }
             all_placeholders.push(format!("({})", placeholders.join(",")));
@@ -148,11 +144,11 @@ impl RdbQueryBuilder<'_> {
             for col in self.rdb_tb_meta.id_cols.iter() {
                 cols.push(col.clone());
                 let col_value = before.get(col);
-                if *col_value.unwrap() == ColValue::None {
-                    bail! {Error::Unexpected(format!(
-                        "db: {}, tb: {}, where col: {} is NULL, which should not happen in batch delete",
-                        self.rdb_tb_meta.schema, self.rdb_tb_meta.tb, col
-                    ))}
+                if col_value.is_none() || *col_value.unwrap() == ColValue::None {
+                    bail! {
+                        "where col: {} is NULL, which should not happen in batch delete, sql: {}",
+                        col, sql
+                    }
                 }
                 binds.push(col_value);
             }
@@ -172,7 +168,7 @@ impl RdbQueryBuilder<'_> {
         for _ in 0..batch_size {
             let mut col_values = Vec::new();
             for col in self.rdb_tb_meta.cols.iter() {
-                col_values.push(self.get_placeholder(placeholder_index, col));
+                col_values.push(self.get_placeholder(placeholder_index, col)?);
                 placeholder_index += 1;
             }
             row_values.push(format!("({})", col_values.join(",")));
@@ -214,7 +210,7 @@ impl RdbQueryBuilder<'_> {
             let after = row_data.after.as_ref().unwrap();
             let mut set_pairs = Vec::new();
             for col in self.rdb_tb_meta.cols.iter() {
-                let sql_value = self.get_sql_value(index, col, &after.get(col), placeholder);
+                let sql_value = self.get_sql_value(index, col, &after.get(col), placeholder)?;
                 let set_pair = format!(r#""{}"={}"#, col, sql_value);
                 set_pairs.push(set_pair);
                 query_info.cols.push(col.clone());
@@ -251,7 +247,7 @@ impl RdbQueryBuilder<'_> {
         let mut col_values = Vec::new();
         for i in 0..self.rdb_tb_meta.cols.len() {
             let sql_value =
-                self.get_sql_value(i + 1, &self.rdb_tb_meta.cols[i], &binds[i], placeholder);
+                self.get_sql_value(i + 1, &self.rdb_tb_meta.cols[i], &binds[i], placeholder)?;
             col_values.push(sql_value);
         }
 
@@ -305,7 +301,7 @@ impl RdbQueryBuilder<'_> {
         let mut set_pairs = Vec::new();
         for (col, _) in after.iter() {
             set_cols.push(col.clone());
-            let sql_value = self.get_sql_value(index, col, &after.get(col), placeholder);
+            let sql_value = self.get_sql_value(index, col, &after.get(col), placeholder)?;
             set_pairs.push(format!("{}={}", self.escape(col), sql_value));
             index += 1;
         }
@@ -387,11 +383,11 @@ impl RdbQueryBuilder<'_> {
             for col in self.rdb_tb_meta.id_cols.iter() {
                 cols.push(col.clone());
                 let col_value = after.get(col);
-                if *col_value.unwrap() == ColValue::None {
-                    bail! {Error::Unexpected(format!(
+                if col_value.is_none() || *col_value.unwrap() == ColValue::None {
+                    bail! {
                         "db: {}, tb: {}, where col: {} is NULL, which should not happen in batch select",
                         self.rdb_tb_meta.schema, self.rdb_tb_meta.tb, col
-                    ))}
+                    }
                 }
                 binds.push(col_value);
             }
@@ -403,7 +399,7 @@ impl RdbQueryBuilder<'_> {
         if let Some(tb_meta) = self.pg_tb_meta {
             let mut extract_cols = Vec::new();
             for col in self.rdb_tb_meta.cols.iter() {
-                let col_type = tb_meta.col_type_map.get(col).unwrap();
+                let col_type = tb_meta.get_col_type(col)?;
                 let extract_type = PgColValueConvertor::get_extract_type(col_type);
                 let extract_col = if extract_type.is_empty() {
                     self.escape(col)
@@ -438,7 +434,7 @@ impl RdbQueryBuilder<'_> {
                     where_sql = format!("{} {} IS NULL", where_sql, escaped_col);
                 } else {
                     let sql_value =
-                        self.get_sql_value(index, col, &col_value_map.get(col), placeholder);
+                        self.get_sql_value(index, col, &col_value_map.get(col), placeholder)?;
                     where_sql = format!("{} {} = {}", where_sql, escaped_col, sql_value);
                     not_null_cols.push(col.clone());
                 }
@@ -457,7 +453,7 @@ impl RdbQueryBuilder<'_> {
         for _ in 0..batch_size {
             let mut placeholders = Vec::new();
             for col in self.rdb_tb_meta.id_cols.iter() {
-                placeholders.push(self.get_placeholder(placeholder_index, col));
+                placeholders.push(self.get_placeholder(placeholder_index, col)?);
                 placeholder_index += 1;
             }
             all_placeholders.push(format!("({})", placeholders.join(",")));
@@ -476,20 +472,20 @@ impl RdbQueryBuilder<'_> {
         col: &str,
         col_value: &Option<&ColValue>,
         placeholder: bool,
-    ) -> String {
+    ) -> anyhow::Result<String> {
         if placeholder {
             return self.get_placeholder(index, col);
         }
 
         if col_value.is_none() {
-            return "NULL".to_string();
+            return Ok("NULL".to_string());
         }
 
         if self.mysql_tb_meta.is_some() {
             return self.get_mysql_sql_value(col, col_value.unwrap());
         }
 
-        self.get_pg_sql_value(col_value.unwrap())
+        Ok(self.get_pg_sql_value(col_value.unwrap()))
     }
 
     fn get_pg_sql_value(&self, col_value: &ColValue) -> String {
@@ -502,11 +498,11 @@ impl RdbQueryBuilder<'_> {
         format!(r#"'{}'"#, value.replace('\'', "\'\'"))
     }
 
-    fn get_mysql_sql_value(&self, col: &str, col_value: &ColValue) -> String {
-        let col_type = self.mysql_tb_meta.unwrap().col_type_map.get(col).unwrap();
+    fn get_mysql_sql_value(&self, col: &str, col_value: &ColValue) -> anyhow::Result<String> {
+        let col_type = self.mysql_tb_meta.unwrap().get_col_type(col)?;
         let (str, is_hex_str) = col_value.to_mysql_string();
         if str.is_none() {
-            return "NULL".to_string();
+            return Ok("NULL".to_string());
         }
 
         let value = str.unwrap();
@@ -526,24 +522,24 @@ impl RdbQueryBuilder<'_> {
 
         if !is_hex_str && is_str {
             // INSERT INTO tb1 VALUES(1, 'abc''');
-            return format!(r#"'{}'"#, value.replace('\'', "\'\'"));
+            return Ok(format!(r#"'{}'"#, value.replace('\'', "\'\'")));
         }
-        value
+        Ok(value)
     }
 
-    fn get_placeholder(&self, index: usize, col: &str) -> String {
+    fn get_placeholder(&self, index: usize, col: &str) -> anyhow::Result<String> {
         if let Some(tb_meta) = self.pg_tb_meta {
-            let col_type = tb_meta.col_type_map.get(col).unwrap();
+            let col_type = tb_meta.get_col_type(col)?;
             // TODO: workaround for types like bit(3)
             let col_type_name = if col_type.short_name == "bit" {
                 "varbit"
             } else {
                 &col_type.short_name
             };
-            return format!("${}::{}", index, col_type_name);
+            return Ok(format!("${}::{}", index, col_type_name));
         }
 
-        "?".to_string()
+        Ok("?".to_string())
     }
 
     fn escape(&self, origin: &str) -> String {

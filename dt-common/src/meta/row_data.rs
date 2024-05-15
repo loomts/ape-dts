@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::config::config_enums::DbType;
+use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{mysql::MySqlRow, postgres::PgRow};
@@ -80,6 +81,12 @@ impl RowData {
         for (col, col_type) in &tb_meta.col_type_map {
             let col_val =
                 MysqlColValueConvertor::from_query_mysql_compatible(row, col, col_type, db_type)
+                    .with_context(|| {
+                        format!(
+                            "schema: {}, tb: {}, col: {}, col_type: {}",
+                            tb_meta.basic.schema, tb_meta.basic.tb, col, col_type
+                        )
+                    })
                     .unwrap();
             after.insert(col.to_string(), col_val);
         }
@@ -88,9 +95,16 @@ impl RowData {
 
     pub fn from_pg_row(row: &PgRow, tb_meta: &PgTbMeta) -> Self {
         let mut after = HashMap::new();
-        for (col_name, col_type) in &tb_meta.col_type_map {
-            let col_value = PgColValueConvertor::from_query(row, col_name, col_type).unwrap();
-            after.insert(col_name.to_string(), col_value);
+        for (col, col_type) in &tb_meta.col_type_map {
+            let col_value = PgColValueConvertor::from_query(row, col, col_type)
+                .with_context(|| {
+                    format!(
+                        "schema: {}, tb: {}, col: {}, col_type: {}",
+                        tb_meta.basic.schema, tb_meta.basic.tb, col, col_type
+                    )
+                })
+                .unwrap();
+            after.insert(col.to_string(), col_value);
         }
         Self::build_insert_row_data(after, &tb_meta.basic)
     }

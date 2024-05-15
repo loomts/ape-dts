@@ -9,7 +9,7 @@ use dt_common::meta::{
     ddl_data::DdlData, pg::pg_meta_manager::PgMetaManager, rdb_meta_manager::RdbMetaManager,
     row_data::RowData, struct_meta::statement::struct_statement::StructStatement,
 };
-use dt_common::{ monitor::monitor::Monitor, rdb_filter::RdbFilter};
+use dt_common::{monitor::monitor::Monitor, rdb_filter::RdbFilter};
 use futures::TryStreamExt;
 use sqlx::{Pool, Postgres};
 
@@ -41,7 +41,7 @@ impl Sinker for PgChecker {
         }
 
         if !batch {
-            self.serial_check(data).await.unwrap();
+            self.serial_check(data).await?;
         } else {
             call_batch_fn!(self, data, Self::batch_check);
         }
@@ -59,7 +59,7 @@ impl Sinker for PgChecker {
             return Ok(());
         }
 
-        self.serial_ddl_check(data).await.unwrap();
+        self.serial_ddl_check(data).await?;
         Ok(())
     }
 }
@@ -169,7 +169,7 @@ impl PgChecker {
 
             let mut dst_statement = match &src_statement {
                 StructStatement::PgCreateSchema { statement: _ } => {
-                    let dst_statement = struct_fetcher.get_create_schema_statement().await.unwrap();
+                    let dst_statement = struct_fetcher.get_create_schema_statement().await?;
                     Some(StructStatement::PgCreateSchema {
                         statement: dst_statement,
                     })
@@ -178,8 +178,7 @@ impl PgChecker {
                 StructStatement::PgCreateTable { statement } => {
                     let mut dst_statement = struct_fetcher
                         .get_create_table_statements(&statement.table.table_name)
-                        .await
-                        .unwrap();
+                        .await?;
                     if dst_statement.is_empty() {
                         None
                     } else {
@@ -192,7 +191,7 @@ impl PgChecker {
                 _ => None,
             };
 
-            BaseChecker::compare_struct(src_statement, &mut dst_statement, &self.filter).unwrap();
+            BaseChecker::compare_struct(src_statement, &mut dst_statement, &self.filter)?;
         }
         Ok(())
     }

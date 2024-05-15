@@ -22,23 +22,23 @@ pub struct PgCheckTableInfo {
 impl PgStructCheckFetcher {
     /// execute the sqls behind "\d table"
     /// refer: https://www.postgresql.org/docs/current/app-psql.html
-    pub async fn fetch_table(&self, schema: &str, tb: &str) -> PgCheckTableInfo {
-        let oid = self.get_oid(schema, tb).await;
-        let summary = self.get_table_summary(&oid).await;
-        let columns = self.get_table_columns(&oid).await;
-        let indexes = self.get_table_indexes(&oid).await;
-        let mut constraints = self.get_table_check_constraints(&oid).await;
-        let foreign_key_constraints = self.get_table_foreign_key_constraints(&oid).await;
+    pub async fn fetch_table(&self, schema: &str, tb: &str) -> anyhow::Result<PgCheckTableInfo> {
+        let oid = self.get_oid(schema, tb).await?;
+        let summary = self.get_table_summary(&oid).await?;
+        let columns = self.get_table_columns(&oid).await?;
+        let indexes = self.get_table_indexes(&oid).await?;
+        let mut constraints = self.get_table_check_constraints(&oid).await?;
+        let foreign_key_constraints = self.get_table_foreign_key_constraints(&oid).await?;
         constraints.extend_from_slice(&foreign_key_constraints);
-        PgCheckTableInfo {
+        Ok(PgCheckTableInfo {
             summary,
             columns,
             indexes,
             constraints,
-        }
+        })
     }
 
-    pub async fn get_oid(&self, schema: &str, tb: &str) -> String {
+    pub async fn get_oid(&self, schema: &str, tb: &str) -> anyhow::Result<String> {
         let sql = format!(
             r#"SELECT c.oid::int8,
                 n.nspname,
@@ -54,14 +54,14 @@ impl PgStructCheckFetcher {
         let mut col_types = HashMap::new();
         col_types.insert("oid", Self::mock_col_type("oid"));
 
-        let rows = self.execute_sql(&sql, &col_names, &col_types).await;
+        let rows = self.execute_sql(&sql, &col_names, &col_types).await?;
         if !rows.is_empty() {
-            return rows[0].get("oid").unwrap().into();
+            return Ok(rows[0].get("oid").unwrap().into());
         }
-        String::new()
+        Ok(String::new())
     }
 
-    async fn get_table_summary(&self, oid: &str) -> Vec<HashMap<String, String>> {
+    async fn get_table_summary(&self, oid: &str) -> anyhow::Result<Vec<HashMap<String, String>>> {
         let sql = format!(
             r#"SELECT c.relchecks, c.relkind, c.relhasindex, c.relhasrules, 
             c.relhastriggers, c.relrowsecurity, c.relforcerowsecurity, false AS relhasoids, c.relispartition, '', 
@@ -104,7 +104,7 @@ impl PgStructCheckFetcher {
         self.execute_sql(&sql, &col_names, &col_types).await
     }
 
-    async fn get_table_columns(&self, oid: &str) -> Vec<HashMap<String, String>> {
+    async fn get_table_columns(&self, oid: &str) -> anyhow::Result<Vec<HashMap<String, String>>> {
         let sql = format!(
             r#"SELECT a.attname,
                 pg_catalog.format_type(a.atttypid, a.atttypmod),
@@ -136,7 +136,7 @@ impl PgStructCheckFetcher {
         self.execute_sql(&sql, &col_names, &col_types).await
     }
 
-    async fn get_table_indexes(&self, oid: &str) -> Vec<HashMap<String, String>> {
+    async fn get_table_indexes(&self, oid: &str) -> anyhow::Result<Vec<HashMap<String, String>>> {
         let sql = format!(
             r#"SELECT c2.relname, i.indisprimary, i.indisunique, i.indisclustered, i.indisvalid, pg_catalog.pg_get_indexdef(i.indexrelid, 0, true),
                 pg_catalog.pg_get_constraintdef(con.oid, true), contype, condeferrable, condeferred, i.indisreplident, 
@@ -174,7 +174,10 @@ impl PgStructCheckFetcher {
         self.execute_sql(&sql, &col_names, &col_types).await
     }
 
-    async fn get_table_check_constraints(&self, oid: &str) -> Vec<HashMap<String, String>> {
+    async fn get_table_check_constraints(
+        &self,
+        oid: &str,
+    ) -> anyhow::Result<Vec<HashMap<String, String>>> {
         let sql = format!(
             r#"SELECT r.conname, pg_catalog.pg_get_constraintdef(r.oid, true)
             FROM pg_catalog.pg_constraint r
@@ -188,7 +191,10 @@ impl PgStructCheckFetcher {
         self.execute_sql(&sql, &col_names, &col_types).await
     }
 
-    async fn get_table_foreign_key_constraints(&self, oid: &str) -> Vec<HashMap<String, String>> {
+    async fn get_table_foreign_key_constraints(
+        &self,
+        oid: &str,
+    ) -> anyhow::Result<Vec<HashMap<String, String>>> {
         let sql = format!(
             r#"SELECT conname, conrelid::pg_catalog.regclass::text AS ontable,
             pg_catalog.pg_get_constraintdef(oid, true) AS condef
@@ -210,25 +216,25 @@ impl PgStructCheckFetcher {
         sql: &str,
         col_names: &[&str],
         col_types: &HashMap<&str, PgColType>,
-    ) -> Vec<HashMap<String, String>> {
+    ) -> anyhow::Result<Vec<HashMap<String, String>>> {
         let mut results = Vec::new();
         let mut rows = sqlx::query(sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
-            let res = Self::parse_row(&row, col_names, col_types);
+            let res = Self::parse_row(&row, col_names, col_types)?;
             results.push(res);
         }
-        results
+        Ok(results)
     }
 
     fn parse_row(
         row: &PgRow,
         col_names: &[&str],
         col_types: &HashMap<&str, PgColType>,
-    ) -> HashMap<String, String> {
+    ) -> anyhow::Result<HashMap<String, String>> {
         let mut results = HashMap::new();
         for col_name in col_names {
             let col_value = if let Some(col_type) = col_types.get(*col_name) {
-                PgColValueConvertor::from_query(row, col_name, col_type).unwrap()
+                PgColValueConvertor::from_query(row, col_name, col_type)?
             } else {
                 let value: Option<String> = row.try_get_unchecked(col_name).unwrap();
                 if let Some(v) = value {
@@ -244,7 +250,7 @@ impl PgStructCheckFetcher {
                 results.insert(col_name.to_string(), String::new());
             }
         }
-        results
+        Ok(results)
     }
 
     fn mock_col_type(short_name: &str) -> PgColType {

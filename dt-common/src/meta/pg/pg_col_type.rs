@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PgColType {
@@ -10,6 +11,12 @@ pub struct PgColType {
     pub modifiers: i32,
     pub category: String,
     pub enum_values: Option<Vec<String>>,
+}
+
+impl std::fmt::Display for PgColType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", json!(self))
+    }
 }
 
 #[allow(dead_code)]

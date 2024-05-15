@@ -13,8 +13,8 @@ impl RdbReader<'_> {
             255 => f64::NEG_INFINITY,
             _ => {
                 let buf = self.read_bytes(n as usize)?;
-                let s = String::from_utf8(buf).unwrap();
-                let v: f64 = s.parse().unwrap();
+                let s = String::from_utf8(buf)?;
+                let v: f64 = s.parse()?;
                 v
             }
         };

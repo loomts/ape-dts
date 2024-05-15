@@ -1,3 +1,5 @@
+use anyhow::Context;
+
 use crate::utils::time_util::TimeUtil;
 
 #[derive(Default)]
@@ -10,12 +12,14 @@ pub struct TimeFilter {
 }
 
 impl TimeFilter {
-    pub fn new(start_time_utc: &str, end_time_utc: &str) -> Self {
+    pub fn new(start_time_utc: &str, end_time_utc: &str) -> anyhow::Result<Self> {
         let start_timestamp = if start_time_utc.is_empty() {
             0
         } else {
             TimeUtil::datetime_from_utc_str(start_time_utc)
-                .unwrap()
+                .with_context(|| {
+                    format!("time_filter, invalid start_time_utc: [{}]", start_time_utc)
+                })?
                 .timestamp() as u32
         };
 
@@ -23,15 +27,15 @@ impl TimeFilter {
             u32::MAX
         } else {
             TimeUtil::datetime_from_utc_str(end_time_utc)
-                .unwrap()
+                .with_context(|| format!("time_filter, invalid end_time_utc: [{}]", end_time_utc))?
                 .timestamp() as u32
         };
 
-        Self {
+        Ok(Self {
             start_timestamp,
             end_timestamp,
             started: start_time_utc.is_empty(),
             ended: false,
-        }
+        })
     }
 }

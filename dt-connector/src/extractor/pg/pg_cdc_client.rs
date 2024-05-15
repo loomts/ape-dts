@@ -1,11 +1,11 @@
 use anyhow::bail;
 use dt_common::error::Error;
+use dt_common::utils::url_util::UrlUtil;
 use dt_common::{log_info, log_warn};
 use postgres_types::PgLsn;
 use tokio_postgres::NoTls;
 use tokio_postgres::SimpleQueryMessage::Row;
 use tokio_postgres::{replication::LogicalReplicationStream, Client};
-use url::Url;
 
 pub struct PgCdcClient {
     pub url: String,
@@ -16,7 +16,7 @@ pub struct PgCdcClient {
 
 impl PgCdcClient {
     pub async fn connect(&mut self) -> anyhow::Result<(LogicalReplicationStream, String)> {
-        let url_info = Url::parse(&self.url).unwrap();
+        let url_info = UrlUtil::parse(&self.url)?;
         let host = url_info.host_str().unwrap().to_string();
         let port = format!("{}", url_info.port().unwrap());
         let dbname = url_info.path().trim_start_matches('/');
@@ -27,7 +27,7 @@ impl PgCdcClient {
             host, port, dbname, username, password
         );
 
-        let (client, connection) = tokio_postgres::connect(&conn_info, NoTls).await.unwrap();
+        let (client, connection) = tokio_postgres::connect(&conn_info, NoTls).await?;
         tokio::spawn(async move {
             log_info!("postgres replication connection starts",);
             if let Err(e) = connection.await {
@@ -45,7 +45,7 @@ impl PgCdcClient {
 
         // set extra_float_digits to max so no precision will lose
         let query = "SET extra_float_digits=3";
-        client.simple_query(query).await.unwrap();
+        client.simple_query(query).await?;
 
         // create publication for all tables if not exists
         let pub_name = if self.pub_name.is_empty() {
@@ -57,14 +57,14 @@ impl PgCdcClient {
             "SELECT * FROM {} WHERE pubname = '{}'",
             "pg_catalog.pg_publication", pub_name
         );
-        let res = client.simple_query(&query).await.unwrap();
+        let res = client.simple_query(&query).await?;
         let pub_exists = res.len() > 1;
         log_info!("publication: {} exists: {}", pub_name, pub_exists);
 
         if !pub_exists {
             let query = format!("CREATE PUBLICATION {} FOR ALL TABLES", pub_name);
             log_info!("execute: {}", query);
-            client.simple_query(&query).await.unwrap();
+            client.simple_query(&query).await?;
         }
 
         // check slot exists
@@ -72,7 +72,7 @@ impl PgCdcClient {
             "SELECT * FROM {} WHERE slot_name = '{}'",
             "pg_catalog.pg_replication_slots", self.slot_name
         );
-        let res = client.simple_query(&query).await.unwrap();
+        let res = client.simple_query(&query).await?;
         let slot_exists = res.len() > 1;
         let mut create_slot = !slot_exists;
         log_info!("slot: {} exists: {}", self.slot_name, slot_exists);
@@ -112,7 +112,7 @@ impl PgCdcClient {
                     "pg_drop_replication_slot", self.slot_name
                 );
                 log_info!("execute: {}", query);
-                client.simple_query(&query).await.unwrap();
+                client.simple_query(&query).await?;
             }
 
             let query = format!(
@@ -121,7 +121,7 @@ impl PgCdcClient {
             );
             log_info!("execute: {}", query);
 
-            let res = client.simple_query(&query).await.unwrap();
+            let res = client.simple_query(&query).await?;
             // get the lsn for the newly created slot
             start_lsn = if let Row(row) = &res[0] {
                 row.get("consistent_point").unwrap().to_string()
@@ -149,10 +149,7 @@ impl PgCdcClient {
         );
         log_info!("execute: {}", query);
 
-        let copy_stream = client
-            .copy_both_simple::<bytes::Bytes>(&query)
-            .await
-            .unwrap();
+        let copy_stream = client.copy_both_simple::<bytes::Bytes>(&query).await?;
         let stream = LogicalReplicationStream::new(copy_stream);
         Ok((stream, start_lsn))
     }

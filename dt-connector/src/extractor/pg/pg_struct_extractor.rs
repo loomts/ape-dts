@@ -43,21 +43,21 @@ impl PgStructExtractor {
         };
 
         // schema
-        let schema_statement = pg_fetcher.get_create_schema_statement().await.unwrap();
+        let schema_statement = pg_fetcher.get_create_schema_statement().await?;
         let statement = StructStatement::PgCreateSchema {
             statement: schema_statement,
         };
-        self.push_dt_data(statement).await;
+        self.push_dt_data(statement).await?;
 
         // tables
-        for statement in pg_fetcher.get_create_table_statements("").await.unwrap() {
+        for statement in pg_fetcher.get_create_table_statements("").await? {
             self.push_dt_data(StructStatement::PgCreateTable { statement })
-                .await;
+                .await?;
         }
         Ok(())
     }
 
-    pub async fn push_dt_data(&mut self, statement: StructStatement) {
+    pub async fn push_dt_data(&mut self, statement: StructStatement) -> anyhow::Result<()> {
         let ddl_data = DdlData {
             schema: self.schema.clone(),
             tb: String::new(),
@@ -69,6 +69,5 @@ impl PgStructExtractor {
         self.base_extractor
             .push_dt_data(DtData::Ddl { ddl_data }, Position::None)
             .await
-            .unwrap()
     }
 }

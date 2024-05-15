@@ -6,11 +6,10 @@ use dt_common::{
     meta::redis::{
         cluster_node::ClusterNode, command::cmd_encoder::CmdEncoder, redis_object::RedisCmd,
     },
-    utils::redis_util::RedisUtil,
+    utils::{redis_util::RedisUtil, url_util::UrlUtil},
 };
 use redis::{Connection, ConnectionLike};
 use serde_json::json;
-use url::Url;
 
 use crate::{extractor::base_extractor::BaseExtractor, Extractor};
 
@@ -91,7 +90,7 @@ impl RedisReshardExtractor {
         for (dst_node_id, move_in_slots) in node_move_in_slots.iter() {
             // get dst_node by id
             let dst_node = nodes.iter().find(|i| i.id == *dst_node_id).unwrap();
-            let mut dst_conn = self.get_node_conn(dst_node).await.unwrap();
+            let mut dst_conn = self.get_node_conn(dst_node).await?;
 
             let mut cur_src_node: Option<ClusterNode> = None;
             let mut cur_src_conn: Option<Connection> = None;
@@ -105,7 +104,7 @@ impl RedisReshardExtractor {
                     cur_src_node.is_none() || src_node.id != cur_src_node.as_ref().unwrap().id;
                 if src_node_changed {
                     cur_src_node = Some(src_node.clone());
-                    cur_src_conn = Some(self.get_node_conn(src_node).await.unwrap());
+                    cur_src_conn = Some(self.get_node_conn(src_node).await?);
                 }
 
                 // move slot
@@ -116,8 +115,7 @@ impl RedisReshardExtractor {
                     &mut dst_conn,
                     *slot,
                 )
-                .await
-                .unwrap();
+                .await?;
             }
         }
         Ok(())
@@ -138,7 +136,7 @@ impl RedisReshardExtractor {
             dst_node.id
         );
 
-        let keys = Self::get_keys_in_slot(src_conn, slot).unwrap();
+        let keys = Self::get_keys_in_slot(src_conn, slot)?;
         log_info!("slot {} has {} keys", slot, keys.len());
 
         // cluster setslot importing
@@ -157,12 +155,8 @@ impl RedisReshardExtractor {
             "migrating",
             &dst_node.id,
         ]);
-        dst_conn
-            .req_packed_command(&CmdEncoder::encode(&dst_cmd))
-            .unwrap();
-        src_conn
-            .req_packed_command(&CmdEncoder::encode(&src_cmd))
-            .unwrap();
+        dst_conn.req_packed_command(&CmdEncoder::encode(&dst_cmd))?;
+        src_conn.req_packed_command(&CmdEncoder::encode(&src_cmd))?;
 
         // migrate
         for key in keys.iter() {
@@ -183,9 +177,7 @@ impl RedisReshardExtractor {
                 "keys",
                 key,
             ]);
-            src_conn
-                .req_packed_command(&CmdEncoder::encode(&cmd))
-                .unwrap();
+            src_conn.req_packed_command(&CmdEncoder::encode(&cmd))?;
         }
 
         // cluster setslot node
@@ -196,12 +188,8 @@ impl RedisReshardExtractor {
             "node",
             &dst_node.id,
         ]);
-        dst_conn
-            .req_packed_command(&CmdEncoder::encode(&cmd))
-            .unwrap();
-        src_conn
-            .req_packed_command(&CmdEncoder::encode(&cmd))
-            .unwrap();
+        dst_conn.req_packed_command(&CmdEncoder::encode(&cmd))?;
+        src_conn.req_packed_command(&CmdEncoder::encode(&cmd))?;
         log_info!(
             "moved slot {} from {} to {}",
             slot,
@@ -217,12 +205,12 @@ impl RedisReshardExtractor {
         let cmd =
             RedisCmd::from_str_args(&["cluster", "getkeysinslot", &slot.to_string(), "100000000"]);
         let packed_cmd = &CmdEncoder::encode(&cmd);
-        let result = conn.req_packed_command(packed_cmd).unwrap();
+        let result = conn.req_packed_command(packed_cmd)?;
         RedisUtil::parse_result_as_string(result)
     }
 
     async fn get_node_conn(&self, node: &ClusterNode) -> anyhow::Result<Connection> {
-        let url_info = Url::parse(&self.url).unwrap();
+        let url_info = UrlUtil::parse(&self.url)?;
         let username = url_info.username();
         let password = url_info.password().unwrap_or("").to_string();
         let url = format!("redis://{}:{}@{}", username, password, node.address);

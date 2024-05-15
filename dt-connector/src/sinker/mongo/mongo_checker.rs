@@ -94,9 +94,9 @@ impl MongoChecker {
 
         // batch fetch dst
         let mut dst_row_data_map = HashMap::new();
-        let mut cursor = collection.find(filter, None).await.unwrap();
-        while cursor.advance().await.unwrap() {
-            let doc = cursor.deserialize_current().unwrap();
+        let mut cursor = collection.find(filter, None).await?;
+        while cursor.advance().await? {
+            let doc = cursor.deserialize_current()?;
             // key should not be none since we have filtered in ids,
             let key = MongoKey::from_doc(&doc).unwrap();
             let row_data = Self::build_row_data(schema, tb, doc, &key);

@@ -4,6 +4,8 @@ use std::{
     path::PathBuf,
 };
 
+use anyhow::Context;
+
 pub struct LogReader {
     files: Vec<PathBuf>,
     file_index: usize,
@@ -12,7 +14,9 @@ pub struct LogReader {
 
 impl LogReader {
     pub fn new(dir_path: &str) -> Self {
-        let files = Self::list_files(dir_path);
+        let files = Self::list_files(dir_path)
+            .with_context(|| format!("failed to list files in dir: [{}]", dir_path))
+            .unwrap();
         Self {
             files,
             file_index: 0,
@@ -20,42 +24,41 @@ impl LogReader {
         }
     }
 
-    pub fn nextval(&mut self) -> Option<String> {
+    pub fn nextval(&mut self) -> anyhow::Result<Option<String>> {
         if self.file_index >= self.files.len() {
-            return Option::None;
+            return Ok(None);
         }
 
         if self.lines.is_none() {
             let path = &self.files[self.file_index];
-            let file = File::open(path.to_str().unwrap()).unwrap();
-            self.lines = Some(BufReader::new(file).lines());
+            if let Some(file_path) = path.to_str() {
+                let file = File::open(file_path)
+                    .with_context(|| format!("failed to open file: [{}]", file_path))?;
+                self.lines = Some(BufReader::new(file).lines());
+            }
         }
 
         if let Some(lines) = self.lines.as_mut() {
             if let Some(result) = lines.next() {
-                return Some(result.unwrap());
+                return Ok(Some(result?));
             } else {
                 self.lines = None;
                 self.file_index += 1;
                 return self.nextval();
             }
         }
-        None
+        Ok(None)
     }
 
-    fn list_files(dir_path: &str) -> Vec<PathBuf> {
-        let mut files = fs::read_dir(dir_path)
-            .unwrap()
-            .filter_map(|entry| {
-                let path = entry.unwrap().path();
-                if path.is_file() {
-                    Some(path)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
+    fn list_files(dir_path: &str) -> anyhow::Result<Vec<PathBuf>> {
+        let mut files = Vec::new();
+        for entry in fs::read_dir(dir_path)? {
+            let path = entry?.path();
+            if path.is_file() {
+                files.push(path);
+            }
+        }
         files.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
-        files
+        Ok(files)
     }
 }

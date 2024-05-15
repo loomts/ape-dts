@@ -95,7 +95,7 @@ impl TestConfigUtil {
         dst_task_config_file: &str,
         project_root: &str,
     ) {
-        let config = TaskConfig::new(&src_task_config_file);
+        let config = TaskConfig::new(&src_task_config_file).unwrap();
         let mut update_configs = Vec::new();
 
         // runtime/log4rs_file

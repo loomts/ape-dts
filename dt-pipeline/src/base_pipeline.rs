@@ -50,7 +50,7 @@ enum SinkMethod {
 impl Pipeline for BasePipeline {
     async fn stop(&mut self) -> anyhow::Result<()> {
         for sinker in self.sinkers.iter_mut() {
-            sinker.lock().await.close().await.unwrap();
+            sinker.lock().await.close().await?;
         }
         self.parallelizer.close().await
     }
@@ -84,7 +84,7 @@ impl Pipeline for BasePipeline {
                 Vec::new()
             } else {
                 last_sink_time = Instant::now();
-                self.parallelizer.drain(self.buffer.as_ref()).await.unwrap()
+                self.parallelizer.drain(self.buffer.as_ref()).await?
             };
 
             if let Some(data_marker) = &mut self.data_marker {
@@ -96,9 +96,9 @@ impl Pipeline for BasePipeline {
 
             // process all row_datas in buffer at a time
             let (count, last_received, last_commit) = match Self::get_sink_method(&data) {
-                SinkMethod::Ddl => self.sink_ddl(data).await.unwrap(),
-                SinkMethod::Dml => self.sink_dml(data).await.unwrap(),
-                SinkMethod::Raw => self.sink_raw(data).await.unwrap(),
+                SinkMethod::Ddl => self.sink_ddl(data).await?,
+                SinkMethod::Dml => self.sink_dml(data).await?,
+                SinkMethod::Raw => self.sink_raw(data).await?,
             };
 
             if let Some(position) = &last_received {
@@ -136,10 +136,7 @@ impl BasePipeline {
         let (data, last_received_position, last_commit_position) = Self::fetch_raw(all_data);
         let count = data.len();
         if count > 0 {
-            self.parallelizer
-                .sink_raw(data, &self.sinkers)
-                .await
-                .unwrap()
+            self.parallelizer.sink_raw(data, &self.sinkers).await?
         }
         Ok((count, last_received_position, last_commit_position))
     }
@@ -156,10 +153,7 @@ impl BasePipeline {
                 data = lua_processor.process(data)?;
             }
 
-            self.parallelizer
-                .sink_dml(data, &self.sinkers)
-                .await
-                .unwrap()
+            self.parallelizer.sink_dml(data, &self.sinkers).await?
         }
         Ok((count, last_received_position, last_commit_position))
     }
@@ -173,16 +167,10 @@ impl BasePipeline {
         if count > 0 {
             self.parallelizer
                 .sink_ddl(data.clone(), &self.sinkers)
-                .await
-                .unwrap();
+                .await?;
             // only part of sinkers will execute sink_ddl, but all sinkers should refresh metadata
             for sinker in self.sinkers.iter_mut() {
-                sinker
-                    .lock()
-                    .await
-                    .refresh_meta(data.clone())
-                    .await
-                    .unwrap();
+                sinker.lock().await.refresh_meta(data.clone()).await?;
             }
         }
         Ok((count, last_received_position, last_commit_position))

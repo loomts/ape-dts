@@ -7,6 +7,7 @@ use crate::{
     utils::sql_util::SqlUtil,
 };
 
+use anyhow::Context;
 use regex::Regex;
 
 #[derive(Debug, Clone)]
@@ -152,10 +153,11 @@ impl RdbFilter {
             .replace('*', ".*")
             .replace('?', ".?");
         pattern = format!(r"^{}$", pattern);
-        if Regex::new(&pattern).unwrap().is_match(item) {
-            return true;
-        }
-        false
+
+        Regex::new(&pattern)
+            .with_context(|| format!("invalid filter pattern: [{}]", pattern))
+            .unwrap()
+            .is_match(item)
     }
 
     fn parse_pair_tokens(

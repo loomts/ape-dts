@@ -40,7 +40,7 @@ impl MongoTestRunner {
         let mut src_mongo_client = None;
         let mut dst_mongo_client = None;
 
-        let config = TaskConfig::new(&base.task_config_file);
+        let config = TaskConfig::new(&base.task_config_file).unwrap();
         match config.extractor {
             ExtractorConfig::MongoSnapshot { url, app_name, .. }
             | ExtractorConfig::MongoCdc { url, app_name, .. }
@@ -195,7 +195,7 @@ impl MongoTestRunner {
     ) -> anyhow::Result<()> {
         self.execute_prepare_sqls().await?;
 
-        let config = TaskConfig::new(&self.base.task_config_file);
+        let config = TaskConfig::new(&self.base.task_config_file).unwrap();
         let (db, tb) = match config.extractor {
             ExtractorConfig::MongoCdc { heartbeat_tb, .. } => {
                 let tokens: Vec<&str> = heartbeat_tb.split(".").collect();

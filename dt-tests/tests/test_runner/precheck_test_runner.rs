@@ -21,7 +21,7 @@ pub struct PrecheckTestRunner {
 impl PrecheckTestRunner {
     pub async fn new(test_dir: &str) -> anyhow::Result<Self> {
         let base = BaseTestRunner::new(test_dir).await.unwrap();
-        let task_config = TaskConfig::new(&base.task_config_file);
+        let task_config = TaskConfig::new(&base.task_config_file).unwrap();
         let precheck_config = PrecheckTaskConfig::new(&base.task_config_file).unwrap();
         let checker_connector =
             PrecheckerBuilder::build(precheck_config.precheck.clone(), task_config.clone());

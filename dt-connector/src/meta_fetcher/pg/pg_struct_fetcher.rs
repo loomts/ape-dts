@@ -42,7 +42,7 @@ enum ColType {
 
 impl PgStructFetcher {
     pub async fn get_create_schema_statement(&mut self) -> anyhow::Result<PgCreateSchemaStatement> {
-        let schema = self.get_schema().await.unwrap();
+        let schema = self.get_schema().await?;
         Ok(PgCreateSchemaStatement { schema })
     }
 
@@ -52,19 +52,16 @@ impl PgStructFetcher {
     ) -> anyhow::Result<Vec<PgCreateTableStatement>> {
         let mut results = Vec::new();
 
-        let tables = self.get_tables(tb).await.unwrap();
-        let mut sequences = self.get_sequences(tb).await.unwrap();
-        let mut sequence_owners = self.get_sequence_owners(tb).await.unwrap();
-        let mut constraints = self.get_constraints(tb).await.unwrap();
-        let mut indexes = self.get_indexes(tb).await.unwrap();
-        let mut column_comments = self.get_column_comments(tb).await.unwrap();
-        let mut table_comments = self.get_table_comments(tb).await.unwrap();
+        let tables = self.get_tables(tb).await?;
+        let mut sequences = self.get_sequences(tb).await?;
+        let mut sequence_owners = self.get_sequence_owners(tb).await?;
+        let mut constraints = self.get_constraints(tb).await?;
+        let mut indexes = self.get_indexes(tb).await?;
+        let mut column_comments = self.get_column_comments(tb).await?;
+        let mut table_comments = self.get_table_comments(tb).await?;
 
         for (table_name, table) in tables {
-            let table_sequences = self
-                .get_table_sequences(&table, &mut sequences)
-                .await
-                .unwrap();
+            let table_sequences = self.get_table_sequences(&table, &mut sequences).await?;
             let statement = PgCreateTableStatement {
                 table,
                 sequences: table_sequences,
@@ -89,7 +86,7 @@ impl PgStructFetcher {
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         if let Some(row) = rows.try_next().await.unwrap() {
-            let schema_name = Self::get_str_with_null(&row, "schema_name").unwrap();
+            let schema_name = Self::get_str_with_null(&row, "schema_name")?;
             let schema = Schema { name: schema_name };
             return Ok(schema);
         }
@@ -138,21 +135,21 @@ impl PgStructFetcher {
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let (sequence_schema, table_name, sequence_name): (String, String, String) = (
-                Self::get_str_with_null(&row, "sequence_schema").unwrap(),
-                Self::get_str_with_null(&row, "table_name").unwrap(),
-                Self::get_str_with_null(&row, "sequence_name").unwrap(),
+                Self::get_str_with_null(&row, "sequence_schema")?,
+                Self::get_str_with_null(&row, "table_name")?,
+                Self::get_str_with_null(&row, "sequence_name")?,
             );
 
             let sequence = Sequence {
                 sequence_name,
-                database_name: Self::get_str_with_null(&row, "sequence_catalog").unwrap(),
+                database_name: Self::get_str_with_null(&row, "sequence_catalog")?,
                 schema_name: sequence_schema,
-                data_type: Self::get_str_with_null(&row, "data_type").unwrap(),
+                data_type: Self::get_str_with_null(&row, "data_type")?,
                 start_value: row.get("start_value"),
                 increment: row.get("increment"),
                 minimum_value: row.get("minimum_value"),
                 maximum_value: row.get("maximum_value"),
-                cycle_option: Self::get_str_with_null(&row, "cycle_option").unwrap(),
+                cycle_option: Self::get_str_with_null(&row, "cycle_option")?,
             };
             self.push_to_results(&mut results, &table_name, sequence);
         }
@@ -177,15 +174,15 @@ impl PgStructFetcher {
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let sequence = Sequence {
-                sequence_name: Self::get_str_with_null(&row, "sequence_name").unwrap(),
-                database_name: Self::get_str_with_null(&row, "sequence_catalog").unwrap(),
-                schema_name: Self::get_str_with_null(&row, "sequence_schema").unwrap(),
-                data_type: Self::get_str_with_null(&row, "data_type").unwrap(),
+                sequence_name: Self::get_str_with_null(&row, "sequence_name")?,
+                database_name: Self::get_str_with_null(&row, "sequence_catalog")?,
+                schema_name: Self::get_str_with_null(&row, "sequence_schema")?,
+                data_type: Self::get_str_with_null(&row, "data_type")?,
                 start_value: row.get("start_value"),
                 increment: row.get("increment"),
                 minimum_value: row.get("minimum_value"),
                 maximum_value: row.get("maximum_value"),
-                cycle_option: Self::get_str_with_null(&row, "cycle_option").unwrap(),
+                cycle_option: Self::get_str_with_null(&row, "cycle_option")?,
             };
             results.push(sequence)
         }
@@ -252,8 +249,7 @@ impl PgStructFetcher {
         if !independent_squence_names.is_empty() {
             let independent_squences = self
                 .get_independent_sequences(&independent_squence_names)
-                .await
-                .unwrap();
+                .await?;
             table_sequences.extend_from_slice(&independent_squences);
         }
 
@@ -296,9 +292,9 @@ impl PgStructFetcher {
 
         while let Some(row) = rows.try_next().await.unwrap() {
             let (schema_name, table_name, seq_name): (String, String, String) = (
-                Self::get_str_with_null(&row, "nspname").unwrap(),
-                Self::get_str_with_null(&row, "table_name").unwrap(),
-                Self::get_str_with_null(&row, "relname").unwrap(),
+                Self::get_str_with_null(&row, "nspname")?,
+                Self::get_str_with_null(&row, "table_name")?,
+                Self::get_str_with_null(&row, "relname")?,
             );
 
             let sequence_owner = SequenceOwner {
@@ -306,7 +302,7 @@ impl PgStructFetcher {
                 database_name: String::new(),
                 schema_name,
                 table_name: table_name.clone(),
-                column_name: Self::get_str_with_null(&row, "column_name").unwrap(),
+                column_name: Self::get_str_with_null(&row, "column_name")?,
             };
             self.push_to_results(&mut results, &table_name, sequence_owner);
         }
@@ -345,24 +341,24 @@ impl PgStructFetcher {
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let (table_schema, table_name) = (
-                Self::get_str_with_null(&row, "table_schema").unwrap(),
-                Self::get_str_with_null(&row, "table_name").unwrap(),
+                Self::get_str_with_null(&row, "table_schema")?,
+                Self::get_str_with_null(&row, "table_name")?,
             );
 
             if self.filter_tb(&table_name) {
                 continue;
             }
 
-            let ordinal_position: i32 = row.try_get("ordinal_position").unwrap();
+            let ordinal_position: i32 = row.try_get("ordinal_position")?;
             let is_identity = row.get("is_identity");
             let identity_generation = row.get("identity_generation");
             let generation_rule = Self::get_col_generation_rule(is_identity, identity_generation);
 
             let column = Column {
-                column_name: Self::get_str_with_null(&row, "column_name").unwrap(),
+                column_name: Self::get_str_with_null(&row, "column_name")?,
                 ordinal_position: ordinal_position as u32,
                 column_default: row.get("column_default"),
-                is_nullable: Self::get_str_with_null(&row, "is_nullable").unwrap(),
+                is_nullable: Self::get_str_with_null(&row, "is_nullable")?,
                 generated: generation_rule,
                 ..Default::default()
             };
@@ -385,7 +381,7 @@ impl PgStructFetcher {
 
         // get column types
         for (table_name, table) in results.iter_mut() {
-            let column_types = self.get_column_types(table_name).await.unwrap();
+            let column_types = self.get_column_types(table_name).await?;
             for column in table.columns.iter_mut() {
                 column.column_type = column_types.get(&column.column_name).unwrap().to_owned();
             }
@@ -399,7 +395,7 @@ impl PgStructFetcher {
             conn_pool: self.conn_pool.clone(),
         };
 
-        let oid = fetcher.get_oid(&self.schema, tb).await;
+        let oid = fetcher.get_oid(&self.schema, tb).await?;
         let sql = format!(
             "SELECT a.attname AS column_name, 
                 pg_catalog.format_type(a.atttypid, a.atttypmod) AS column_type
@@ -411,8 +407,8 @@ impl PgStructFetcher {
         let mut results = HashMap::new();
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
-            let column_name: String = Self::get_str_with_null(&row, "column_name").unwrap();
-            let column_type: String = Self::get_str_with_null(&row, "column_type").unwrap();
+            let column_name: String = Self::get_str_with_null(&row, "column_name")?;
+            let column_type: String = Self::get_str_with_null(&row, "column_type")?;
             results.insert(column_name, column_type);
         }
 
@@ -449,17 +445,16 @@ impl PgStructFetcher {
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
-            let table_name = Self::get_str_with_null(&row, "relname").unwrap();
-            let constraint_type =
-                Self::get_with_null(&row, "constraint_type", ColType::Char).unwrap();
+            let table_name = Self::get_str_with_null(&row, "relname")?;
+            let constraint_type = Self::get_with_null(&row, "constraint_type", ColType::Char)?;
 
             let constraint = Constraint {
                 database_name: String::new(),
-                schema_name: Self::get_str_with_null(&row, "nspname").unwrap(),
+                schema_name: Self::get_str_with_null(&row, "nspname")?,
                 table_name: table_name.clone(),
-                constraint_name: Self::get_str_with_null(&row, "constraint_name").unwrap(),
+                constraint_name: Self::get_str_with_null(&row, "constraint_name")?,
                 constraint_type: ConstraintType::from_str(&constraint_type, DbType::Pg),
-                definition: Self::get_str_with_null(&row, "constraint_definition").unwrap(),
+                definition: Self::get_str_with_null(&row, "constraint_definition")?,
             };
             self.push_to_results(&mut results, &table_name, constraint);
         }
@@ -488,15 +483,15 @@ impl PgStructFetcher {
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
-            let table_name = Self::get_str_with_null(&row, "tablename").unwrap();
-            let definition = Self::get_str_with_null(&row, "indexdef").unwrap();
+            let table_name = Self::get_str_with_null(&row, "tablename")?;
+            let definition = Self::get_str_with_null(&row, "indexdef")?;
 
             let index = Index {
-                schema_name: Self::get_str_with_null(&row, "schemaname").unwrap(),
+                schema_name: Self::get_str_with_null(&row, "schemaname")?,
                 table_name: table_name.clone(),
-                index_name: Self::get_str_with_null(&row, "indexname").unwrap(),
+                index_name: Self::get_str_with_null(&row, "indexname")?,
                 index_kind: self.get_index_kind(&definition),
-                table_space: Self::get_str_with_null(&row, "tablespace").unwrap(),
+                table_space: Self::get_str_with_null(&row, "tablespace")?,
                 definition,
                 ..Default::default()
             };
@@ -535,8 +530,8 @@ impl PgStructFetcher {
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let (schema_name, table_name): (String, String) = (
-                Self::get_str_with_null(&row, "nspname").unwrap(),
-                Self::get_str_with_null(&row, "relname").unwrap(),
+                Self::get_str_with_null(&row, "nspname")?,
+                Self::get_str_with_null(&row, "relname")?,
             );
 
             let comment = Comment {
@@ -545,7 +540,7 @@ impl PgStructFetcher {
                 schema_name,
                 table_name: table_name.clone(),
                 column_name: String::new(),
-                comment: Self::get_str_with_null(&row, "description").unwrap(),
+                comment: Self::get_str_with_null(&row, "description")?,
             };
             self.push_to_results(&mut results, &table_name, comment);
         }
@@ -586,9 +581,9 @@ impl PgStructFetcher {
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let (schema_name, table_name, column_name) = (
-                Self::get_str_with_null(&row, "nspname").unwrap(),
-                Self::get_str_with_null(&row, "relname").unwrap(),
-                Self::get_str_with_null(&row, "name").unwrap(),
+                Self::get_str_with_null(&row, "nspname")?,
+                Self::get_str_with_null(&row, "relname")?,
+                Self::get_str_with_null(&row, "name")?,
             );
 
             let comment = Comment {
@@ -597,7 +592,7 @@ impl PgStructFetcher {
                 schema_name,
                 table_name: table_name.clone(),
                 column_name,
-                comment: Self::get_str_with_null(&row, "comment").unwrap(),
+                comment: Self::get_str_with_null(&row, "comment")?,
             };
             self.push_to_results(&mut results, &table_name, comment);
         }

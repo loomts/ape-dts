@@ -33,7 +33,7 @@ impl RedisTestRunner {
     ) -> anyhow::Result<Self> {
         let base = BaseTestRunner::new(relative_test_dir).await.unwrap();
 
-        let config = TaskConfig::new(&base.task_config_file);
+        let config = TaskConfig::new(&base.task_config_file).unwrap();
         let src_conn = match config.extractor {
             ExtractorConfig::RedisSnapshot { url, .. } | ExtractorConfig::RedisCdc { url, .. } => {
                 RedisUtil::create_redis_conn(&url).await.unwrap()
@@ -97,7 +97,7 @@ impl RedisTestRunner {
         start_millis: u64,
         _parse_millis: u64,
     ) -> anyhow::Result<()> {
-        let config = TaskConfig::new(&self.base.task_config_file);
+        let config = TaskConfig::new(&self.base.task_config_file).unwrap();
         let heartbeat_key = match config.extractor {
             ExtractorConfig::RedisCdc { heartbeat_key, .. } => heartbeat_key.clone(),
             _ => String::new(),

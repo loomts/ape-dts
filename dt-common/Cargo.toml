@@ -33,3 +33,4 @@ log = { workspace = true }
 redis = { workspace = true }
 mlua = { workspace = true }
 anyhow = { workspace = true }
+url = { workspace = true }

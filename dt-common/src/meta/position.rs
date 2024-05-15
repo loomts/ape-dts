@@ -1,10 +1,9 @@
 use std::str::FromStr;
 
+use anyhow::Context;
 use chrono::DateTime;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-
-use crate::error::Error;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type")]
@@ -53,11 +52,13 @@ pub enum Position {
 
 impl Position {
     pub fn format_timestamp_millis(millis: i64) -> String {
-        let naive_datetime = DateTime::from_timestamp_millis(millis);
-        naive_datetime
-            .unwrap()
-            .format("%Y-%m-%d %H:%M:%S%.3f UTC-0000")
-            .to_string()
+        if let Some(naive_datetime) = DateTime::from_timestamp_millis(millis) {
+            naive_datetime
+                .format("%Y-%m-%d %H:%M:%S%.3f UTC-0000")
+                .to_string()
+        } else {
+            String::new()
+        }
     }
 }
 
@@ -68,9 +69,10 @@ impl std::fmt::Display for Position {
 }
 
 impl FromStr for Position {
-    type Err = Error;
-    fn from_str(str: &str) -> Result<Self, Self::Err> {
-        let me: Self = serde_json::from_str(str).unwrap();
+    type Err = anyhow::Error;
+    fn from_str(str: &str) -> anyhow::Result<Self, anyhow::Error> {
+        let me: Self = serde_json::from_str(str)
+            .with_context(|| format!("invalid position str: [{}]", str))?;
         Ok(me)
     }
 }

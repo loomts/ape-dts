@@ -51,8 +51,7 @@ impl KafkaSinker {
             let key = self.avro_converter.row_data_to_avro_key(row_data).await?;
             let payload = self
                 .avro_converter
-                .row_data_to_avro_value(row_data.clone())
-                .unwrap();
+                .row_data_to_avro_value(row_data.clone())?;
             messages.push(Record {
                 key,
                 value: payload,
@@ -61,7 +60,7 @@ impl KafkaSinker {
             });
         }
 
-        self.producer.send_all(&messages).unwrap();
+        self.producer.send_all(&messages)?;
 
         BaseSinker::update_batch_monitor(&mut self.monitor, data.len(), data_size, start_time).await
     }

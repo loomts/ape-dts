@@ -97,7 +97,7 @@ impl DataMarker {
                 if let Some(col_value) = row_data.after.as_ref().unwrap().get(DATA_ORIGIN_NODE) {
                     // mysql, ColValue::Blob
                     // pg, ColValue::String
-                    self.data_origin_node = col_value.to_option_string().unwrap();
+                    self.data_origin_node = col_value.to_string();
                 }
             }
 

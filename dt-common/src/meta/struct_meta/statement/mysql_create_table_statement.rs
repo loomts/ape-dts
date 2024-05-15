@@ -62,7 +62,7 @@ impl MysqlCreateTableStatement {
     }
 
     fn table_to_sql(table: &mut Table) -> String {
-        let (columns_sql, pks) = Self::columns_to_sql(&mut table.columns).unwrap();
+        let (columns_sql, pks) = Self::columns_to_sql(&mut table.columns);
         let mut pk_str = String::new();
         if !pks.is_empty() {
             pk_str = format!(
@@ -95,7 +95,7 @@ impl MysqlCreateTableStatement {
         sql
     }
 
-    fn columns_to_sql(columns: &mut Vec<Column>) -> anyhow::Result<(String, Vec<String>)> {
+    fn columns_to_sql(columns: &mut Vec<Column>) -> (String, Vec<String>) {
         let (mut sql, mut pks) = (String::new(), Vec::new());
 
         columns.sort_by(|c1, c2| c1.ordinal_position.cmp(&c2.ordinal_position));
@@ -147,7 +147,7 @@ impl MysqlCreateTableStatement {
             sql = sql[0..sql.len() - 1].to_string();
         }
 
-        Ok((sql, pks))
+        (sql, pks)
     }
 
     fn index_to_sql(index: &mut Index) -> String {

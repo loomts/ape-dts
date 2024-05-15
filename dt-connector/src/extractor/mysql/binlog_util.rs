@@ -20,7 +20,7 @@ impl BinlogUtil {
 
         log_info!(
             "finding the last binlog before start_time: {}",
-            TimeUtil::timestamp_to_str(start_timestamp)
+            TimeUtil::timestamp_to_str(start_timestamp)?
         );
 
         let mut left = 0;
@@ -37,7 +37,7 @@ impl BinlogUtil {
                 log_info!(
                     "found binlog: {}, binlog_start_time: {}",
                     binlog,
-                    TimeUtil::timestamp_to_str(binlog_start_timestamp)
+                    TimeUtil::timestamp_to_str(binlog_start_timestamp)?
                 );
                 return Ok(binlog.to_owned());
             } else if binlog_start_timestamp < start_timestamp {
@@ -58,7 +58,7 @@ impl BinlogUtil {
             log_info!(
                 "start_time is ealier than the first binlog: {}, binlog_start_time: {}",
                 &binlogs[0],
-                TimeUtil::timestamp_to_str(binlog_start_timestamp)
+                TimeUtil::timestamp_to_str(binlog_start_timestamp)?
             );
             Ok(String::new())
         } else {
@@ -68,7 +68,7 @@ impl BinlogUtil {
             log_info!(
                 "found binlog: {}, binlog_start_time: {}",
                 binlog,
-                TimeUtil::timestamp_to_str(binlog_start_timestamp)
+                TimeUtil::timestamp_to_str(binlog_start_timestamp)?
             );
             Ok(binlog)
         }

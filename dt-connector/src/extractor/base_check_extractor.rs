@@ -26,39 +26,40 @@ impl BaseCheckExtractor {
         let mut log_reader = LogReader::new(&self.check_log_dir);
         let mut batch = Vec::new();
 
-        while let Some(log) = log_reader.nextval() {
+        while let Some(log) = log_reader.nextval()? {
             if log.trim().is_empty() {
                 continue;
             }
 
-            let check_log = CheckLog::from_str(&log).unwrap();
+            let check_log = CheckLog::from_str(&log)?;
             if Self::can_in_same_batch(&batch, &check_log) {
                 batch.push(check_log);
             } else {
-                Self::batch_extract_and_clear(extractor, &mut batch).await;
+                Self::batch_extract_and_clear(extractor, &mut batch).await?;
                 batch.push(check_log);
             }
 
             if batch.len() >= self.batch_size
                 || (batch.len() == 1 && Self::is_any_col_none(&batch[0]))
             {
-                Self::batch_extract_and_clear(extractor, &mut batch).await;
+                Self::batch_extract_and_clear(extractor, &mut batch).await?;
             }
         }
 
-        Self::batch_extract_and_clear(extractor, &mut batch).await;
+        Self::batch_extract_and_clear(extractor, &mut batch).await?;
         Ok(())
     }
 
     async fn batch_extract_and_clear(
         extractor: &mut (dyn BatchCheckExtractor + Send),
         batch: &mut Vec<CheckLog>,
-    ) {
+    ) -> anyhow::Result<()> {
         if batch.is_empty() {
-            return;
+            return Ok(());
         }
-        extractor.batch_extract(batch).await.unwrap();
+        extractor.batch_extract(batch).await?;
         batch.clear();
+        Ok(())
     }
 
     fn can_in_same_batch(exist_items: &[CheckLog], new_item: &CheckLog) -> bool {

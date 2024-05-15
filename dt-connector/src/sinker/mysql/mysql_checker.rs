@@ -44,7 +44,7 @@ impl Sinker for MysqlChecker {
         }
 
         if !batch {
-            self.serial_check(data).await.unwrap();
+            self.serial_check(data).await?;
         } else {
             call_batch_fn!(self, data, Self::batch_check);
         }
@@ -62,7 +62,7 @@ impl Sinker for MysqlChecker {
             return Ok(());
         }
 
-        self.serial_ddl_check(data).await.unwrap();
+        self.serial_ddl_check(data).await?;
         Ok(())
     }
 }
@@ -177,10 +177,7 @@ impl MysqlChecker {
 
             let mut dst_statement = match &src_statement {
                 StructStatement::MysqlCreateDatabase { statement: _ } => {
-                    let dst_statement = struct_fetcher
-                        .get_create_database_statement()
-                        .await
-                        .unwrap();
+                    let dst_statement = struct_fetcher.get_create_database_statement().await?;
                     Some(StructStatement::MysqlCreateDatabase {
                         statement: dst_statement,
                     })
@@ -189,8 +186,7 @@ impl MysqlChecker {
                 StructStatement::MysqlCreateTable { statement } => {
                     let mut dst_statement = struct_fetcher
                         .get_create_table_statements(&statement.table.table_name)
-                        .await
-                        .unwrap();
+                        .await?;
                     if dst_statement.is_empty() {
                         None
                     } else {
@@ -203,7 +199,7 @@ impl MysqlChecker {
                 _ => None,
             };
 
-            BaseChecker::compare_struct(src_statement, &mut dst_statement, &self.filter).unwrap();
+            BaseChecker::compare_struct(src_statement, &mut dst_statement, &self.filter)?;
         }
         Ok(())
     }

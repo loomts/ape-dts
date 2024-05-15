@@ -1,10 +1,10 @@
-use std::collections::HashMap;
 use dt_common::{
     config::{
         config_enums::DbType, config_token_parser::ConfigTokenParser, router_config::RouterConfig,
     },
     utils::sql_util::SqlUtil,
 };
+use std::collections::HashMap;
 
 use dt_common::meta::{col_value::ColValue, row_data::RowData};
 use serde::{Deserialize, Serialize};
@@ -33,13 +33,13 @@ impl RdbRouter {
                 col_map,
                 topic_map,
             } => {
-                let db_map = Self::parse_db_map(db_map, db_type).unwrap();
-                let mut tb_map = Self::parse_tb_map(tb_map, db_type).unwrap();
-                let (tb_map_2, tb_col_map) = Self::parse_tb_col_map(col_map, db_type).unwrap();
+                let db_map = Self::parse_db_map(db_map, db_type)?;
+                let mut tb_map = Self::parse_tb_map(tb_map, db_type)?;
+                let (tb_map_2, tb_col_map) = Self::parse_tb_col_map(col_map, db_type)?;
                 for (k, v) in tb_map_2 {
                     tb_map.insert(k, v);
                 }
-                let topic_map = Self::parse_topic_map(topic_map, db_type).unwrap();
+                let topic_map = Self::parse_topic_map(topic_map, db_type)?;
                 Ok(Self {
                     db_map,
                     tb_map,

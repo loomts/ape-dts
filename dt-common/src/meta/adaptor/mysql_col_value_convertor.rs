@@ -55,13 +55,13 @@ impl MysqlColValueConvertor {
         let mut month = 0;
         let mut day = 0;
         if length >= 2 {
-            year = cursor.read_u16::<LittleEndian>().unwrap();
+            year = cursor.read_u16::<LittleEndian>()?;
         }
         if length >= 3 {
-            month = cursor.read_u8().unwrap();
+            month = cursor.read_u8()?;
         }
         if length >= 4 {
-            day = cursor.read_u8().unwrap();
+            day = cursor.read_u8()?;
         }
         Ok(format!("{}-{:02}-{:02}", year, month, day))
     }
@@ -71,13 +71,13 @@ impl MysqlColValueConvertor {
         let mut minute = 0;
         let mut second = 0;
         if length >= 1 {
-            hour = cursor.read_u8().unwrap();
+            hour = cursor.read_u8()?;
         }
         if length >= 2 {
-            minute = cursor.read_u8().unwrap();
+            minute = cursor.read_u8()?;
         }
         if length >= 3 {
-            second = cursor.read_u8().unwrap();
+            second = cursor.read_u8()?;
         }
         if length >= 4 {
             let micros = cursor.read_uint::<LittleEndian>(length - 3)?;
@@ -300,43 +300,43 @@ impl MysqlColValueConvertor {
 
         match col_type {
             MysqlColType::Tiny => {
-                let value: i8 = row.try_get(col).unwrap();
+                let value: i8 = row.try_get(col)?;
                 return Ok(ColValue::Tiny(value));
             }
             MysqlColType::UnsignedTiny => {
-                let value: u8 = row.try_get(col).unwrap();
+                let value: u8 = row.try_get(col)?;
                 return Ok(ColValue::UnsignedTiny(value));
             }
             MysqlColType::Short => {
-                let value: i16 = row.try_get(col).unwrap();
+                let value: i16 = row.try_get(col)?;
                 return Ok(ColValue::Short(value));
             }
             MysqlColType::UnsignedShort => {
-                let value: u16 = row.try_get(col).unwrap();
+                let value: u16 = row.try_get(col)?;
                 return Ok(ColValue::UnsignedShort(value));
             }
             MysqlColType::Medium | MysqlColType::Long => {
-                let value: i32 = row.try_get(col).unwrap();
+                let value: i32 = row.try_get(col)?;
                 return Ok(ColValue::Long(value));
             }
             MysqlColType::UnsignedMedium | MysqlColType::UnsignedLong => {
-                let value: u32 = row.try_get(col).unwrap();
+                let value: u32 = row.try_get(col)?;
                 return Ok(ColValue::UnsignedLong(value));
             }
             MysqlColType::LongLong => {
-                let value: i64 = row.try_get(col).unwrap();
+                let value: i64 = row.try_get(col)?;
                 return Ok(ColValue::LongLong(value));
             }
             MysqlColType::UnsignedLongLong => {
-                let value: u64 = row.try_get(col).unwrap();
+                let value: u64 = row.try_get(col)?;
                 return Ok(ColValue::UnsignedLongLong(value));
             }
             MysqlColType::Float => {
-                let value: f32 = row.try_get(col).unwrap();
+                let value: f32 = row.try_get(col)?;
                 return Ok(ColValue::Float(value));
             }
             MysqlColType::Double => {
-                let value: f64 = row.try_get(col).unwrap();
+                let value: f64 = row.try_get(col)?;
                 return Ok(ColValue::Double(value));
             }
             MysqlColType::Decimal => {
@@ -372,42 +372,42 @@ impl MysqlColValueConvertor {
                 return Self::parse_timestamp(value);
             }
             MysqlColType::Year => {
-                let value: u16 = row.try_get(col).unwrap();
+                let value: u16 = row.try_get(col)?;
                 return Ok(ColValue::Year(value));
             }
             MysqlColType::String {
                 length: _,
                 charset: _,
             } => {
-                let value: String = row.try_get(col).unwrap();
+                let value: String = row.try_get(col)?;
                 return Ok(ColValue::String(value));
             }
             MysqlColType::Binary { length: _ } => {
-                let value: Vec<u8> = row.try_get(col).unwrap();
+                let value: Vec<u8> = row.try_get(col)?;
                 return Ok(ColValue::Blob(value));
             }
             MysqlColType::VarBinary { length: _ } => {
-                let value: Vec<u8> = row.try_get(col).unwrap();
+                let value: Vec<u8> = row.try_get(col)?;
                 return Ok(ColValue::Blob(value));
             }
             MysqlColType::Blob => {
-                let value: Vec<u8> = row.try_get(col).unwrap();
+                let value: Vec<u8> = row.try_get(col)?;
                 return Ok(ColValue::Blob(value));
             }
             MysqlColType::Bit => {
-                let value: u64 = row.try_get(col).unwrap();
+                let value: u64 = row.try_get(col)?;
                 return Ok(ColValue::Bit(value));
             }
             MysqlColType::Set => {
-                let value: String = row.try_get(col).unwrap();
+                let value: String = row.try_get(col)?;
                 return Ok(ColValue::Set2(value));
             }
             MysqlColType::Enum => {
-                let value: String = row.try_get(col).unwrap();
+                let value: String = row.try_get(col)?;
                 return Ok(ColValue::Enum2(value));
             }
             MysqlColType::Json => {
-                let value: serde_json::Value = row.try_get(col).unwrap();
+                let value: serde_json::Value = row.try_get(col)?;
                 // TODO, decimal will lose precision when insert into target mysql as string.
                 // insert into json_table(id, json_col) values(1, "212765.700000000010000"); the result will be:
                 // +-----+--------------------------+

@@ -11,7 +11,7 @@ pub mod meta;
 pub mod prechecker;
 
 pub async fn do_precheck(config: &str) {
-    let task_config = TaskConfig::new(config);
+    let task_config = TaskConfig::new(config).unwrap();
     let precheck_config = PrecheckTaskConfig::new(config).unwrap();
 
     let checker_connector = PrecheckerBuilder::build(precheck_config.precheck, task_config);

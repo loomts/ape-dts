@@ -91,7 +91,7 @@ impl BaseExtractor {
             position,
             data_origin_node,
         };
-        self.buffer.push(item).unwrap();
+        self.buffer.push(item)?;
         Ok(())
     }
 

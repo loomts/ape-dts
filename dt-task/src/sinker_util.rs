@@ -3,6 +3,7 @@ use std::{
     sync::{Arc, Mutex, RwLock},
 };
 
+use anyhow::Context;
 use dt_common::{
     config::{
         config_enums::{ConflictPolicyEnum, DbType},
@@ -11,6 +12,7 @@ use dt_common::{
     },
     monitor::monitor::Monitor,
     rdb_filter::RdbFilter,
+    utils::url_util::UrlUtil,
 };
 use dt_common::{
     meta::{
@@ -440,7 +442,7 @@ impl SinkerUtil {
                 .with_ack_timeout(std::time::Duration::from_secs(ack_timeout_secs))
                 .with_required_acks(acks)
                 .create()
-                .unwrap();
+                .with_context(|| format!("failed to create kafka producer, url: [{}]", url))?;
 
             let sinker = KafkaSinker {
                 batch_size,
@@ -464,7 +466,7 @@ impl SinkerUtil {
     ) -> anyhow::Result<Sinkers> {
         let mut sub_sinkers: Sinkers = Vec::new();
         for _ in 0..parallel_size {
-            let mongo_client = TaskUtil::create_mongo_client(url, app_name).await.unwrap();
+            let mongo_client = TaskUtil::create_mongo_client(url, app_name).await?;
             let sinker = MongoSinker {
                 batch_size,
                 router: router.clone(),
@@ -486,7 +488,7 @@ impl SinkerUtil {
     ) -> anyhow::Result<Sinkers> {
         let mut sub_sinkers: Sinkers = Vec::new();
         for _ in 0..parallel_size {
-            let mongo_client = TaskUtil::create_mongo_client(url, app_name).await.unwrap();
+            let mongo_client = TaskUtil::create_mongo_client(url, app_name).await?;
             let sinker = MongoChecker {
                 batch_size,
                 router: router.clone(),
@@ -559,10 +561,10 @@ impl SinkerUtil {
 
         let mut conn = RedisUtil::create_redis_conn(url).await?;
         let version = RedisUtil::get_redis_version(&mut conn)?;
-        let method = RedisWriteMethod::from_str(method).unwrap();
+        let method = RedisWriteMethod::from_str(method)?;
 
         if is_cluster {
-            let url_info = Url::parse(url).unwrap();
+            let url_info = Url::parse(url)?;
             let username = url_info.username();
             let password = url_info.password().unwrap_or("").to_string();
 
@@ -615,7 +617,7 @@ impl SinkerUtil {
         data_size_threshold: usize,
         monitor: Arc<Mutex<Monitor>>,
     ) -> anyhow::Result<Sinkers> {
-        let statistic_type = RedisStatisticType::from_str(statistic_type).unwrap();
+        let statistic_type = RedisStatisticType::from_str(statistic_type)?;
         let mut sub_sinkers: Sinkers = Vec::new();
         for _ in 0..parallel_size {
             let sinker = RedisStatisticSinker {
@@ -637,7 +639,7 @@ impl SinkerUtil {
     ) -> anyhow::Result<Sinkers> {
         let mut sub_sinkers: Sinkers = Vec::new();
         for _ in 0..parallel_size {
-            let url_info = Url::parse(stream_load_url).unwrap();
+            let url_info = UrlUtil::parse(stream_load_url)?;
             let host = url_info.host_str().unwrap().to_string();
             let port = format!("{}", url_info.port().unwrap());
             let username = url_info.username().to_string();
@@ -647,8 +649,7 @@ impl SinkerUtil {
             let client = reqwest::Client::builder()
                 .http1_title_case_headers()
                 .redirect(custom)
-                .build()
-                .unwrap();
+                .build()?;
 
             let sinker = StarRocksSinker {
                 client,
