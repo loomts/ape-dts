@@ -17,7 +17,7 @@ use dt_common::{
         extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
     },
     error::Error,
-    log_info,
+    log_finished, log_info,
     monitor::monitor::Monitor,
     rdb_filter::RdbFilter,
     utils::{sql_util::SqlUtil, time_util::TimeUtil},
@@ -89,6 +89,7 @@ impl TaskRunner {
             }
         };
 
+        log_finished!("task finished");
         Ok(())
     }
 
