@@ -5,6 +5,8 @@ use chrono::DateTime;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+use crate::log_error;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type")]
 pub enum Position {
@@ -53,9 +55,7 @@ pub enum Position {
 impl Position {
     pub fn format_timestamp_millis(millis: i64) -> String {
         if let Some(naive_datetime) = DateTime::from_timestamp_millis(millis) {
-            naive_datetime
-                .format("%Y-%m-%d %H:%M:%S%.3f UTC-0000")
-                .to_string()
+            naive_datetime.format("%Y-%m-%d %H:%M:%S%.3f").to_string()
         } else {
             String::new()
         }
@@ -85,11 +85,17 @@ impl Position {
             return Position::None;
         }
 
-        let error = format!("invalid position log: {}", log);
-        let left = log.find('{').expect(&error);
-        let right = log.rfind('}').expect(&error);
-        let position_log = &log[left..=right];
-        Position::from_str(position_log).expect(&error)
+        let left = log.find('{');
+        let right = log.rfind('}');
+        if left.is_some() && right.is_some() {
+            let position_log = &log[left.unwrap()..=right.unwrap()];
+            if let Ok(position) = Position::from_str(position_log) {
+                return position;
+            }
+        }
+
+        log_error!("invalid position log: {}", log);
+        Position::None
     }
 }
 
@@ -100,12 +106,12 @@ mod test {
     #[test]
     fn test_format_timestamp() {
         assert_eq!(
-            "2023-03-28 07:33:48.396 UTC-0000",
+            "2023-03-28 07:33:48.396",
             Position::format_timestamp_millis(733304028396543 / 1000 + 946_684_800 * 1000)
         );
 
         assert_eq!(
-            "2023-03-28 05:33:47.000 UTC-0000",
+            "2023-03-28 05:33:47.000",
             Position::format_timestamp_millis(1679981627 * 1000)
         );
     }
@@ -127,6 +133,7 @@ mod test {
     fn test_from_log() {
         let log1 = r#"2024-04-01 03:25:18.701725 | {"type":"RdbSnapshotFinished","db_type":"mysql","schema":"test_db_1","tb":"one_pk_no_uk"}"#;
         let log2 = r#"2024-03-29 07:02:24.463776 | current_position | {"type":"RdbSnapshot","db_type":"mysql","schema":"test_db_1","tb":"one_pk_no_uk","order_col":"f_0","value":"9"}"#;
+        let log3 = "task finished";
 
         if let Position::RdbSnapshotFinished {
             db_type,
@@ -157,5 +164,7 @@ mod test {
         } else {
             assert!(false)
         }
+
+        assert_eq!(Position::from_log(log3), Position::None);
     }
 }
