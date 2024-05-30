@@ -2,16 +2,9 @@ use anyhow::Context;
 use async_trait::async_trait;
 use chrono::{DateTime, Datelike, Timelike, Utc};
 use dt_common::{
-    config::{config_enums::ExtractType, s3_config::S3Config},
-    meta::{
-        col_value::ColValue,
-        mysql::{mysql_col_type::MysqlColType, mysql_tb_meta::MysqlTbMeta},
-        rdb_meta_manager::RdbMetaManager,
-        row_data::RowData,
-        row_type::RowType,
-    },
-    monitor::monitor::Monitor,
-    utils::time_util::TimeUtil,
+    config::{config_enums::ExtractType, s3_config::S3Config}, log_info, meta::{
+        col_value::ColValue, ddl_data::DdlData, mysql::{mysql_col_type::MysqlColType, mysql_tb_meta::MysqlTbMeta}, rdb_meta_manager::RdbMetaManager, row_data::RowData, row_type::RowType
+    }, monitor::monitor::Monitor, utils::time_util::TimeUtil
 };
 use orc_format::{
     schema::{Field, Schema},
@@ -50,6 +43,15 @@ impl Sinker for FoxlakeSinker {
         }
 
         call_batch_fn!(self, data, Self::batch_sink);
+        Ok(())
+    }
+
+    async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> anyhow::Result<()> {
+        for ddl_data in data.iter() {
+            log_info!("sink ddl: {}", ddl_data.query);
+            let query = sqlx::query(&ddl_data.query);
+            query.execute(&self.conn_pool).await?;
+        }
         Ok(())
     }
 }
