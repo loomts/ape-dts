@@ -1,5 +1,4 @@
 use anyhow::bail;
-use dt_common::meta::mysql::mysql_col_type::MysqlColType;
 use dt_common::utils::redis_util::RedisUtil;
 use dt_common::{
     config::{sinker_config::SinkerConfig, task_config::TaskConfig},
@@ -157,15 +156,6 @@ impl RdbRedisTestRunner {
                 for (col, db_v) in row_data.after.unwrap() {
                     // check redis key exists
                     assert!(redis_kvs.contains_key(&col));
-
-                    // TODO
-                    // ignore enum/set columns since for mysql: we get integer in binlog, but string by db select
-                    if matches!(tb_meta.col_type_map.get(&col), Some(MysqlColType::Enum))
-                        || matches!(tb_meta.col_type_map.get(&col), Some(MysqlColType::Set))
-                    {
-                        continue;
-                    }
-
                     // check redis value = db value
                     if let Value::Data(v) = redis_kvs.get(&col).unwrap() {
                         let redis_v_str = String::from_utf8(v.clone()).unwrap();

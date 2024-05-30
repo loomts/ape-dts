@@ -7,6 +7,7 @@ use anyhow::Context;
 use dt_common::{
     config::{
         config_enums::{ConflictPolicyEnum, DbType},
+        s3_config::S3Config,
         sinker_config::SinkerConfig,
         task_config::TaskConfig,
     },
@@ -29,6 +30,7 @@ use dt_connector::{
     rdb_router::RdbRouter,
     sinker::{
         dummy_sinker::DummySinker,
+        foxlake::foxlake_sinker::FoxlakeSinker,
         kafka::kafka_sinker::KafkaSinker,
         mongo::{mongo_checker::MongoChecker, mongo_sinker::MongoSinker},
         mysql::{
@@ -44,6 +46,8 @@ use dt_connector::{
 };
 use kafka::producer::{Producer, RequiredAcks};
 use reqwest::{redirect::Policy, Url};
+use rusoto_core::Region;
+use rusoto_s3::S3Client;
 
 use super::task_util::TaskUtil;
 
@@ -276,6 +280,23 @@ impl SinkerUtil {
                 )?;
                 Self::create_sql_sinker(task_config, &router, parallel_size, *reverse, monitor)
                     .await?
+            }
+
+            SinkerConfig::Foxlake {
+                url,
+                batch_size,
+                s3_config,
+            } => {
+                Self::create_foxlake_sinker(
+                    url,
+                    log_level,
+                    task_config,
+                    parallel_size,
+                    *batch_size,
+                    s3_config,
+                    monitor,
+                )
+                .await?
             }
         };
         Ok(sinkers)
@@ -682,6 +703,48 @@ impl SinkerUtil {
                 router: router.clone(),
                 reverse,
                 monitor: monitor.clone(),
+            };
+            sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
+        }
+        Ok(sub_sinkers)
+    }
+
+    async fn create_foxlake_sinker<'a>(
+        url: &str,
+        log_level: &str,
+        task_config: &TaskConfig,
+        parallel_size: usize,
+        batch_size: usize,
+        s3_config: &S3Config,
+        monitor: Arc<Mutex<Monitor>>,
+    ) -> anyhow::Result<Sinkers> {
+        let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(log_level);
+        let conn_pool =
+            TaskUtil::create_mysql_conn_pool(url, parallel_size as u32 * 2, enable_sqlx_log)
+                .await?;
+
+        let mut sub_sinkers: Sinkers = Vec::new();
+        for _ in 0..parallel_size {
+            let meta_manager = Self::get_extractor_meta_manager(task_config)
+                .await?
+                .unwrap();
+
+            let region = Region::from_str(&s3_config.region).unwrap();
+            let credentials = rusoto_credential::StaticProvider::new_minimal(
+                s3_config.access_key.to_owned(),
+                s3_config.secret_key.to_owned(),
+            );
+            let s3_client =
+                S3Client::new_with(rusoto_core::HttpClient::new().unwrap(), credentials, region);
+
+            let sinker = FoxlakeSinker {
+                extract_type: task_config.extractor_basic.extract_type.clone(),
+                meta_manager,
+                batch_size,
+                s3_config: s3_config.clone(),
+                s3_client,
+                monitor: monitor.clone(),
+                conn_pool: conn_pool.clone(),
             };
             sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
         }

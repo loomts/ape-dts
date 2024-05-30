@@ -10,5 +10,6 @@ pub mod processor_config;
 pub mod resumer_config;
 pub mod router_config;
 pub mod runtime_config;
+pub mod s3_config;
 pub mod sinker_config;
 pub mod task_config;

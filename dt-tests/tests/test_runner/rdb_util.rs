@@ -30,7 +30,7 @@ impl RdbUtil {
         );
 
         let mut query = sqlx::query(&sql);
-        if *db_type == DbType::StarRocks {
+        if *db_type == DbType::StarRocks || *db_type == DbType::Foxlake {
             query = query.disable_arguments();
         }
         let mut rows = query.fetch(conn_pool);

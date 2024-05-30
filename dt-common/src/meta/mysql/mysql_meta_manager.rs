@@ -26,6 +26,8 @@ const COLUMN_TYPE: &str = "COLUMN_TYPE";
 const DATA_TYPE: &str = "DATA_TYPE";
 const CHARACTER_MAXIMUM_LENGTH: &str = "CHARACTER_MAXIMUM_LENGTH";
 const CHARACTER_SET_NAME: &str = "CHARACTER_SET_NAME";
+const NUMERIC_PRECISION: &str = "NUMERIC_PRECISION";
+const NUMERIC_SCALE: &str = "NUMERIC_SCALE";
 
 impl MysqlMetaManager {
     pub fn new(conn_pool: Pool<MySql>) -> Self {
@@ -120,12 +122,12 @@ impl MysqlMetaManager {
         }
 
         let sql = if db_type == &DbType::Mysql {
-            format!("SELECT {}, {}, {}, {}, {} FROM information_schema.columns WHERE table_schema = ? AND table_name = ?", 
-                COLUMN_NAME, COLUMN_TYPE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_SET_NAME)
+            format!("SELECT {}, {}, {}, {}, {}, {}, {} FROM information_schema.columns WHERE table_schema = ? AND table_name = ?", 
+                COLUMN_NAME, COLUMN_TYPE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_SET_NAME, NUMERIC_PRECISION, NUMERIC_SCALE)
         } else {
             // starrocks
-            format!("SELECT {}, {}, {}, {}, {} FROM information_schema.columns WHERE table_schema = '{}' AND table_name = '{}'", 
-                COLUMN_NAME, COLUMN_TYPE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_SET_NAME, &schema, &tb)
+            format!("SELECT {}, {}, {}, {}, {}, {}, {} FROM information_schema.columns WHERE table_schema = '{}' AND table_name = '{}'", 
+                COLUMN_NAME, COLUMN_TYPE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_SET_NAME, NUMERIC_PRECISION, NUMERIC_SCALE, &schema, &tb)
         };
 
         let mut rows = if db_type == &DbType::Mysql {
@@ -234,13 +236,61 @@ impl MysqlMetaManager {
             "tinyblob" | "mediumblob" | "longblob" | "blob" => MysqlColType::Blob,
             "float" => MysqlColType::Float,
             "double" => MysqlColType::Double,
-            "decimal" => MysqlColType::Decimal,
+
+            "decimal" => {
+                let precision: u32 = row.try_get(NUMERIC_PRECISION).unwrap();
+                let scale: u32 = row.try_get(NUMERIC_SCALE).unwrap();
+                MysqlColType::Decimal { precision, scale }
+            }
+
+            "enum" => {
+                // enum('x-small','small','medium','large','x-large')
+                let column_type: String = row.try_get(COLUMN_TYPE).unwrap();
+                let enum_str = column_type
+                    .trim_start_matches("enum(")
+                    .trim_end_matches(')');
+                let enum_str_items: Vec<String> = enum_str
+                    .split(',')
+                    .map(|i| {
+                        i.trim_start_matches('\'')
+                            .trim_end_matches('\'')
+                            .to_string()
+                    })
+                    .collect();
+                let mut items = HashMap::new();
+                let mut key = 1;
+                for str in enum_str_items {
+                    items.insert(key, str);
+                    key += 1;
+                }
+                MysqlColType::Enum { items }
+            }
+
+            "set" => {
+                // set('a','b','c','d','e')
+                let column_type: String = row.try_get(COLUMN_TYPE).unwrap();
+                let enum_str = column_type.trim_start_matches("set(").trim_end_matches(')');
+                let enum_str_items: Vec<String> = enum_str
+                    .split(',')
+                    .map(|i| {
+                        i.trim_start_matches('\'')
+                            .trim_end_matches('\'')
+                            .to_string()
+                    })
+                    .collect();
+                let mut items = HashMap::new();
+                let mut key = 1;
+                for str in enum_str_items {
+                    items.insert(key, str);
+                    key <<= 1;
+                }
+                MysqlColType::Set { items }
+            }
+
             "datetime" => MysqlColType::DateTime,
             "date" => MysqlColType::Date,
             "time" => MysqlColType::Time,
             "year" => MysqlColType::Year,
-            "enum" => MysqlColType::Enum,
-            "set" => MysqlColType::Set,
             "bit" => MysqlColType::Bit,
             "json" => MysqlColType::Json,
 
@@ -261,7 +311,14 @@ impl MysqlMetaManager {
         // with A expression, error will throw for mysql 8.0: ColumnDecode { index: "\"CHARACTER_MAXIMUM_LENGTH\"", source: "mismatched types; Rust type `u64` (as SQL type `BIGINT UNSIGNED`) is not compatible with SQL type `BIGINT`" }'
         // with B expression, error will throw for mysql 5.7: ColumnDecode { index: "\"CHARACTER_MAXIMUM_LENGTH\"", source: "mismatched types; Rust type `i64` (as SQL type `BIGINT`) is not compatible with SQL type `BIGINT UNSIGNED`" }'
         // no need to consider versions before 5.*
-        if db_type == &DbType::Mysql && version.starts_with("5.") {
+        let is_u64 = match *db_type {
+            DbType::Mysql => version.starts_with("5."),
+            DbType::StarRocks => false,
+            DbType::Foxlake => true,
+            _ => false,
+        };
+
+        if is_u64 {
             let length: u64 = row.try_get(CHARACTER_MAXIMUM_LENGTH).unwrap();
             Ok(length)
         } else {
@@ -345,7 +402,7 @@ impl MysqlMetaManager {
         let sql = "SELECT VERSION()";
         let mut rows = sqlx::query(sql).disable_arguments().fetch(&self.conn_pool);
         if let Some(row) = rows.try_next().await.unwrap() {
-            let version: String = row.try_get(0)?;
+            let version: String = row.get_unchecked(0);
             self.version = version.trim().into();
             return Ok(());
         }

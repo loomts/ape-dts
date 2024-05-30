@@ -182,8 +182,19 @@ impl MysqlColValueConvertor {
             },
 
             ColumnValue::Bit(v) => ColValue::Bit(v),
-            ColumnValue::Set(v) => ColValue::Set(v),
-            ColumnValue::Enum(v) => ColValue::Enum(v),
+
+            ColumnValue::Set(v) => match col_type {
+                MysqlColType::Set { items } => ColValue::Set2(items.get(&v).unwrap().to_owned()),
+                // should never happen
+                _ => ColValue::Set(v),
+            },
+
+            ColumnValue::Enum(v) => match col_type {
+                MysqlColType::Enum { items } => ColValue::Enum2(items.get(&v).unwrap().to_owned()),
+                // should never happen
+                _ => ColValue::Enum(v),
+            },
+
             ColumnValue::Json(v) => {
                 let v = JsonBinary::parse_as_string(&v)?;
                 ColValue::Json2(v)
@@ -241,7 +252,7 @@ impl MysqlColValueConvertor {
                 Err(_) => ColValue::None,
             },
 
-            MysqlColType::Decimal => ColValue::Decimal(value_str),
+            MysqlColType::Decimal { .. } => ColValue::Decimal(value_str),
             MysqlColType::Time => ColValue::Time(value_str),
             MysqlColType::Date => ColValue::Date(value_str),
             MysqlColType::DateTime => ColValue::DateTime(value_str),
@@ -263,8 +274,8 @@ impl MysqlColValueConvertor {
                 Err(_) => ColValue::None,
             },
 
-            MysqlColType::Set => ColValue::String(value_str),
-            MysqlColType::Enum => ColValue::String(value_str),
+            MysqlColType::Set { .. } => ColValue::String(value_str),
+            MysqlColType::Enum { .. } => ColValue::String(value_str),
 
             MysqlColType::Json => ColValue::Json2(value_str),
 
@@ -339,40 +350,56 @@ impl MysqlColValueConvertor {
                 let value: f64 = row.try_get(col)?;
                 return Ok(ColValue::Double(value));
             }
-            MysqlColType::Decimal => {
+            MysqlColType::Decimal { .. } => {
                 let value: String = row.get_unchecked(col);
                 return Ok(ColValue::Decimal(value));
             }
-            MysqlColType::Time => {
-                let value: Vec<u8> = row.get_unchecked(col);
-                return Self::parse_time(value);
-            }
-            MysqlColType::Date => {
-                if *db_type == DbType::StarRocks {
+            MysqlColType::Time => match db_type {
+                DbType::Foxlake => {
+                    let value: Vec<u8> = row.get_unchecked(col);
+                    let str: String = String::from_utf8_lossy(&value).to_string();
+                    return Ok(ColValue::Time(str));
+                }
+                _ => {
+                    let value: Vec<u8> = row.get_unchecked(col);
+                    return Self::parse_time(value);
+                }
+            },
+            MysqlColType::Date => match db_type {
+                DbType::StarRocks | DbType::Foxlake => {
                     let value: Vec<u8> = row.get_unchecked(col);
                     let str: String = String::from_utf8_lossy(&value).to_string();
                     return Ok(ColValue::Date(str));
-                } else {
+                }
+                _ => {
                     let value: Vec<u8> = row.get_unchecked(col);
                     return Self::parse_date(value);
                 }
-            }
-            MysqlColType::DateTime => {
-                if *db_type == DbType::StarRocks {
+            },
+            MysqlColType::DateTime => match db_type {
+                DbType::StarRocks | DbType::Foxlake => {
                     let value: Vec<u8> = row.get_unchecked(col);
                     let str: String = String::from_utf8_lossy(&value).to_string();
                     return Ok(ColValue::DateTime(str));
-                } else {
+                }
+                _ => {
                     let value: Vec<u8> = row.get_unchecked(col);
                     return Self::parse_datetime(value);
                 }
-            }
-            MysqlColType::Timestamp { timezone_offset: _ } => {
-                let value: Vec<u8> = row.get_unchecked(col);
-                return Self::parse_timestamp(value);
-            }
+            },
+            MysqlColType::Timestamp { timezone_offset: _ } => match db_type {
+                DbType::Foxlake => {
+                    let value: Vec<u8> = row.get_unchecked(col);
+                    let str: String = String::from_utf8_lossy(&value).to_string();
+                    return Ok(ColValue::Timestamp(str));
+                }
+                _ => {
+                    let value: Vec<u8> = row.get_unchecked(col);
+                    return Self::parse_timestamp(value);
+                }
+            },
             MysqlColType::Year => {
-                let value: u16 = row.try_get(col)?;
+                let value: u16 = row.get_unchecked(col);
                 return Ok(ColValue::Year(value));
             }
             MysqlColType::String {
@@ -398,11 +425,11 @@ impl MysqlColValueConvertor {
                 let value: u64 = row.try_get(col)?;
                 return Ok(ColValue::Bit(value));
             }
-            MysqlColType::Set => {
+            MysqlColType::Set { .. } => {
                 let value: String = row.try_get(col)?;
                 return Ok(ColValue::Set2(value));
             }
-            MysqlColType::Enum => {
+            MysqlColType::Enum { .. } => {
                 let value: String = row.try_get(col)?;
                 return Ok(ColValue::Enum2(value));
             }

@@ -19,6 +19,8 @@ pub enum DbType {
     Redis,
     #[strum(serialize = "starrocks")]
     StarRocks,
+    #[strum(serialize = "foxlake")]
+    Foxlake,
 }
 
 #[derive(Display, EnumString, IntoStaticStr, Debug, Clone)]

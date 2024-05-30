@@ -515,8 +515,8 @@ impl RdbQueryBuilder<'_> {
             | MysqlColType::Binary { .. }
             | MysqlColType::VarBinary { .. }
             | MysqlColType::Json => true,
-            MysqlColType::Enum => !matches!(col_value, ColValue::Enum(_)),
-            MysqlColType::Set => !matches!(col_value, ColValue::Set(_)),
+            MysqlColType::Enum { .. } => !matches!(col_value, ColValue::Enum(_)),
+            MysqlColType::Set { .. } => !matches!(col_value, ColValue::Set(_)),
             _ => false,
         };
 

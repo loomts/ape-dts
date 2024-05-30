@@ -159,7 +159,8 @@ impl RdbTestRunner {
             SinkerConfig::Mysql { url, .. }
             | SinkerConfig::MysqlCheck { url, .. }
             | SinkerConfig::MysqlStruct { url, .. }
-            | SinkerConfig::Starrocks { url, .. } => {
+            | SinkerConfig::Starrocks { url, .. }
+            | SinkerConfig::Foxlake { url, .. } => {
                 dst_url = url.clone();
             }
 
@@ -441,6 +442,18 @@ impl RdbTestRunner {
                 };
 
                 let dst_col_value = dst_col_values.get(dst_col).unwrap();
+
+                // TODO
+                // issue: https://github.com/apecloud/foxlake/issues/2108
+                // sqlx will execute: "SET time_zone='+00:00',NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;"
+                // to initialize each connection.
+                // but it doesn't work on Foxlake
+                if matches!(self.base.get_config().sinker, SinkerConfig::Foxlake { .. })
+                    && matches!(dst_col_value, ColValue::Timestamp(..))
+                {
+                    continue;
+                }
+
                 if Self::compare_col_value(src_col_value, dst_col_value, &src_db_type, &dst_db_type)
                 {
                     continue;
