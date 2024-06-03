@@ -38,3 +38,17 @@ UPDATE test_db_1.numeric_table SET f_1=0, f_2=0, f_3=0, f_4=0, f_5=0, f_6=0, f_7
 UPDATE test_db_1.numeric_table SET f_1=0, f_2=-32768, f_3=0, f_4=-8388608, f_5=0, f_6=-2147483648, f_7=0, f_8=-9223372036854775808, f_9=0 WHERE f_0=0;
 
 DELETE FROM test_db_1.numeric_table;
+
+-- for value 0 (decimal(47,25)), mysql: 0.0000000000000000000000000, foxlake: 0E-25
+-- INSERT INTO test_db_1.big_decimal_table VALUES(0, 0);
+INSERT INTO test_db_1.big_decimal_table VALUES(1, -0.9);
+INSERT INTO test_db_1.big_decimal_table VALUES(2, -9000000000000000000000.0000000000000000000000009);
+INSERT INTO test_db_1.big_decimal_table VALUES(3, 0.9);
+INSERT INTO test_db_1.big_decimal_table VALUES(4, 9000000000000000000000.0000000000000000000000009);
+
+UPDATE test_db_1.big_decimal_table SET f_1 = -9000000000000000000000.0000000000000000000000009 WHERE f_0 = 1;
+UPDATE test_db_1.big_decimal_table SET f_1 = 0.9 WHERE f_0 = 2;
+UPDATE test_db_1.big_decimal_table SET f_1 = 9000000000000000000000.0000000000000000000000009 WHERE f_0 = 3;
+UPDATE test_db_1.big_decimal_table SET f_1 = -0.9 WHERE f_0 = 4;
+
+DELETE FROM test_db_1.big_decimal_table;

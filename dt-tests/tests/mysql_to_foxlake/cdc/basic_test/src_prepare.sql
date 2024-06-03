@@ -7,3 +7,5 @@ CREATE TABLE test_db_1.one_pk_no_uk ( f_0 tinyint, f_1 smallint DEFAULT NULL, f_
 CREATE TABLE test_db_1.timestamp_table ( f_0 tinyint, f_1 timestamp(6) NULL DEFAULT NULL, f_2 timestamp(3) NULL DEFAULT NULL, PRIMARY KEY (f_0));
 
 CREATE TABLE test_db_1.numeric_table ( f_0 tinyint, f_1 tinyint unsigned, f_2 smallint, f_3 smallint unsigned, f_4 mediumint, f_5 mediumint unsigned, f_6 int, f_7 int unsigned, f_8 bigint, f_9 bigint unsigned, PRIMARY KEY(f_0));
+
+CREATE TABLE test_db_1.big_decimal_table ( f_0 tinyint, f_1 decimal(47,25) DEFAULT NULL, PRIMARY KEY(f_0));

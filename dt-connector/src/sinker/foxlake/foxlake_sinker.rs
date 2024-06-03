@@ -2,9 +2,18 @@ use anyhow::Context;
 use async_trait::async_trait;
 use chrono::{DateTime, Datelike, Timelike, Utc};
 use dt_common::{
-    config::{config_enums::ExtractType, s3_config::S3Config}, log_info, meta::{
-        col_value::ColValue, ddl_data::DdlData, mysql::{mysql_col_type::MysqlColType, mysql_tb_meta::MysqlTbMeta}, rdb_meta_manager::RdbMetaManager, row_data::RowData, row_type::RowType
-    }, monitor::monitor::Monitor, utils::time_util::TimeUtil
+    config::{config_enums::ExtractType, s3_config::S3Config},
+    log_info,
+    meta::{
+        col_value::ColValue,
+        ddl_data::DdlData,
+        mysql::{mysql_col_type::MysqlColType, mysql_tb_meta::MysqlTbMeta},
+        rdb_meta_manager::RdbMetaManager,
+        row_data::RowData,
+        row_type::RowType,
+    },
+    monitor::monitor::Monitor,
+    utils::time_util::TimeUtil,
 };
 use orc_format::{
     schema::{Field, Schema},
@@ -21,6 +30,8 @@ use std::{
 use uuid::Uuid;
 
 use crate::{call_batch_fn, Sinker};
+
+use super::{decimal_uitil::DecimalUtil, unicode_util::UnicodeUtil};
 
 pub struct FoxlakeSinker {
     pub batch_size: usize,
@@ -233,6 +244,19 @@ impl FoxlakeSinker {
                                 field_data.write(&bit)
                             }
 
+                            Some(ColValue::Decimal(v)) => match tb_meta.get_col_type(col)? {
+                                MysqlColType::Decimal { precision, scale } => {
+                                    let latin1_data = DecimalUtil::string_to_mysql_binlog(
+                                        v,
+                                        *precision as usize,
+                                        *scale as usize,
+                                    )?;
+                                    let utf8_data = UnicodeUtil::latin1_to_utf8(&latin1_data);
+                                    field_data.write(&utf8_data)
+                                }
+                                _ => field_data.write_null(),
+                            },
+
                             _ => field_data.write_null(),
                         };
                     }
@@ -297,7 +321,14 @@ impl FoxlakeSinker {
 
             MysqlColType::Float => Schema::Float,
             MysqlColType::Double => Schema::Double,
-            MysqlColType::Decimal { precision, scale } => Schema::Decimal(precision, scale),
+            MysqlColType::Decimal { precision, scale } => {
+                // 2^127 > 10^38
+                if precision > 38 {
+                    Schema::Binary
+                } else {
+                    Schema::Decimal(precision, scale)
+                }
+            }
 
             MysqlColType::Year => Schema::Long,
             MysqlColType::Time
