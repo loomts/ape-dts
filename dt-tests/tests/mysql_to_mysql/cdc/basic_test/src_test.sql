@@ -58,6 +58,19 @@ INSERT INTO test_db_1.numeric_table VALUES(127, 255, 32767, 65535, 8388607, 1677
 -- zero
 INSERT INTO test_db_1.numeric_table VALUES(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
+-- https://dev.mysql.com/doc/refman/8.4/en/datetime.html
+-- https://dev.mysql.com/doc/refman/8.4/en/time.html
+-- https://dev.mysql.com/doc/refman/8.4/en/year.html
+INSERT INTO test_db_1.date_time_table VALUES(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+-- min for each col
+-- the min value for time(6) is -838:59:59, but sqlx does not support negative time
+INSERT INTO test_db_1.date_time_table VALUES(2, '1000-01-01 00:00:00', '1000-01-01 00:00:00.000000', '00:00:00', '00:00:00.000000', '1970-01-01 00:00:01', '1970-01-01 00:00:01.000000', '1000-01-01', 1901);
+-- max for each col
+INSERT INTO test_db_1.date_time_table VALUES(3, '9999-12-31 23:59:59', '9999-12-31 23:59:59.499999', '838:59:59', '838:59:59.000000', '2038-01-19 03:14:07', '2038-01-19 03:14:07.499999', '9999-12-31', 2155);
+-- zero
+INSERT INTO test_db_1.date_time_table VALUES(4, '1000-01-01 00:00:00', '1000-01-01 00:00:00.000000', '00:00:00', '00:00:00.000000', '1970-01-01 00:00:01', '1970-01-01 00:00:01.000000', '1000-01-01', 1901);
+
+
 UPDATE test_db_1.no_pk_no_uk SET f_1=20, f_2=30, f_3=40, f_4=50, f_5=654321.4321, f_6=4321.21, f_7=54321.321, f_8=3045, f_9='2021-02-01 04:05:06.654321', f_10='04:05:06.654321', f_11='2012-02-01', f_12=2021, f_13='2021-02-01 04:05:06.654321', f_14='1', f_15='2', f_16='3', f_17='4', f_18='5', f_19='6', f_20='7', f_21='8', f_22=x'ABCDEF0123456789', f_23=x'ABCDEF0123456789', f_24=x'ABCDEF0123456789', f_25=x'ABCDEF0123456789', f_26='small', f_27='b', f_28=NULL WHERE f_0=1;
 
 UPDATE test_db_1.one_pk_no_uk SET f_1=20, f_2=30, f_3=40, f_4=50, f_5=654321.4321, f_6=4321.21, f_7=54321.321, f_8=3045, f_9='2021-02-01 04:05:06.654321', f_10='04:05:06.654321', f_11='2012-02-01', f_12=2021, f_13='2021-02-01 04:05:06.654321', f_14='1', f_15='2', f_16='3', f_17='4', f_18='5', f_19='6', f_20='7', f_21='8', f_22=x'ABCDEF0123456789', f_23=x'ABCDEF0123456789', f_24=x'ABCDEF0123456789', f_25=x'ABCDEF0123456789', f_26='small', f_27='b', f_28=NULL WHERE f_0=1;
@@ -79,6 +92,11 @@ UPDATE test_db_1.numeric_table SET f_1=255, f_2=32767, f_3=65535, f_4=8388607, f
 UPDATE test_db_1.numeric_table SET f_1=0, f_2=0, f_3=0, f_4=0, f_5=0, f_6=0, f_7=0, f_8=0, f_9=0 WHERE f_0=127;
 UPDATE test_db_1.numeric_table SET f_1=0, f_2=-32768, f_3=0, f_4=-8388608, f_5=0, f_6=-2147483648, f_7=0, f_8=-9223372036854775808, f_9=0 WHERE f_0=0;
 
+UPDATE test_db_1.date_time_table SET f_1='1000-01-01 00:00:00', f_2='1000-01-01 00:00:00.000000', f_3='00:00:00', f_4='00:00:00.000000', f_5='1970-01-01 00:00:01', f_6='1970-01-01 00:00:01.000000', f_7='1000-01-01', f_8=1901 WHERE f_0 = 1;
+UPDATE test_db_1.date_time_table SET f_1='9999-12-31 23:59:59', f_2='9999-12-31 23:59:59.499999', f_3='838:59:59', f_4='838:59:59.000000', f_5='2038-01-19 03:14:07', f_6='2038-01-19 03:14:07.499999', f_7='9999-12-31', f_8=2155 WHERE f_0 = 2;
+UPDATE test_db_1.date_time_table SET f_1='1000-01-01 00:00:00', f_2='1000-01-01 00:00:00.000000', f_3='00:00:00', f_4='00:00:00.000000', f_5='1970-01-01 00:00:01', f_6='1970-01-01 00:00:01.000000', f_7='1000-01-01', f_8=1901 WHERE f_0 = 3;
+UPDATE test_db_1.date_time_table SET f_1=NULL, f_2=NULL, f_3=NULL, f_4=NULL, f_5=NULL, f_6=NULL, f_7=NULL, f_8=NULL WHERE f_0 = 4;
+
 DELETE FROM test_db_1.no_pk_no_uk;
 DELETE FROM test_db_1.one_pk_no_uk;
 DELETE FROM test_db_1.no_pk_one_uk;
@@ -86,3 +104,4 @@ DELETE FROM test_db_1.no_pk_multi_uk;
 DELETE FROM test_db_1.one_pk_multi_uk;
 DELETE FROM test_db_1.col_has_special_character_table;
 DELETE FROM test_db_1.numeric_table;
+DELETE FROM test_db_1.date_time_table;

@@ -7,7 +7,11 @@ use chrono::{TimeZone, Utc};
 use mysql_binlog_connector_rust::column::{
     column_value::ColumnValue, json::json_binary::JsonBinary,
 };
-use sqlx::{mysql::MySqlRow, Row};
+use sqlx::{
+    mysql::MySqlRow,
+    types::time::{Date, OffsetDateTime, PrimitiveDateTime, Time},
+    Row,
+};
 
 use crate::meta::{col_value::ColValue, mysql::mysql_col_type::MysqlColType};
 
@@ -361,8 +365,8 @@ impl MysqlColValueConvertor {
                     return Ok(ColValue::Time(str));
                 }
                 _ => {
-                    let value: Vec<u8> = row.get_unchecked(col);
-                    return Self::parse_time(value);
+                    let value: Time = row.try_get(col)?;
+                    return Ok(ColValue::Time(value.to_string()));
                 }
             },
             MysqlColType::Date => match db_type {
@@ -372,8 +376,8 @@ impl MysqlColValueConvertor {
                     return Ok(ColValue::Date(str));
                 }
                 _ => {
-                    let value: Vec<u8> = row.get_unchecked(col);
-                    return Self::parse_date(value);
+                    let value: Date = row.try_get(col)?;
+                    return Ok(ColValue::Date(value.to_string()));
                 }
             },
             MysqlColType::DateTime => match db_type {
@@ -383,8 +387,8 @@ impl MysqlColValueConvertor {
                     return Ok(ColValue::DateTime(str));
                 }
                 _ => {
-                    let value: Vec<u8> = row.get_unchecked(col);
-                    return Self::parse_datetime(value);
+                    let value: PrimitiveDateTime = row.try_get(col)?;
+                    return Ok(ColValue::DateTime(value.to_string()));
                 }
             },
             MysqlColType::Timestamp { timezone_offset: _ } => match db_type {
@@ -394,8 +398,12 @@ impl MysqlColValueConvertor {
                     return Ok(ColValue::Timestamp(str));
                 }
                 _ => {
-                    let value: Vec<u8> = row.get_unchecked(col);
-                    return Self::parse_timestamp(value);
+                    let value: OffsetDateTime = row.try_get(col)?;
+                    let timestamp = value.to_string();
+                    // we always set session.time_zone='+00:00' for connection
+                    return Ok(ColValue::Timestamp(
+                        timestamp.trim_end_matches(" +00:00:00").into(),
+                    ));
                 }
             },
             MysqlColType::Year => {

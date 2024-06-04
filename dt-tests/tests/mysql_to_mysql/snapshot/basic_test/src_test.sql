@@ -57,3 +57,15 @@ INSERT INTO test_db_1.numeric_table VALUES(-128, 0, -32768, 0, -8388608, 0, -214
 INSERT INTO test_db_1.numeric_table VALUES(127, 255, 32767, 65535, 8388607, 16777215, 2147483647, 4294967295, 9223372036854775807, 18446744073709551615);
 -- zero
 INSERT INTO test_db_1.numeric_table VALUES(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+
+-- https://dev.mysql.com/doc/refman/8.4/en/datetime.html
+-- https://dev.mysql.com/doc/refman/8.4/en/time.html
+-- https://dev.mysql.com/doc/refman/8.4/en/year.html
+INSERT INTO test_db_1.date_time_table VALUES(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+-- min for each col
+-- the min value for time(6) is -838:59:59, but sqlx does not support negative time
+INSERT INTO test_db_1.date_time_table VALUES(2, '1000-01-01 00:00:00', '1000-01-01 00:00:00.000000', '00:00:00', '00:00:00.000000', '1970-01-01 00:00:01', '1970-01-01 00:00:01.000000', '1000-01-01', 1901);
+-- max for each col
+INSERT INTO test_db_1.date_time_table VALUES(3, '9999-12-31 23:59:59', '9999-12-31 23:59:59.499999', '838:59:59', '838:59:59.000000', '2038-01-19 03:14:07', '2038-01-19 03:14:07.499999', '9999-12-31', 2155);
+-- zero
+INSERT INTO test_db_1.date_time_table VALUES(4, '1000-01-01 00:00:00', '1000-01-01 00:00:00.000000', '00:00:00', '00:00:00.000000', '1970-01-01 00:00:01', '1970-01-01 00:00:01.000000', '1000-01-01', 1901);
