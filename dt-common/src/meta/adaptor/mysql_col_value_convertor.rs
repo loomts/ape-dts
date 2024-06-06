@@ -1,17 +1,13 @@
-use std::io::{Cursor, Seek, SeekFrom};
+use std::io::Cursor;
 
-use crate::{config::config_enums::DbType, error::Error};
+use crate::{config::config_enums::DbType, error::Error, meta::time::dt_utc_time::DtNaiveTime};
 use anyhow::bail;
 use byteorder::{LittleEndian, ReadBytesExt};
 use chrono::{TimeZone, Utc};
 use mysql_binlog_connector_rust::column::{
     column_value::ColumnValue, json::json_binary::JsonBinary,
 };
-use sqlx::{
-    mysql::MySqlRow,
-    types::time::{Date, OffsetDateTime, PrimitiveDateTime, Time},
-    Row,
-};
+use sqlx::{mysql::MySqlRow, types::BigDecimal, Row};
 
 use crate::meta::{col_value::ColValue, mysql::mysql_col_type::MysqlColType};
 
@@ -19,13 +15,33 @@ pub struct MysqlColValueConvertor {}
 
 impl MysqlColValueConvertor {
     pub fn parse_time(buf: Vec<u8>) -> anyhow::Result<ColValue> {
-        // for: 13:14:15.456, the result buf is [12, 0, 0, 0, 0, 0, 13, 14, 15, 64, 245, 6, 0]
+        // for: 13:14:15.456, buf: [12, 0, 0, 0, 0, 0, 13, 14, 15, 64, 245, 6, 0]
+        // for: -838:59:59, buf: [8, 1, 34, 0, 0, 0, 22, 59, 59]
+
+        // https://mariadb.com/kb/en/resultset-row/#timestamp-binary-encoding
+        //  int<1> data length: 0 for special '00:00:00' value, 8 without fractional seconds, 12 with fractional seconds
+        // if data length > 0
+        // int<1> 0 for positive time, 1 for negative time
+        // int<4> days
+        // int<1> hours
+        // int<1> minutes
+        // int<1> seconds
+        // if data length > 8
+        // int<4> microseconds
+
         let mut cursor = Cursor::new(buf);
         let length = cursor.read_u8()? as usize;
-        // TODO: why there are 5 zero bytes before hour?
-        cursor.seek(SeekFrom::Current(5))?;
-        let time = Self::parese_time_fields(&mut cursor, length - 5)?;
-        Ok(ColValue::Time(time))
+        let time = if length == 0 {
+            DtNaiveTime::default()
+        } else {
+            let is_negative = cursor.read_u8()? != 0;
+            let day = cursor.read_u32::<LittleEndian>()?;
+            let mut time = Self::parese_time_fields(&mut cursor, length - 5)?;
+            time.hour += day * 24;
+            time.is_negative = is_negative;
+            time
+        };
+        Ok(ColValue::Time(time.to_string()))
     }
 
     pub fn parse_date(buf: Vec<u8>) -> anyhow::Result<ColValue> {
@@ -70,28 +86,19 @@ impl MysqlColValueConvertor {
         Ok(format!("{}-{:02}-{:02}", year, month, day))
     }
 
-    fn parese_time_fields(cursor: &mut Cursor<Vec<u8>>, length: usize) -> anyhow::Result<String> {
-        let mut hour = 0;
-        let mut minute = 0;
-        let mut second = 0;
-        if length >= 1 {
-            hour = cursor.read_u8()?;
-        }
-        if length >= 2 {
-            minute = cursor.read_u8()?;
-        }
-        if length >= 3 {
-            second = cursor.read_u8()?;
-        }
+    fn parese_time_fields(
+        cursor: &mut Cursor<Vec<u8>>,
+        length: usize,
+    ) -> anyhow::Result<DtNaiveTime> {
+        let mut time = DtNaiveTime::default();
+        time.hour = cursor.read_u8()? as u32;
+        time.minute = cursor.read_u8()? as u32;
+        time.second = cursor.read_u8()? as u32;
         if length >= 4 {
-            let micros = cursor.read_uint::<LittleEndian>(length - 3)?;
-            Ok(format!(
-                "{:02}:{:02}:{:02}.{:06}",
-                hour, minute, second, micros
-            ))
-        } else {
-            Ok(format!("{:02}:{:02}:{:02}", hour, minute, second))
+            let microsecond = cursor.read_uint::<LittleEndian>(length - 3)?;
+            time.microsecond = microsecond as u32;
         }
+        Ok(time)
     }
 
     pub fn from_binlog(col_type: &MysqlColType, value: ColumnValue) -> anyhow::Result<ColValue> {
@@ -187,14 +194,39 @@ impl MysqlColValueConvertor {
 
             ColumnValue::Bit(v) => ColValue::Bit(v),
 
-            ColumnValue::Set(v) => match col_type {
-                MysqlColType::Set { items } => ColValue::Set2(items.get(&v).unwrap().to_owned()),
+            ColumnValue::Set(mut v) => match col_type {
+                MysqlColType::Set { items } => {
+                    if v == 0 {
+                        return Ok(ColValue::Set2(String::new()));
+                    }
+                    let mut matched_items = Vec::new();
+                    let mut pos = 0;
+                    while v > 0 {
+                        let mut i = v & 0x01;
+                        if i > 0 {
+                            i = i << pos;
+                            if let Some(item) = items.get(&i) {
+                                matched_items.push(item.to_owned());
+                            }
+                        }
+                        v = v >> 1;
+                        pos += 1;
+                    }
+                    ColValue::Set2(matched_items.join(","))
+                }
                 // should never happen
                 _ => ColValue::Set(v),
             },
 
             ColumnValue::Enum(v) => match col_type {
-                MysqlColType::Enum { items } => ColValue::Enum2(items.get(&v).unwrap().to_owned()),
+                MysqlColType::Enum { items } => {
+                    if let Some(item) = items.get(&v) {
+                        ColValue::Enum2(item.to_owned())
+                    } else {
+                        // should never happen
+                        ColValue::None
+                    }
+                }
                 // should never happen
                 _ => ColValue::Enum(v),
             },
@@ -355,8 +387,8 @@ impl MysqlColValueConvertor {
                 return Ok(ColValue::Double(value));
             }
             MysqlColType::Decimal { .. } => {
-                let value: String = row.get_unchecked(col);
-                return Ok(ColValue::Decimal(value));
+                let value: BigDecimal = row.get_unchecked(col);
+                return Ok(ColValue::Decimal(value.to_string()));
             }
             MysqlColType::Time => match db_type {
                 DbType::Foxlake => {
@@ -365,8 +397,10 @@ impl MysqlColValueConvertor {
                     return Ok(ColValue::Time(str));
                 }
                 _ => {
-                    let value: Time = row.try_get(col)?;
-                    return Ok(ColValue::Time(value.to_string()));
+                    // do not use chrono::NaiveTime since it ignores year
+                    // let value: chrono::NaiveTime = row.try_get(col)?;
+                    let buf: Vec<u8> = row.get_unchecked(col);
+                    return Ok(Self::parse_time(buf)?);
                 }
             },
             MysqlColType::Date => match db_type {
@@ -376,8 +410,8 @@ impl MysqlColValueConvertor {
                     return Ok(ColValue::Date(str));
                 }
                 _ => {
-                    let value: Date = row.try_get(col)?;
-                    return Ok(ColValue::Date(value.to_string()));
+                    let value: chrono::NaiveDate = row.try_get(col)?;
+                    return Ok(ColValue::Date(value.format("%Y-%m-%d").to_string()));
                 }
             },
             MysqlColType::DateTime => match db_type {
@@ -387,8 +421,10 @@ impl MysqlColValueConvertor {
                     return Ok(ColValue::DateTime(str));
                 }
                 _ => {
-                    let value: PrimitiveDateTime = row.try_get(col)?;
-                    return Ok(ColValue::DateTime(value.to_string()));
+                    let value: chrono::NaiveDateTime = row.try_get(col)?;
+                    return Ok(ColValue::DateTime(
+                        value.format("%Y-%m-%d %H:%M:%S%.f").to_string(),
+                    ));
                 }
             },
             MysqlColType::Timestamp { timezone_offset: _ } => match db_type {
@@ -398,11 +434,10 @@ impl MysqlColValueConvertor {
                     return Ok(ColValue::Timestamp(str));
                 }
                 _ => {
-                    let value: OffsetDateTime = row.try_get(col)?;
-                    let timestamp = value.to_string();
                     // we always set session.time_zone='+00:00' for connection
+                    let value: chrono::DateTime<Utc> = row.try_get(col)?;
                     return Ok(ColValue::Timestamp(
-                        timestamp.trim_end_matches(" +00:00:00").into(),
+                        value.format("%Y-%m-%d %H:%M:%S%.f").to_string(),
                     ));
                 }
             },

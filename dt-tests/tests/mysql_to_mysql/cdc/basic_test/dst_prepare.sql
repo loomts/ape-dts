@@ -26,3 +26,7 @@ CREATE TABLE test_db_1.date_time_table( f_0 tinyint,
     f_7 date DEFAULT NULL, 
     f_8 year DEFAULT NULL,
     PRIMARY KEY(f_0));
+
+CREATE TABLE test_db_1.set_table( f_0 tinyint,
+    f_1 SET('a','b','c','d','e'),
+    PRIMARY KEY(f_0));

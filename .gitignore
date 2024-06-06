@@ -31,3 +31,5 @@ Cargo.lock
 /**/.env.local
 
 /**/pkg/*
+
+/release

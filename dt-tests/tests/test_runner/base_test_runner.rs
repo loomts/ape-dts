@@ -154,10 +154,11 @@ impl BaseTestRunner {
                 return Vec::new();
             }
 
-            if db_type == &DbType::Mysql || db_type == &DbType::Pg {
-                Self::load_rdb_sqls(&full_sql_path)
-            } else {
-                Self::load_non_rdb_sqls(&full_sql_path)
+            match db_type {
+                DbType::Mysql | DbType::Pg | DbType::Foxlake | DbType::StarRocks => {
+                    Self::load_rdb_sqls(&full_sql_path)
+                }
+                _ => Self::load_non_rdb_sqls(&full_sql_path),
             }
         };
 

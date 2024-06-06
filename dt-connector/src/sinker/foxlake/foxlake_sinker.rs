@@ -11,6 +11,7 @@ use dt_common::{
         rdb_meta_manager::RdbMetaManager,
         row_data::RowData,
         row_type::RowType,
+        time::dt_utc_time::DtNaiveTime,
     },
     monitor::monitor::Monitor,
     utils::time_util::TimeUtil,
@@ -376,9 +377,8 @@ impl FoxlakeSinker {
 
     #[inline(always)]
     fn time_to_long(time: &str) -> anyhow::Result<i64> {
-        let timestamp = format!("1970-01-01 {}", time);
-        let datetime = TimeUtil::datetime_from_utc_str(&timestamp)?;
-        Ok(datetime.timestamp_micros())
+        let time = DtNaiveTime::from_str(time)?;
+        Ok(time.timestamp_micros())
     }
 
     #[inline(always)]

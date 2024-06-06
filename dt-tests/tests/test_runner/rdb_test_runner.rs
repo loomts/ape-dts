@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+};
 
 use chrono::{Duration, Utc};
 use dt_common::{
@@ -6,6 +9,7 @@ use dt_common::{
         config_enums::DbType, config_token_parser::ConfigTokenParser,
         extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
     },
+    meta::time::dt_utc_time::DtNaiveTime,
     utils::{sql_util::SqlUtil, time_util::TimeUtil},
 };
 
@@ -478,13 +482,34 @@ impl RdbTestRunner {
             if src_col_value.is_nan() && dst_col_value.is_nan() {
                 return true;
             }
+
+            if src_db_type == dst_db_type {
+                return false;
+            }
+
             // different databases support different column types,
             // for example: we use Year in mysql, but INT in StarRocks,
             // so try to compare after both converted to string.
-            if src_db_type != dst_db_type {
-                return src_col_value.to_option_string() == dst_col_value.to_option_string();
-            }
-            return false;
+            return match src_col_value {
+                // mysql 00:00:00 == foxlake 00:00:00.000000
+                ColValue::Time(_) => {
+                    DtNaiveTime::from_str(&src_col_value.to_string()).unwrap()
+                        == DtNaiveTime::from_str(&dst_col_value.to_string()).unwrap()
+                }
+                ColValue::Date(_) => {
+                    TimeUtil::date_from_str(&src_col_value.to_string()).unwrap()
+                        == TimeUtil::date_from_str(&dst_col_value.to_string()).unwrap()
+                }
+                ColValue::DateTime(_) => {
+                    TimeUtil::datetime_from_utc_str(&src_col_value.to_string()).unwrap()
+                        == TimeUtil::datetime_from_utc_str(&dst_col_value.to_string()).unwrap()
+                }
+                ColValue::Timestamp(_) => {
+                    TimeUtil::datetime_from_utc_str(&src_col_value.to_string()).unwrap()
+                        == TimeUtil::datetime_from_utc_str(&dst_col_value.to_string()).unwrap()
+                }
+                _ => src_col_value.to_option_string() == dst_col_value.to_option_string(),
+            };
         }
         true
     }
