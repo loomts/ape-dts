@@ -76,9 +76,13 @@ impl MysqlCreateTableStatement {
 
         // Todo: table partition; column visible, generated(information_schema.column.GENERATION_EXPRESSION)
         let mut sql = format!(
-            "CREATE TABLE `{}`.`{}` ({}{}) ENGINE={} ",
-            table.database_name, table.table_name, columns_sql, pk_str, table.engine_name
+            "CREATE TABLE `{}`.`{}` ({}{}) ",
+            table.database_name, table.table_name, columns_sql, pk_str
         );
+
+        if !table.engine_name.is_empty() {
+            sql = format!("{} ENGINE={} ", sql, table.engine_name);
+        }
 
         if !table.character_set.is_empty() {
             sql = format!("{} DEFAULT CHARSET={}", sql, table.character_set);

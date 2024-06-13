@@ -123,12 +123,12 @@ impl BaseExtractor {
         // binlog query.schema == empty, schema from DdlParser == db_1
         // case 3, execute: use db_1; create table db_2.tb_1(id int);
         // binlog query.schema == db_1, schema from DdlParser == db_2
-        let (ddl_type, schema, tb) = parse_result.unwrap();
-        ddl_data.ddl_type = ddl_type;
-        if let Some(schema) = schema {
+        let ddl = parse_result.unwrap();
+        ddl_data.ddl_type = ddl.ddl_type;
+        if let Some(schema) = ddl.schema {
             ddl_data.schema = schema;
         }
-        if let Some(tb) = tb {
+        if let Some(tb) = ddl.tb {
             ddl_data.tb = tb;
         }
 

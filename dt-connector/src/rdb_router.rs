@@ -50,6 +50,13 @@ impl RdbRouter {
         }
     }
 
+    pub fn get_db_map<'a>(&'a self, db: &'a str) -> &'a str {
+        if let Some(dst_db) = self.db_map.get(db) {
+            return dst_db;
+        }
+        db
+    }
+
     pub fn get_tb_map<'a>(&'a self, db: &'a str, tb: &'a str) -> (&'a str, &'a str) {
         if let Some((dst_db, dst_tb)) = self.tb_map.get(&(db.into(), tb.into())) {
             return (dst_db, dst_tb);

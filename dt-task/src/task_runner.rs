@@ -1,6 +1,8 @@
 use std::{
+    env,
     fs::{self, File},
     io::Read,
+    panic,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex, RwLock,
@@ -10,7 +12,6 @@ use std::{
 
 use anyhow::{bail, Context};
 use concurrent_queue::ConcurrentQueue;
-use dt_common::meta::{dt_data::DtItem, position::Position, row_type::RowType, syncer::Syncer};
 use dt_common::{
     config::{
         config_enums::DbType, config_token_parser::ConfigTokenParser,
@@ -21,6 +22,10 @@ use dt_common::{
     monitor::monitor::Monitor,
     rdb_filter::RdbFilter,
     utils::{sql_util::SqlUtil, time_util::TimeUtil},
+};
+use dt_common::{
+    log_error,
+    meta::{dt_data::DtItem, position::Position, row_type::RowType, syncer::Syncer},
 };
 use dt_connector::{
     data_marker::DataMarker,
@@ -62,6 +67,11 @@ impl TaskRunner {
         if enable_log4rs {
             self.init_log4rs()?;
         }
+
+        env::set_var("RUST_BACKTRACE", "1");
+        panic::set_hook(Box::new(|panic_info| {
+            log_error!("panic: {}", panic_info);
+        }));
 
         let db_type = &self.config.extractor_basic.db_type;
         let router = RdbRouter::from_config(&self.config.router, db_type)?;

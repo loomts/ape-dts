@@ -27,7 +27,7 @@ impl std::fmt::Display for DtNaiveTime {
 impl FromStr for DtNaiveTime {
     type Err = Error;
     fn from_str(str: &str) -> Result<Self, Self::Err> {
-        let is_negative = str.starts_with("-");
+        let is_negative = str.starts_with('-');
         let time_str = if is_negative { &str[1..] } else { str };
 
         let mut time = DtNaiveTime {
@@ -74,7 +74,7 @@ impl DtNaiveTime {
             * 1_000_000
             + self.microsecond as i64;
         if self.is_negative {
-            return -1 * value;
+            return -value;
         }
         value
     }

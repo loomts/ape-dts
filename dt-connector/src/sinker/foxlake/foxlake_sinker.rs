@@ -7,10 +7,14 @@ use dt_common::{
     meta::{
         col_value::ColValue,
         ddl_data::DdlData,
-        mysql::{mysql_col_type::MysqlColType, mysql_tb_meta::MysqlTbMeta},
-        rdb_meta_manager::RdbMetaManager,
+        ddl_type::DdlType,
+        mysql::{
+            mysql_col_type::MysqlColType, mysql_meta_manager::MysqlMetaManager,
+            mysql_tb_meta::MysqlTbMeta,
+        },
         row_data::RowData,
         row_type::RowType,
+        sql_parser::ddl_parser::DdlParser,
         time::dt_utc_time::DtNaiveTime,
     },
     monitor::monitor::Monitor,
@@ -23,25 +27,30 @@ use orc_format::{
 use rusoto_core::ByteStream;
 use rusoto_s3::{PutObjectRequest, S3Client, S3};
 use rust_decimal::Decimal;
-use sqlx::{MySql, Pool};
+use sqlx::{
+    mysql::{MySqlConnectOptions, MySqlPoolOptions},
+    MySql, Pool,
+};
 use std::{
     str::FromStr,
     sync::{Arc, Mutex},
 };
 use uuid::Uuid;
 
-use crate::{call_batch_fn, Sinker};
+use crate::{call_batch_fn, rdb_router::RdbRouter, Sinker};
 
 use super::{decimal_uitil::DecimalUtil, unicode_util::UnicodeUtil};
 
 pub struct FoxlakeSinker {
+    pub url: String,
     pub batch_size: usize,
-    pub meta_manager: RdbMetaManager,
+    pub meta_manager: MysqlMetaManager,
     pub monitor: Arc<Mutex<Monitor>>,
     pub s3_client: S3Client,
     pub s3_config: S3Config,
     pub conn_pool: Pool<MySql>,
     pub extract_type: ExtractType,
+    pub router: RdbRouter,
 }
 
 const CDC_ACTION: &str = "cdc_action";
@@ -60,9 +69,44 @@ impl Sinker for FoxlakeSinker {
 
     async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> anyhow::Result<()> {
         for ddl_data in data.iter() {
-            log_info!("sink ddl: {}", ddl_data.query);
-            let query = sqlx::query(&ddl_data.query);
-            query.execute(&self.conn_pool).await?;
+            let mut sql = ddl_data.query.clone();
+            // db mapping
+            let db = self.router.get_db_map(&ddl_data.schema);
+            if db != ddl_data.schema {
+                let mut parsed_ddl = DdlParser::parse(&ddl_data.query)?;
+                if parsed_ddl.schema.is_some() {
+                    parsed_ddl.schema = Some(db.to_string());
+                    sql = parsed_ddl.to_sql();
+                    log_info!(
+                        "sink ddl, origin sql: {}, mapped sql: {}",
+                        ddl_data.query,
+                        sql
+                    );
+                }
+            }
+
+            log_info!("sink ddl: {}", sql);
+            let query = sqlx::query(&sql);
+
+            // create a tmp connection with databse since sqlx conn pool does NOT support `USE db`
+            let mut conn_options = MySqlConnectOptions::from_str(&self.url)?;
+            if !db.is_empty() {
+                match ddl_data.ddl_type {
+                    DdlType::CreateDatabase | DdlType::DropDatabase | DdlType::AlterDatabase => {}
+                    _ => {
+                        conn_options = conn_options.database(db);
+                    }
+                }
+            }
+
+            let conn_pool = MySqlPoolOptions::new()
+                .max_connections(1)
+                .connect_with(conn_options)
+                .await?;
+            query.execute(&conn_pool).await?;
+            conn_pool.close().await;
+
+            self.meta_manager.invalidate_cache(db, &ddl_data.tb);
         }
         Ok(())
     }
@@ -77,9 +121,6 @@ impl FoxlakeSinker {
     ) -> anyhow::Result<()> {
         let tb_meta = self
             .meta_manager
-            .mysql_meta_manager
-            .as_mut()
-            .unwrap()
             .get_tb_meta_by_row_data(&data[0])
             .await?
             .to_owned();
@@ -401,8 +442,11 @@ impl FoxlakeSinker {
     fn get_log_dml_file(&self) -> String {
         // currently we do not get sequence from position
         let log_sequence = "0_0";
-        let file_name = format!("log_dml_{}_{}.orc", log_sequence, Uuid::new_v4());
-        format!("{}/{}", self.s3_config.root_dir, file_name)
+        let mut file_name = format!("log_dml_{}_{}.orc", log_sequence, Uuid::new_v4());
+        if !self.s3_config.root_dir.is_empty() {
+            file_name = format!("{}/{}", self.s3_config.root_dir, file_name);
+        }
+        file_name
     }
 
     async fn put_to_s3(&self, key: &str, data: Vec<u8>) -> anyhow::Result<()> {

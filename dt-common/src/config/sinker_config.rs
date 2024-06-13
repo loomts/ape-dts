@@ -85,6 +85,11 @@ pub enum SinkerConfig {
         s3_config: S3Config,
     },
 
+    FoxlakeStruct {
+        url: String,
+        conflict_policy: ConflictPolicyEnum,
+    },
+
     Sql {
         reverse: bool,
     },

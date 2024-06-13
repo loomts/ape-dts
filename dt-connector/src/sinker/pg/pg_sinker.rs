@@ -65,14 +65,19 @@ impl Sinker for PgSinker {
             let mut pool_options = PgPoolOptions::new().max_connections(1);
             let sql = format!("SET search_path = '{}';", ddl_data.schema);
 
-            if !ddl_data.schema.is_empty() && ddl_data.ddl_type != DdlType::CreateSchema {
-                pool_options = pool_options.after_connect(move |conn, _meta| {
-                    let sql = sql.clone();
-                    Box::pin(async move {
-                        conn.execute(sql.as_str()).await?;
-                        Ok(())
-                    })
-                });
+            if !ddl_data.schema.is_empty() {
+                match ddl_data.ddl_type {
+                    DdlType::CreateSchema | DdlType::DropSchema | DdlType::AlterSchema => {}
+                    _ => {
+                        pool_options = pool_options.after_connect(move |conn, _meta| {
+                            let sql = sql.clone();
+                            Box::pin(async move {
+                                conn.execute(sql.as_str()).await?;
+                                Ok(())
+                            })
+                        });
+                    }
+                }
             }
 
             let conn_pool = pool_options.connect_with(conn_options).await?;

@@ -65,11 +65,15 @@ impl RdbTestRunner {
         }
 
         if !dst_url.is_empty() {
-            if dst_db_type == DbType::Mysql {
-                dst_conn_pool_mysql =
-                    Some(TaskUtil::create_mysql_conn_pool(&dst_url, 1, false).await?);
-            } else {
-                dst_conn_pool_pg = Some(TaskUtil::create_pg_conn_pool(&dst_url, 1, false).await?);
+            match dst_db_type {
+                DbType::Mysql | DbType::Foxlake => {
+                    dst_conn_pool_mysql =
+                        Some(TaskUtil::create_mysql_conn_pool(&dst_url, 1, false).await?);
+                }
+                _ => {
+                    dst_conn_pool_pg =
+                        Some(TaskUtil::create_pg_conn_pool(&dst_url, 1, false).await?);
+                }
             }
         }
 
@@ -164,7 +168,8 @@ impl RdbTestRunner {
             | SinkerConfig::MysqlCheck { url, .. }
             | SinkerConfig::MysqlStruct { url, .. }
             | SinkerConfig::Starrocks { url, .. }
-            | SinkerConfig::Foxlake { url, .. } => {
+            | SinkerConfig::Foxlake { url, .. }
+            | SinkerConfig::FoxlakeStruct { url, .. } => {
                 dst_url = url.clone();
             }
 
@@ -579,9 +584,9 @@ impl RdbTestRunner {
             }
 
             let ddl = DdlParser::parse(&sql).unwrap();
-            if ddl.0 == DdlType::CreateTable {
-                let db = ddl.1.unwrap_or(PUBLIC.into());
-                let tb = ddl.2.unwrap();
+            if ddl.ddl_type == DdlType::CreateTable {
+                let db = ddl.schema.unwrap_or(PUBLIC.into());
+                let tb = ddl.tb.unwrap();
                 db_tbs.push((db, tb));
             }
         }

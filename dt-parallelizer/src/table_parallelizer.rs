@@ -39,9 +39,8 @@ impl Parallelizer for TableParallelizer {
         data: Vec<DdlData>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
     ) -> anyhow::Result<()> {
-        let sub_datas = Self::partition_ddl(data)?;
         self.base_parallelizer
-            .sink_ddl(sub_datas, sinkers, self.parallel_size, false)
+            .sink_ddl(vec![data], sinkers, 1, false)
             .await
     }
 }
@@ -56,20 +55,6 @@ impl TableParallelizer {
                 sub_data.push(row_data);
             } else {
                 sub_data_map.insert(full_tb, vec![row_data]);
-            }
-        }
-
-        Ok(sub_data_map.into_values().collect())
-    }
-
-    /// partition ddl vec into sub vecs by schema
-    pub fn partition_ddl(data: Vec<DdlData>) -> anyhow::Result<Vec<Vec<DdlData>>> {
-        let mut sub_data_map: HashMap<String, Vec<DdlData>> = HashMap::new();
-        for ddl in data {
-            if let Some(sub_data) = sub_data_map.get_mut(&ddl.schema) {
-                sub_data.push(ddl);
-            } else {
-                sub_data_map.insert(ddl.schema.clone(), vec![ddl]);
             }
         }
 

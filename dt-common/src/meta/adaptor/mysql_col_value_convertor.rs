@@ -86,6 +86,7 @@ impl MysqlColValueConvertor {
         Ok(format!("{}-{:02}-{:02}", year, month, day))
     }
 
+    #[allow(clippy::field_reassign_with_default)]
     fn parese_time_fields(
         cursor: &mut Cursor<Vec<u8>>,
         length: usize,
@@ -204,12 +205,12 @@ impl MysqlColValueConvertor {
                     while v > 0 {
                         let mut i = v & 0x01;
                         if i > 0 {
-                            i = i << pos;
+                            i <<= pos;
                             if let Some(item) = items.get(&i) {
                                 matched_items.push(item.to_owned());
                             }
                         }
-                        v = v >> 1;
+                        v >>= 1;
                         pos += 1;
                     }
                     ColValue::Set2(matched_items.join(","))
@@ -400,7 +401,7 @@ impl MysqlColValueConvertor {
                     // do not use chrono::NaiveTime since it ignores year
                     // let value: chrono::NaiveTime = row.try_get(col)?;
                     let buf: Vec<u8> = row.get_unchecked(col);
-                    return Ok(Self::parse_time(buf)?);
+                    return Self::parse_time(buf);
                 }
             },
             MysqlColType::Date => match db_type {

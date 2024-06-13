@@ -66,8 +66,13 @@ impl Sinker for MysqlSinker {
 
             // create a tmp connection with databse since sqlx conn pool does NOT support `USE db`
             let mut conn_options = MySqlConnectOptions::from_str(&self.url)?;
-            if !ddl_data.schema.is_empty() && ddl_data.ddl_type != DdlType::CreateDatabase {
-                conn_options = conn_options.database(&ddl_data.schema);
+            if !ddl_data.schema.is_empty() {
+                match ddl_data.ddl_type {
+                    DdlType::CreateDatabase | DdlType::DropDatabase | DdlType::AlterDatabase => {}
+                    _ => {
+                        conn_options = conn_options.database(&ddl_data.schema);
+                    }
+                }
             }
 
             let conn_pool = MySqlPoolOptions::new()
