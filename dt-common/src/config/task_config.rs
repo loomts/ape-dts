@@ -437,6 +437,7 @@ impl TaskConfig {
             ),
             batch_sink_interval_secs: loader.get_optional(PIPELINE, "batch_sink_interval_secs"),
             max_rps: loader.get_optional(PIPELINE, "max_rps"),
+            buffer_memory_mb: loader.get_optional(PIPELINE, "buffer_memory_mb"),
         }
     }
 

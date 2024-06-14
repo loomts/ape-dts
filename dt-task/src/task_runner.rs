@@ -11,7 +11,6 @@ use std::{
 };
 
 use anyhow::{bail, Context};
-use concurrent_queue::ConcurrentQueue;
 use dt_common::{
     config::{
         config_enums::DbType, config_token_parser::ConfigTokenParser,
@@ -19,13 +18,14 @@ use dt_common::{
     },
     error::Error,
     log_finished, log_info,
+    meta::dt_queue::DtQueue,
     monitor::monitor::Monitor,
     rdb_filter::RdbFilter,
     utils::{sql_util::SqlUtil, time_util::TimeUtil},
 };
 use dt_common::{
     log_error,
-    meta::{dt_data::DtItem, position::Position, row_type::RowType, syncer::Syncer},
+    meta::{position::Position, row_type::RowType, syncer::Syncer},
 };
 use dt_connector::{
     data_marker::DataMarker,
@@ -204,7 +204,12 @@ impl TaskRunner {
         snapshot_resumer: &SnapshotResumer,
         cdc_resumer: &CdcResumer,
     ) -> anyhow::Result<()> {
-        let buffer = Arc::new(ConcurrentQueue::bounded(self.config.pipeline.buffer_size));
+        let max_bytes = self.config.pipeline.buffer_memory_mb * 1024 * 1024;
+        let buffer = Arc::new(DtQueue::new(
+            self.config.pipeline.buffer_size,
+            max_bytes as i64,
+        ));
+
         let shut_down = Arc::new(AtomicBool::new(false));
         let syncer = Arc::new(Mutex::new(Syncer {
             received_position: Position::None,
@@ -309,7 +314,7 @@ impl TaskRunner {
 
     async fn create_pipeline(
         &self,
-        buffer: Arc<ConcurrentQueue<DtItem>>,
+        buffer: Arc<DtQueue>,
         shut_down: Arc<AtomicBool>,
         syncer: Arc<Mutex<Syncer>>,
         sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,

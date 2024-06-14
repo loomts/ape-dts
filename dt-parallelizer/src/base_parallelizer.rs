@@ -1,8 +1,8 @@
 use anyhow::bail;
-use concurrent_queue::ConcurrentQueue;
 use dt_common::meta::{
     ddl_data::DdlData,
     dt_data::{DtData, DtItem},
+    dt_queue::DtQueue,
     row_data::RowData,
 };
 use dt_common::monitor::counter::Counter;
@@ -20,7 +20,7 @@ pub struct BaseParallelizer {
 }
 
 impl BaseParallelizer {
-    pub async fn drain(&mut self, buffer: &ConcurrentQueue<DtItem>) -> anyhow::Result<Vec<DtItem>> {
+    pub async fn drain(&mut self, buffer: &DtQueue) -> anyhow::Result<Vec<DtItem>> {
         let mut data = Vec::new();
         while let Some(item) = self.poped_data.pop_front() {
             data.push(item);
@@ -28,7 +28,7 @@ impl BaseParallelizer {
 
         let mut record_size_counter = Counter::new(0, 0);
         // ddls and dmls should be drained seperately
-        while let Ok(item) = self.pop(buffer, &mut record_size_counter) {
+        while let Ok(item) = self.pop(buffer, &mut record_size_counter).await {
             if data.is_empty()
                 || (data[0].is_ddl() == item.is_ddl()
                     && data[0].data_origin_node == item.data_origin_node)
@@ -44,9 +44,9 @@ impl BaseParallelizer {
         Ok(data)
     }
 
-    pub fn pop(
+    pub async fn pop(
         &self,
-        buffer: &ConcurrentQueue<DtItem>,
+        buffer: &DtQueue,
         record_size_counter: &mut Counter,
     ) -> anyhow::Result<DtItem> {
         // rps limit

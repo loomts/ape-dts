@@ -2,9 +2,9 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::bail;
 use async_trait::async_trait;
-use concurrent_queue::ConcurrentQueue;
 use dt_common::meta::{
     dt_data::{DtData, DtItem},
+    dt_queue::DtQueue,
     redis::command::key_parser::KeyParser,
 };
 use dt_common::{error::Error, log_warn};
@@ -29,7 +29,7 @@ impl Parallelizer for RedisParallelizer {
         "RedisParallelizer".to_string()
     }
 
-    async fn drain(&mut self, buffer: &ConcurrentQueue<DtItem>) -> anyhow::Result<Vec<DtItem>> {
+    async fn drain(&mut self, buffer: &DtQueue) -> anyhow::Result<Vec<DtItem>> {
         self.base_parallelizer.drain(buffer).await
     }
 

@@ -2,8 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::Parallelizer;
 use async_trait::async_trait;
-use concurrent_queue::ConcurrentQueue;
-use dt_common::meta::{ddl_data::DdlData, dt_data::DtItem, row_data::RowData};
+use dt_common::meta::{ddl_data::DdlData, dt_data::DtItem, dt_queue::DtQueue, row_data::RowData};
 use dt_connector::Sinker;
 
 use super::base_parallelizer::BaseParallelizer;
@@ -19,7 +18,7 @@ impl Parallelizer for TableParallelizer {
         "TableParallelizer".to_string()
     }
 
-    async fn drain(&mut self, buffer: &ConcurrentQueue<DtItem>) -> anyhow::Result<Vec<DtItem>> {
+    async fn drain(&mut self, buffer: &DtQueue) -> anyhow::Result<Vec<DtItem>> {
         self.base_parallelizer.drain(buffer).await
     }
 

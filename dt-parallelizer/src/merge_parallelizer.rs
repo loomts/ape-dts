@@ -1,8 +1,8 @@
 use std::{cmp, sync::Arc};
 
 use async_trait::async_trait;
-use concurrent_queue::ConcurrentQueue;
 use dt_common::config::sinker_config::BasicSinkerConfig;
+use dt_common::meta::dt_queue::DtQueue;
 use dt_common::meta::{
     ddl_data::DdlData, dt_data::DtItem, rdb_meta_manager::RdbMetaManager, row_data::RowData,
     row_type::RowType,
@@ -47,7 +47,7 @@ impl Parallelizer for MergeParallelizer {
         "MergeParallelizer".to_string()
     }
 
-    async fn drain(&mut self, buffer: &ConcurrentQueue<DtItem>) -> anyhow::Result<Vec<DtItem>> {
+    async fn drain(&mut self, buffer: &DtQueue) -> anyhow::Result<Vec<DtItem>> {
         self.base_parallelizer.drain(buffer).await
     }
 

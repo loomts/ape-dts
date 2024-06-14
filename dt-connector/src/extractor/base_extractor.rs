@@ -4,12 +4,12 @@ use std::sync::{
 };
 
 use anyhow::bail;
-use concurrent_queue::ConcurrentQueue;
 
 use dt_common::{
     config::{config_enums::DbType, config_token_parser::ConfigTokenParser},
     error::Error,
     log_error, log_info, log_warn,
+    meta::dt_queue::DtQueue,
     utils::{sql_util::SqlUtil, time_util::TimeUtil},
 };
 use dt_common::{
@@ -29,7 +29,7 @@ use crate::{data_marker::DataMarker, rdb_router::RdbRouter};
 use super::extractor_monitor::ExtractorMonitor;
 
 pub struct BaseExtractor {
-    pub buffer: Arc<ConcurrentQueue<DtItem>>,
+    pub buffer: Arc<DtQueue>,
     pub router: RdbRouter,
     pub shut_down: Arc<AtomicBool>,
     pub monitor: ExtractorMonitor,
@@ -49,10 +49,6 @@ impl BaseExtractor {
         dt_data: DtData,
         position: Position,
     ) -> anyhow::Result<()> {
-        while self.buffer.is_full() {
-            TimeUtil::sleep_millis(1).await;
-        }
-
         if let Some(data_marker) = &mut self.data_marker {
             if dt_data.is_begin() || dt_data.is_commit() {
                 data_marker.reset();
@@ -91,8 +87,7 @@ impl BaseExtractor {
             position,
             data_origin_node,
         };
-        self.buffer.push(item)?;
-        Ok(())
+        self.buffer.push(item).await
     }
 
     pub async fn push_row(&mut self, row_data: RowData, position: Position) -> anyhow::Result<()> {

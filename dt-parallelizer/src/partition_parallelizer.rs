@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use concurrent_queue::ConcurrentQueue;
 use dt_common::meta::{
     ddl_data::DdlData,
     dt_data::{DtData, DtItem},
+    dt_queue::DtQueue,
     row_data::RowData,
 };
 use dt_common::monitor::counter::Counter;
@@ -30,10 +30,14 @@ impl Parallelizer for PartitionParallelizer {
         self.partitioner.close().await
     }
 
-    async fn drain(&mut self, buffer: &ConcurrentQueue<DtItem>) -> anyhow::Result<Vec<DtItem>> {
+    async fn drain(&mut self, buffer: &DtQueue) -> anyhow::Result<Vec<DtItem>> {
         let mut data = Vec::new();
         let mut record_size_counter = Counter::new(0, 0);
-        while let Ok(item) = self.base_parallelizer.pop(buffer, &mut record_size_counter) {
+        while let Ok(item) = self
+            .base_parallelizer
+            .pop(buffer, &mut record_size_counter)
+            .await
+        {
             match &item.dt_data {
                 DtData::Dml { row_data } => {
                     if self.parallel_size > 1

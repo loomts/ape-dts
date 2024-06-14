@@ -1,9 +1,9 @@
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
 
 use async_trait::async_trait;
-use concurrent_queue::ConcurrentQueue;
 use dt_common::{
     config::{config_enums::DbType, extractor_config::ExtractorConfig, task_config::TaskConfig},
+    meta::dt_queue::DtQueue,
     monitor::monitor::Monitor,
     rdb_filter::RdbFilter,
 };
@@ -73,7 +73,7 @@ impl Prechecker for RedisPrechecker {
             _ => 0,
         };
         let mut conn = RedisClient::new(&self.fetcher.url).await?;
-        let buffer = Arc::new(ConcurrentQueue::bounded(1));
+        let buffer = Arc::new(DtQueue::new(1, 0));
 
         let filter = RdbFilter::from_config(&self.task_config.filter, &DbType::Redis)?;
         let monitor = Arc::new(Mutex::new(Monitor::new("extractor", 1, 1)));

@@ -3,10 +3,9 @@ use std::{
     sync::{atomic::AtomicBool, Arc, Mutex},
 };
 
-use concurrent_queue::ConcurrentQueue;
 use dt_common::{
     config::{extractor_config::ExtractorConfig, task_config::TaskConfig},
-    meta::dt_data::DtItem,
+    meta::dt_queue::DtQueue,
     monitor::monitor::Monitor,
     rdb_filter::RdbFilter,
     time_filter::TimeFilter,
@@ -59,7 +58,7 @@ impl ExtractorUtil {
     pub async fn create_extractor(
         config: &TaskConfig,
         extractor_config: &ExtractorConfig,
-        buffer: Arc<ConcurrentQueue<DtItem>>,
+        buffer: Arc<DtQueue>,
         shut_down: Arc<AtomicBool>,
         syncer: Arc<Mutex<Syncer>>,
         monitor: Arc<Mutex<Monitor>>,

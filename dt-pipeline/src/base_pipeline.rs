@@ -7,10 +7,10 @@ use std::{
 };
 
 use async_trait::async_trait;
-use concurrent_queue::ConcurrentQueue;
 use dt_common::meta::{
     ddl_data::DdlData,
     dt_data::{DtData, DtItem},
+    dt_queue::DtQueue,
     position::Position,
     row_data::RowData,
     syncer::Syncer,
@@ -27,7 +27,7 @@ use dt_parallelizer::Parallelizer;
 use crate::{lua_processor::LuaProcessor, Pipeline};
 
 pub struct BasePipeline {
-    pub buffer: Arc<ConcurrentQueue<DtItem>>,
+    pub buffer: Arc<DtQueue>,
     pub parallelizer: Box<dyn Parallelizer + Send>,
     pub sinker_basic_config: BasicSinkerConfig,
     pub sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,

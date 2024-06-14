@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use concurrent_queue::ConcurrentQueue;
-use dt_common::meta::{ddl_data::DdlData, dt_data::DtItem, row_data::RowData};
+use dt_common::meta::{ddl_data::DdlData, dt_data::DtItem, dt_queue::DtQueue, row_data::RowData};
 use dt_connector::Sinker;
 
 use crate::Parallelizer;
@@ -20,7 +19,7 @@ impl Parallelizer for SnapshotParallelizer {
         "SnapshotParallelizer".to_string()
     }
 
-    async fn drain(&mut self, buffer: &ConcurrentQueue<DtItem>) -> anyhow::Result<Vec<DtItem>> {
+    async fn drain(&mut self, buffer: &DtQueue) -> anyhow::Result<Vec<DtItem>> {
         self.base_parallelizer.drain(buffer).await
     }
 

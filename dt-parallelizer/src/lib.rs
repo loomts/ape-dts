@@ -13,10 +13,10 @@ pub mod table_parallelizer;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use concurrent_queue::ConcurrentQueue;
 use dt_common::meta::{
     ddl_data::DdlData,
     dt_data::{DtData, DtItem},
+    dt_queue::DtQueue,
     row_data::RowData,
 };
 use dt_connector::Sinker;
@@ -26,7 +26,7 @@ use merge_parallelizer::TbMergedData;
 pub trait Parallelizer {
     fn get_name(&self) -> String;
 
-    async fn drain(&mut self, _buffer: &ConcurrentQueue<DtItem>) -> anyhow::Result<Vec<DtItem>> {
+    async fn drain(&mut self, _buffer: &DtQueue) -> anyhow::Result<Vec<DtItem>> {
         Ok(Vec::new())
     }
 
