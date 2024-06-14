@@ -34,10 +34,11 @@ use sqlx::{
 use std::{
     str::FromStr,
     sync::{Arc, Mutex},
+    time::Instant,
 };
 use uuid::Uuid;
 
-use crate::{call_batch_fn, rdb_router::RdbRouter, Sinker};
+use crate::{call_batch_fn, rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker};
 
 use super::{decimal_uitil::DecimalUtil, unicode_util::UnicodeUtil};
 
@@ -119,6 +120,13 @@ impl FoxlakeSinker {
         start_index: usize,
         batch_size: usize,
     ) -> anyhow::Result<()> {
+        let start_time = Instant::now();
+
+        let mut data_size = 0;
+        for row_data in data.iter().skip(start_index).take(batch_size) {
+            data_size += row_data.data_size;
+        }
+
         let tb_meta = self
             .meta_manager
             .get_tb_meta_by_row_data(&data[0])
@@ -132,7 +140,10 @@ impl FoxlakeSinker {
         let s3_file = self.get_log_dml_file();
         self.put_to_s3(&s3_file, orc_data).await?;
 
-        self.merge_to_foxlake(&tb_meta, &s3_file, insert_only).await
+        self.merge_to_foxlake(&tb_meta, &s3_file, insert_only)
+            .await?;
+
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
 
     async fn merge_to_foxlake(
@@ -146,8 +157,14 @@ impl FoxlakeSinker {
 
         let insert_only = if insert_only { "TRUE" } else { "FALSE" };
         let sql = format!(
-            r#"MERGE INTO TABLE `{}`.`{}` USING URL = '{}' CREDENTIALS = (ACCESS_KEY_ID='{}' SECRET_ACCESS_KEY='{}') FILE_FORMAT = (TYPE='DML_CHANGE_LOG') INSERT_ONLY = {};"#,
-            tb_meta.basic.schema, tb_meta.basic.tb, url, s3.access_key, s3.secret_key, insert_only
+            r#"MERGE INTO TABLE `{}`.`{}` USING URI = '{}' ENDPOINT = '{}' CREDENTIALS = (ACCESS_KEY_ID='{}' SECRET_ACCESS_KEY='{}') FILE_FORMAT = (TYPE='DML_CHANGE_LOG') INSERT_ONLY = {};"#,
+            tb_meta.basic.schema,
+            tb_meta.basic.tb,
+            url,
+            s3.endpoint,
+            s3.access_key,
+            s3.secret_key,
+            insert_only
         );
 
         let query = sqlx::query(&sql);
