@@ -403,6 +403,8 @@ impl TaskConfig {
                     SinkerConfig::Foxlake {
                         url,
                         batch_size,
+                        merge_multi_files: loader.get_optional(SINKER, "merge_multi_files"),
+                        batch_memory_mb: loader.get_optional(SINKER, "batch_memory_mb"),
                         s3_config,
                     }
                 }

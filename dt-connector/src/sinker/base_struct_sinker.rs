@@ -1,4 +1,5 @@
 use anyhow::bail;
+use dt_common::log_error;
 use dt_common::meta::ddl_data::DdlData;
 use dt_common::{
     config::config_enums::ConflictPolicyEnum, error::Error, log_info, rdb_filter::RdbFilter,
@@ -29,7 +30,7 @@ impl BaseStructSinker {
                     }
 
                     Err(error) => {
-                        log_info!("ddl failed, error: {}", error);
+                        log_error!("ddl failed, error: {}", error);
                         match conflict_policy {
                             ConflictPolicyEnum::Interrupt => bail! {error},
                             ConflictPolicyEnum::Ignore => {}

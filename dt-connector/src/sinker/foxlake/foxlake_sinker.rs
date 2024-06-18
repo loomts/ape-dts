@@ -51,6 +51,8 @@ pub struct FoxlakeSinker {
     pub s3_config: S3Config,
     pub conn_pool: Pool<MySql>,
     pub extract_type: ExtractType,
+    pub merge_multi_files: bool,
+    pub batch_memory_bytes: usize,
     pub router: RdbRouter,
 }
 
@@ -64,7 +66,12 @@ impl Sinker for FoxlakeSinker {
             return Ok(());
         }
 
-        call_batch_fn!(self, data, Self::batch_sink);
+        if self.merge_multi_files {
+            self.merge_multi_files_sink(&mut data).await?;
+        } else {
+            call_batch_fn!(self, data, Self::batch_sink);
+        }
+
         Ok(())
     }
 
@@ -140,30 +147,81 @@ impl FoxlakeSinker {
         let s3_file = self.get_log_dml_file();
         self.put_to_s3(&s3_file, orc_data).await?;
 
-        self.merge_to_foxlake(&tb_meta, &s3_file, insert_only)
+        self.merge_to_foxlake(&tb_meta, &[s3_file], insert_only)
             .await?;
 
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
 
+    async fn merge_multi_files_sink(&mut self, data: &mut [RowData]) -> anyhow::Result<()> {
+        let start_time = Instant::now();
+
+        let tb_meta = self
+            .meta_manager
+            .get_tb_meta_by_row_data(&data[0])
+            .await?
+            .clone();
+
+        let mut all_data_size = 0;
+        let mut all_s3_files = Vec::new();
+        let mut all_insert_only = true;
+        let mut pushed_count = 0;
+        loop {
+            if data.len() <= pushed_count {
+                break;
+            }
+
+            let mut batch_size = 0;
+            let mut data_size = 0;
+            for row_data in data.iter().skip(pushed_count) {
+                batch_size += 1;
+                data_size += row_data.data_size;
+                if data_size >= self.batch_memory_bytes {
+                    break;
+                }
+            }
+
+            let (orc_data, insert_only) = self
+                .generate_orc_data(data, pushed_count, batch_size, &tb_meta)
+                .await?;
+            let s3_file = self.get_log_dml_file();
+            self.put_to_s3(&s3_file, orc_data).await?;
+
+            all_s3_files.push(s3_file);
+            all_data_size += data_size;
+            all_insert_only &= insert_only;
+            pushed_count += batch_size;
+        }
+
+        self.merge_to_foxlake(&tb_meta, &all_s3_files, all_insert_only)
+            .await?;
+
+        BaseSinker::update_batch_monitor(&mut self.monitor, pushed_count, all_data_size, start_time)
+            .await
+    }
+
     async fn merge_to_foxlake(
         &self,
         tb_meta: &MysqlTbMeta,
-        s3_file: &str,
+        s3_files: &[String],
         insert_only: bool,
     ) -> anyhow::Result<()> {
         let s3 = &self.s3_config;
-        let url = format!("{}/{}", s3.root_url, s3_file);
-
+        let files: Vec<String> = s3_files.iter().map(|i| format!("'{}'", i)).collect();
         let insert_only = if insert_only { "TRUE" } else { "FALSE" };
         let sql = format!(
-            r#"MERGE INTO TABLE `{}`.`{}` USING URI = '{}' ENDPOINT = '{}' CREDENTIALS = (ACCESS_KEY_ID='{}' SECRET_ACCESS_KEY='{}') FILE_FORMAT = (TYPE='DML_CHANGE_LOG') INSERT_ONLY = {};"#,
+            r#"MERGE INTO TABLE `{}`.`{}` 
+            USING URI = '{}/' 
+            ENDPOINT = '{}' 
+            CREDENTIALS = (ACCESS_KEY_ID='{}' SECRET_ACCESS_KEY='{}') 
+            FILES=({}) FILE_FORMAT = (TYPE='DML_CHANGE_LOG') INSERT_ONLY = {};"#,
             tb_meta.basic.schema,
             tb_meta.basic.tb,
-            url,
+            s3.root_url,
             s3.endpoint,
             s3.access_key,
             s3.secret_key,
+            files.join(","),
             insert_only
         );
 

@@ -285,6 +285,8 @@ impl SinkerUtil {
             SinkerConfig::Foxlake {
                 url,
                 batch_size,
+                merge_multi_files,
+                batch_memory_mb,
                 s3_config,
             } => {
                 let router = RdbRouter::from_config(&task_config.router, &DbType::Mysql)?;
@@ -294,6 +296,8 @@ impl SinkerUtil {
                     task_config,
                     parallel_size,
                     *batch_size,
+                    *merge_multi_files,
+                    *batch_memory_mb,
                     s3_config,
                     &router,
                     monitor,
@@ -734,6 +738,8 @@ impl SinkerUtil {
         task_config: &TaskConfig,
         parallel_size: usize,
         batch_size: usize,
+        merge_multi_files: bool,
+        batch_memory_mb: usize,
         s3_config: &S3Config,
         router: &RdbRouter,
         monitor: Arc<Mutex<Monitor>>,
@@ -772,6 +778,8 @@ impl SinkerUtil {
                 extract_type: task_config.extractor_basic.extract_type.clone(),
                 meta_manager,
                 batch_size,
+                merge_multi_files,
+                batch_memory_bytes: batch_memory_mb * 1024 * 1024,
                 s3_config: s3_config.clone(),
                 s3_client,
                 monitor: monitor.clone(),
