@@ -13,7 +13,7 @@ use futures::TryStreamExt;
 
 use sqlx::{MySql, Pool};
 
-use dt_common::{config::config_enums::DbType, log_finished, log_info};
+use dt_common::{config::config_enums::DbType, log_info};
 
 use crate::{
     close_conn_pool,
@@ -73,16 +73,6 @@ impl MysqlSnapshotExtractor {
         } else {
             self.extract_all(&tb_meta).await?;
         }
-
-        log_finished!(
-            "{}",
-            Position::RdbSnapshotFinished {
-                db_type: DbType::Mysql.to_string(),
-                schema: self.db.clone(),
-                tb: self.tb.clone(),
-            }
-            .to_string()
-        );
         Ok(())
     }
 

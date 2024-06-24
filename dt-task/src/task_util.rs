@@ -1,5 +1,6 @@
 use std::{str::FromStr, time::Duration};
 
+use dt_common::config::s3_config::S3Config;
 use dt_common::config::{
     config_enums::DbType, sinker_config::SinkerConfig, task_config::TaskConfig,
 };
@@ -10,6 +11,8 @@ use dt_common::meta::{
 };
 use futures::TryStreamExt;
 use mongodb::options::ClientOptions;
+use rusoto_core::Region;
+use rusoto_s3::S3Client;
 use sqlx::{
     mysql::{MySqlConnectOptions, MySqlPoolOptions},
     postgres::{PgConnectOptions, PgPoolOptions},
@@ -289,5 +292,23 @@ impl TaskUtil {
         let tbs = client.database(db).list_collection_names(None).await?;
         client.shutdown().await;
         Ok(tbs)
+    }
+
+    pub fn create_s3_client(s3_config: &S3Config) -> S3Client {
+        let region = if s3_config.endpoint.is_empty() {
+            Region::from_str(&s3_config.region).unwrap()
+        } else {
+            Region::Custom {
+                name: s3_config.region.clone(),
+                endpoint: s3_config.endpoint.clone(),
+            }
+        };
+
+        let credentials = rusoto_credential::StaticProvider::new_minimal(
+            s3_config.access_key.to_owned(),
+            s3_config.secret_key.to_owned(),
+        );
+
+        S3Client::new_with(rusoto_core::HttpClient::new().unwrap(), credentials, region)
     }
 }

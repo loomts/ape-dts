@@ -1,12 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use dt_common::meta::{
-    ddl_data::DdlData,
-    dt_data::{DtData, DtItem},
-    dt_queue::DtQueue,
-    row_data::RowData,
-};
+use dt_common::meta::{ddl_data::DdlData, dt_data::DtItem, dt_queue::DtQueue, row_data::RowData};
 use dt_connector::Sinker;
 
 use crate::Parallelizer;
@@ -49,7 +44,7 @@ impl Parallelizer for SerialParallelizer {
 
     async fn sink_raw(
         &mut self,
-        data: Vec<DtData>,
+        data: Vec<DtItem>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
     ) -> anyhow::Result<()> {
         self.base_parallelizer

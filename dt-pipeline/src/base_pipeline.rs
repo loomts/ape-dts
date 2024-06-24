@@ -7,16 +7,18 @@ use std::{
 };
 
 use async_trait::async_trait;
-use dt_common::meta::{
-    ddl_data::DdlData,
-    dt_data::{DtData, DtItem},
-    dt_queue::DtQueue,
-    position::Position,
-    row_data::RowData,
-    syncer::Syncer,
+use dt_common::{
+    config::sinker_config::SinkerConfig,
+    meta::{
+        ddl_data::DdlData,
+        dt_data::{DtData, DtItem},
+        dt_queue::DtQueue,
+        position::Position,
+        row_data::RowData,
+        syncer::Syncer,
+    },
 };
 use dt_common::{
-    config::sinker_config::BasicSinkerConfig,
     log_info, log_position,
     monitor::{counter_type::CounterType, monitor::Monitor},
     utils::time_util::TimeUtil,
@@ -29,7 +31,7 @@ use crate::{lua_processor::LuaProcessor, Pipeline};
 pub struct BasePipeline {
     pub buffer: Arc<DtQueue>,
     pub parallelizer: Box<dyn Parallelizer + Send>,
-    pub sinker_basic_config: BasicSinkerConfig,
+    pub sinker_config: SinkerConfig,
     pub sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
     pub shut_down: Arc<AtomicBool>,
     pub checkpoint_interval_secs: u64,
@@ -95,7 +97,7 @@ impl Pipeline for BasePipeline {
             }
 
             // process all row_datas in buffer at a time
-            let (count, last_received, last_commit) = match Self::get_sink_method(&data) {
+            let (count, last_received, last_commit) = match self.get_sink_method(&data) {
                 SinkMethod::Ddl => self.sink_ddl(data).await?,
                 SinkMethod::Dml => self.sink_dml(data).await?,
                 SinkMethod::Raw => self.sink_raw(data).await?,
@@ -133,10 +135,10 @@ impl BasePipeline {
         &mut self,
         all_data: Vec<DtItem>,
     ) -> anyhow::Result<(usize, Option<Position>, Option<Position>)> {
-        let (data, last_received_position, last_commit_position) = Self::fetch_raw(all_data);
-        let count = data.len();
+        let (last_received_position, last_commit_position) = Self::fetch_raw(&all_data);
+        let count = all_data.len();
         if count > 0 {
-            self.parallelizer.sink_raw(data, &self.sinkers).await?
+            self.parallelizer.sink_raw(all_data, &self.sinkers).await?
         }
         Ok((count, last_received_position, last_commit_position))
     }
@@ -176,25 +178,23 @@ impl BasePipeline {
         Ok((count, last_received_position, last_commit_position))
     }
 
-    fn fetch_raw(mut data: Vec<DtItem>) -> (Vec<DtData>, Option<Position>, Option<Position>) {
-        let mut raw_data = Vec::new();
+    fn fetch_raw(data: &[DtItem]) -> (Option<Position>, Option<Position>) {
         let mut last_received_position = Option::None;
         let mut last_commit_position = Option::None;
-        for i in data.drain(..) {
+        for i in data.iter() {
             match &i.dt_data {
                 DtData::Commit { .. } => {
-                    last_commit_position = Some(i.position);
+                    last_commit_position = Some(i.position.clone());
                     last_received_position = last_commit_position.clone();
                     continue;
                 }
 
                 DtData::Redis { entry } => {
-                    last_received_position = Some(i.position);
+                    last_received_position = Some(i.position.clone());
                     last_commit_position = last_received_position.clone();
                     if !entry.is_raw() && entry.cmd.get_name().eq_ignore_ascii_case("ping") {
                         continue;
                     }
-                    raw_data.push(i.dt_data);
                 }
 
                 DtData::Begin {} => {
@@ -202,13 +202,12 @@ impl BasePipeline {
                 }
 
                 _ => {
-                    last_received_position = Some(i.position);
-                    raw_data.push(i.dt_data);
+                    last_received_position = Some(i.position.clone());
                 }
             }
         }
 
-        (raw_data, last_received_position, last_commit_position)
+        (last_received_position, last_commit_position)
     }
 
     fn fetch_dml(mut data: Vec<DtItem>) -> (Vec<RowData>, Option<Position>, Option<Position>) {
@@ -259,12 +258,19 @@ impl BasePipeline {
         (result, last_received_position, last_commit_position)
     }
 
-    fn get_sink_method(data: &Vec<DtItem>) -> SinkMethod {
+    fn get_sink_method(&self, data: &Vec<DtItem>) -> SinkMethod {
+        match self.sinker_config {
+            SinkerConfig::FoxlakePush { .. }
+            | SinkerConfig::FoxlakeMerge { .. }
+            | SinkerConfig::Foxlake { .. } => return SinkMethod::Raw,
+            _ => {}
+        }
+
         for i in data {
             match i.dt_data {
                 DtData::Ddl { .. } => return SinkMethod::Ddl,
                 DtData::Dml { .. } => return SinkMethod::Dml,
-                DtData::Redis { .. } => return SinkMethod::Raw,
+                DtData::Redis { .. } | DtData::Foxlake { .. } => return SinkMethod::Raw,
                 DtData::Begin {} | DtData::Commit { .. } => {
                     continue;
                 }

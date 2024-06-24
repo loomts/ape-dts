@@ -39,6 +39,8 @@ pub enum ExtractType {
     Scan,
     #[strum(serialize = "reshard")]
     Reshard,
+    #[strum(serialize = "foxlake_s3")]
+    FoxlakeS3,
 }
 
 #[derive(Display, EnumString, IntoStaticStr)]
@@ -55,6 +57,10 @@ pub enum SinkType {
     Statistic,
     #[strum(serialize = "sql")]
     Sql,
+    #[strum(serialize = "push")]
+    Push,
+    #[strum(serialize = "merge")]
+    Merge,
 }
 
 #[derive(EnumString, IntoStaticStr, Clone, Display)]

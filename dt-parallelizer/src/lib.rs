@@ -13,12 +13,7 @@ pub mod table_parallelizer;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use dt_common::meta::{
-    ddl_data::DdlData,
-    dt_data::{DtData, DtItem},
-    dt_queue::DtQueue,
-    row_data::RowData,
-};
+use dt_common::meta::{ddl_data::DdlData, dt_data::DtItem, dt_queue::DtQueue, row_data::RowData};
 use dt_connector::Sinker;
 use merge_parallelizer::TbMergedData;
 
@@ -48,7 +43,7 @@ pub trait Parallelizer {
 
     async fn sink_raw(
         &mut self,
-        _data: Vec<DtData>,
+        _data: Vec<DtItem>,
         _sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
     ) -> anyhow::Result<()> {
         Ok(())

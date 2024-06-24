@@ -23,6 +23,7 @@ use dt_connector::{
     extractor::{
         base_extractor::BaseExtractor,
         extractor_monitor::ExtractorMonitor,
+        foxlake::foxlake_s3_extractor::FoxlakeS3Extractor,
         kafka::kafka_extractor::KafkaExtractor,
         mongo::{
             mongo_cdc_extractor::MongoCdcExtractor, mongo_check_extractor::MongoCheckExtractor,
@@ -403,6 +404,25 @@ impl ExtractorUtil {
                     syncer,
                     resumer: cdc_resumer,
                     base_extractor,
+                };
+                Box::new(extractor)
+            }
+
+            ExtractorConfig::FoxlakeS3 {
+                schema,
+                tb,
+                s3_config,
+                ..
+            } => {
+                let s3_client = TaskUtil::create_s3_client(&s3_config);
+                let extractor = FoxlakeS3Extractor {
+                    schema,
+                    tb,
+                    s3_client,
+                    s3_config,
+                    resumer: snapshot_resumer,
+                    base_extractor,
+                    slice_size: buffer_size,
                 };
                 Box::new(extractor)
             }

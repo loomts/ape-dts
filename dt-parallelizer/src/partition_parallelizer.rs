@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use dt_common::meta::{
-    ddl_data::DdlData,
     dt_data::{DtData, DtItem},
     dt_queue::DtQueue,
     row_data::RowData,
@@ -73,13 +72,5 @@ impl Parallelizer for PartitionParallelizer {
         self.base_parallelizer
             .sink_dml(sub_datas, sinkers, self.parallel_size, false)
             .await
-    }
-
-    async fn sink_ddl(
-        &mut self,
-        _data: Vec<DdlData>,
-        _sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> anyhow::Result<()> {
-        Ok(())
     }
 }

@@ -83,7 +83,8 @@ impl TaskRunner {
             | ExtractorConfig::PgStruct { url, .. }
             | ExtractorConfig::MysqlSnapshot { url, .. }
             | ExtractorConfig::PgSnapshot { url, .. }
-            | ExtractorConfig::MongoSnapshot { url, .. } => {
+            | ExtractorConfig::MongoSnapshot { url, .. }
+            | ExtractorConfig::FoxlakeS3 { url, .. } => {
                 self.start_multi_task(url, &router, &snapshot_resumer, &cdc_resumer)
                     .await?
             }
@@ -185,6 +186,15 @@ impl TaskRunner {
                         }
                     }
 
+                    ExtractorConfig::FoxlakeS3 { url, s3_config, .. } => {
+                        ExtractorConfig::FoxlakeS3 {
+                            url: url.clone(),
+                            schema: db.clone(),
+                            tb: tb.clone(),
+                            s3_config: s3_config.clone(),
+                        }
+                    }
+
                     _ => {
                         bail! {Error::ConfigError("unsupported extractor config".into())};
                     }
@@ -261,6 +271,7 @@ impl TaskRunner {
         )));
         let sinkers = SinkerUtil::create_sinkers(
             &self.config,
+            extractor_config,
             sinker_monitor.clone(),
             rw_sinker_data_marker.clone(),
         )
@@ -309,6 +320,27 @@ impl TaskRunner {
             .await
         });
         try_join!(f1, f2, f3).unwrap();
+
+        // finished log
+        let (schema, tb) = match extractor_config {
+            ExtractorConfig::MysqlSnapshot { db, tb, .. }
+            | ExtractorConfig::MongoSnapshot { db, tb, .. } => (db.to_owned(), tb.to_owned()),
+            ExtractorConfig::PgSnapshot { schema, tb, .. }
+            | ExtractorConfig::FoxlakeS3 { schema, tb, .. } => (schema.to_owned(), tb.to_owned()),
+            _ => (String::new(), String::new()),
+        };
+        if !tb.is_empty() {
+            log_finished!(
+                "{}",
+                Position::RdbSnapshotFinished {
+                    db_type: self.config.extractor_basic.db_type.to_string(),
+                    schema,
+                    tb,
+                }
+                .to_string()
+            );
+        }
+
         Ok(())
     }
 
@@ -347,7 +379,7 @@ impl TaskRunner {
         let pipeline = BasePipeline {
             buffer,
             parallelizer,
-            sinker_basic_config: self.config.sinker_basic.clone(),
+            sinker_config: self.config.sinker.clone(),
             sinkers,
             shut_down,
             checkpoint_interval_secs: self.config.pipeline.checkpoint_interval_secs,

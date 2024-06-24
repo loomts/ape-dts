@@ -22,3 +22,4 @@ pub mod sql_parser;
 pub mod struct_meta;
 pub mod syncer;
 pub mod time;
+pub mod foxlake;

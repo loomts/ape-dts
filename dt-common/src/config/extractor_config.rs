@@ -1,4 +1,7 @@
-use super::config_enums::{DbType, ExtractType};
+use super::{
+    config_enums::{DbType, ExtractType},
+    s3_config::S3Config,
+};
 
 #[derive(Clone, Debug)]
 pub enum ExtractorConfig {
@@ -125,6 +128,13 @@ pub enum ExtractorConfig {
         partition: i32,
         offset: i64,
         ack_interval_secs: u64,
+    },
+
+    FoxlakeS3 {
+        url: String,
+        schema: String,
+        tb: String,
+        s3_config: S3Config,
     },
 }
 

@@ -4,6 +4,7 @@ use std::sync::Mutex;
 use async_trait::async_trait;
 use dt_common::log_statistic;
 use dt_common::meta::dt_data::DtData;
+use dt_common::meta::dt_data::DtItem;
 use dt_common::meta::redis::redis_statistic_type::RedisStatisticType;
 use dt_common::monitor::monitor::Monitor;
 use serde::Serialize;
@@ -35,9 +36,9 @@ struct HotKeyInfo {
 
 #[async_trait]
 impl Sinker for RedisStatisticSinker {
-    async fn sink_raw(&mut self, mut data: Vec<DtData>, _batch: bool) -> anyhow::Result<()> {
-        for dt_data in data.iter_mut() {
-            if let DtData::Redis { entry } = dt_data {
+    async fn sink_raw(&mut self, mut data: Vec<DtItem>, _batch: bool) -> anyhow::Result<()> {
+        for dt_item in data.iter_mut() {
+            if let DtData::Redis { entry } = &mut dt_item.dt_data {
                 match self.statistic_type {
                     RedisStatisticType::BigKey => {
                         if entry.get_data_malloc_size() < self.data_size_threshold {

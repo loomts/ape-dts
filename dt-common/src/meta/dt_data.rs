@@ -3,7 +3,7 @@ use serde_json::json;
 
 use crate::meta::{position::Position, redis::redis_entry::RedisEntry};
 
-use super::{ddl_data::DdlData, row_data::RowData};
+use super::{ddl_data::DdlData, foxlake::s3_file_meta::S3FileMeta, row_data::RowData};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DtItem {
@@ -33,6 +33,9 @@ pub enum DtData {
     #[serde(skip)]
     Redis {
         entry: RedisEntry,
+    },
+    Foxlake {
+        file_meta: S3FileMeta,
     },
 }
 

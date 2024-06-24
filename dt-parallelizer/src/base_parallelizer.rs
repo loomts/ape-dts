@@ -1,10 +1,5 @@
 use anyhow::bail;
-use dt_common::meta::{
-    ddl_data::DdlData,
-    dt_data::{DtData, DtItem},
-    dt_queue::DtQueue,
-    row_data::RowData,
-};
+use dt_common::meta::{ddl_data::DdlData, dt_data::DtItem, dt_queue::DtQueue, row_data::RowData};
 use dt_common::monitor::counter::Counter;
 use dt_common::monitor::counter_type::CounterType;
 use dt_common::{error::Error, monitor::monitor::Monitor};
@@ -130,7 +125,7 @@ impl BaseParallelizer {
 
     pub async fn sink_raw(
         &self,
-        mut sub_datas: Vec<Vec<DtData>>,
+        mut sub_datas: Vec<Vec<DtItem>>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
         parallel_size: usize,
         batch: bool,

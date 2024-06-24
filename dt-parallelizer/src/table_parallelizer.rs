@@ -2,7 +2,12 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::Parallelizer;
 use async_trait::async_trait;
-use dt_common::meta::{ddl_data::DdlData, dt_data::DtItem, dt_queue::DtQueue, row_data::RowData};
+use dt_common::meta::{
+    ddl_data::DdlData,
+    dt_data::{DtData, DtItem},
+    dt_queue::DtQueue,
+    row_data::RowData,
+};
 use dt_connector::Sinker;
 
 use super::base_parallelizer::BaseParallelizer;
@@ -33,6 +38,17 @@ impl Parallelizer for TableParallelizer {
             .await
     }
 
+    async fn sink_raw(
+        &mut self,
+        data: Vec<DtItem>,
+        sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
+    ) -> anyhow::Result<()> {
+        let sub_datas = Self::partition_raw(data)?;
+        self.base_parallelizer
+            .sink_raw(sub_datas, sinkers, self.parallel_size, false)
+            .await
+    }
+
     async fn sink_ddl(
         &mut self,
         data: Vec<DdlData>,
@@ -45,8 +61,8 @@ impl Parallelizer for TableParallelizer {
 }
 
 impl TableParallelizer {
-    /// partition dml vec into sub vecs by full table name
-    pub fn partition_dml(data: Vec<RowData>) -> anyhow::Result<Vec<Vec<RowData>>> {
+    // partition dml vec into sub vecs by full table name
+    fn partition_dml(data: Vec<RowData>) -> anyhow::Result<Vec<Vec<RowData>>> {
         let mut sub_data_map: HashMap<String, Vec<RowData>> = HashMap::new();
         for row_data in data {
             let full_tb = format!("{}.{}", row_data.schema, row_data.tb);
@@ -54,6 +70,22 @@ impl TableParallelizer {
                 sub_data.push(row_data);
             } else {
                 sub_data_map.insert(full_tb, vec![row_data]);
+            }
+        }
+
+        Ok(sub_data_map.into_values().collect())
+    }
+
+    fn partition_raw(data: Vec<DtItem>) -> anyhow::Result<Vec<Vec<DtItem>>> {
+        let mut sub_data_map: HashMap<String, Vec<DtItem>> = HashMap::new();
+        for item in data {
+            if let DtData::Dml { row_data } = &item.dt_data {
+                let full_tb = format!("{}.{}", row_data.schema, row_data.tb);
+                if let Some(sub_data) = sub_data_map.get_mut(&full_tb) {
+                    sub_data.push(item);
+                } else {
+                    sub_data_map.insert(full_tb, vec![item]);
+                }
             }
         }
 

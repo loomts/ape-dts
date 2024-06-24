@@ -35,7 +35,7 @@ impl Parallelizer for RedisParallelizer {
 
     async fn sink_raw(
         &mut self,
-        data: Vec<DtData>,
+        data: Vec<DtItem>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
     ) -> anyhow::Result<()> {
         if self.slot_node_map.is_empty() {
@@ -59,8 +59,8 @@ impl Parallelizer for RedisParallelizer {
         }
 
         // for redis cluster
-        for mut dt_data in data {
-            let slots = if let DtData::Redis { entry } = &mut dt_data {
+        for mut dt_item in data {
+            let slots = if let DtData::Redis { entry } = &mut dt_item.dt_data {
                 let slots = entry.cal_slots(&self.key_parser)?;
                 for i in 1..slots.len() {
                     if slots[i] != slots[0] {
@@ -84,7 +84,7 @@ impl Parallelizer for RedisParallelizer {
             // sink to all nodes
             if slots.is_empty() {
                 for node_data in node_datas.iter_mut() {
-                    node_data.push(dt_data.clone());
+                    node_data.push(dt_item.clone());
                 }
                 continue;
             }
@@ -92,7 +92,7 @@ impl Parallelizer for RedisParallelizer {
             // find the dst node for entry by slot
             let node = *self.slot_node_map.get(&slots[0]).unwrap();
             let sinker_index = *self.node_sinker_index_map.get(node).unwrap();
-            node_datas[sinker_index].push(dt_data);
+            node_datas[sinker_index].push(dt_item);
         }
 
         let mut futures = Vec::new();

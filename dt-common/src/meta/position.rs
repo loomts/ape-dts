@@ -50,6 +50,11 @@ pub enum Position {
         now_db_id: i64,
         timestamp: String,
     },
+    FoxlakeS3 {
+        schema: String,
+        tb: String,
+        s3_meta_file: String,
+    },
 }
 
 impl Position {

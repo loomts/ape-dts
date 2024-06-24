@@ -65,15 +65,26 @@ impl SnapshotResumer {
             // since only 1 table is being processed at the same time
             if let Ok(lines) = FileUtil::tail(&position_log, TAIL_POSITION_COUNT) {
                 for line in lines.iter() {
-                    if let Position::RdbSnapshot {
-                        schema,
-                        tb,
-                        order_col,
-                        value,
-                        ..
-                    } = Position::from_log(line)
-                    {
-                        tb_positions.insert((schema, tb, order_col), value);
+                    match Position::from_log(line) {
+                        Position::RdbSnapshot {
+                            schema,
+                            tb,
+                            order_col,
+                            value,
+                            ..
+                        } => {
+                            tb_positions.insert((schema, tb, order_col), value);
+                        }
+
+                        Position::FoxlakeS3 {
+                            schema,
+                            tb,
+                            s3_meta_file,
+                        } => {
+                            tb_positions.insert((schema, tb, String::new()), s3_meta_file);
+                        }
+
+                        _ => {}
                     }
                 }
             }

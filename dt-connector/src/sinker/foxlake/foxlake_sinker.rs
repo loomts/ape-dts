@@ -1,32 +1,17 @@
-use anyhow::Context;
+use anyhow::Ok;
 use async_trait::async_trait;
-use chrono::{DateTime, Datelike, Timelike, Utc};
 use dt_common::{
-    config::{config_enums::ExtractType, s3_config::S3Config},
     log_info,
     meta::{
-        col_value::ColValue,
         ddl_data::DdlData,
         ddl_type::DdlType,
-        mysql::{
-            mysql_col_type::MysqlColType, mysql_meta_manager::MysqlMetaManager,
-            mysql_tb_meta::MysqlTbMeta,
-        },
-        row_data::RowData,
-        row_type::RowType,
+        dt_data::{DtData, DtItem},
+        mysql::mysql_meta_manager::MysqlMetaManager,
+        position::Position,
         sql_parser::ddl_parser::DdlParser,
-        time::dt_utc_time::DtNaiveTime,
     },
     monitor::monitor::Monitor,
-    utils::time_util::TimeUtil,
 };
-use orc_format::{
-    schema::{Field, Schema},
-    writer::{data::GenericData, Config, Writer},
-};
-use rusoto_core::ByteStream;
-use rusoto_s3::{PutObjectRequest, S3Client, S3};
-use rust_decimal::Decimal;
 use sqlx::{
     mysql::{MySqlConnectOptions, MySqlPoolOptions},
     MySql, Pool,
@@ -36,43 +21,30 @@ use std::{
     sync::{Arc, Mutex},
     time::Instant,
 };
-use uuid::Uuid;
 
-use crate::{call_batch_fn, rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker};
+use crate::{close_conn_pool, rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker};
 
-use super::{decimal_uitil::DecimalUtil, unicode_util::UnicodeUtil};
+use super::{foxlake_merger::FoxlakeMerger, foxlake_pusher::FoxlakePusher};
 
 pub struct FoxlakeSinker {
     pub url: String,
     pub batch_size: usize,
     pub meta_manager: MysqlMetaManager,
     pub monitor: Arc<Mutex<Monitor>>,
-    pub s3_client: S3Client,
-    pub s3_config: S3Config,
     pub conn_pool: Pool<MySql>,
-    pub extract_type: ExtractType,
-    pub merge_multi_files: bool,
-    pub batch_memory_bytes: usize,
     pub router: RdbRouter,
+    pub pusher: FoxlakePusher,
+    pub merger: FoxlakeMerger,
 }
-
-const CDC_ACTION: &str = "cdc_action";
-const CDC_LOG_SEQUENCE: &str = "cdc_log_sequence";
 
 #[async_trait]
 impl Sinker for FoxlakeSinker {
-    async fn sink_dml(&mut self, mut data: Vec<RowData>, _batch: bool) -> anyhow::Result<()> {
+    async fn sink_raw(&mut self, mut data: Vec<DtItem>, _batch: bool) -> anyhow::Result<()> {
         if data.is_empty() {
             return Ok(());
         }
 
-        if self.merge_multi_files {
-            self.merge_multi_files_sink(&mut data).await?;
-        } else {
-            call_batch_fn!(self, data, Self::batch_sink);
-        }
-
-        Ok(())
+        self.batch_sink(&mut data).await
     }
 
     async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> anyhow::Result<()> {
@@ -118,425 +90,38 @@ impl Sinker for FoxlakeSinker {
         }
         Ok(())
     }
-}
 
-impl FoxlakeSinker {
-    async fn batch_sink(
-        &mut self,
-        data: &mut [RowData],
-        start_index: usize,
-        batch_size: usize,
-    ) -> anyhow::Result<()> {
-        let start_time = Instant::now();
-
-        let mut data_size = 0;
-        for row_data in data.iter().skip(start_index).take(batch_size) {
-            data_size += row_data.data_size;
-        }
-
-        let tb_meta = self
-            .meta_manager
-            .get_tb_meta_by_row_data(&data[0])
-            .await?
-            .to_owned();
-
-        let (orc_data, insert_only) = self
-            .generate_orc_data(data, start_index, batch_size, &tb_meta)
-            .await?;
-
-        let s3_file = self.get_log_dml_file();
-        self.put_to_s3(&s3_file, orc_data).await?;
-
-        self.merge_to_foxlake(&tb_meta, &[s3_file], insert_only)
-            .await?;
-
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
-    }
-
-    async fn merge_multi_files_sink(&mut self, data: &mut [RowData]) -> anyhow::Result<()> {
-        let start_time = Instant::now();
-
-        let tb_meta = self
-            .meta_manager
-            .get_tb_meta_by_row_data(&data[0])
-            .await?
-            .clone();
-
-        let mut all_data_size = 0;
-        let mut all_s3_files = Vec::new();
-        let mut all_insert_only = true;
-        let mut pushed_count = 0;
-        loop {
-            if data.len() <= pushed_count {
-                break;
-            }
-
-            let mut batch_size = 0;
-            let mut data_size = 0;
-            for row_data in data.iter().skip(pushed_count) {
-                batch_size += 1;
-                data_size += row_data.data_size;
-                if data_size >= self.batch_memory_bytes {
-                    break;
-                }
-            }
-
-            let (orc_data, insert_only) = self
-                .generate_orc_data(data, pushed_count, batch_size, &tb_meta)
-                .await?;
-            let s3_file = self.get_log_dml_file();
-            self.put_to_s3(&s3_file, orc_data).await?;
-
-            all_s3_files.push(s3_file);
-            all_data_size += data_size;
-            all_insert_only &= insert_only;
-            pushed_count += batch_size;
-        }
-
-        self.merge_to_foxlake(&tb_meta, &all_s3_files, all_insert_only)
-            .await?;
-
-        BaseSinker::update_batch_monitor(&mut self.monitor, pushed_count, all_data_size, start_time)
-            .await
-    }
-
-    async fn merge_to_foxlake(
-        &self,
-        tb_meta: &MysqlTbMeta,
-        s3_files: &[String],
-        insert_only: bool,
-    ) -> anyhow::Result<()> {
-        let s3 = &self.s3_config;
-        let files: Vec<String> = s3_files.iter().map(|i| format!("'{}'", i)).collect();
-        let insert_only = if insert_only { "TRUE" } else { "FALSE" };
-        let sql = format!(
-            r#"MERGE INTO TABLE `{}`.`{}` 
-            USING URI = '{}/' 
-            ENDPOINT = '{}' 
-            CREDENTIALS = (ACCESS_KEY_ID='{}' SECRET_ACCESS_KEY='{}') 
-            FILES=({}) FILE_FORMAT = (TYPE='DML_CHANGE_LOG') INSERT_ONLY = {};"#,
-            tb_meta.basic.schema,
-            tb_meta.basic.tb,
-            s3.root_url,
-            s3.endpoint,
-            s3.access_key,
-            s3.secret_key,
-            files.join(","),
-            insert_only
-        );
-
-        let query = sqlx::query(&sql);
-        query
-            .execute(&self.conn_pool)
-            .await
-            .with_context(|| format!("merge to foxlake failed: {}", sql))?;
-        Ok(())
-    }
-
-    #[inline(always)]
-    fn get_col_value<'a>(row_data: &'a RowData, col: &str) -> Option<&'a ColValue> {
-        if row_data.row_type == RowType::Delete {
-            row_data.before.as_ref().unwrap().get(col)
-        } else {
-            row_data.after.as_ref().unwrap().get(col)
-        }
+    async fn close(&mut self) -> anyhow::Result<()> {
+        self.meta_manager.close().await?;
+        return close_conn_pool!(self);
     }
 }
 
-// ORC functions
 impl FoxlakeSinker {
-    async fn generate_orc_data(
-        &self,
-        data: &mut [RowData],
-        start_index: usize,
-        batch_size: usize,
-        tb_meta: &MysqlTbMeta,
-    ) -> anyhow::Result<(Vec<u8>, bool)> {
-        let mut insert_only = true;
-        let (tb_schema, fields) = self.get_tb_orc_schema(tb_meta)?;
-        let col_count = tb_meta.basic.cols.len();
+    async fn batch_sink(&mut self, data: &mut [DtItem]) -> anyhow::Result<()> {
+        let start_time = Instant::now();
 
-        let mut buffer = Vec::new();
-        let mut writer = Writer::new(&mut buffer, &tb_schema, Config::new()).unwrap();
-        let root = writer.data().unwrap_struct();
+        // push to s3
+        let (s3_file_metas, _) = self.pusher.batch_push(data, 0, data.len(), true).await?;
 
-        // ignore cdc_action and cdc_log_sequence
-        for (i, field) in fields.into_iter().take(col_count).enumerate() {
-            let col = &field.0;
-            let col_schema = field.1;
-            match col_schema {
-                Schema::Long => {
-                    let field_data = root.child(i).unwrap_long();
-                    for row_data in data.iter().skip(start_index).take(batch_size) {
-                        match Self::get_col_value(row_data, col) {
-                            Some(ColValue::Tiny(v)) => field_data.write(*v as i64),
-                            Some(ColValue::UnsignedTiny(v)) => field_data.write(*v as i64),
-                            Some(ColValue::Short(v)) => field_data.write(*v as i64),
-                            Some(ColValue::UnsignedShort(v)) => field_data.write(*v as i64),
-                            Some(ColValue::Long(v)) => field_data.write(*v as i64),
-                            Some(ColValue::UnsignedLong(v)) => field_data.write(*v as i64),
-                            Some(ColValue::LongLong(v)) => field_data.write(*v),
-                            Some(ColValue::UnsignedLongLong(v)) => field_data.write(*v as i64),
-                            Some(ColValue::Year(v)) => field_data.write(*v as i64),
-                            Some(ColValue::Bit(v)) => field_data.write(*v as i64),
-                            Some(ColValue::Set(v)) => field_data.write(*v as i64),
-                            Some(ColValue::Enum(v)) => field_data.write(*v as i64),
-
-                            Some(ColValue::Time(v)) => {
-                                let timestamp = Self::time_to_long(v)?;
-                                field_data.write(timestamp)
-                            }
-
-                            Some(ColValue::Date(v)) => {
-                                let timestamp = Self::date_to_long(v)?;
-                                field_data.write(timestamp)
-                            }
-
-                            Some(ColValue::DateTime(v)) | Some(ColValue::Timestamp(v)) => {
-                                field_data.write(Self::timestamp_to_long(v)?)
-                            }
-
-                            _ => field_data.write_null(),
-                        };
-                    }
-                }
-
-                Schema::Decimal(..) => {
-                    let field_data = root.child(i).unwrap_decimal();
-                    for row_data in data.iter().skip(start_index).take(batch_size) {
-                        match Self::get_col_value(row_data, col) {
-                            Some(ColValue::Decimal(v)) => {
-                                let decimal = Decimal::from_str(v)
-                                    .with_context(|| format!("invalide decimal: {}", v))?;
-                                field_data.write_i128(decimal.mantissa())
-                            }
-                            _ => field_data.write_null(),
-                        };
-                    }
-                }
-
-                Schema::Float => {
-                    let field_data = root.child(i).unwrap_float();
-                    for row_data in data.iter().skip(start_index).take(batch_size) {
-                        match Self::get_col_value(row_data, col) {
-                            Some(ColValue::Float(v)) => field_data.write(*v),
-                            _ => field_data.write_null(),
-                        };
-                    }
-                }
-
-                Schema::Double => {
-                    let field_data = root.child(i).unwrap_double();
-                    for row_data in data.iter().skip(start_index).take(batch_size) {
-                        match Self::get_col_value(row_data, col) {
-                            Some(ColValue::Double(v)) => field_data.write(*v),
-                            _ => field_data.write_null(),
-                        };
-                    }
-                }
-
-                Schema::String => {
-                    let field_data = root.child(i).unwrap_string();
-                    for row_data in data.iter().skip(start_index).take(batch_size) {
-                        match Self::get_col_value(row_data, col) {
-                            Some(ColValue::String(v))
-                            | Some(ColValue::Set2(v))
-                            | Some(ColValue::Enum2(v))
-                            | Some(ColValue::Json2(v)) => field_data.write(v),
-                            _ => field_data.write_null(),
-                        };
-                    }
-                }
-
-                Schema::Binary => {
-                    let field_data = root.child(i).unwrap_binary();
-                    for row_data in data.iter().skip(start_index).take(batch_size) {
-                        match Self::get_col_value(row_data, col) {
-                            Some(ColValue::Json(v))
-                            | Some(ColValue::Blob(v))
-                            | Some(ColValue::RawString(v)) => field_data.write(v),
-
-                            Some(ColValue::Bit(v)) => {
-                                let bit = Self::u64_to_bytes(*v);
-                                field_data.write(&bit)
-                            }
-
-                            Some(ColValue::Decimal(v)) => match tb_meta.get_col_type(col)? {
-                                MysqlColType::Decimal { precision, scale } => {
-                                    let latin1_data = DecimalUtil::string_to_mysql_binlog(
-                                        v,
-                                        *precision as usize,
-                                        *scale as usize,
-                                    )?;
-                                    let utf8_data = UnicodeUtil::latin1_to_utf8(&latin1_data);
-                                    field_data.write(&utf8_data)
-                                }
-                                _ => field_data.write_null(),
-                            },
-
-                            _ => field_data.write_null(),
-                        };
-                    }
-                }
-                // never happen
-                _ => continue,
-            }
-        }
-
-        let cdc_action = root.child(col_count).unwrap_long();
-        for i in 0..batch_size {
-            let action = match data[start_index + i].row_type {
-                RowType::Insert => 0,
-                RowType::Update => 1,
-                RowType::Delete => 2,
+        // merge to foxlake
+        let mut dt_items = Vec::new();
+        for file_meta in s3_file_metas {
+            let dt_item = DtItem {
+                dt_data: DtData::Foxlake { file_meta },
+                position: Position::None,
+                data_origin_node: String::new(),
             };
-            cdc_action.write(action);
-            if action != 0 {
-                insert_only = false;
-            }
+            dt_items.push(dt_item);
         }
+        let (all_data_size, all_row_count) = self.merger.batch_merge(dt_items).await?;
 
-        let cdc_log_sequence = root.child(col_count + 1).unwrap_long();
-        for _ in 0..batch_size {
-            cdc_log_sequence.write(0);
-        }
-
-        for _ in 0..batch_size {
-            root.write();
-        }
-
-        writer.write_batch(batch_size as u64)?;
-        let orc_data = writer.finish()?.to_owned();
-
-        Ok((orc_data, insert_only))
-    }
-
-    fn get_tb_orc_schema(&self, tb_meta: &MysqlTbMeta) -> anyhow::Result<(Schema, Vec<Field>)> {
-        let mut fields = Vec::new();
-        for col in tb_meta.basic.cols.iter() {
-            let col_type = tb_meta.get_col_type(col)?;
-            let schema = self.get_col_orc_schema(col_type);
-            fields.push(Field(col.to_owned(), schema))
-        }
-        fields.push(Field(CDC_ACTION.to_owned(), Schema::Int));
-        fields.push(Field(CDC_LOG_SEQUENCE.to_owned(), Schema::Long));
-        Ok((Schema::Struct(fields.clone()), fields))
-    }
-
-    fn get_col_orc_schema(&self, col_type: &MysqlColType) -> Schema {
-        match *col_type {
-            MysqlColType::Tiny
-            | MysqlColType::UnsignedTiny
-            | MysqlColType::Short
-            | MysqlColType::UnsignedShort
-            | MysqlColType::Medium
-            | MysqlColType::UnsignedMedium
-            | MysqlColType::Long
-            | MysqlColType::UnsignedLong
-            | MysqlColType::LongLong
-            | MysqlColType::UnsignedLongLong => Schema::Long,
-
-            MysqlColType::Float => Schema::Float,
-            MysqlColType::Double => Schema::Double,
-            MysqlColType::Decimal { precision, scale } => {
-                // 2^127 > 10^38
-                if precision > 38 {
-                    Schema::Binary
-                } else {
-                    Schema::Decimal(precision, scale)
-                }
-            }
-
-            MysqlColType::Year => Schema::Long,
-            MysqlColType::Time
-            | MysqlColType::Date
-            | MysqlColType::DateTime
-            | MysqlColType::Timestamp { .. } => Schema::Long,
-
-            MysqlColType::Binary { .. }
-            | MysqlColType::Bit
-            | MysqlColType::Blob
-            | MysqlColType::VarBinary { .. }
-            | MysqlColType::Unkown => Schema::Binary,
-
-            MysqlColType::String { .. } => match self.extract_type {
-                ExtractType::Cdc => Schema::Binary,
-                _ => Schema::String,
-            },
-
-            MysqlColType::Enum { .. } | MysqlColType::Set { .. } | MysqlColType::Json => {
-                Schema::String
-            }
-        }
-    }
-
-    #[inline(always)]
-    fn timestamp_to_long(timestamp: &str) -> anyhow::Result<i64> {
-        let datetime: DateTime<Utc> = TimeUtil::datetime_from_utc_str(timestamp)?;
-        let ymd = ((datetime.year() as i64 * 13 + datetime.month() as i64) << 5)
-            | (datetime.day() as i64);
-        let hms = ((datetime.hour() as i64) << 12)
-            | ((datetime.minute() as i64) << 6)
-            | (datetime.second() as i64);
-        let second_part = datetime.timestamp_micros() - datetime.timestamp() * 1_000_000;
-        let l = (((ymd << 17) | hms) << 24) + second_part;
-        Ok(l)
-    }
-
-    #[inline(always)]
-    fn date_to_long(timestamp: &str) -> anyhow::Result<i64> {
-        let date = TimeUtil::date_from_str(timestamp)?;
-        let ymd = ((date.year() as i64 * 13 + date.month() as i64) << 5) | (date.day() as i64);
-        let l = ymd << (24 + 17);
-        Ok(l)
-    }
-
-    #[inline(always)]
-    fn time_to_long(time: &str) -> anyhow::Result<i64> {
-        let time = DtNaiveTime::from_str(time)?;
-        Ok(time.timestamp_micros())
-    }
-
-    #[inline(always)]
-    fn u64_to_bytes(value: u64) -> Vec<u8> {
-        // Big Endian
-        let mut bytes = [0; 8];
-        let mut v = value;
-        let mut i: i32 = 7;
-        while i >= 0 {
-            bytes[i as usize] = (v & 0xFF) as u8;
-            v >>= 8;
-            i -= 1;
-        }
-        bytes.to_vec()
-    }
-}
-
-// s3 functions
-impl FoxlakeSinker {
-    fn get_log_dml_file(&self) -> String {
-        // currently we do not get sequence from position
-        let log_sequence = "0_0";
-        let mut file_name = format!("log_dml_{}_{}.orc", log_sequence, Uuid::new_v4());
-        if !self.s3_config.root_dir.is_empty() {
-            file_name = format!("{}/{}", self.s3_config.root_dir, file_name);
-        }
-        file_name
-    }
-
-    async fn put_to_s3(&self, key: &str, data: Vec<u8>) -> anyhow::Result<()> {
-        let byte_stream = ByteStream::from(data);
-        let request = PutObjectRequest {
-            bucket: self.s3_config.bucket.clone(),
-            key: key.to_string(),
-            body: Some(byte_stream),
-            ..Default::default()
-        };
-
-        self.s3_client
-            .put_object(request)
-            .await
-            .with_context(|| format!("failed to push objects to s3, key: {}", key))?;
-        Ok(())
+        BaseSinker::update_batch_monitor(
+            &mut self.monitor,
+            all_row_count,
+            all_data_size,
+            start_time,
+        )
+        .await
     }
 }

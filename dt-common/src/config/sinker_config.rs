@@ -82,8 +82,20 @@ pub enum SinkerConfig {
     Foxlake {
         url: String,
         batch_size: usize,
-        merge_multi_files: bool,
         batch_memory_mb: usize,
+        s3_config: S3Config,
+    },
+
+    FoxlakePush {
+        url: String,
+        batch_size: usize,
+        batch_memory_mb: usize,
+        s3_config: S3Config,
+    },
+
+    FoxlakeMerge {
+        url: String,
+        batch_size: usize,
         s3_config: S3Config,
     },
 

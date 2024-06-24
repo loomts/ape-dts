@@ -144,6 +144,24 @@ impl TaskConfig {
                     db: String::new(),
                 },
 
+                ExtractType::FoxlakeS3 => {
+                    let s3_config = S3Config {
+                        bucket: loader.get_optional(EXTRACTOR, "s3_bucket"),
+                        access_key: loader.get_optional(EXTRACTOR, "s3_access_key"),
+                        secret_key: loader.get_optional(EXTRACTOR, "s3_secret_key"),
+                        region: loader.get_optional(EXTRACTOR, "s3_region"),
+                        endpoint: loader.get_optional(EXTRACTOR, "s3_endpoint"),
+                        root_dir: loader.get_optional(EXTRACTOR, "s3_root_dir"),
+                        root_url: loader.get_optional(EXTRACTOR, "s3_root_url"),
+                    };
+                    ExtractorConfig::FoxlakeS3 {
+                        url,
+                        schema: String::new(),
+                        tb: String::new(),
+                        s3_config,
+                    }
+                }
+
                 _ => bail! {not_supported_err},
             },
 
@@ -389,33 +407,46 @@ impl TaskConfig {
                 stream_load_url: loader.get_optional(SINKER, "stream_load_url"),
             },
 
-            DbType::Foxlake => match sink_type {
-                SinkType::Write => {
-                    let s3_config = S3Config {
-                        bucket: loader.get_optional(SINKER, "s3_bucket"),
-                        access_key: loader.get_optional(SINKER, "s3_access_key"),
-                        secret_key: loader.get_optional(SINKER, "s3_secret_key"),
-                        region: loader.get_optional(SINKER, "s3_region"),
-                        endpoint: loader.get_optional(SINKER, "s3_endpoint"),
-                        root_dir: loader.get_optional(SINKER, "s3_root_dir"),
-                        root_url: loader.get_optional(SINKER, "s3_root_url"),
-                    };
-                    SinkerConfig::Foxlake {
+            DbType::Foxlake => {
+                let s3_config = S3Config {
+                    bucket: loader.get_optional(SINKER, "s3_bucket"),
+                    access_key: loader.get_optional(SINKER, "s3_access_key"),
+                    secret_key: loader.get_optional(SINKER, "s3_secret_key"),
+                    region: loader.get_optional(SINKER, "s3_region"),
+                    endpoint: loader.get_optional(SINKER, "s3_endpoint"),
+                    root_dir: loader.get_optional(SINKER, "s3_root_dir"),
+                    root_url: loader.get_optional(SINKER, "s3_root_url"),
+                };
+
+                match sink_type {
+                    SinkType::Write => SinkerConfig::Foxlake {
                         url,
                         batch_size,
-                        merge_multi_files: loader.get_optional(SINKER, "merge_multi_files"),
                         batch_memory_mb: loader.get_optional(SINKER, "batch_memory_mb"),
                         s3_config,
-                    }
+                    },
+
+                    SinkType::Struct => SinkerConfig::FoxlakeStruct {
+                        url,
+                        conflict_policy,
+                    },
+
+                    SinkType::Push => SinkerConfig::FoxlakePush {
+                        url,
+                        batch_size,
+                        batch_memory_mb: loader.get_optional(SINKER, "batch_memory_mb"),
+                        s3_config,
+                    },
+
+                    SinkType::Merge => SinkerConfig::FoxlakeMerge {
+                        url,
+                        batch_size,
+                        s3_config,
+                    },
+
+                    _ => bail! { not_supported_err },
                 }
-
-                SinkType::Struct => SinkerConfig::FoxlakeStruct {
-                    url,
-                    conflict_policy,
-                },
-
-                _ => bail! { not_supported_err },
-            },
+            }
         };
         Ok((basic, sinker))
     }
