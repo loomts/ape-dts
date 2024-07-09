@@ -27,7 +27,7 @@ pub struct PgChecker {
     pub conn_pool: Pool<Postgres>,
     pub meta_manager: PgMetaManager,
     pub extractor_meta_manager: RdbMetaManager,
-    pub router: RdbRouter,
+    pub reverse_router: RdbRouter,
     pub batch_size: usize,
     pub monitor: Arc<Mutex<Monitor>>,
     pub filter: RdbFilter,
@@ -89,7 +89,7 @@ impl PgChecker {
                         src_row_data,
                         diff_col_values,
                         &mut self.extractor_meta_manager,
-                        &self.router,
+                        &self.reverse_router,
                     )
                     .await?;
                     diff.push(diff_log);
@@ -98,7 +98,7 @@ impl PgChecker {
                 let miss_log = BaseChecker::build_miss_log(
                     src_row_data,
                     &mut self.extractor_meta_manager,
-                    &self.router,
+                    &self.reverse_router,
                 )
                 .await?;
                 miss.push(miss_log);
@@ -140,7 +140,7 @@ impl PgChecker {
             batch_size,
             &tb_meta.basic,
             &mut self.extractor_meta_manager,
-            &self.router,
+            &self.reverse_router,
         )
         .await?;
         BaseChecker::log_dml(miss, diff);

@@ -32,7 +32,7 @@ use std::{
 };
 use uuid::Uuid;
 
-use crate::{sinker::base_sinker::BaseSinker, Sinker};
+use crate::{rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker};
 
 use super::{decimal_uitil::DecimalUtil, unicode_util::UnicodeUtil};
 
@@ -47,6 +47,7 @@ pub struct FoxlakePusher {
     pub batch_memory_bytes: usize,
     pub schema: Option<String>,
     pub tb: Option<String>,
+    pub reverse_router: RdbRouter,
 }
 
 const CDC_ACTION: &str = "cdc_action";
@@ -144,15 +145,17 @@ impl FoxlakePusher {
                 .generate_orc_data(&mut data, 0, batch_size, &tb_meta)
                 .await?;
 
-            let (data_file_name, meta_file_name) =
-                self.get_s3_file_info(&tb_meta.basic.schema, &tb_meta.basic.tb);
+            let (src_schema, src_tb) = self
+                .reverse_router
+                .get_tb_map(&tb_meta.basic.schema, &tb_meta.basic.tb);
+            let (data_file_name, meta_file_name) = self.get_s3_file_info(src_schema, src_tb);
 
             let s3_file_meta = S3FileMeta {
                 schema: tb_meta.basic.schema.clone(),
                 tb: tb_meta.basic.tb.clone(),
                 insert_only,
-                data_file_name: data_file_name.clone(),
-                meta_file_name: meta_file_name.clone(),
+                data_file_name,
+                meta_file_name,
                 data_size,
                 row_count: data.len(),
                 last_position: items[batch_size - 1].position.clone(),

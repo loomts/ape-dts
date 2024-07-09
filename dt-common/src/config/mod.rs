@@ -4,6 +4,7 @@ pub mod data_marker_config;
 pub mod extractor_config;
 pub mod filter_config;
 pub mod ini_loader;
+pub mod monitor_config;
 pub mod parallelizer_config;
 pub mod pipeline_config;
 pub mod processor_config;

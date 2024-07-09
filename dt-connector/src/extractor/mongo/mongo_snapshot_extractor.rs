@@ -54,6 +54,7 @@ impl MongoSnapshotExtractor {
                 .get_resume_value(&self.db, &self.tb, MongoConstants::ID)
         {
             let start_id = ObjectId::parse_str(resume_value).unwrap();
+            log_info!("start_id: {}", start_id.to_string());
             Some(doc! {MongoConstants::ID: {"$gt": start_id}})
         } else {
             None

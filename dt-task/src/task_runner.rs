@@ -242,11 +242,13 @@ impl TaskRunner {
             .map(|data_marker| Arc::new(RwLock::new(data_marker)));
 
         // extractor
-        let monitor_time_window_secs = self.config.pipeline.checkpoint_interval_secs as usize;
+        let monitor_time_window_secs = self.config.pipeline.counter_time_window_secs as usize;
+        let monitor_max_sub_count = self.config.pipeline.counter_max_sub_count as usize;
         let monitor_count_window = self.config.pipeline.buffer_size;
         let extractor_monitor = Arc::new(Mutex::new(Monitor::new(
             "extractor",
             monitor_time_window_secs,
+            monitor_max_sub_count,
             monitor_count_window,
         )));
         let mut extractor = ExtractorUtil::create_extractor(
@@ -267,6 +269,7 @@ impl TaskRunner {
         let sinker_monitor = Arc::new(Mutex::new(Monitor::new(
             "sinker",
             monitor_time_window_secs,
+            monitor_max_sub_count,
             monitor_count_window,
         )));
         let sinkers = SinkerUtil::create_sinkers(
@@ -281,6 +284,7 @@ impl TaskRunner {
         let pipeline_monitor = Arc::new(Mutex::new(Monitor::new(
             "pipeline",
             monitor_time_window_secs,
+            monitor_max_sub_count,
             monitor_count_window,
         )));
         let mut pipeline = self

@@ -21,6 +21,7 @@ pub struct FoxlakeStructSinker {
     pub conflict_policy: ConflictPolicyEnum,
     pub filter: RdbFilter,
     pub router: RdbRouter,
+    pub engine: String,
 }
 
 #[async_trait]
@@ -40,7 +41,7 @@ impl Sinker for FoxlakeStructSinker {
                     statement.table.database_name = db.to_string();
 
                     statement.table.table_collation = String::new();
-                    statement.table.engine_name = String::new();
+                    statement.table.engine_name = format!("'{}'", self.engine);
                     for column in statement.table.columns.iter_mut() {
                         column.collation_name = String::new();
                     }

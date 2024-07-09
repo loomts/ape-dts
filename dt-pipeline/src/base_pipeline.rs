@@ -112,7 +112,7 @@ impl Pipeline for BasePipeline {
             }
 
             last_checkpoint_time = self.record_checkpoint(
-                last_checkpoint_time,
+                Some(last_checkpoint_time),
                 &last_received_position,
                 &last_commit_position,
             );
@@ -126,6 +126,7 @@ impl Pipeline for BasePipeline {
             TimeUtil::sleep_millis(1).await;
         }
 
+        self.record_checkpoint(None, &last_received_position, &last_commit_position);
         Ok(())
     }
 }
@@ -281,12 +282,14 @@ impl BasePipeline {
 
     fn record_checkpoint(
         &self,
-        last_checkpoint_time: Instant,
+        last_checkpoint_time: Option<Instant>,
         last_received_position: &Option<Position>,
         last_commit_position: &Option<Position>,
     ) -> Instant {
-        if last_checkpoint_time.elapsed().as_secs() < self.checkpoint_interval_secs {
-            return last_checkpoint_time;
+        if let Some(last) = last_checkpoint_time {
+            if last.elapsed().as_secs() < self.checkpoint_interval_secs {
+                return last;
+            }
         }
 
         if let Some(position) = last_received_position {

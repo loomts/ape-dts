@@ -110,9 +110,11 @@ impl PgSnapshotExtractor {
         resume_value: ColValue,
     ) -> anyhow::Result<()> {
         log_info!(
-            r#"start extracting data from "{}"."{}" by slices"#,
+            r#"start extracting data from "{}"."{}" by slices, order_col: {}, start_value: {}"#,
             self.schema,
-            self.tb
+            self.tb,
+            order_col,
+            resume_value.to_string()
         );
 
         let mut extracted_count = 0;

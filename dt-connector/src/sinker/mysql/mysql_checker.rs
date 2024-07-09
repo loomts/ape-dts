@@ -30,7 +30,7 @@ pub struct MysqlChecker {
     pub conn_pool: Pool<MySql>,
     pub meta_manager: MysqlMetaManager,
     pub extractor_meta_manager: RdbMetaManager,
-    pub router: RdbRouter,
+    pub reverse_router: RdbRouter,
     pub batch_size: usize,
     pub monitor: Arc<Mutex<Monitor>>,
     pub filter: RdbFilter,
@@ -92,7 +92,7 @@ impl MysqlChecker {
                         src_row_data,
                         diff_col_values,
                         &mut self.extractor_meta_manager,
-                        &self.router,
+                        &self.reverse_router,
                     )
                     .await?;
                     diff.push(diff_log);
@@ -101,7 +101,7 @@ impl MysqlChecker {
                 let miss_log = BaseChecker::build_miss_log(
                     src_row_data,
                     &mut self.extractor_meta_manager,
-                    &self.router,
+                    &self.reverse_router,
                 )
                 .await?;
                 miss.push(miss_log);
@@ -143,7 +143,7 @@ impl MysqlChecker {
             batch_size,
             &tb_meta.basic,
             &mut self.extractor_meta_manager,
-            &self.router,
+            &self.reverse_router,
         )
         .await?;
         BaseChecker::log_dml(miss, diff);

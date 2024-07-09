@@ -424,11 +424,13 @@ impl TaskConfig {
                         batch_size,
                         batch_memory_mb: loader.get_optional(SINKER, "batch_memory_mb"),
                         s3_config,
+                        engine: loader.get_optional(SINKER, "engine"),
                     },
 
                     SinkType::Struct => SinkerConfig::FoxlakeStruct {
                         url,
                         conflict_policy,
+                        engine: loader.get_optional(SINKER, "engine"),
                     },
 
                     SinkType::Push => SinkerConfig::FoxlakePush {
@@ -461,7 +463,7 @@ impl TaskConfig {
     }
 
     fn load_pipeline_config(loader: &IniLoader) -> PipelineConfig {
-        PipelineConfig {
+        let mut config = PipelineConfig {
             buffer_size: loader.get_with_default(PIPELINE, "buffer_size", 16000),
             checkpoint_interval_secs: loader.get_with_default(
                 PIPELINE,
@@ -469,9 +471,16 @@ impl TaskConfig {
                 10,
             ),
             batch_sink_interval_secs: loader.get_optional(PIPELINE, "batch_sink_interval_secs"),
+            counter_time_window_secs: loader.get_optional(PIPELINE, "counter_time_window_secs"),
+            counter_max_sub_count: loader.get_with_default(PIPELINE, "counter_max_sub_count", 1000),
             max_rps: loader.get_optional(PIPELINE, "max_rps"),
             buffer_memory_mb: loader.get_optional(PIPELINE, "buffer_memory_mb"),
+        };
+
+        if config.counter_time_window_secs == 0 {
+            config.counter_time_window_secs = config.checkpoint_interval_secs;
         }
+        config
     }
 
     fn load_runtime_config(loader: &IniLoader) -> anyhow::Result<RuntimeConfig> {

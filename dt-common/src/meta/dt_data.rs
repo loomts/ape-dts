@@ -56,8 +56,16 @@ impl DtData {
         match &self {
             DtData::Dml { row_data } => row_data.data_size,
             DtData::Redis { entry } => entry.data_size,
+            DtData::Foxlake { file_meta } => file_meta.data_size,
             // ignore other item types
             _ => 0,
+        }
+    }
+
+    pub fn get_data_count(&self) -> usize {
+        match &self {
+            DtData::Foxlake { file_meta } => file_meta.row_count,
+            _ => 1,
         }
     }
 }

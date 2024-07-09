@@ -1,4 +1,4 @@
-use std::{cmp, collections::LinkedList};
+use std::{cmp, collections::LinkedList, time::Instant};
 
 use super::counter::Counter;
 
@@ -14,15 +14,19 @@ pub struct WindowCounterStatistic {
 
 #[derive(Clone)]
 pub struct TimeWindowCounter {
+    pub timestamp: Instant,
     pub time_window_secs: usize,
+    pub max_sub_count: usize,
     pub counters: LinkedList<Counter>,
     pub description: String,
 }
 
 impl TimeWindowCounter {
-    pub fn new(time_window_secs: usize) -> Self {
+    pub fn new(time_window_secs: usize, max_sub_count: usize) -> Self {
         Self {
+            timestamp: Instant::now(),
             time_window_secs,
+            max_sub_count,
             counters: LinkedList::new(),
             description: String::new(),
         }
@@ -30,6 +34,9 @@ impl TimeWindowCounter {
 
     #[inline(always)]
     pub fn add(&mut self, value: usize, count: usize) {
+        while self.counters.len() > self.max_sub_count {
+            self.counters.pop_front();
+        }
         self.counters.push_back(Counter::new(value, count));
     }
 
@@ -61,7 +68,11 @@ impl TimeWindowCounter {
 
         if statistics.count > 0 {
             statistics.avg_by_count = statistics.sum / statistics.count;
-            statistics.avg_by_sec = statistics.sum / self.time_window_secs;
+            let time_span = cmp::min(
+                self.time_window_secs,
+                cmp::max(self.timestamp.elapsed().as_secs() as usize, 1),
+            );
+            statistics.avg_by_sec = statistics.sum / time_span;
         }
 
         statistics

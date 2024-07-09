@@ -4,8 +4,9 @@ use anyhow::Context;
 use async_trait::async_trait;
 use dt_common::{
     config::s3_config::S3Config,
-    log_info,
+    log_debug, log_info,
     meta::{dt_data::DtData, foxlake::s3_file_meta::S3FileMeta, position::Position},
+    utils::time_util::TimeUtil,
 };
 use rusoto_s3::{GetObjectRequest, ListObjectsV2Request, S3Client, S3};
 use tokio::io::AsyncReadExt;
@@ -50,7 +51,7 @@ impl FoxlakeS3Extractor {
             for file in meta_files.iter() {
                 if file.ends_with(FINISHED) {
                     finished = true;
-                    continue;
+                    break;
                 }
                 let file_meta = self.get_meta(file).await?;
                 let dt_data = DtData::Foxlake { file_meta };
@@ -62,9 +63,13 @@ impl FoxlakeS3Extractor {
                 self.base_extractor.push_dt_data(dt_data, position).await?;
             }
 
-            start_after = meta_files.last().map(|s| s.to_string());
+            start_after = meta_files.last().map(|s: &String| s.to_string());
             if finished {
                 break;
+            }
+
+            if meta_files.is_empty() {
+                TimeUtil::sleep_millis(5000).await;
             }
         }
         Ok(())
@@ -96,6 +101,11 @@ impl FoxlakeS3Extractor {
             prefix = format!("{}/{}", self.s3_config.root_dir, prefix);
         }
 
+        log_debug!(
+            "list meta files, prefix: {}, start_after: {:?}",
+            &prefix,
+            start_after
+        );
         let request = ListObjectsV2Request {
             bucket: self.s3_config.bucket.clone(),
             max_keys: Some(self.slice_size as i64),
@@ -123,6 +133,11 @@ impl FoxlakeS3Extractor {
             }
         }
 
+        log_debug!(
+            "found meta files, count: {}, last file: {:?}",
+            file_names.len(),
+            file_names.last()
+        );
         Ok(file_names)
     }
 }

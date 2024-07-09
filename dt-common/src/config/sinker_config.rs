@@ -84,6 +84,7 @@ pub enum SinkerConfig {
         batch_size: usize,
         batch_memory_mb: usize,
         s3_config: S3Config,
+        engine: String,
     },
 
     FoxlakePush {
@@ -102,6 +103,7 @@ pub enum SinkerConfig {
     FoxlakeStruct {
         url: String,
         conflict_policy: ConflictPolicyEnum,
+        engine: String,
     },
 
     Sql {

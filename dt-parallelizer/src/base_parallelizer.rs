@@ -58,7 +58,8 @@ impl BaseParallelizer {
         match buffer.pop() {
             Ok(item) => {
                 // counter
-                record_size_counter.add(item.dt_data.get_data_size(), 1);
+                record_size_counter
+                    .add(item.dt_data.get_data_size(), item.dt_data.get_data_count());
                 Ok(item)
             }
             Err(error) => bail! {Error::PipelineError(format!("buffer pop error: {}", error))},

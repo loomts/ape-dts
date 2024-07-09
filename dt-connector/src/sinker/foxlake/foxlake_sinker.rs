@@ -35,6 +35,7 @@ pub struct FoxlakeSinker {
     pub router: RdbRouter,
     pub pusher: FoxlakePusher,
     pub merger: FoxlakeMerger,
+    pub engine: String,
 }
 
 #[async_trait]

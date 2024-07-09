@@ -109,9 +109,11 @@ impl MysqlSnapshotExtractor {
         resume_value: ColValue,
     ) -> anyhow::Result<()> {
         log_info!(
-            "start extracting data from `{}`.`{}` by slices",
+            "start extracting data from `{}`.`{}` by slices, order_col: {}, start_value: {}",
             self.db,
-            self.tb
+            self.tb,
+            order_col,
+            resume_value.to_string()
         );
 
         let mut extracted_count = 0;

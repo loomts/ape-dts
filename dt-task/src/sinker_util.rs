@@ -102,7 +102,8 @@ impl SinkerUtil {
                 url, batch_size, ..
             } => {
                 // checker needs the reverse router
-                let router = RdbRouter::from_config(&task_config.router, &DbType::Mysql)?.reverse();
+                let reverse_router =
+                    RdbRouter::from_config(&task_config.router, &DbType::Mysql)?.reverse();
                 let filter = RdbFilter::from_config(&task_config.filter, &DbType::Mysql)?;
                 let extractor_meta_manager = Self::get_extractor_meta_manager(task_config)
                     .await?
@@ -118,7 +119,7 @@ impl SinkerUtil {
                         conn_pool: conn_pool.clone(),
                         meta_manager: meta_manager.clone(),
                         extractor_meta_manager: extractor_meta_manager.clone(),
-                        router: router.clone(),
+                        reverse_router: reverse_router.clone(),
                         filter: filter.clone(),
                         batch_size,
                         monitor: monitor.clone(),
@@ -151,7 +152,8 @@ impl SinkerUtil {
                 url, batch_size, ..
             } => {
                 // checker needs the reverse router
-                let router = RdbRouter::from_config(&task_config.router, &DbType::Pg)?.reverse();
+                let reverse_router =
+                    RdbRouter::from_config(&task_config.router, &DbType::Pg)?.reverse();
                 let filter = RdbFilter::from_config(&task_config.filter, &DbType::Pg)?;
                 let extractor_meta_manager = Self::get_extractor_meta_manager(task_config)
                     .await?
@@ -166,7 +168,7 @@ impl SinkerUtil {
                         conn_pool: conn_pool.clone(),
                         meta_manager: meta_manager.clone(),
                         extractor_meta_manager: extractor_meta_manager.clone(),
-                        router: router.clone(),
+                        reverse_router: reverse_router.clone(),
                         filter: filter.clone(),
                         batch_size,
                         monitor: monitor.clone(),
@@ -199,12 +201,13 @@ impl SinkerUtil {
                 batch_size,
                 ..
             } => {
-                let router = RdbRouter::from_config(&task_config.router, &DbType::Mongo)?.reverse();
+                let reverse_router =
+                    RdbRouter::from_config(&task_config.router, &DbType::Mongo)?.reverse();
                 for _ in 0..parallel_size {
                     let mongo_client = TaskUtil::create_mongo_client(&url, &app_name).await?;
                     let sinker = MongoChecker {
                         batch_size,
-                        router: router.clone(),
+                        reverse_router: reverse_router.clone(),
                         mongo_client,
                         monitor: monitor.clone(),
                     };
@@ -423,8 +426,10 @@ impl SinkerUtil {
                 batch_size,
                 batch_memory_mb,
                 s3_config,
+                engine,
             } => {
                 let router = RdbRouter::from_config(&task_config.router, &DbType::Mysql)?;
+                let reverse_router = router.reverse();
                 let conn_pool =
                     TaskUtil::create_mysql_conn_pool(&url, parallel_size * 2, enable_sqlx_log)
                         .await?;
@@ -453,6 +458,7 @@ impl SinkerUtil {
                         monitor: monitor.clone(),
                         schema,
                         tb,
+                        reverse_router: reverse_router.clone(),
                     };
 
                     let merger = FoxlakeMerger {
@@ -472,6 +478,7 @@ impl SinkerUtil {
                         router: router.clone(),
                         pusher,
                         merger,
+                        engine: engine.clone(),
                     };
                     sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
                 }
@@ -487,6 +494,8 @@ impl SinkerUtil {
                     TaskUtil::create_mysql_conn_pool(&url, parallel_size * 2, enable_sqlx_log)
                         .await?;
                 let s3_client: S3Client = TaskUtil::create_s3_client(&s3_config);
+                let reverse_router =
+                    RdbRouter::from_config(&task_config.router, &DbType::Mysql)?.reverse();
 
                 for _ in 0..parallel_size {
                     let meta_manager =
@@ -511,6 +520,7 @@ impl SinkerUtil {
                         monitor: monitor.clone(),
                         schema,
                         tb,
+                        reverse_router: reverse_router.clone(),
                     };
                     sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
                 }
@@ -541,6 +551,7 @@ impl SinkerUtil {
             SinkerConfig::FoxlakeStruct {
                 url,
                 conflict_policy,
+                engine,
             } => {
                 let filter = RdbFilter::from_config(&task_config.filter, &DbType::Mysql)?;
                 let router = RdbRouter::from_config(&task_config.router, &DbType::Mysql)?;
@@ -555,6 +566,7 @@ impl SinkerUtil {
                         conflict_policy: conflict_policy.clone(),
                         filter: filter.clone(),
                         router: router.clone(),
+                        engine: engine.clone(),
                     };
                     sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
                 }

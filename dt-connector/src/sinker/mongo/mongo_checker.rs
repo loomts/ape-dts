@@ -29,7 +29,7 @@ use crate::{
 
 #[derive(Clone)]
 pub struct MongoChecker {
-    pub router: RdbRouter,
+    pub reverse_router: RdbRouter,
     pub batch_size: usize,
     pub mongo_client: Client,
     pub monitor: Arc<Mutex<Monitor>>,
@@ -114,13 +114,13 @@ impl MongoChecker {
                         src_row_data,
                         diff_col_values,
                         &tb_meta,
-                        &self.router,
+                        &self.reverse_router,
                     );
                     diff.push(diff_log);
                 }
             } else {
                 let miss_log =
-                    BaseChecker::build_mongo_miss_log(src_row_data, &tb_meta, &self.router);
+                    BaseChecker::build_mongo_miss_log(src_row_data, &tb_meta, &self.reverse_router);
                 miss.push(miss_log);
             };
         }

@@ -7,7 +7,7 @@ use anyhow::Context;
 use async_trait::async_trait;
 use dt_common::{
     config::s3_config::S3Config,
-    log_error,
+    log_debug, log_info,
     meta::dt_data::{DtData, DtItem},
     monitor::monitor::Monitor,
 };
@@ -55,8 +55,6 @@ impl FoxlakeMerger {
     }
 
     pub async fn batch_merge(&mut self, data: Vec<DtItem>) -> anyhow::Result<(usize, usize)> {
-        log_error!("1111111111111111111111111");
-
         let mut all_row_count = 0;
         let mut all_data_size = 0;
         let mut schema = String::new();
@@ -75,7 +73,19 @@ impl FoxlakeMerger {
             }
         }
 
+        log_info!(
+            "merging schema: {}, tb: {}, row_count: {}, data_size: {}, file_count: {}",
+            schema,
+            tb,
+            all_row_count,
+            all_data_size,
+            s3_files.len()
+        );
+
         let s3 = &self.s3_config;
+        // minio: s3_endpoint=http://127.0.0.1:9000
+        let endpoint = s3.endpoint.trim_start_matches("http://");
+
         let files: Vec<String> = s3_files.iter().map(|i| format!("'{}'", i)).collect();
         let insert_only = if insert_only { "TRUE" } else { "FALSE" };
         let sql = format!(
@@ -87,14 +97,13 @@ impl FoxlakeMerger {
             schema,
             tb,
             s3.root_url,
-            s3.endpoint,
+            endpoint,
             s3.access_key,
             s3.secret_key,
             files.join(","),
             insert_only
         );
-
-        log_error!("{}", sql);
+        log_debug!("merge sql: {}", sql);
 
         let query = sqlx::query(&sql);
         query
@@ -102,8 +111,7 @@ impl FoxlakeMerger {
             .await
             .with_context(|| format!("merge to foxlake failed: {}", sql))?;
 
-        log_error!("22222222222222222222222222");
-
+        log_info!("merge succeeded");
         Ok((all_data_size, all_row_count))
     }
 }
