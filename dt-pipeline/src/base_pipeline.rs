@@ -260,10 +260,17 @@ impl BasePipeline {
     }
 
     fn get_sink_method(&self, data: &Vec<DtItem>) -> SinkMethod {
+        if data.is_empty() {
+            return SinkMethod::Raw;
+        }
+
         match self.sinker_config {
             SinkerConfig::FoxlakePush { .. }
             | SinkerConfig::FoxlakeMerge { .. }
-            | SinkerConfig::Foxlake { .. } => return SinkMethod::Raw,
+            | SinkerConfig::Foxlake { .. } => match data[0].dt_data {
+                DtData::Ddl { .. } => return SinkMethod::Ddl,
+                _ => return SinkMethod::Raw,
+            },
             _ => {}
         }
 

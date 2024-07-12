@@ -76,7 +76,7 @@ impl MysqlCreateTableStatement {
 
         // Todo: table partition; column visible, generated(information_schema.column.GENERATION_EXPRESSION)
         let mut sql = format!(
-            "CREATE TABLE `{}`.`{}` ({}{})",
+            "CREATE TABLE IF NOT EXISTS `{}`.`{}` ({}{})",
             table.database_name, table.table_name, columns_sql, pk_str
         );
 
