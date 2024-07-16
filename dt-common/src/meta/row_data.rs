@@ -68,6 +68,19 @@ impl RowData {
         }
     }
 
+    pub fn split_update_row_data(self) -> (RowData, RowData) {
+        let delete = RowData::new(
+            self.schema.clone(),
+            self.tb.clone(),
+            RowType::Delete,
+            self.before,
+            None,
+        );
+
+        let insert = RowData::new(self.schema, self.tb, RowType::Insert, None, self.after);
+        (delete, insert)
+    }
+
     pub fn from_mysql_row(row: &MySqlRow, tb_meta: &MysqlTbMeta) -> Self {
         Self::from_mysql_compatible_row(row, tb_meta, &DbType::Mysql)
     }

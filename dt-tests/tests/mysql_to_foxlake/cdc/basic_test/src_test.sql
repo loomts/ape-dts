@@ -58,3 +58,9 @@ UPDATE test_db_1.big_decimal_table SET f_1 = -0.9 WHERE f_0 = 4;
 UPDATE test_db_1.big_decimal_table SET f_1 = 0 WHERE f_0 = 5;
 
 DELETE FROM test_db_1.big_decimal_table;
+
+INSERT INTO test_db_1.composite_pk VALUES(0, 0);
+
+UPDATE test_db_1.composite_pk SET f_1 = 1 WHERE f_0 = 0;
+
+DELETE FROM test_db_1.composite_pk;

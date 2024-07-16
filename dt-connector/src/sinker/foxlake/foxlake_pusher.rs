@@ -55,12 +55,12 @@ const CDC_LOG_SEQUENCE: &str = "cdc_log_sequence";
 
 #[async_trait]
 impl Sinker for FoxlakePusher {
-    async fn sink_raw(&mut self, mut data: Vec<DtItem>, _batch: bool) -> anyhow::Result<()> {
+    async fn sink_raw(&mut self, data: Vec<DtItem>, _batch: bool) -> anyhow::Result<()> {
         if data.is_empty() {
             return Ok(());
         }
 
-        self.batch_sink(&mut data).await
+        self.batch_sink(data).await
     }
 
     async fn close(&mut self) -> anyhow::Result<()> {
@@ -83,67 +83,74 @@ impl Sinker for FoxlakePusher {
 }
 
 impl FoxlakePusher {
-    async fn batch_sink(&mut self, items: &mut [DtItem]) -> anyhow::Result<()> {
+    async fn batch_sink(&mut self, items: Vec<DtItem>) -> anyhow::Result<()> {
         let start_time = Instant::now();
 
-        let (_, all_data_size) = self.batch_push(items, 0, items.len(), false).await?;
+        let batch_size = items.len();
+        let (_, all_data_size) = self.batch_push(items, false).await?;
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, items.len(), all_data_size, start_time)
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, all_data_size, start_time)
             .await
     }
 
     pub async fn batch_push(
         &mut self,
-        items: &mut [DtItem],
-        start_index: usize,
-        max_push_count: usize,
+        items: Vec<DtItem>,
         async_push: bool,
     ) -> anyhow::Result<(Vec<S3FileMeta>, usize)> {
         let bucket = self.s3_config.bucket.clone();
-        let mut all_data_size = 0;
-        let mut to_push_count = 0;
-        let mut pushed_count = 0;
         let mut s3_file_metas = Vec::new();
         let mut futures = Vec::new();
 
-        loop {
-            if items.len() <= start_index + pushed_count {
-                break;
-            }
+        let mut all_data_size = 0;
+        let all_row_count = items.len();
+        let mut push_row_count = 0;
 
-            let mut data = Vec::new();
-            let mut batch_size = 0;
-            let mut data_size = 0;
-            for item in items.iter().skip(start_index).skip(pushed_count) {
-                if to_push_count >= max_push_count {
-                    break;
+        let mut batch_data = Vec::new();
+        let mut batch_last_position;
+        let mut batch_row_count = 0;
+        let mut batch_data_size = 0;
+
+        for item in items {
+            push_row_count += 1;
+            batch_last_position = item.position;
+            let mut do_push = false;
+
+            if let DtData::Dml { row_data } = item.dt_data {
+                batch_data_size += row_data.data_size;
+
+                if row_data.row_type == RowType::Update {
+                    let (delete_row_data, insert_row_data) = row_data.split_update_row_data();
+                    batch_data.push(delete_row_data);
+                    batch_data.push(insert_row_data);
+                    batch_row_count += 2;
+                } else {
+                    batch_data.push(row_data);
+                    batch_row_count += 1;
                 }
-                to_push_count += 1;
 
-                if let DtData::Dml { row_data } = &item.dt_data {
-                    data.push(row_data);
-                    batch_size += 1;
-                    data_size += row_data.data_size;
-
-                    if self.batch_memory_bytes > 0 {
-                        if data_size >= self.batch_memory_bytes {
-                            break;
-                        }
-                    } else if batch_size >= self.batch_size {
-                        break;
+                if self.batch_memory_bytes > 0 {
+                    if batch_data_size >= self.batch_memory_bytes {
+                        do_push = true;
                     }
+                } else if batch_row_count >= self.batch_size {
+                    do_push = true;
                 }
             }
 
+            do_push |= push_row_count >= all_row_count;
+            if !do_push {
+                continue;
+            }
+
+            // push current batch
             let tb_meta = self
                 .meta_manager
-                .get_tb_meta_by_row_data(data[0])
+                .get_tb_meta_by_row_data(&batch_data[0])
                 .await?
                 .to_owned();
 
-            let (orc_data, insert_only) = self
-                .generate_orc_data(&mut data, 0, batch_size, &tb_meta)
-                .await?;
+            let (orc_data, insert_only) = self.generate_orc_data(batch_data, &tb_meta).await?;
 
             let (src_schema, src_tb) = self
                 .reverse_router
@@ -156,9 +163,9 @@ impl FoxlakePusher {
                 insert_only,
                 data_file_name,
                 meta_file_name,
-                data_size,
-                row_count: data.len(),
-                last_position: items[batch_size - 1].position.clone(),
+                data_size: batch_data_size,
+                row_count: batch_row_count,
+                last_position: batch_last_position.clone(),
             };
 
             // push to s3
@@ -177,8 +184,12 @@ impl FoxlakePusher {
             }
 
             s3_file_metas.push(s3_file_meta);
-            pushed_count += batch_size;
-            all_data_size += data_size;
+            all_data_size += batch_data_size;
+
+            // reset batch data
+            batch_data = Vec::new();
+            batch_data_size = 0;
+            batch_row_count = 0;
         }
 
         for future in futures {
@@ -217,9 +228,7 @@ impl FoxlakePusher {
 
     async fn generate_orc_data(
         &self,
-        data: &mut [&RowData],
-        start_index: usize,
-        batch_size: usize,
+        data: Vec<RowData>,
         tb_meta: &MysqlTbMeta,
     ) -> anyhow::Result<(Vec<u8>, bool)> {
         let mut insert_only = true;
@@ -237,7 +246,7 @@ impl FoxlakePusher {
             match col_schema {
                 Schema::Long => {
                     let field_data = root.child(i).unwrap_long();
-                    for row_data in data.iter().skip(start_index).take(batch_size) {
+                    for row_data in data.iter() {
                         match Self::get_col_value(row_data, col) {
                             Some(ColValue::Tiny(v)) => field_data.write(*v as i64),
                             Some(ColValue::UnsignedTiny(v)) => field_data.write(*v as i64),
@@ -273,7 +282,7 @@ impl FoxlakePusher {
 
                 Schema::Decimal(..) => {
                     let field_data = root.child(i).unwrap_decimal();
-                    for row_data in data.iter().skip(start_index).take(batch_size) {
+                    for row_data in data.iter() {
                         match Self::get_col_value(row_data, col) {
                             Some(ColValue::Decimal(v)) => {
                                 let decimal = Decimal::from_str(v)
@@ -287,7 +296,7 @@ impl FoxlakePusher {
 
                 Schema::Float => {
                     let field_data = root.child(i).unwrap_float();
-                    for row_data in data.iter().skip(start_index).take(batch_size) {
+                    for row_data in data.iter() {
                         match Self::get_col_value(row_data, col) {
                             Some(ColValue::Float(v)) => field_data.write(*v),
                             _ => field_data.write_null(),
@@ -297,7 +306,7 @@ impl FoxlakePusher {
 
                 Schema::Double => {
                     let field_data = root.child(i).unwrap_double();
-                    for row_data in data.iter().skip(start_index).take(batch_size) {
+                    for row_data in data.iter() {
                         match Self::get_col_value(row_data, col) {
                             Some(ColValue::Double(v)) => field_data.write(*v),
                             _ => field_data.write_null(),
@@ -307,7 +316,7 @@ impl FoxlakePusher {
 
                 Schema::String => {
                     let field_data = root.child(i).unwrap_string();
-                    for row_data in data.iter().skip(start_index).take(batch_size) {
+                    for row_data in data.iter() {
                         match Self::get_col_value(row_data, col) {
                             Some(ColValue::String(v))
                             | Some(ColValue::Set2(v))
@@ -320,7 +329,7 @@ impl FoxlakePusher {
 
                 Schema::Binary => {
                     let field_data = root.child(i).unwrap_binary();
-                    for row_data in data.iter().skip(start_index).take(batch_size) {
+                    for row_data in data.iter() {
                         match Self::get_col_value(row_data, col) {
                             Some(ColValue::Json(v))
                             | Some(ColValue::Blob(v))
@@ -354,8 +363,8 @@ impl FoxlakePusher {
         }
 
         let cdc_action = root.child(col_count).unwrap_long();
-        for i in 0..batch_size {
-            let action = match data[start_index + i].row_type {
+        for row_data in data.iter() {
+            let action = match row_data.row_type {
                 RowType::Insert => 0,
                 RowType::Update => 1,
                 RowType::Delete => 2,
@@ -367,15 +376,15 @@ impl FoxlakePusher {
         }
 
         let cdc_log_sequence = root.child(col_count + 1).unwrap_long();
-        for _ in 0..batch_size {
+        for _ in 0..data.len() {
             cdc_log_sequence.write(0);
         }
 
-        for _ in 0..batch_size {
+        for _ in 0..data.len() {
             root.write();
         }
 
-        writer.write_batch(batch_size as u64)?;
+        writer.write_batch(data.len() as u64)?;
         let orc_data = writer.finish()?.to_owned();
 
         Ok((orc_data, insert_only))

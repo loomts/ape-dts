@@ -40,12 +40,12 @@ pub struct FoxlakeSinker {
 
 #[async_trait]
 impl Sinker for FoxlakeSinker {
-    async fn sink_raw(&mut self, mut data: Vec<DtItem>, _batch: bool) -> anyhow::Result<()> {
+    async fn sink_raw(&mut self, data: Vec<DtItem>, _batch: bool) -> anyhow::Result<()> {
         if data.is_empty() {
             return Ok(());
         }
 
-        self.batch_sink(&mut data).await
+        self.batch_sink(data).await
     }
 
     async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> anyhow::Result<()> {
@@ -99,11 +99,11 @@ impl Sinker for FoxlakeSinker {
 }
 
 impl FoxlakeSinker {
-    async fn batch_sink(&mut self, data: &mut [DtItem]) -> anyhow::Result<()> {
+    async fn batch_sink(&mut self, data: Vec<DtItem>) -> anyhow::Result<()> {
         let start_time = Instant::now();
 
         // push to s3
-        let (s3_file_metas, _) = self.pusher.batch_push(data, 0, data.len(), true).await?;
+        let (s3_file_metas, _) = self.pusher.batch_push(data, true).await?;
 
         // merge to foxlake
         let mut dt_items = Vec::new();

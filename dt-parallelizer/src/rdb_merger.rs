@@ -90,7 +90,7 @@ impl RdbMerger {
                     return Ok(());
                 }
 
-                let (delete, insert) = Self::split_update_row_data(row_data).await?;
+                let (delete, insert) = row_data.split_update_row_data();
                 let insert_hash_code = Self::get_hash_code(&insert, tb_meta).await?;
 
                 if Self::check_collision(&merged.insert_rows, tb_meta, &insert, insert_hash_code)
@@ -158,26 +158,6 @@ impl RdbMerger {
             }
         }
         false
-    }
-
-    async fn split_update_row_data(row_data: RowData) -> anyhow::Result<(RowData, RowData)> {
-        let delete_row = RowData::new(
-            row_data.schema.clone(),
-            row_data.tb.clone(),
-            RowType::Delete,
-            row_data.before,
-            None,
-        );
-
-        let insert_row = RowData::new(
-            row_data.schema,
-            row_data.tb,
-            RowType::Insert,
-            None,
-            row_data.after,
-        );
-
-        Ok((delete_row, insert_row))
     }
 
     async fn get_hash_code(row_data: &RowData, tb_meta: &RdbTbMeta) -> anyhow::Result<u128> {

@@ -23,3 +23,5 @@ CREATE TABLE test_db_1.date_time_table( f_0 tinyint,
     f_7 date DEFAULT NULL, 
     f_8 year DEFAULT NULL,
     PRIMARY KEY(f_0));
+
+CREATE TABLE test_db_1.composite_pk(f_0 int NOT NULL, f_1 float NOT NULL, PRIMARY KEY (f_0, f_1));
