@@ -59,14 +59,14 @@ impl Sinker for FoxlakeSinker {
                     parsed_ddl.schema = Some(db.to_string());
                     sql = parsed_ddl.to_sql();
                     log_info!(
-                        "sink ddl, origin sql: {}, mapped sql: {}",
+                        "sinking ddl, origin sql: {}, mapped sql: {}",
                         ddl_data.query,
                         sql
                     );
                 }
             }
 
-            log_info!("sink ddl: {}", sql);
+            log_info!("sinking ddl: db: {}, {}", db, sql);
             let query = sqlx::query(&sql);
 
             // create a tmp connection with databse since sqlx conn pool does NOT support `USE db`
@@ -88,6 +88,8 @@ impl Sinker for FoxlakeSinker {
             conn_pool.close().await;
 
             self.meta_manager.invalidate_cache(db, &ddl_data.tb);
+            self.pusher.meta_manager.invalidate_cache(db, &ddl_data.tb);
+            log_info!("ddl sinked");
         }
         Ok(())
     }

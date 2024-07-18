@@ -55,7 +55,7 @@ impl MysqlMetaManager {
 
     pub fn invalidate_cache(&mut self, schema: &str, tb: &str) {
         if !schema.is_empty() && !tb.is_empty() {
-            let full_name = format!("{}.{}", schema, tb);
+            let full_name = format!("{}.{}", schema, tb).to_lowercase();
             self.cache.remove(&full_name);
         } else {
             // clear all cache is always safe
@@ -75,7 +75,7 @@ impl MysqlMetaManager {
         schema: &str,
         tb: &str,
     ) -> anyhow::Result<&'a MysqlTbMeta> {
-        let full_name = format!("{}.{}", schema, tb);
+        let full_name = format!("{}.{}", schema, tb).to_lowercase();
         if !self.cache.contains_key(&full_name) {
             let (cols, col_type_map) =
                 Self::parse_cols(&self.conn_pool, &self.db_type, &self.version, schema, tb).await?;

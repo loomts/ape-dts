@@ -67,8 +67,8 @@ impl Pipeline for BasePipeline {
 
         let mut last_sink_time = Instant::now();
         let mut last_checkpoint_time = Instant::now();
-        let mut last_received_position = Option::None;
-        let mut last_commit_position = Option::None;
+        let mut last_received_position = Position::None;
+        let mut last_commit_position = Position::None;
 
         while !self.shut_down.load(Ordering::Acquire) || !self.buffer.is_empty() {
             // to avoid too many sub counters, only add counter when buffer is not empty
@@ -105,10 +105,10 @@ impl Pipeline for BasePipeline {
 
             if let Some(position) = &last_received {
                 self.syncer.lock().unwrap().received_position = position.to_owned();
-                last_received_position = last_received;
+                last_received_position = position.to_owned();
             }
-            if last_commit.is_some() {
-                last_commit_position = last_commit;
+            if let Some(position) = &last_commit {
+                last_commit_position = position.to_owned();
             }
 
             last_checkpoint_time = self.record_checkpoint(
@@ -281,8 +281,8 @@ impl BasePipeline {
     fn record_checkpoint(
         &self,
         last_checkpoint_time: Option<Instant>,
-        last_received_position: &Option<Position>,
-        last_commit_position: &Option<Position>,
+        last_received_position: &Position,
+        last_commit_position: &Position,
     ) -> Instant {
         if let Some(last) = last_checkpoint_time {
             if last.elapsed().as_secs() < self.checkpoint_interval_secs {
@@ -290,13 +290,11 @@ impl BasePipeline {
             }
         }
 
-        if let Some(position) = last_received_position {
-            log_position!("current_position | {}", position.to_string());
-        }
+        log_position!("current_position | {}", last_received_position.to_string());
+        log_position!("checkpoint_position | {}", last_commit_position.to_string());
 
-        if let Some(position) = last_commit_position {
-            log_position!("checkpoint_position | {}", position.to_string());
-            self.syncer.lock().unwrap().committed_position = position.clone();
+        if !matches!(last_commit_position, Position::None) {
+            self.syncer.lock().unwrap().committed_position = last_commit_position.to_owned();
         }
         Instant::now()
     }

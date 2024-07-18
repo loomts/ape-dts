@@ -79,7 +79,7 @@ impl PgMetaManager {
         schema: &str,
         tb: &str,
     ) -> anyhow::Result<&'a PgTbMeta> {
-        let full_name = format!(r#""{}"."{}""#, schema, tb);
+        let full_name = format!(r#""{}"."{}""#, schema, tb).to_lowercase();
         if !self.name_to_tb_meta.contains_key(&full_name) {
             let oid = Self::get_oid(&self.conn_pool, schema, tb).await?;
             let (cols, col_type_map) =
@@ -113,7 +113,7 @@ impl PgMetaManager {
     pub fn invalidate_cache(&mut self, schema: &str, tb: &str) {
         // TODO, if schema is not empty but tb is empty, only clear cache for the schema
         if !schema.is_empty() && !tb.is_empty() {
-            let full_name = format!(r#""{}"."{}""#, schema, tb);
+            let full_name = format!(r#""{}"."{}""#, schema, tb).to_lowercase();
             self.name_to_tb_meta.remove(&full_name);
         } else {
             self.name_to_tb_meta.clear();
