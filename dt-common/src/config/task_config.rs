@@ -524,8 +524,7 @@ impl TaskConfig {
         }
 
         Ok(ResumerConfig {
-            tb_positions: loader.get_optional(RESUMER, "tb_positions"),
-            finished_tbs: loader.get_optional(RESUMER, "finished_tbs"),
+            resume_config_file: loader.get_optional(RESUMER, "resume_config_file"),
             resume_from_log: loader.get_optional(RESUMER, "resume_from_log"),
             resume_log_dir,
         })

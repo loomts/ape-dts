@@ -1,3 +1,8 @@
+use std::{
+    fs::File,
+    io::{BufRead, BufReader},
+};
+
 use dt_common::{
     config::resumer_config::ResumerConfig, log_info, meta::position::Position,
     utils::file_util::FileUtil,
@@ -13,6 +18,16 @@ pub struct CdcResumer {
 impl CdcResumer {
     pub fn from_config(config: &ResumerConfig) -> anyhow::Result<Self> {
         let mut position = Position::None;
+
+        if let Ok(file) = File::open(&config.resume_config_file) {
+            for line in BufReader::new(file).lines().map_while(Result::ok) {
+                position = Position::from_log(&line);
+                if position != Position::None {
+                    break;
+                }
+            }
+        }
+
         if !config.resume_from_log {
             return Ok(Self { position });
         }

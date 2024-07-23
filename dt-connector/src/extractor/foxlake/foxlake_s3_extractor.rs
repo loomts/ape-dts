@@ -45,9 +45,10 @@ impl Extractor for FoxlakeS3Extractor {
 impl FoxlakeS3Extractor {
     async fn extract_internal(&mut self) -> anyhow::Result<()> {
         let mut start_after = self.resumer.get_resume_value(&self.schema, &self.tb, "");
+        log_info!("start extracting from: {:?}", start_after);
         loop {
             let mut finished = false;
-            let meta_files = self.list_meta_file(start_after).await?;
+            let meta_files = self.list_meta_file(&start_after).await?;
             for file in meta_files.iter() {
                 if file.ends_with(FINISHED) {
                     finished = true;
@@ -63,13 +64,14 @@ impl FoxlakeS3Extractor {
                 self.base_extractor.push_dt_data(dt_data, position).await?;
             }
 
-            start_after = meta_files.last().map(|s: &String| s.to_string());
             if finished {
                 break;
             }
 
             if meta_files.is_empty() {
                 TimeUtil::sleep_millis(5000).await;
+            } else {
+                start_after = meta_files.last().map(|s: &String| s.to_string());
             }
         }
         Ok(())
@@ -95,7 +97,7 @@ impl FoxlakeS3Extractor {
         S3FileMeta::from_str(&content).with_context(|| format!("invalid s3 file meta: [{}]", key))
     }
 
-    async fn list_meta_file(&self, start_after: Option<String>) -> anyhow::Result<Vec<String>> {
+    async fn list_meta_file(&self, start_after: &Option<String>) -> anyhow::Result<Vec<String>> {
         let mut prefix = format!("{}/{}/meta/", self.schema, self.tb);
         if !self.s3_config.root_dir.is_empty() {
             prefix = format!("{}/{}", self.s3_config.root_dir, prefix);
