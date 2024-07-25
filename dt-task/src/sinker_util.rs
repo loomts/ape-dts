@@ -31,6 +31,7 @@ use dt_connector::{
         foxlake::{
             foxlake_merger::FoxlakeMerger, foxlake_pusher::FoxlakePusher,
             foxlake_sinker::FoxlakeSinker, foxlake_struct_sinker::FoxlakeStructSinker,
+            orc_sequencer::OrcSequencer,
         },
         kafka::kafka_sinker::KafkaSinker,
         mongo::{mongo_checker::MongoChecker, mongo_sinker::MongoSinker},
@@ -434,6 +435,7 @@ impl SinkerUtil {
                     TaskUtil::create_mysql_conn_pool(&url, parallel_size * 2, enable_sqlx_log)
                         .await?;
                 let s3_client = TaskUtil::create_s3_client(&s3_config);
+                let orc_sequencer = Arc::new(Mutex::new(OrcSequencer::new()));
 
                 for _ in 0..parallel_size {
                     let meta_manager =
@@ -459,6 +461,7 @@ impl SinkerUtil {
                         schema,
                         tb,
                         reverse_router: reverse_router.clone(),
+                        orc_sequencer: orc_sequencer.clone(),
                     };
 
                     let merger = FoxlakeMerger {
@@ -496,6 +499,7 @@ impl SinkerUtil {
                 let s3_client: S3Client = TaskUtil::create_s3_client(&s3_config);
                 let reverse_router =
                     RdbRouter::from_config(&task_config.router, &DbType::Mysql)?.reverse();
+                let orc_sequencer = Arc::new(Mutex::new(OrcSequencer::new()));
 
                 for _ in 0..parallel_size {
                     let meta_manager =
@@ -521,6 +525,7 @@ impl SinkerUtil {
                         schema,
                         tb,
                         reverse_router: reverse_router.clone(),
+                        orc_sequencer: orc_sequencer.clone(),
                     };
                     sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
                 }

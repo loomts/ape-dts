@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Datelike, Timelike, Utc};
 use dt_common::{
     config::{config_enums::ExtractType, s3_config::S3Config},
+    log_info,
     meta::{
         col_value::ColValue,
         dt_data::{DtData, DtItem},
@@ -34,7 +35,7 @@ use uuid::Uuid;
 
 use crate::{rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker};
 
-use super::{decimal_uitil::DecimalUtil, unicode_util::UnicodeUtil};
+use super::{decimal_uitil::DecimalUtil, orc_sequencer::OrcSequencer, unicode_util::UnicodeUtil};
 
 pub struct FoxlakePusher {
     pub url: String,
@@ -48,6 +49,7 @@ pub struct FoxlakePusher {
     pub schema: Option<String>,
     pub tb: Option<String>,
     pub reverse_router: RdbRouter,
+    pub orc_sequencer: Arc<Mutex<OrcSequencer>>,
 }
 
 const CDC_ACTION: &str = "cdc_action";
@@ -501,7 +503,7 @@ impl FoxlakePusher {
         let data_file_name = format!("log_dml_{}_{}.orc", log_sequence, uuid);
         let meta_file_name = format!(
             "{}_{}",
-            Utc::now().format("%Y-%m-%d %H:%M:%S%.6f"),
+            self.orc_sequencer.lock().unwrap().get_sequence(),
             &data_file_name
         );
 
@@ -540,7 +542,8 @@ impl FoxlakePusher {
         s3_client
             .put_object(request)
             .await
-            .with_context(|| format!("failed to push objects to s3, key: {}", key))?;
+            .with_context(|| format!("failed to push: {}", key))?;
+        log_info!("pushed: {}", key);
         Ok(())
     }
 }
