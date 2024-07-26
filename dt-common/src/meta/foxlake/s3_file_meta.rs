@@ -6,7 +6,7 @@ use serde_json::json;
 
 use crate::meta::position::Position;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct S3FileMeta {
     pub schema: String,
     pub tb: String,
@@ -16,6 +16,7 @@ pub struct S3FileMeta {
     pub data_size: usize,
     pub row_count: usize,
     pub last_position: Position,
+    pub push_epoch: i64,
 }
 
 impl std::fmt::Display for S3FileMeta {

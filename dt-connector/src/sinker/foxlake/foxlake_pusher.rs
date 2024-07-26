@@ -6,6 +6,7 @@ use dt_common::{
     log_info,
     meta::{
         col_value::ColValue,
+        ddl_data::DdlData,
         dt_data::{DtData, DtItem},
         foxlake::s3_file_meta::S3FileMeta,
         mysql::{
@@ -82,6 +83,11 @@ impl Sinker for FoxlakePusher {
 
         self.meta_manager.close().await
     }
+
+    async fn refresh_meta(&mut self, _data: Vec<DdlData>) -> anyhow::Result<()> {
+        self.orc_sequencer.lock().unwrap().update_epoch();
+        Ok(())
+    }
 }
 
 impl FoxlakePusher {
@@ -157,7 +163,8 @@ impl FoxlakePusher {
             let (src_schema, src_tb) = self
                 .reverse_router
                 .get_tb_map(&tb_meta.basic.schema, &tb_meta.basic.tb);
-            let (data_file_name, meta_file_name) = self.get_s3_file_info(src_schema, src_tb);
+            let (data_file_name, meta_file_name, push_epoch) =
+                self.get_s3_file_info(src_schema, src_tb);
 
             let s3_file_meta = S3FileMeta {
                 schema: tb_meta.basic.schema.clone(),
@@ -168,6 +175,7 @@ impl FoxlakePusher {
                 data_size: batch_data_size,
                 row_count: batch_row_count,
                 last_position: batch_last_position.clone(),
+                push_epoch,
             };
 
             // push to s3
@@ -495,21 +503,19 @@ impl FoxlakePusher {
 
 // s3 functions
 impl FoxlakePusher {
-    fn get_s3_file_info(&self, schema: &str, tb: &str) -> (String, String) {
+    fn get_s3_file_info(&self, schema: &str, tb: &str) -> (String, String, i64) {
         let dir = self.get_s3_file_dir(schema, tb);
         // currently we do not get sequence from position
         let log_sequence = "0_0";
         let uuid = Uuid::new_v4();
         let data_file_name = format!("log_dml_{}_{}.orc", log_sequence, uuid);
-        let meta_file_name = format!(
-            "{}_{}",
-            self.orc_sequencer.lock().unwrap().get_sequence(),
-            &data_file_name
-        );
 
+        let (push_epoch, orc_sequence) = self.orc_sequencer.lock().unwrap().get_sequence();
+        let meta_file_name = format!("{}_{}", orc_sequence, &data_file_name);
         (
             format!("{}/{}", dir, data_file_name),
             format!("{}/meta/{}", dir, meta_file_name),
+            push_epoch,
         )
     }
 

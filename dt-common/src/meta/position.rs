@@ -7,9 +7,10 @@ use serde_json::json;
 
 use crate::log_error;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(tag = "type")]
 pub enum Position {
+    #[default]
     None,
     Kafka {
         topic: String,

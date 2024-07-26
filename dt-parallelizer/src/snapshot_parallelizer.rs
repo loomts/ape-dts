@@ -59,8 +59,12 @@ impl SnapshotParallelizer {
             sub_datas.push(Vec::with_capacity(avg_size));
         }
 
-        for (i, item) in data.into_iter().enumerate() {
-            sub_datas[i / avg_size].push(item);
+        let mut i = 0;
+        for item in data {
+            sub_datas[i].push(item);
+            if sub_datas[i].len() >= avg_size {
+                i += 1;
+            }
         }
         Ok(sub_datas)
     }

@@ -35,7 +35,7 @@ impl SnapshotResumer {
             // since only 1 table is being processed at the same time
             if let Ok(lines) = FileUtil::tail(&position_log, TAIL_POSITION_COUNT) {
                 for line in lines.iter() {
-                    Self::load_resume_line(&mut tb_positions, &mut finished_tbs, &line)
+                    Self::load_resume_line(&mut tb_positions, &mut finished_tbs, line)
                 }
             }
 

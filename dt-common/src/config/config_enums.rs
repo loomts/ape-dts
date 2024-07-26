@@ -81,6 +81,8 @@ pub enum ParallelType {
     Mongo,
     #[strum(serialize = "redis")]
     Redis,
+    #[strum(serialize = "foxlake")]
+    Foxlake,
 }
 
 #[derive(Clone, Debug, IntoStaticStr)]

@@ -1,4 +1,4 @@
-use std::{path::PathBuf, str::FromStr};
+use std::{i64, path::PathBuf, str::FromStr};
 
 use anyhow::Context;
 use async_trait::async_trait;
@@ -77,6 +77,15 @@ impl FoxlakeS3Extractor {
             }
 
             if finished {
+                let dt_data = DtData::Foxlake {
+                    file_meta: S3FileMeta {
+                        push_epoch: i64::MAX,
+                        ..Default::default()
+                    },
+                };
+                self.base_extractor
+                    .push_dt_data(dt_data, Position::None)
+                    .await?;
                 break;
             }
 
@@ -155,7 +164,7 @@ impl FoxlakeS3Extractor {
         Ok(file_names)
     }
 
-    fn check_continuity(meta_files: &Vec<String>, start_after: &Option<String>) -> bool {
+    fn check_continuity(meta_files: &[String], start_after: &Option<String>) -> bool {
         let mut prev_meta_file = &String::new();
         let (mut prev_id, mut prev_sequence) = (0, 0);
         if let Some(v) = start_after {
@@ -211,7 +220,7 @@ impl FoxlakeS3Extractor {
             prev_meta_file = meta_file;
         }
 
-        return continuous;
+        continuous
     }
 
     fn parse_meta_file_name(meta_file: &str) -> (u64, u64) {

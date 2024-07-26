@@ -1,32 +1,40 @@
-use std::sync::atomic::{AtomicU64, Ordering};
-
 use chrono::Utc;
 
 pub struct OrcSequencer {
     pub id: i64,
-    pub sequence: AtomicU64,
+    pub epoch: i64,
+    pub sequence: u64,
 }
 
 impl OrcSequencer {
     pub fn new() -> Self {
         Self {
             id: Utc::now().timestamp(),
-            sequence: AtomicU64::new(0),
+            epoch: Utc::now().timestamp(),
+            sequence: 0,
         }
     }
 
-    pub fn get_sequence(&mut self) -> String {
-        if self.sequence.load(Ordering::Acquire) >= 999999999 {
+    pub fn update_epoch(&mut self) {
+        self.epoch = Utc::now().timestamp();
+    }
+
+    pub fn get_sequence(&mut self) -> (i64, String) {
+        if self.sequence >= 999999999 {
             // should never happen, no single table will have so big data
             self.id = Utc::now().timestamp();
-            self.sequence.store(0, Ordering::Release);
+            self.sequence = 0;
         }
 
         let width = 10;
-        format!(
-            "{:0>width$}_{:0>width$}",
-            self.id,
-            self.sequence.fetch_add(1, Ordering::Release)
-        )
+        let sequence = format!("{:0>width$}_{:0>width$}", self.id, self.sequence);
+        self.sequence += 1;
+        (self.epoch, sequence)
+    }
+}
+
+impl Default for OrcSequencer {
+    fn default() -> Self {
+        Self::new()
     }
 }
