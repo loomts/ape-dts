@@ -125,6 +125,8 @@ impl ExtractorUtil {
                 binlog_filename,
                 binlog_position,
                 server_id,
+                gtid_enabled,
+                gtid_set,
                 heartbeat_interval_secs,
                 heartbeat_tb,
                 start_time_utc,
@@ -147,6 +149,8 @@ impl ExtractorUtil {
                     base_extractor,
                     resumer: cdc_resumer,
                     time_filter,
+                    gtid_enabled,
+                    gtid_set,
                 };
                 Box::new(extractor)
             }

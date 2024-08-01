@@ -147,4 +147,10 @@ mod test {
     async fn cdc_to_reverse_sql_test() {
         TestBase::run_cdc_to_sql_test("mysql_to_mysql/cdc/to_sql_test", true, 1000, 0).await;
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn cdc_gtid_test() {
+        TestBase::run_cdc_test("mysql_to_mysql/cdc/gtid_test", 3000, 2000).await;
+    }
 }

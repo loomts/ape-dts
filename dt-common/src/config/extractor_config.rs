@@ -27,6 +27,8 @@ pub enum ExtractorConfig {
         binlog_filename: String,
         binlog_position: u32,
         server_id: u64,
+        gtid_enabled: bool,
+        gtid_set: String,
         heartbeat_interval_secs: u64,
         heartbeat_tb: String,
         start_time_utc: String,

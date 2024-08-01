@@ -127,6 +127,8 @@ impl TaskConfig {
                     binlog_filename: loader.get_optional(EXTRACTOR, "binlog_filename"),
                     binlog_position: loader.get_optional(EXTRACTOR, "binlog_position"),
                     server_id: loader.get_required(EXTRACTOR, "server_id"),
+                    gtid_enabled: loader.get_optional(EXTRACTOR, "gtid_enabled"),
+                    gtid_set: loader.get_optional(EXTRACTOR, "gtid_set"),
                     heartbeat_interval_secs,
                     heartbeat_tb,
                     start_time_utc: loader.get_optional(EXTRACTOR, "start_time_utc"),

@@ -4,7 +4,7 @@ use anyhow::Context;
 use async_trait::async_trait;
 use dt_common::{
     config::s3_config::S3Config,
-    log_debug, log_error, log_info,
+    log_debug, log_info, log_warn,
     meta::{dt_data::DtData, foxlake::s3_file_meta::S3FileMeta, position::Position},
     utils::time_util::TimeUtil,
 };
@@ -52,7 +52,7 @@ impl FoxlakeS3Extractor {
             let meta_files = self.list_meta_file(&start_after).await?;
 
             if !Self::check_continuity(&meta_files, &start_after) {
-                log_error!(
+                log_warn!(
                     "meta files are not continuous, start_after: {:?}, meta_files: {}",
                     start_after,
                     meta_files.join(",")
@@ -209,7 +209,7 @@ impl FoxlakeS3Extractor {
             // discontinuity is caused by multiple threads pushing orc files in pusher progress.
             if sequence != prev_sequence + 1 {
                 continuous = false;
-                log_error!(
+                log_warn!(
                     "sequence discontinuity, previous meta file: {}, current meta file: {}",
                     prev_meta_file,
                     meta_file

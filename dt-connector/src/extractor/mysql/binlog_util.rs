@@ -97,6 +97,7 @@ impl BinlogUtil {
             binlog_filename: binlog.into(),
             binlog_position: 0,
             server_id,
+            ..Default::default()
         };
         let mut stream = client.connect().await?;
         loop {

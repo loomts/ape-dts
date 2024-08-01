@@ -248,7 +248,8 @@ impl BasePipeline {
                 }
 
                 DtData::Ddl { ddl_data } => {
-                    last_received_position = Some(i.position);
+                    last_commit_position = Some(i.position);
+                    last_received_position = last_commit_position.clone();
                     result.push(ddl_data);
                 }
 

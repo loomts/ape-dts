@@ -33,6 +33,7 @@ pub enum Position {
         server_id: String,
         binlog_filename: String,
         next_event_position: u32,
+        gtid_set: String,
         timestamp: String,
     },
     PgCdc {
