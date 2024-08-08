@@ -6,8 +6,10 @@ use std::{
 
 use async_trait::async_trait;
 use dt_common::meta::{
-    ddl_data::DdlData, pg::pg_meta_manager::PgMetaManager, rdb_meta_manager::RdbMetaManager,
-    row_data::RowData, struct_meta::statement::struct_statement::StructStatement,
+    pg::pg_meta_manager::PgMetaManager,
+    rdb_meta_manager::RdbMetaManager,
+    row_data::RowData,
+    struct_meta::{statement::struct_statement::StructStatement, struct_data::StructData},
 };
 use dt_common::{monitor::monitor::Monitor, rdb_filter::RdbFilter};
 use futures::TryStreamExt;
@@ -54,12 +56,12 @@ impl Sinker for PgChecker {
         return close_conn_pool!(self);
     }
 
-    async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> anyhow::Result<()> {
+    async fn sink_struct(&mut self, data: Vec<StructData>) -> anyhow::Result<()> {
         if data.is_empty() {
             return Ok(());
         }
 
-        self.serial_ddl_check(data).await?;
+        self.serial_struct_check(data).await?;
         Ok(())
     }
 }
@@ -148,13 +150,9 @@ impl PgChecker {
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, 0, start_time).await
     }
 
-    async fn serial_ddl_check(&mut self, mut data: Vec<DdlData>) -> anyhow::Result<()> {
+    async fn serial_struct_check(&mut self, mut data: Vec<StructData>) -> anyhow::Result<()> {
         for src_data in data.iter_mut() {
-            if src_data.statement.is_none() {
-                continue;
-            }
-
-            let src_statement = src_data.statement.as_mut().unwrap();
+            let src_statement = &mut src_data.statement;
             let schema = match src_statement {
                 StructStatement::PgCreateSchema { statement } => statement.schema.name.clone(),
                 StructStatement::PgCreateTable { statement } => statement.table.schema_name.clone(),

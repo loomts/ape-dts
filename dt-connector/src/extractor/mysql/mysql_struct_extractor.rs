@@ -1,9 +1,9 @@
 use async_trait::async_trait;
+use dt_common::meta::struct_meta::struct_data::StructData;
 use dt_common::{log_info, rdb_filter::RdbFilter};
 
 use dt_common::meta::{
-    ddl_data::DdlData, ddl_type::DdlType, dt_data::DtData,
-    mysql::mysql_meta_manager::MysqlMetaManager, position::Position,
+    dt_data::DtData, mysql::mysql_meta_manager::MysqlMetaManager, position::Position,
     struct_meta::statement::struct_statement::StructStatement,
 };
 use sqlx::{MySql, Pool};
@@ -37,7 +37,7 @@ impl Extractor for MysqlStructExtractor {
 impl MysqlStructExtractor {
     pub async fn extract_internal(&mut self) -> anyhow::Result<()> {
         let meta_manager = MysqlMetaManager::new(self.conn_pool.clone()).init().await?;
-        let mut pg_fetcher = MysqlStructFetcher {
+        let mut fetcher = MysqlStructFetcher {
             conn_pool: self.conn_pool.to_owned(),
             db: self.db.clone(),
             filter: Some(self.filter.to_owned()),
@@ -45,14 +45,14 @@ impl MysqlStructExtractor {
         };
 
         // database
-        let database = pg_fetcher.get_create_database_statement().await?;
+        let database = fetcher.get_create_database_statement().await?;
         let statement = StructStatement::MysqlCreateDatabase {
             statement: database,
         };
         self.push_dt_data(statement).await?;
 
         // tables
-        for statement in pg_fetcher.get_create_table_statements("").await? {
+        for statement in fetcher.get_create_table_statements("").await? {
             self.push_dt_data(StructStatement::MysqlCreateTable { statement })
                 .await?;
         }
@@ -60,16 +60,14 @@ impl MysqlStructExtractor {
     }
 
     pub async fn push_dt_data(&mut self, statement: StructStatement) -> anyhow::Result<()> {
-        let ddl_data = DdlData {
+        let struct_data = StructData {
             schema: self.db.clone(),
             tb: String::new(),
-            query: String::new(),
-            statement: Some(statement),
-            ddl_type: DdlType::Unknown,
+            statement,
         };
 
         self.base_extractor
-            .push_dt_data(DtData::Ddl { ddl_data }, Position::None)
+            .push_dt_data(DtData::Struct { struct_data }, Position::None)
             .await
     }
 }

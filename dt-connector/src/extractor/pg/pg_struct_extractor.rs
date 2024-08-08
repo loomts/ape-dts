@@ -1,9 +1,9 @@
 use async_trait::async_trait;
+use dt_common::meta::struct_meta::struct_data::StructData;
 use dt_common::{log_info, rdb_filter::RdbFilter};
 
 use dt_common::meta::{
-    ddl_data::DdlData, ddl_type::DdlType, dt_data::DtData, position::Position,
-    struct_meta::statement::struct_statement::StructStatement,
+    dt_data::DtData, position::Position, struct_meta::statement::struct_statement::StructStatement,
 };
 
 use sqlx::{Pool, Postgres};
@@ -58,16 +58,14 @@ impl PgStructExtractor {
     }
 
     pub async fn push_dt_data(&mut self, statement: StructStatement) -> anyhow::Result<()> {
-        let ddl_data = DdlData {
+        let struct_data = StructData {
             schema: self.schema.clone(),
             tb: String::new(),
-            query: String::new(),
-            statement: Some(statement),
-            ddl_type: DdlType::Unknown,
+            statement,
         };
 
         self.base_extractor
-            .push_dt_data(DtData::Ddl { ddl_data }, Position::None)
+            .push_dt_data(DtData::Struct { struct_data }, Position::None)
             .await
     }
 }

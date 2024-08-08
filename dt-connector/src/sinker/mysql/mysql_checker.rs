@@ -17,12 +17,13 @@ use crate::{
     Sinker,
 };
 
-use dt_common::{monitor::monitor::Monitor, rdb_filter::RdbFilter};
+use dt_common::{
+    meta::struct_meta::struct_data::StructData, monitor::monitor::Monitor, rdb_filter::RdbFilter,
+};
 
 use dt_common::meta::{
-    ddl_data::DdlData, mysql::mysql_meta_manager::MysqlMetaManager,
-    rdb_meta_manager::RdbMetaManager, row_data::RowData,
-    struct_meta::statement::struct_statement::StructStatement,
+    mysql::mysql_meta_manager::MysqlMetaManager, rdb_meta_manager::RdbMetaManager,
+    row_data::RowData, struct_meta::statement::struct_statement::StructStatement,
 };
 
 #[derive(Clone)]
@@ -57,7 +58,7 @@ impl Sinker for MysqlChecker {
         return close_conn_pool!(self);
     }
 
-    async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> anyhow::Result<()> {
+    async fn sink_struct(&mut self, data: Vec<StructData>) -> anyhow::Result<()> {
         if data.is_empty() {
             return Ok(());
         }
@@ -151,13 +152,9 @@ impl MysqlChecker {
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, 0, start_time).await
     }
 
-    async fn serial_ddl_check(&mut self, mut data: Vec<DdlData>) -> anyhow::Result<()> {
+    async fn serial_ddl_check(&mut self, mut data: Vec<StructData>) -> anyhow::Result<()> {
         for src_data in data.iter_mut() {
-            if src_data.statement.is_none() {
-                continue;
-            }
-
-            let src_statement = src_data.statement.as_mut().unwrap();
+            let src_statement = &mut src_data.statement;
             let db = match src_statement {
                 StructStatement::MysqlCreateDatabase { statement } => {
                     statement.database.name.clone()

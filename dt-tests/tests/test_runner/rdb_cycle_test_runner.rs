@@ -3,7 +3,7 @@ use dt_connector::data_marker::DataMarker;
 use std::collections::HashMap;
 use tokio::task::JoinHandle;
 
-use crate::test_config_util::TestConfigUtil;
+use crate::{test_config_util::TestConfigUtil, test_runner::mongo_test_runner::SRC};
 
 use super::rdb_test_runner::RdbTestRunner;
 
@@ -118,8 +118,11 @@ impl RdbCycleTestRunner {
         expect_tx_count_map: &HashMap<(String, String, String), u8>,
     ) -> anyhow::Result<()> {
         let data_marker = self.get_data_marker();
-        let mut db_tbs =
-            RdbTestRunner::get_compare_db_tbs_from_sqls(&self.base.base.src_prepare_sqls)?;
+        let db_type = self.base.get_db_type(SRC);
+        let mut db_tbs = RdbTestRunner::get_compare_db_tbs_from_sqls(
+            &db_type,
+            &self.base.base.src_prepare_sqls,
+        )?;
         for i in 0..db_tbs.len() {
             if db_tbs[i].0 == data_marker.marker_db && db_tbs[i].1 == data_marker.marker_tb {
                 db_tbs.remove(i);

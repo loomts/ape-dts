@@ -27,8 +27,9 @@ use sqlx::{postgres::PgArguments, query::Query, Pool, Postgres};
 use tokio_postgres::replication::LogicalReplicationStream;
 
 use dt_common::{
-    config::config_enums::DbType, error::Error, log_error, log_info, rdb_filter::RdbFilter,
-    time_filter::TimeFilter, utils::time_util::TimeUtil,
+    config::config_enums::DbType, error::Error, log_error, log_info,
+    meta::ddl_meta::ddl_data::DdlData, rdb_filter::RdbFilter, time_filter::TimeFilter,
+    utils::time_util::TimeUtil,
 };
 
 use crate::{
@@ -417,18 +418,22 @@ impl PgCdcExtractor {
         let _tag = get_string(row_data, "tag");
         let schema = get_string(row_data, "schema");
 
-        if let Ok(ddl_data) = self.base_extractor.parse_ddl(&schema, &ddl_text).await {
-            // invalidate metadata cache
-            self.meta_manager
-                .invalidate_cache(&ddl_data.schema, &ddl_data.tb);
+        if let Ok(ddl_data) = self
+            .base_extractor
+            .parse_ddl(&DbType::Pg, &schema, &ddl_text)
+            .await
+        {
+            for ddl_data in ddl_data.split_to_multi() {
+                // invalidate metadata cache
+                self.meta_manager.invalidate_cache_by_ddl_data(&ddl_data);
+                let (schema, tb) = ddl_data.get_db_tb();
 
-            if !self.filter.filter_ddl(
-                &ddl_data.schema,
-                &ddl_data.tb,
-                &ddl_data.ddl_type.to_string(),
-            ) {
-                self.push_dt_data_to_buf(DtData::Ddl { ddl_data }, position.to_owned())
-                    .await?;
+                if !self
+                    .filter
+                    .filter_ddl(&schema, &tb, &ddl_data.ddl_type.to_string())
+                {
+                    self.push_ddl_to_buf(ddl_data, position.to_owned()).await?;
+                }
             }
         }
         Ok(())
@@ -475,6 +480,17 @@ impl PgCdcExtractor {
             return Ok(());
         }
         self.base_extractor.push_row(row_data, position).await
+    }
+
+    async fn push_ddl_to_buf(
+        &mut self,
+        row_data: DdlData,
+        position: Position,
+    ) -> anyhow::Result<()> {
+        if !self.time_filter.started {
+            return Ok(());
+        }
+        self.base_extractor.push_ddl(row_data, position).await
     }
 
     async fn push_dt_data_to_buf(

@@ -7,7 +7,7 @@ use super::{
     pg_create_table_statement::PgCreateTableStatement,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum StructStatement {
     MysqlCreateDatabase {
         statement: MysqlCreateDatabaseStatement,
@@ -21,6 +21,8 @@ pub enum StructStatement {
     PgCreateTable {
         statement: PgCreateTableStatement,
     },
+    #[default]
+    Unknown,
 }
 
 impl StructStatement {
@@ -30,6 +32,7 @@ impl StructStatement {
             Self::PgCreateSchema { statement } => statement.to_sqls(filter),
             Self::MysqlCreateTable { statement } => statement.to_sqls(filter),
             Self::PgCreateTable { statement } => statement.to_sqls(filter),
+            _ => vec![],
         }
     }
 }

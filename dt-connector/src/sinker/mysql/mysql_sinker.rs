@@ -10,11 +10,14 @@ use crate::{
 };
 
 use anyhow::Context;
-use dt_common::{log_error, log_info, monitor::monitor::Monitor};
+use dt_common::{
+    log_error, log_info,
+    meta::ddl_meta::{ddl_data::DdlData, ddl_type::DdlType},
+    monitor::monitor::Monitor,
+};
 
 use dt_common::meta::{
-    ddl_data::DdlData, ddl_type::DdlType, mysql::mysql_meta_manager::MysqlMetaManager,
-    row_data::RowData, row_type::RowType,
+    mysql::mysql_meta_manager::MysqlMetaManager, row_data::RowData, row_type::RowType,
 };
 
 use sqlx::{
@@ -60,17 +63,19 @@ impl Sinker for MysqlSinker {
     }
 
     async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> anyhow::Result<()> {
-        for ddl_data in data.iter() {
-            log_info!("sink ddl: {}", ddl_data.query);
-            let query = sqlx::query(&ddl_data.query);
+        for ddl_data in data {
+            let sql = ddl_data.to_sql();
+            log_info!("sink ddl: {}", &sql);
+            let query = sqlx::query(&sql);
 
             // create a tmp connection with databse since sqlx conn pool does NOT support `USE db`
+            let (db, _tb) = ddl_data.get_db_tb();
             let mut conn_options = MySqlConnectOptions::from_str(&self.url)?;
-            if !ddl_data.schema.is_empty() {
+            if !db.is_empty() {
                 match ddl_data.ddl_type {
                     DdlType::CreateDatabase | DdlType::DropDatabase | DdlType::AlterDatabase => {}
                     _ => {
-                        conn_options = conn_options.database(&ddl_data.schema);
+                        conn_options = conn_options.database(&db);
                     }
                 }
             }
@@ -92,8 +97,7 @@ impl Sinker for MysqlSinker {
 
     async fn refresh_meta(&mut self, data: Vec<DdlData>) -> anyhow::Result<()> {
         for ddl_data in data.iter() {
-            self.meta_manager
-                .invalidate_cache(&ddl_data.schema, &ddl_data.tb);
+            self.meta_manager.invalidate_cache_by_ddl_data(ddl_data);
         }
         Ok(())
     }

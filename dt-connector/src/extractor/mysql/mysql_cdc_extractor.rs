@@ -14,8 +14,8 @@ use std::{
 use dt_common::{
     meta::{
         adaptor::mysql_col_value_convertor::MysqlColValueConvertor, col_value::ColValue,
-        dt_data::DtData, mysql::mysql_meta_manager::MysqlMetaManager, position::Position,
-        row_data::RowData, row_type::RowType, syncer::Syncer,
+        ddl_meta::ddl_data::DdlData, dt_data::DtData, mysql::mysql_meta_manager::MysqlMetaManager,
+        position::Position, row_data::RowData, row_type::RowType, syncer::Syncer,
     },
     time_filter::TimeFilter,
 };
@@ -297,6 +297,17 @@ impl MysqlCdcExtractor {
         self.base_extractor.push_row(row_data, position).await
     }
 
+    async fn push_ddl_to_buf(
+        &mut self,
+        ddl_data: DdlData,
+        position: Position,
+    ) -> anyhow::Result<()> {
+        if !self.time_filter.started {
+            return Ok(());
+        }
+        self.base_extractor.push_ddl(ddl_data, position).await
+    }
+
     async fn push_dt_data_to_buf(
         &mut self,
         dt_data: DtData,
@@ -363,20 +374,19 @@ impl MysqlCdcExtractor {
         log_info!("received ddl: {:?}", query);
         if let Ok(ddl_data) = self
             .base_extractor
-            .parse_ddl(&query.schema, &query.query)
+            .parse_ddl(&DbType::Mysql, &query.schema, &query.query)
             .await
         {
-            // invalidate metadata cache
-            self.meta_manager
-                .invalidate_cache(&ddl_data.schema, &ddl_data.tb);
-
-            if !self.filter.filter_ddl(
-                &ddl_data.schema,
-                &ddl_data.tb,
-                &ddl_data.ddl_type.to_string(),
-            ) {
-                self.push_dt_data_to_buf(DtData::Ddl { ddl_data }, position)
-                    .await?;
+            for ddl_data in ddl_data.split_to_multi() {
+                // invalidate metadata cache
+                self.meta_manager.invalidate_cache_by_ddl_data(&ddl_data);
+                let (db, tb) = ddl_data.get_db_tb();
+                if !self
+                    .filter
+                    .filter_ddl(&db, &tb, &ddl_data.ddl_type.to_string())
+                {
+                    self.push_ddl_to_buf(ddl_data, position.clone()).await?;
+                }
             }
         }
         Ok(())

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{config::config_enums::DbType, error::Error};
+use crate::{config::config_enums::DbType, error::Error, meta::ddl_meta::ddl_data::DdlData};
 use anyhow::bail;
 use futures::TryStreamExt;
 
@@ -61,6 +61,11 @@ impl MysqlMetaManager {
             // clear all cache is always safe
             self.cache.clear();
         }
+    }
+
+    pub fn invalidate_cache_by_ddl_data(&mut self, ddl_data: &DdlData) {
+        let (db, tb) = ddl_data.get_db_tb();
+        self.invalidate_cache(&db, &tb);
     }
 
     pub async fn get_tb_meta_by_row_data<'a>(

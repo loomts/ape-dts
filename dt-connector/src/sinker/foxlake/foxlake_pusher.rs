@@ -6,7 +6,7 @@ use dt_common::{
     log_info,
     meta::{
         col_value::ColValue,
-        ddl_data::DdlData,
+        ddl_meta::ddl_data::DdlData,
         dt_data::{DtData, DtItem},
         foxlake::s3_file_meta::S3FileMeta,
         mysql::{

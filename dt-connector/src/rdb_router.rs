@@ -2,6 +2,7 @@ use dt_common::{
     config::{
         config_enums::DbType, config_token_parser::ConfigTokenParser, router_config::RouterConfig,
     },
+    meta::ddl_meta::{ddl_data::DdlData, ddl_statement::DdlStatement},
     utils::sql_util::SqlUtil,
 };
 use std::collections::HashMap;
@@ -150,6 +151,33 @@ impl RdbRouter {
         }
 
         row_data
+    }
+
+    pub fn route_ddl(&self, mut ddl_data: DdlData) -> DdlData {
+        match &mut ddl_data.statement {
+            DdlStatement::RenameTable(s) => {
+                let (src_db, src_tb) = (s.db_tb.db.clone(), s.db_tb.tb.clone());
+                let (src_new_db, src_new_tb) = (s.new_db_tb.db.clone(), s.new_db_tb.tb.clone());
+                let (dst_db, dst_tb) = self.get_tb_map(&src_db, &src_tb);
+                let (dst_new_db, dst_new_tb) = self.get_tb_map(&src_new_db, &src_new_tb);
+                ddl_data.statement.route_rename_table(
+                    dst_db.into(),
+                    dst_tb.into(),
+                    dst_new_db.into(),
+                    dst_new_tb.into(),
+                );
+            }
+
+            _ => {
+                let (src_db, src_tb) = ddl_data.get_db_tb();
+                let (dst_db, dst_tb) = self.get_tb_map(&src_db, &src_tb);
+                ddl_data.statement.route(dst_db.into(), dst_tb.into());
+            }
+        }
+
+        let dst_default_db = self.get_db_map(&ddl_data.default_db);
+        ddl_data.default_db = dst_default_db.into();
+        ddl_data
     }
 
     fn parse_db_map(config_str: &str, db_type: &DbType) -> anyhow::Result<HashMap<String, String>> {

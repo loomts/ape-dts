@@ -1,5 +1,6 @@
 use anyhow::bail;
-use dt_common::meta::{ddl_data::DdlData, dt_data::DtItem, dt_queue::DtQueue, row_data::RowData};
+use dt_common::meta::ddl_meta::ddl_data::DdlData;
+use dt_common::meta::{dt_data::DtItem, dt_queue::DtQueue, row_data::RowData};
 use dt_common::monitor::counter::Counter;
 use dt_common::monitor::counter_type::CounterType;
 use dt_common::{error::Error, monitor::monitor::Monitor};

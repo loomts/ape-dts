@@ -7,10 +7,10 @@ use crate::{
 
 use dt_common::{
     config::config_enums::ConflictPolicyEnum,
-    meta::struct_meta::statement::struct_statement::StructStatement, rdb_filter::RdbFilter,
+    meta::struct_meta::{statement::struct_statement::StructStatement, struct_data::StructData},
+    rdb_filter::RdbFilter,
 };
 
-use dt_common::meta::ddl_data::DdlData;
 use sqlx::{MySql, Pool};
 
 use async_trait::async_trait;
@@ -26,20 +26,13 @@ pub struct FoxlakeStructSinker {
 
 #[async_trait]
 impl Sinker for FoxlakeStructSinker {
-    async fn sink_ddl(&mut self, mut data: Vec<DdlData>, _batch: bool) -> anyhow::Result<()> {
-        for ddl_data in data.iter_mut() {
-            match ddl_data.statement.as_mut() {
-                Some(StructStatement::MysqlCreateTable { statement }) => {
-                    let db = self.router.get_db_map(&statement.table.database_name);
-                    // currently, foxlake does not support index
-                    for index in statement.indexes.iter_mut() {
-                        index.database_name = db.to_string();
-                    }
-                    for constraint in statement.constraints.iter_mut() {
-                        constraint.database_name = db.to_string();
-                    }
-                    statement.table.database_name = db.to_string();
+    async fn sink_struct(&mut self, data: Vec<StructData>) -> anyhow::Result<()> {
+        let mut statements = Vec::new();
+        for mut struct_data in data {
+            BaseStructSinker::route_statement(&mut struct_data.statement, &self.router);
 
+            match &mut struct_data.statement {
+                StructStatement::MysqlCreateTable { statement } => {
                     statement.table.table_collation = String::new();
                     statement.table.engine_name = format!("'{}'", self.engine);
                     for column in statement.table.columns.iter_mut() {
@@ -47,21 +40,20 @@ impl Sinker for FoxlakeStructSinker {
                     }
                 }
 
-                Some(StructStatement::MysqlCreateDatabase { statement }) => {
-                    statement.database.name =
-                        self.router.get_db_map(&statement.database.name).to_string();
-
+                StructStatement::MysqlCreateDatabase { statement } => {
                     statement.database.default_collation_name = String::new();
                 }
 
                 _ => {}
             }
+
+            statements.push(struct_data.statement);
         }
 
-        BaseStructSinker::sink_ddl(
+        BaseStructSinker::sink_structs(
             &DBConnPool::MySQL(self.conn_pool.clone()),
             &self.conflict_policy,
-            data,
+            statements,
             &self.filter,
         )
         .await

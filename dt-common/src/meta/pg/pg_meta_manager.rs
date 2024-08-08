@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use crate::error::Error;
+use crate::{
+    error::Error,
+    meta::ddl_meta::{ddl_data::DdlData, ddl_statement::DdlStatement},
+};
 use anyhow::{bail, Context};
 use futures::TryStreamExt;
 use sqlx::{Pool, Postgres, Row};
@@ -117,6 +120,22 @@ impl PgMetaManager {
             self.name_to_tb_meta.remove(&full_name);
         } else {
             self.name_to_tb_meta.clear();
+        }
+    }
+
+    pub fn invalidate_cache_by_ddl_data(&mut self, ddl_data: &DdlData) {
+        match &ddl_data.statement {
+            DdlStatement::RenameTable(s) => {
+                let (db, tb) = (s.db_tb.db.clone(), s.db_tb.tb.clone());
+                let (new_db, new_tb) = (s.new_db_tb.db.clone(), s.new_db_tb.tb.clone());
+                self.invalidate_cache(&db, &tb);
+                self.invalidate_cache(&new_db, &new_tb);
+            }
+
+            _ => {
+                let (db, tb) = ddl_data.get_db_tb();
+                self.invalidate_cache(&db, &tb);
+            }
         }
     }
 

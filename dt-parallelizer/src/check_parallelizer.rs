@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use dt_common::meta::{ddl_data::DdlData, dt_data::DtItem, dt_queue::DtQueue, row_data::RowData};
+use dt_common::meta::{
+    dt_data::DtItem, dt_queue::DtQueue, row_data::RowData, struct_meta::struct_data::StructData,
+};
 use dt_connector::Sinker;
 
 use crate::{Merger, Parallelizer};
@@ -51,13 +53,11 @@ impl Parallelizer for CheckParallelizer {
         Ok(())
     }
 
-    async fn sink_ddl(
+    async fn sink_struct(
         &mut self,
-        data: Vec<DdlData>,
+        data: Vec<StructData>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
     ) -> anyhow::Result<()> {
-        self.base_parallelizer
-            .sink_ddl(vec![data], sinkers, 1, false)
-            .await
+        sinkers[0].lock().await.sink_struct(data).await
     }
 }
