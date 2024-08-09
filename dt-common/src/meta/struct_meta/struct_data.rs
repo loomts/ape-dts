@@ -5,8 +5,7 @@ use super::statement::struct_statement::StructStatement;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StructData {
-    pub schema: String,
-    pub tb: String,
+    pub db: String,
     #[serde(skip)]
     pub statement: StructStatement,
 }

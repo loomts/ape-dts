@@ -3,7 +3,7 @@ use dt_common::meta::struct_meta::struct_data::StructData;
 use dt_common::{log_info, rdb_filter::RdbFilter};
 
 use dt_common::meta::{
-    dt_data::DtData, mysql::mysql_meta_manager::MysqlMetaManager, position::Position,
+    mysql::mysql_meta_manager::MysqlMetaManager,
     struct_meta::statement::struct_statement::StructStatement,
 };
 use sqlx::{MySql, Pool};
@@ -45,15 +45,13 @@ impl MysqlStructExtractor {
         };
 
         // database
-        let database = fetcher.get_create_database_statement().await?;
-        let statement = StructStatement::MysqlCreateDatabase {
-            statement: database,
-        };
-        self.push_dt_data(statement).await?;
+        let database_statement = fetcher.get_create_database_statement().await?;
+        self.push_dt_data(StructStatement::MysqlCreateDatabase(database_statement))
+            .await?;
 
         // tables
-        for statement in fetcher.get_create_table_statements("").await? {
-            self.push_dt_data(StructStatement::MysqlCreateTable { statement })
+        for table_statement in fetcher.get_create_table_statements("").await? {
+            self.push_dt_data(StructStatement::MysqlCreateTable(table_statement))
                 .await?;
         }
         Ok(())
@@ -61,13 +59,9 @@ impl MysqlStructExtractor {
 
     pub async fn push_dt_data(&mut self, statement: StructStatement) -> anyhow::Result<()> {
         let struct_data = StructData {
-            schema: self.db.clone(),
-            tb: String::new(),
+            db: self.db.clone(),
             statement,
         };
-
-        self.base_extractor
-            .push_dt_data(DtData::Struct { struct_data }, Position::None)
-            .await
+        self.base_extractor.push_struct(struct_data).await
     }
 }

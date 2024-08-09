@@ -412,10 +412,11 @@ impl RdbTestRunner {
         let src_data = self.fetch_data(src_db_tb, SRC).await?;
         let dst_data = self.fetch_data(dst_db_tb, DST).await?;
         println!(
-            "comparing row data for src_tb: {:?}, dst_tb: {:?}, src_data count: {}",
+            "comparing row data for src_tb: {:?}, dst_tb: {:?}, src_data count: {}, dst_data count: {}",
             src_db_tb,
             dst_db_tb,
-            src_data.len()
+            src_data.len(),
+            dst_data.len(),
         );
 
         let col_map = self.router.get_col_map(&src_db_tb.0, &src_db_tb.1);

@@ -27,8 +27,7 @@ use sqlx::{postgres::PgArguments, query::Query, Pool, Postgres};
 use tokio_postgres::replication::LogicalReplicationStream;
 
 use dt_common::{
-    config::config_enums::DbType, error::Error, log_error, log_info,
-    meta::ddl_meta::ddl_data::DdlData, rdb_filter::RdbFilter, time_filter::TimeFilter,
+    config::config_enums::DbType, error::Error, log_error, log_info, rdb_filter::RdbFilter,
     utils::time_util::TimeUtil,
 };
 
@@ -57,7 +56,6 @@ pub struct PgCdcExtractor {
     pub meta_manager: PgMetaManager,
     pub conn_pool: Pool<Postgres>,
     pub filter: RdbFilter,
-    pub time_filter: TimeFilter,
     pub url: String,
     pub slot_name: String,
     pub pub_name: String,
@@ -127,7 +125,7 @@ impl PgCdcExtractor {
 
         // refer: https://www.postgresql.org/docs/10/protocol-replication.html to get WAL data details
         loop {
-            if self.time_filter.ended {
+            if self.base_extractor.time_filter.ended {
                 // cdc stream will be dropped automaticaly if postgres receives no keepalive ack
                 return Ok(());
             }
@@ -152,7 +150,7 @@ impl PgCdcExtractor {
 
                             let timestamp = begin.timestamp() / 1_000_000 + SECS_FROM_1970_TO_2000;
                             BaseExtractor::update_time_filter(
-                                &mut self.time_filter,
+                                &mut self.base_extractor.time_filter,
                                 timestamp as u32,
                                 &position,
                             );
@@ -162,7 +160,9 @@ impl PgCdcExtractor {
                             last_tx_end_lsn = PgLsn::from(commit.end_lsn()).to_string();
                             position = get_position(&last_tx_end_lsn, commit.timestamp());
                             let commit = DtData::Commit { xid: xid.clone() };
-                            self.push_dt_data_to_buf(commit, position.clone()).await?;
+                            self.base_extractor
+                                .push_dt_data(commit, position.clone())
+                                .await?;
                         }
 
                         Origin(_origin) => {}
@@ -172,19 +172,19 @@ impl PgCdcExtractor {
                         Type(_typee) => {}
 
                         Insert(insert) => {
-                            if self.time_filter.started {
+                            if self.base_extractor.time_filter.started {
                                 self.decode_insert(&insert, &position).await?;
                             }
                         }
 
                         Update(update) => {
-                            if self.time_filter.started {
+                            if self.base_extractor.time_filter.started {
                                 self.decode_update(&update, &position).await?;
                             }
                         }
 
                         Delete(delete) => {
-                            if self.time_filter.started {
+                            if self.base_extractor.time_filter.started {
                                 self.decode_delete(&delete, &position).await?;
                             }
                         }
@@ -432,7 +432,9 @@ impl PgCdcExtractor {
                     .filter
                     .filter_ddl(&schema, &tb, &ddl_data.ddl_type.to_string())
                 {
-                    self.push_ddl_to_buf(ddl_data, position.to_owned()).await?;
+                    self.base_extractor
+                        .push_ddl(ddl_data, position.clone())
+                        .await?;
                 }
             }
         }
@@ -476,32 +478,7 @@ impl PgCdcExtractor {
         row_data: RowData,
         position: Position,
     ) -> anyhow::Result<()> {
-        if !self.time_filter.started {
-            return Ok(());
-        }
         self.base_extractor.push_row(row_data, position).await
-    }
-
-    async fn push_ddl_to_buf(
-        &mut self,
-        row_data: DdlData,
-        position: Position,
-    ) -> anyhow::Result<()> {
-        if !self.time_filter.started {
-            return Ok(());
-        }
-        self.base_extractor.push_ddl(row_data, position).await
-    }
-
-    async fn push_dt_data_to_buf(
-        &mut self,
-        dt_data: DtData,
-        position: Position,
-    ) -> anyhow::Result<()> {
-        if !self.time_filter.started {
-            return Ok(());
-        }
-        self.base_extractor.push_dt_data(dt_data, position).await
     }
 
     fn filter_event(&mut self, tb_meta: &PgTbMeta, row_type: RowType) -> bool {

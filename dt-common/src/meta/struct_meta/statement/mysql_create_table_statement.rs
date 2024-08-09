@@ -16,7 +16,7 @@ pub struct MysqlCreateTableStatement {
 }
 
 impl MysqlCreateTableStatement {
-    pub fn to_sqls(&mut self, filter: &RdbFilter) -> Vec<(String, String)> {
+    pub fn to_sqls(&mut self, filter: &RdbFilter) -> anyhow::Result<Vec<(String, String)>> {
         let mut sqls = Vec::new();
 
         if !filter.filter_structure(StructureType::Table.into()) {
@@ -58,7 +58,7 @@ impl MysqlCreateTableStatement {
             }
         }
 
-        sqls
+        Ok(sqls)
     }
 
     fn table_to_sql(table: &mut Table) -> String {

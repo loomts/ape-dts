@@ -26,34 +26,29 @@ pub struct FoxlakeStructSinker {
 
 #[async_trait]
 impl Sinker for FoxlakeStructSinker {
-    async fn sink_struct(&mut self, data: Vec<StructData>) -> anyhow::Result<()> {
-        let mut statements = Vec::new();
-        for mut struct_data in data {
-            BaseStructSinker::route_statement(&mut struct_data.statement, &self.router);
-
+    async fn sink_struct(&mut self, mut data: Vec<StructData>) -> anyhow::Result<()> {
+        for struct_data in data.iter_mut() {
             match &mut struct_data.statement {
-                StructStatement::MysqlCreateTable { statement } => {
-                    statement.table.table_collation = String::new();
-                    statement.table.engine_name = format!("'{}'", self.engine);
-                    for column in statement.table.columns.iter_mut() {
+                StructStatement::MysqlCreateTable(s) => {
+                    s.table.table_collation = String::new();
+                    s.table.engine_name = format!("'{}'", self.engine);
+                    for column in s.table.columns.iter_mut() {
                         column.collation_name = String::new();
                     }
                 }
 
-                StructStatement::MysqlCreateDatabase { statement } => {
-                    statement.database.default_collation_name = String::new();
+                StructStatement::MysqlCreateDatabase(s) => {
+                    s.database.default_collation_name = String::new();
                 }
 
                 _ => {}
             }
-
-            statements.push(struct_data.statement);
         }
 
         BaseStructSinker::sink_structs(
             &DBConnPool::MySQL(self.conn_pool.clone()),
             &self.conflict_policy,
-            statements,
+            data,
             &self.filter,
         )
         .await

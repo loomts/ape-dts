@@ -2,7 +2,10 @@ use dt_common::{
     config::{
         config_enums::DbType, config_token_parser::ConfigTokenParser, router_config::RouterConfig,
     },
-    meta::ddl_meta::{ddl_data::DdlData, ddl_statement::DdlStatement},
+    meta::{
+        ddl_meta::{ddl_data::DdlData, ddl_statement::DdlStatement},
+        struct_meta::{statement::struct_statement::StructStatement, struct_data::StructData},
+    },
     utils::sql_util::SqlUtil,
 };
 use std::collections::HashMap;
@@ -156,10 +159,10 @@ impl RdbRouter {
     pub fn route_ddl(&self, mut ddl_data: DdlData) -> DdlData {
         match &mut ddl_data.statement {
             DdlStatement::RenameTable(s) => {
-                let (src_db, src_tb) = (s.db_tb.db.clone(), s.db_tb.tb.clone());
-                let (src_new_db, src_new_tb) = (s.new_db_tb.db.clone(), s.new_db_tb.tb.clone());
-                let (dst_db, dst_tb) = self.get_tb_map(&src_db, &src_tb);
-                let (dst_new_db, dst_new_tb) = self.get_tb_map(&src_new_db, &src_new_tb);
+                let (db, tb) = (s.db_tb.db.clone(), s.db_tb.tb.clone());
+                let (new_db, new_tb) = (s.new_db_tb.db.clone(), s.new_db_tb.tb.clone());
+                let (dst_db, dst_tb) = self.get_tb_map(&db, &tb);
+                let (dst_new_db, dst_new_tb) = self.get_tb_map(&new_db, &new_tb);
                 ddl_data.statement.route_rename_table(
                     dst_db.into(),
                     dst_tb.into(),
@@ -178,6 +181,78 @@ impl RdbRouter {
         let dst_default_db = self.get_db_map(&ddl_data.default_db);
         ddl_data.default_db = dst_default_db.into();
         ddl_data
+    }
+
+    pub fn route_struct(&self, mut struct_data: StructData) -> StructData {
+        match &mut struct_data.statement {
+            StructStatement::MysqlCreateTable(s) => {
+                let (db, tb) = (s.table.database_name.clone(), s.table.table_name.clone());
+                let (dst_db, dst_tb) = self.get_tb_map(&db, &tb);
+
+                s.table.database_name = dst_db.to_string();
+                s.table.table_name = dst_tb.to_string();
+
+                for index in s.indexes.iter_mut() {
+                    index.database_name = dst_db.to_string();
+                    index.table_name = dst_tb.to_string();
+                }
+
+                for constraint in s.constraints.iter_mut() {
+                    constraint.database_name = dst_db.to_string();
+                    constraint.table_name = dst_tb.to_string();
+                }
+            }
+
+            StructStatement::MysqlCreateDatabase(s) => {
+                s.database.name = self.get_db_map(&s.database.name).to_string();
+            }
+
+            StructStatement::PgCreateTable(s) => {
+                let (schema, tb) = (s.table.schema_name.clone(), s.table.table_name.clone());
+                let (dst_schema, dst_tb) = self.get_tb_map(&schema, &tb);
+
+                s.table.schema_name = dst_schema.to_string();
+                s.table.table_name = dst_tb.to_string();
+
+                for comment in s.table_comments.iter_mut() {
+                    comment.schema_name = dst_schema.to_string();
+                    comment.table_name = dst_tb.to_string();
+                }
+
+                for comment in s.column_comments.iter_mut() {
+                    comment.schema_name = dst_schema.to_string();
+                    comment.table_name = dst_tb.to_string();
+                }
+
+                for constraint in s.constraints.iter_mut() {
+                    constraint.schema_name = dst_schema.to_string();
+                    constraint.table_name = dst_tb.to_string();
+                }
+
+                for index in s.indexes.iter_mut() {
+                    index.schema_name = dst_schema.to_string();
+                    index.table_name = dst_tb.to_string();
+                }
+
+                for sequence in s.sequences.iter_mut() {
+                    sequence.schema_name = dst_schema.to_string();
+                }
+
+                for owner in s.sequence_owners.iter_mut() {
+                    owner.schema_name = dst_schema.to_string();
+                    owner.table_name = dst_tb.to_string();
+                }
+            }
+
+            StructStatement::PgCreateSchema(s) => {
+                s.schema.name = self.get_db_map(&s.schema.name).to_string();
+            }
+
+            _ => {}
+        }
+
+        struct_data.db = self.get_db_map(&struct_data.db).into();
+        struct_data
     }
 
     fn parse_db_map(config_str: &str, db_type: &DbType) -> anyhow::Result<HashMap<String, String>> {

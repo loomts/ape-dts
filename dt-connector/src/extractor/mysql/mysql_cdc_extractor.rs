@@ -11,13 +11,10 @@ use std::{
     time::Instant,
 };
 
-use dt_common::{
-    meta::{
-        adaptor::mysql_col_value_convertor::MysqlColValueConvertor, col_value::ColValue,
-        ddl_meta::ddl_data::DdlData, dt_data::DtData, mysql::mysql_meta_manager::MysqlMetaManager,
-        position::Position, row_data::RowData, row_type::RowType, syncer::Syncer,
-    },
-    time_filter::TimeFilter,
+use dt_common::meta::{
+    adaptor::mysql_col_value_convertor::MysqlColValueConvertor, col_value::ColValue,
+    dt_data::DtData, mysql::mysql_meta_manager::MysqlMetaManager, position::Position,
+    row_data::RowData, row_type::RowType, syncer::Syncer,
 };
 use mysql_binlog_connector_rust::{
     binlog_client::BinlogClient,
@@ -47,7 +44,6 @@ pub struct MysqlCdcExtractor {
     pub meta_manager: MysqlMetaManager,
     pub conn_pool: Pool<MySql>,
     pub filter: RdbFilter,
-    pub time_filter: TimeFilter,
     pub url: String,
     pub binlog_filename: String,
     pub binlog_position: u32,
@@ -71,9 +67,9 @@ const QUERY_BEGIN: &str = "BEGIN";
 #[async_trait]
 impl Extractor for MysqlCdcExtractor {
     async fn extract(&mut self) -> anyhow::Result<()> {
-        if self.time_filter.start_timestamp > 0 {
+        if self.base_extractor.time_filter.start_timestamp > 0 {
             self.binlog_filename = BinlogUtil::find_last_binlog_before_timestamp(
-                self.time_filter.start_timestamp,
+                self.base_extractor.time_filter.start_timestamp,
                 &self.url,
                 self.server_id,
                 &self.conn_pool,
@@ -137,7 +133,7 @@ impl MysqlCdcExtractor {
         self.start_heartbeat(self.base_extractor.shut_down.clone())?;
 
         loop {
-            if self.time_filter.ended {
+            if self.base_extractor.time_filter.ended {
                 stream.close().await?;
                 return Ok(());
             }
@@ -264,7 +260,7 @@ impl MysqlCdcExtractor {
             EventData::Query(query) => {
                 if query.query == QUERY_BEGIN {
                     BaseExtractor::update_time_filter(
-                        &mut self.time_filter,
+                        &mut self.base_extractor.time_filter,
                         header.timestamp,
                         &position,
                     );
@@ -277,7 +273,9 @@ impl MysqlCdcExtractor {
                 let commit = DtData::Commit {
                     xid: xid.xid.to_string(),
                 };
-                self.push_dt_data_to_buf(commit, position.clone()).await?;
+                self.base_extractor
+                    .push_dt_data(commit, position.clone())
+                    .await?;
             }
 
             _ => {}
@@ -291,32 +289,7 @@ impl MysqlCdcExtractor {
         row_data: RowData,
         position: Position,
     ) -> anyhow::Result<()> {
-        if !self.time_filter.started {
-            return Ok(());
-        }
         self.base_extractor.push_row(row_data, position).await
-    }
-
-    async fn push_ddl_to_buf(
-        &mut self,
-        ddl_data: DdlData,
-        position: Position,
-    ) -> anyhow::Result<()> {
-        if !self.time_filter.started {
-            return Ok(());
-        }
-        self.base_extractor.push_ddl(ddl_data, position).await
-    }
-
-    async fn push_dt_data_to_buf(
-        &mut self,
-        dt_data: DtData,
-        position: Position,
-    ) -> anyhow::Result<()> {
-        if !self.time_filter.started {
-            return Ok(());
-        }
-        self.base_extractor.push_dt_data(dt_data, position).await
     }
 
     async fn parse_row_data(
@@ -325,7 +298,7 @@ impl MysqlCdcExtractor {
         included_columns: &[bool],
         event: &mut RowEvent,
     ) -> anyhow::Result<HashMap<String, ColValue>> {
-        if !self.time_filter.started {
+        if !self.base_extractor.time_filter.started {
             return Ok(HashMap::new());
         }
 
@@ -385,7 +358,9 @@ impl MysqlCdcExtractor {
                     .filter
                     .filter_ddl(&db, &tb, &ddl_data.ddl_type.to_string())
                 {
-                    self.push_ddl_to_buf(ddl_data, position.clone()).await?;
+                    self.base_extractor
+                        .push_ddl(ddl_data, position.clone())
+                        .await?;
                 }
             }
         }

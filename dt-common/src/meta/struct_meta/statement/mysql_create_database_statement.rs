@@ -8,10 +8,10 @@ pub struct MysqlCreateDatabaseStatement {
 }
 
 impl MysqlCreateDatabaseStatement {
-    pub fn to_sqls(&self, filter: &RdbFilter) -> Vec<(String, String)> {
+    pub fn to_sqls(&self, filter: &RdbFilter) -> anyhow::Result<Vec<(String, String)>> {
         let mut sqls = Vec::new();
         if filter.filter_structure(StructureType::Database.into()) {
-            return sqls;
+            return Ok(sqls);
         }
 
         let mut sql = format!(r#"CREATE DATABASE IF NOT EXISTS `{}`"#, self.database.name);
@@ -30,6 +30,6 @@ impl MysqlCreateDatabaseStatement {
 
         let key = format!("database.{}", self.database.name.clone());
         sqls.push((key, sql));
-        sqls
+        Ok(sqls)
     }
 }

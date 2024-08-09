@@ -6,6 +6,7 @@ use dt_common::{
     meta::dt_queue::DtQueue,
     monitor::monitor::Monitor,
     rdb_filter::RdbFilter,
+    time_filter::TimeFilter,
 };
 use dt_connector::{
     extractor::{
@@ -83,6 +84,7 @@ impl Prechecker for RedisPrechecker {
             shut_down: Arc::new(AtomicBool::new(false)),
             monitor: ExtractorMonitor::new(monitor),
             data_marker: None,
+            time_filter: TimeFilter::default(),
         };
 
         let mut psyncer = RedisPsyncExtractor {

@@ -63,7 +63,7 @@ impl Sinker for MysqlChecker {
             return Ok(());
         }
 
-        self.serial_ddl_check(data).await?;
+        self.serial_check_struct(data).await?;
         Ok(())
     }
 }
@@ -152,16 +152,12 @@ impl MysqlChecker {
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, 0, start_time).await
     }
 
-    async fn serial_ddl_check(&mut self, mut data: Vec<StructData>) -> anyhow::Result<()> {
+    async fn serial_check_struct(&mut self, mut data: Vec<StructData>) -> anyhow::Result<()> {
         for src_data in data.iter_mut() {
             let src_statement = &mut src_data.statement;
             let db = match src_statement {
-                StructStatement::MysqlCreateDatabase { statement } => {
-                    statement.database.name.clone()
-                }
-                StructStatement::MysqlCreateTable { statement } => {
-                    statement.table.database_name.clone()
-                }
+                StructStatement::MysqlCreateDatabase(s) => s.database.name.clone(),
+                StructStatement::MysqlCreateTable(s) => s.table.database_name.clone(),
                 _ => String::new(),
             };
 
@@ -173,27 +169,23 @@ impl MysqlChecker {
             };
 
             let mut dst_statement = match &src_statement {
-                StructStatement::MysqlCreateDatabase { statement: _ } => {
+                StructStatement::MysqlCreateDatabase(_) => {
                     let dst_statement = struct_fetcher.get_create_database_statement().await?;
-                    Some(StructStatement::MysqlCreateDatabase {
-                        statement: dst_statement,
-                    })
+                    StructStatement::MysqlCreateDatabase(dst_statement)
                 }
 
-                StructStatement::MysqlCreateTable { statement } => {
+                StructStatement::MysqlCreateTable(s) => {
                     let mut dst_statement = struct_fetcher
-                        .get_create_table_statements(&statement.table.table_name)
+                        .get_create_table_statements(&s.table.table_name)
                         .await?;
                     if dst_statement.is_empty() {
-                        None
+                        StructStatement::Unknown
                     } else {
-                        Some(StructStatement::MysqlCreateTable {
-                            statement: dst_statement.remove(0),
-                        })
+                        StructStatement::MysqlCreateTable(dst_statement.remove(0))
                     }
                 }
 
-                _ => None,
+                _ => StructStatement::Unknown,
             };
 
             BaseChecker::compare_struct(src_statement, &mut dst_statement, &self.filter)?;

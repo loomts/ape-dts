@@ -1,3 +1,9 @@
+use anyhow::bail;
+
+use crate::config::config_enums::DbType;
+use crate::error::Error;
+use crate::meta::ddl_meta::ddl_parser::DdlParser;
+use crate::meta::ddl_meta::ddl_statement::DdlStatement;
 use crate::rdb_filter::RdbFilter;
 
 use crate::meta::struct_meta::structure::{
@@ -23,7 +29,7 @@ pub struct PgCreateTableStatement {
 }
 
 impl PgCreateTableStatement {
-    pub fn to_sqls(&mut self, filter: &RdbFilter) -> Vec<(String, String)> {
+    pub fn to_sqls(&mut self, filter: &RdbFilter) -> anyhow::Result<Vec<(String, String)>> {
         let mut sqls = Vec::new();
 
         if !filter.filter_structure(StructureType::Table.into()) {
@@ -93,10 +99,10 @@ impl PgCreateTableStatement {
             }
 
             let key = format!("index.{}.{}.{}", i.schema_name, i.table_name, i.index_name);
-            sqls.push((key, Self::index_to_sql(i)));
+            sqls.push((key, Self::index_to_sql(i)?));
         }
 
-        sqls
+        Ok(sqls)
     }
 
     fn table_to_sql(table: &mut Table) -> String {
@@ -140,15 +146,22 @@ impl PgCreateTableStatement {
         sql
     }
 
-    fn index_to_sql(index: &Index) -> String {
-        format!(
-            "{} TABLESPACE {}",
-            index
-                .definition
-                .replace("CREATE INDEX", "CREATE INDEX IF NOT EXISTS")
-                .replace("CREATE UNIQUE INDEX", "CREATE UNIQUE INDEX IF NOT EXISTS"),
-            index.table_space
-        )
+    fn index_to_sql(index: &Index) -> anyhow::Result<String> {
+        let parser = DdlParser::new(DbType::Pg);
+        if let Ok(mut ddl_data) = parser.parse(&index.definition) {
+            if let DdlStatement::PgCreateIndex(s) = &mut ddl_data.statement {
+                s.schema = index.schema_name.clone();
+                s.tb = index.table_name.clone();
+                s.if_not_exists = true;
+            }
+            let sql = format!("{} TABLESPACE {}", ddl_data.to_sql(), index.table_space);
+            Ok(sql)
+        } else {
+            bail! {Error::Unexpected( format!(
+                "failed to parse index, schema: {}, tb: {}, definition: {}",
+                &index.schema_name, &index.table_name, index.definition
+            ) )}
+        }
     }
 
     fn comment_to_sql(comment: &Comment) -> String {

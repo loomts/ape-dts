@@ -2,7 +2,6 @@ use anyhow::Context;
 
 use crate::utils::time_util::TimeUtil;
 
-#[derive(Default)]
 pub struct TimeFilter {
     // timestamp in UTC
     pub start_timestamp: u32,
@@ -37,5 +36,16 @@ impl TimeFilter {
             started: start_time_utc.is_empty(),
             ended: false,
         })
+    }
+}
+
+impl Default for TimeFilter {
+    fn default() -> Self {
+        Self {
+            start_timestamp: 0,
+            end_timestamp: u32::MAX,
+            started: true,
+            ended: false,
+        }
     }
 }

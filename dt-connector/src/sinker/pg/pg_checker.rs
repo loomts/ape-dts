@@ -61,7 +61,7 @@ impl Sinker for PgChecker {
             return Ok(());
         }
 
-        self.serial_struct_check(data).await?;
+        self.serial_check_struct(data).await?;
         Ok(())
     }
 }
@@ -150,12 +150,12 @@ impl PgChecker {
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, 0, start_time).await
     }
 
-    async fn serial_struct_check(&mut self, mut data: Vec<StructData>) -> anyhow::Result<()> {
+    async fn serial_check_struct(&mut self, mut data: Vec<StructData>) -> anyhow::Result<()> {
         for src_data in data.iter_mut() {
             let src_statement = &mut src_data.statement;
             let schema = match src_statement {
-                StructStatement::PgCreateSchema { statement } => statement.schema.name.clone(),
-                StructStatement::PgCreateTable { statement } => statement.table.schema_name.clone(),
+                StructStatement::PgCreateSchema(s) => s.schema.name.clone(),
+                StructStatement::PgCreateTable(s) => s.table.schema_name.clone(),
                 _ => String::new(),
             };
 
@@ -166,27 +166,23 @@ impl PgChecker {
             };
 
             let mut dst_statement = match &src_statement {
-                StructStatement::PgCreateSchema { statement: _ } => {
+                StructStatement::PgCreateSchema(_) => {
                     let dst_statement = struct_fetcher.get_create_schema_statement().await?;
-                    Some(StructStatement::PgCreateSchema {
-                        statement: dst_statement,
-                    })
+                    StructStatement::PgCreateSchema(dst_statement)
                 }
 
-                StructStatement::PgCreateTable { statement } => {
+                StructStatement::PgCreateTable(statement) => {
                     let mut dst_statement = struct_fetcher
                         .get_create_table_statements(&statement.table.table_name)
                         .await?;
                     if dst_statement.is_empty() {
-                        None
+                        StructStatement::Unknown
                     } else {
-                        Some(StructStatement::PgCreateTable {
-                            statement: dst_statement.remove(0),
-                        })
+                        StructStatement::PgCreateTable(dst_statement.remove(0))
                     }
                 }
 
-                _ => None,
+                _ => StructStatement::Unknown,
             };
 
             BaseChecker::compare_struct(src_statement, &mut dst_statement, &self.filter)?;

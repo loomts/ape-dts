@@ -25,16 +25,10 @@ pub struct MysqlStructSinker {
 #[async_trait]
 impl Sinker for MysqlStructSinker {
     async fn sink_struct(&mut self, data: Vec<StructData>) -> anyhow::Result<()> {
-        let mut statements = Vec::new();
-        for mut struct_data in data {
-            BaseStructSinker::route_statement(&mut struct_data.statement, &self.router);
-            statements.push(struct_data.statement);
-        }
-
         BaseStructSinker::sink_structs(
             &DBConnPool::MySQL(self.conn_pool.clone()),
             &self.conflict_policy,
-            statements,
+            data,
             &self.filter,
         )
         .await

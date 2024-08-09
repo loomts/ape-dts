@@ -9,7 +9,7 @@ use dt_common::{
     config::{config_enums::DbType, config_token_parser::ConfigTokenParser},
     error::Error,
     log_error, log_info, log_warn,
-    meta::{ddl_meta::ddl_data::DdlData, dt_queue::DtQueue},
+    meta::{ddl_meta::ddl_data::DdlData, dt_queue::DtQueue, struct_meta::struct_data::StructData},
     utils::{sql_util::SqlUtil, time_util::TimeUtil},
 };
 use dt_common::{
@@ -32,6 +32,7 @@ pub struct BaseExtractor {
     pub shut_down: Arc<AtomicBool>,
     pub monitor: ExtractorMonitor,
     pub data_marker: Option<DataMarker>,
+    pub time_filter: TimeFilter,
 }
 
 impl BaseExtractor {
@@ -47,6 +48,10 @@ impl BaseExtractor {
         dt_data: DtData,
         position: Position,
     ) -> anyhow::Result<()> {
+        if !self.time_filter.started {
+            return Ok(());
+        }
+
         if let Some(data_marker) = &mut self.data_marker {
             if dt_data.is_begin() || dt_data.is_commit() {
                 data_marker.reset();
@@ -90,14 +95,18 @@ impl BaseExtractor {
 
     pub async fn push_row(&mut self, row_data: RowData, position: Position) -> anyhow::Result<()> {
         let row_data = self.router.route_row(row_data);
-        let dt_data = DtData::Dml { row_data };
-        self.push_dt_data(dt_data, position).await
+        self.push_dt_data(DtData::Dml { row_data }, position).await
     }
 
     pub async fn push_ddl(&mut self, ddl_data: DdlData, position: Position) -> anyhow::Result<()> {
         let ddl_data = self.router.route_ddl(ddl_data);
-        let dt_data = DtData::Ddl { ddl_data };
-        self.push_dt_data(dt_data, position).await
+        self.push_dt_data(DtData::Ddl { ddl_data }, position).await
+    }
+
+    pub async fn push_struct(&mut self, struct_data: StructData) -> anyhow::Result<()> {
+        let struct_data = self.router.route_struct(struct_data);
+        self.push_dt_data(DtData::Struct { struct_data }, Position::None)
+            .await
     }
 
     pub async fn parse_ddl(
