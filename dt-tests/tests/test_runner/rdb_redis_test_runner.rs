@@ -1,4 +1,5 @@
 use anyhow::bail;
+use dt_common::config::config_enums::DbType;
 use dt_common::utils::redis_util::RedisUtil;
 use dt_common::{
     config::{sinker_config::SinkerConfig, task_config::TaskConfig},
@@ -63,7 +64,10 @@ impl RdbRedisTestRunner {
         self.execute_sqls(&self.base.src_test_sqls).await?;
         self.base.start_task().await?;
 
-        let db_tbs = RdbTestRunner::get_compare_db_tbs_from_sqls(&self.base.src_prepare_sqls)?;
+        let db_tbs = RdbTestRunner::get_compare_db_tbs_from_sqls(
+            &DbType::Mysql,
+            &self.base.src_prepare_sqls,
+        )?;
         self.compare_data_for_tbs(&db_tbs).await;
         Ok(())
     }
@@ -94,7 +98,10 @@ impl RdbRedisTestRunner {
             }
         }
 
-        let db_tbs = RdbTestRunner::get_compare_db_tbs_from_sqls(&self.base.src_prepare_sqls)?;
+        let db_tbs = RdbTestRunner::get_compare_db_tbs_from_sqls(
+            &DbType::Mysql,
+            &self.base.src_prepare_sqls,
+        )?;
 
         // insert
         self.execute_sqls(&src_insert_sqls).await?;

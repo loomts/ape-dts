@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::error::Error;
+use crate::{error::Error, meta::ddl_meta::ddl_data::DdlData};
 use anyhow::{bail, Context};
 use futures::TryStreamExt;
 use sqlx::{Pool, Postgres, Row};
@@ -118,6 +118,11 @@ impl PgMetaManager {
         } else {
             self.name_to_tb_meta.clear();
         }
+    }
+
+    pub fn invalidate_cache_by_ddl_data(&mut self, ddl_data: &DdlData) {
+        let (db, tb) = ddl_data.get_db_tb();
+        self.invalidate_cache(&db, &tb);
     }
 
     async fn parse_cols(

@@ -1,10 +1,8 @@
 use async_trait::async_trait;
+use dt_common::meta::struct_meta::struct_data::StructData;
 use dt_common::{log_info, rdb_filter::RdbFilter};
 
-use dt_common::meta::{
-    ddl_data::DdlData, ddl_type::DdlType, dt_data::DtData, position::Position,
-    struct_meta::statement::struct_statement::StructStatement,
-};
+use dt_common::meta::struct_meta::statement::struct_statement::StructStatement;
 
 use sqlx::{Pool, Postgres};
 
@@ -44,30 +42,22 @@ impl PgStructExtractor {
 
         // schema
         let schema_statement = pg_fetcher.get_create_schema_statement().await?;
-        let statement = StructStatement::PgCreateSchema {
-            statement: schema_statement,
-        };
-        self.push_dt_data(statement).await?;
+        self.push_dt_data(StructStatement::PgCreateSchema(schema_statement))
+            .await?;
 
         // tables
-        for statement in pg_fetcher.get_create_table_statements("").await? {
-            self.push_dt_data(StructStatement::PgCreateTable { statement })
+        for table_statement in pg_fetcher.get_create_table_statements("").await? {
+            self.push_dt_data(StructStatement::PgCreateTable(table_statement))
                 .await?;
         }
         Ok(())
     }
 
     pub async fn push_dt_data(&mut self, statement: StructStatement) -> anyhow::Result<()> {
-        let ddl_data = DdlData {
-            schema: self.schema.clone(),
-            tb: String::new(),
-            query: String::new(),
-            statement: Some(statement),
-            ddl_type: DdlType::Unknown,
+        let struct_data = StructData {
+            db: self.schema.clone(),
+            statement,
         };
-
-        self.base_extractor
-            .push_dt_data(DtData::Ddl { ddl_data }, Position::None)
-            .await
+        self.base_extractor.push_struct(struct_data).await
     }
 }

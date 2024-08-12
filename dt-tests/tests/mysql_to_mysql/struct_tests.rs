@@ -34,4 +34,10 @@ mod test {
     async fn struct_charset_test() {
         TestBase::run_mysql_struct_test("mysql_to_mysql/struct/charset_test").await;
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn struct_route_test() {
+        TestBase::run_mysql_struct_test("mysql_to_mysql/struct/route_test").await;
+    }
 }

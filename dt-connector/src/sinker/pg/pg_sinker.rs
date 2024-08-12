@@ -10,16 +10,17 @@ use crate::{
 };
 
 use anyhow::Context;
-use dt_common::{log_error, log_info, monitor::monitor::Monitor};
+use dt_common::{
+    log_error, log_info,
+    meta::ddl_meta::{ddl_data::DdlData, ddl_type::DdlType},
+    monitor::monitor::Monitor,
+};
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     Executor, Pool, Postgres,
 };
 
-use dt_common::meta::{
-    ddl_data::DdlData, ddl_type::DdlType, pg::pg_meta_manager::PgMetaManager, row_data::RowData,
-    row_type::RowType,
-};
+use dt_common::meta::{pg::pg_meta_manager::PgMetaManager, row_data::RowData, row_type::RowType};
 
 use async_trait::async_trait;
 
@@ -58,14 +59,13 @@ impl Sinker for PgSinker {
     }
 
     async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> anyhow::Result<()> {
-        for ddl_data in data.iter() {
-            log_info!("sink ddl: {}", ddl_data.query);
-
+        for ddl_data in data {
+            let (db, _tb) = ddl_data.get_db_tb();
             let conn_options = PgConnectOptions::from_str(&self.url)?;
             let mut pool_options = PgPoolOptions::new().max_connections(1);
-            let sql = format!("SET search_path = '{}';", ddl_data.schema);
+            let sql = format!("SET search_path = '{}';", db);
 
-            if !ddl_data.schema.is_empty() {
+            if !db.is_empty() {
                 match ddl_data.ddl_type {
                     DdlType::CreateSchema | DdlType::DropSchema | DdlType::AlterSchema => {}
                     _ => {
@@ -80,8 +80,11 @@ impl Sinker for PgSinker {
                 }
             }
 
+            let sql = ddl_data.to_sql();
+            log_info!("sink ddl: {}", &sql);
+
             let conn_pool = pool_options.connect_with(conn_options).await?;
-            let query = sqlx::query(&ddl_data.query);
+            let query = sqlx::query(&sql);
             query.execute(&conn_pool).await?;
             conn_pool.close().await;
         }
@@ -90,8 +93,7 @@ impl Sinker for PgSinker {
 
     async fn refresh_meta(&mut self, data: Vec<DdlData>) -> anyhow::Result<()> {
         for ddl_data in data.iter() {
-            self.meta_manager
-                .invalidate_cache(&ddl_data.schema, &ddl_data.tb);
+            self.meta_manager.invalidate_cache_by_ddl_data(ddl_data);
         }
         Ok(())
     }

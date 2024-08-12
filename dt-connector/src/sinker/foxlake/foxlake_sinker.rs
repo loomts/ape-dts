@@ -3,12 +3,10 @@ use async_trait::async_trait;
 use dt_common::{
     log_info,
     meta::{
-        ddl_data::DdlData,
-        ddl_type::DdlType,
+        ddl_meta::{ddl_data::DdlData, ddl_type::DdlType},
         dt_data::{DtData, DtItem},
         mysql::mysql_meta_manager::MysqlMetaManager,
         position::Position,
-        sql_parser::ddl_parser::DdlParser,
     },
     monitor::monitor::Monitor,
 };
@@ -49,24 +47,15 @@ impl Sinker for FoxlakeSinker {
     }
 
     async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> anyhow::Result<()> {
-        for ddl_data in data.iter() {
-            let mut sql = ddl_data.query.clone();
-            // db mapping
-            let db = self.router.get_db_map(&ddl_data.schema);
-            if db != ddl_data.schema {
-                let mut parsed_ddl = DdlParser::parse(&ddl_data.query)?;
-                if parsed_ddl.schema.is_some() {
-                    parsed_ddl.schema = Some(db.to_string());
-                    sql = parsed_ddl.to_sql();
-                    log_info!(
-                        "sinking ddl, origin sql: {}, mapped sql: {}",
-                        ddl_data.query,
-                        sql
-                    );
-                }
-            }
+        for ddl_data in data {
+            let sql = ddl_data.to_sql();
+            log_info!(
+                "sinking ddl, origin sql: {}, mapped sql: {}",
+                ddl_data.query,
+                sql
+            );
 
-            log_info!("sinking ddl: db: {}, {}", db, sql);
+            let (db, _tb) = ddl_data.get_db_tb();
             let query = sqlx::query(&sql);
 
             // create a tmp connection with databse since sqlx conn pool does NOT support `USE db`
@@ -75,7 +64,7 @@ impl Sinker for FoxlakeSinker {
                 match ddl_data.ddl_type {
                     DdlType::CreateDatabase | DdlType::DropDatabase | DdlType::AlterDatabase => {}
                     _ => {
-                        conn_options = conn_options.database(db);
+                        conn_options = conn_options.database(&db);
                     }
                 }
             }
@@ -87,9 +76,17 @@ impl Sinker for FoxlakeSinker {
             query.execute(&conn_pool).await?;
             conn_pool.close().await;
 
-            self.meta_manager.invalidate_cache(db, &ddl_data.tb);
-            self.pusher.meta_manager.invalidate_cache(db, &ddl_data.tb);
             log_info!("ddl sinked");
+        }
+        Ok(())
+    }
+
+    async fn refresh_meta(&mut self, data: Vec<DdlData>) -> anyhow::Result<()> {
+        for ddl_data in data.iter() {
+            self.meta_manager.invalidate_cache_by_ddl_data(ddl_data);
+            self.pusher
+                .meta_manager
+                .invalidate_cache_by_ddl_data(ddl_data);
         }
         Ok(())
     }

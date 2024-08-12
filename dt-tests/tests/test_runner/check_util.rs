@@ -21,12 +21,15 @@ impl CheckUtil {
         assert_eq!(expect_miss_logs.len(), actual_miss_logs.len());
         assert_eq!(expect_extra_logs.len(), actual_extra_logs.len());
         for log in expect_diff_logs {
+            println!("expect_diff_log: {}", log);
             assert!(actual_diff_logs.contains(&log))
         }
         for log in expect_miss_logs {
+            println!("expect_miss_log: {}", log);
             assert!(actual_miss_logs.contains(&log))
         }
         for log in expect_extra_logs {
+            println!("expect_extra_log: {}", log);
             assert!(actual_extra_logs.contains(&log))
         }
         Ok(())

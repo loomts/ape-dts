@@ -27,6 +27,8 @@ pub enum DdlType {
     AlterTable,
     #[strum(serialize = "create_index")]
     CreateIndex,
+    #[strum(serialize = "drop_index")]
+    DropIndex,
     #[strum(serialize = "unknown")]
     Unknown,
 }

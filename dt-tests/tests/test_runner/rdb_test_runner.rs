@@ -9,13 +9,13 @@ use dt_common::{
         config_enums::DbType, config_token_parser::ConfigTokenParser,
         extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
     },
-    meta::time::dt_utc_time::DtNaiveTime,
+    meta::{ddl_meta::ddl_type::DdlType, time::dt_utc_time::DtNaiveTime},
     utils::{sql_util::SqlUtil, time_util::TimeUtil},
 };
 
 use dt_common::meta::{
-    col_value::ColValue, ddl_type::DdlType, mysql::mysql_meta_manager::MysqlMetaManager,
-    row_data::RowData, sql_parser::ddl_parser::DdlParser,
+    col_value::ColValue, ddl_meta::ddl_parser::DdlParser,
+    mysql::mysql_meta_manager::MysqlMetaManager, row_data::RowData,
 };
 use dt_connector::rdb_router::RdbRouter;
 use dt_task::task_util::TaskUtil;
@@ -412,10 +412,11 @@ impl RdbTestRunner {
         let src_data = self.fetch_data(src_db_tb, SRC).await?;
         let dst_data = self.fetch_data(dst_db_tb, DST).await?;
         println!(
-            "comparing row data for src_tb: {:?}, dst_tb: {:?}, src_data count: {}",
+            "comparing row data for src_tb: {:?}, dst_tb: {:?}, src_data count: {}, dst_data count: {}",
             src_db_tb,
             dst_db_tb,
-            src_data.len()
+            src_data.len(),
+            dst_data.len(),
         );
 
         let col_map = self.router.get_col_map(&src_db_tb.0, &src_db_tb.1);
@@ -555,10 +556,13 @@ impl RdbTestRunner {
     pub fn get_compare_db_tbs(
         &self,
     ) -> anyhow::Result<(Vec<(String, String)>, Vec<(String, String)>)> {
-        let mut src_db_tbs = Self::get_compare_db_tbs_from_sqls(&self.base.src_prepare_sqls)?;
+        let db_type = self.get_db_type(SRC);
+        let mut src_db_tbs =
+            Self::get_compare_db_tbs_from_sqls(&db_type, &self.base.src_prepare_sqls)?;
         // since tables may be created/dropped in src_test.sql for ddl tests,
         // we also need to parse src_test.sql.
         src_db_tbs.extend_from_slice(&Self::get_compare_db_tbs_from_sqls(
+            &db_type,
             &self.base.src_test_sqls,
         )?);
 
@@ -572,9 +576,11 @@ impl RdbTestRunner {
     }
 
     pub fn get_compare_db_tbs_from_sqls(
+        db_type: &DbType,
         sqls: &Vec<String>,
     ) -> anyhow::Result<Vec<(String, String)>> {
         let mut db_tbs = vec![];
+        let parser = DdlParser::new(db_type.to_owned());
 
         for sql in sqls.iter() {
             let sql = sql.to_lowercase().trim().to_string();
@@ -583,10 +589,12 @@ impl RdbTestRunner {
                 continue;
             }
 
-            let ddl = DdlParser::parse(&sql).unwrap();
+            let ddl = parser.parse(&sql).unwrap();
             if ddl.ddl_type == DdlType::CreateTable {
-                let db = ddl.schema.unwrap_or(PUBLIC.into());
-                let tb = ddl.tb.unwrap();
+                let (mut db, tb) = ddl.get_db_tb();
+                if db.is_empty() {
+                    db = PUBLIC.to_string();
+                }
                 db_tbs.push((db, tb));
             }
         }
@@ -644,7 +652,7 @@ impl RdbTestRunner {
         }
     }
 
-    fn get_db_type(&self, from: &str) -> DbType {
+    pub fn get_db_type(&self, from: &str) -> DbType {
         let config = TaskConfig::new(&self.base.task_config_file).unwrap();
         if from == SRC {
             config.extractor_basic.db_type

@@ -3,7 +3,10 @@ use serde_json::json;
 
 use crate::meta::{position::Position, redis::redis_entry::RedisEntry};
 
-use super::{ddl_data::DdlData, foxlake::s3_file_meta::S3FileMeta, row_data::RowData};
+use super::{
+    ddl_meta::ddl_data::DdlData, foxlake::s3_file_meta::S3FileMeta, row_data::RowData,
+    struct_meta::struct_data::StructData,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DtItem {
@@ -20,6 +23,9 @@ impl DtItem {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DtData {
+    Struct {
+        struct_data: StructData,
+    },
     Ddl {
         ddl_data: DdlData,
     },

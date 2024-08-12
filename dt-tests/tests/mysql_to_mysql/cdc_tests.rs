@@ -37,6 +37,12 @@ mod test {
 
     #[tokio::test]
     #[serial]
+    async fn cdc_ddl_route_test() {
+        TestBase::run_ddl_test("mysql_to_mysql/cdc/ddl_route_test", 3000, 5000).await;
+    }
+
+    #[tokio::test]
+    #[serial]
     async fn cdc_timezone_test() {
         println!("cdc_timezone_test can be covered by test: cdc_basic_test, table: one_pk_no_uk, field: f_13 timestamp(6), the default_time_zone for source db is +08:00, the default_time_zone for target db is +07:00 ")
     }

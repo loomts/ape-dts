@@ -264,18 +264,17 @@ impl SinkerUtil {
                 conflict_policy,
             } => {
                 let filter = RdbFilter::from_config(&task_config.filter, &DbType::Mysql)?;
+                let router = RdbRouter::from_config(&task_config.router, &DbType::Mysql)?;
                 let conn_pool =
                     TaskUtil::create_mysql_conn_pool(&url, parallel_size * 2, enable_sqlx_log)
                         .await?;
-
-                for _ in 0..parallel_size {
-                    let sinker = MysqlStructSinker {
-                        conn_pool: conn_pool.clone(),
-                        conflict_policy: conflict_policy.clone(),
-                        filter: filter.clone(),
-                    };
-                    sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
-                }
+                let sinker = MysqlStructSinker {
+                    conn_pool: conn_pool.clone(),
+                    conflict_policy: conflict_policy.clone(),
+                    filter: filter.clone(),
+                    router,
+                };
+                sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
             }
 
             SinkerConfig::PgStruct {
@@ -283,17 +282,16 @@ impl SinkerUtil {
                 conflict_policy,
             } => {
                 let filter = RdbFilter::from_config(&task_config.filter, &DbType::Pg)?;
+                let router = RdbRouter::from_config(&task_config.router, &DbType::Pg)?;
                 let conn_pool =
                     TaskUtil::create_pg_conn_pool(&url, parallel_size * 2, enable_sqlx_log).await?;
-
-                for _ in 0..parallel_size {
-                    let sinker = PgStructSinker {
-                        conn_pool: conn_pool.clone(),
-                        conflict_policy: conflict_policy.clone(),
-                        filter: filter.clone(),
-                    };
-                    sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
-                }
+                let sinker = PgStructSinker {
+                    conn_pool: conn_pool.clone(),
+                    conflict_policy: conflict_policy.clone(),
+                    filter: filter.clone(),
+                    router,
+                };
+                sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
             }
 
             SinkerConfig::Redis {
@@ -560,21 +558,17 @@ impl SinkerUtil {
             } => {
                 let filter = RdbFilter::from_config(&task_config.filter, &DbType::Mysql)?;
                 let router = RdbRouter::from_config(&task_config.router, &DbType::Mysql)?;
-
                 let conn_pool =
                     TaskUtil::create_mysql_conn_pool(&url, parallel_size * 2, enable_sqlx_log)
                         .await?;
-
-                for _ in 0..parallel_size {
-                    let sinker = FoxlakeStructSinker {
-                        conn_pool: conn_pool.clone(),
-                        conflict_policy: conflict_policy.clone(),
-                        filter: filter.clone(),
-                        router: router.clone(),
-                        engine: engine.clone(),
-                    };
-                    sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
-                }
+                let sinker = FoxlakeStructSinker {
+                    conn_pool: conn_pool.clone(),
+                    conflict_policy: conflict_policy.clone(),
+                    filter,
+                    router,
+                    engine,
+                };
+                sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
             }
         };
         Ok(sub_sinkers)

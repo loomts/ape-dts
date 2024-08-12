@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use crate::Parallelizer;
 use async_trait::async_trait;
 use dt_common::meta::{
-    ddl_data::DdlData,
+    ddl_meta::ddl_data::DdlData,
     dt_data::{DtData, DtItem},
     dt_queue::DtQueue,
     row_data::RowData,

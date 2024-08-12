@@ -2,6 +2,10 @@ use dt_common::{
     config::{
         config_enums::DbType, config_token_parser::ConfigTokenParser, router_config::RouterConfig,
     },
+    meta::{
+        ddl_meta::{ddl_data::DdlData, ddl_statement::DdlStatement},
+        struct_meta::{statement::struct_statement::StructStatement, struct_data::StructData},
+    },
     utils::sql_util::SqlUtil,
 };
 use std::collections::HashMap;
@@ -150,6 +154,66 @@ impl RdbRouter {
         }
 
         row_data
+    }
+
+    pub fn route_ddl(&self, mut ddl_data: DdlData) -> DdlData {
+        match &mut ddl_data.statement {
+            DdlStatement::MysqlAlterRenameTable(_)
+            | DdlStatement::PgAlterRenameTable(_)
+            | DdlStatement::RenameTable(_) => {
+                let (src_db, src_tb) = ddl_data.get_db_tb();
+                let (src_new_db, src_new_tb) = ddl_data.get_rename_to_db_tb();
+                let (dst_db, dst_tb) = self.get_tb_map(&src_db, &src_tb);
+                let (dst_new_db, dst_new_tb) = self.get_tb_map(&src_new_db, &src_new_tb);
+                ddl_data.statement.route_rename_table(
+                    dst_db.into(),
+                    dst_tb.into(),
+                    dst_new_db.into(),
+                    dst_new_tb.into(),
+                );
+            }
+
+            _ => {
+                let (src_db, src_tb) = ddl_data.get_db_tb();
+                let (dst_db, dst_tb) = self.get_tb_map(&src_db, &src_tb);
+                ddl_data.statement.route(dst_db.into(), dst_tb.into());
+            }
+        }
+
+        let dst_default_db = self.get_db_map(&ddl_data.default_db);
+        ddl_data.default_db = dst_default_db.into();
+        ddl_data
+    }
+
+    pub fn route_struct(&self, mut struct_data: StructData) -> StructData {
+        match &mut struct_data.statement {
+            StructStatement::MysqlCreateTable(s) => {
+                let (db, tb) = (s.table.database_name.clone(), s.table.table_name.clone());
+                let (dst_db, dst_tb) = self.get_tb_map(&db, &tb);
+                s.route(dst_db, dst_tb)
+            }
+
+            StructStatement::MysqlCreateDatabase(s) => {
+                let dst_db = self.get_db_map(&s.database.name).to_string();
+                s.route(&dst_db)
+            }
+
+            StructStatement::PgCreateTable(s) => {
+                let (schema, tb) = (s.table.schema_name.clone(), s.table.table_name.clone());
+                let (dst_schema, dst_tb) = self.get_tb_map(&schema, &tb);
+                s.route(dst_schema, dst_tb)
+            }
+
+            StructStatement::PgCreateSchema(s) => {
+                let dst_schema = self.get_db_map(&s.schema.name).to_string();
+                s.route(&dst_schema)
+            }
+
+            _ => {}
+        }
+
+        struct_data.db = self.get_db_map(&struct_data.db).into();
+        struct_data
     }
 
     fn parse_db_map(config_str: &str, db_type: &DbType) -> anyhow::Result<HashMap<String, String>> {

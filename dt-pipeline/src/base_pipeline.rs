@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use dt_common::{
     config::sinker_config::SinkerConfig,
     meta::{
-        ddl_data::DdlData,
+        ddl_meta::ddl_data::DdlData,
         dt_data::{DtData, DtItem},
         dt_queue::DtQueue,
         position::Position,
@@ -46,6 +46,7 @@ enum SinkMethod {
     Raw,
     Ddl,
     Dml,
+    Struct,
 }
 
 #[async_trait]
@@ -101,6 +102,7 @@ impl Pipeline for BasePipeline {
                 SinkMethod::Ddl => self.sink_ddl(data).await?,
                 SinkMethod::Dml => self.sink_dml(data).await?,
                 SinkMethod::Raw => self.sink_raw(data).await?,
+                SinkMethod::Struct => self.sink_struct(data).await?,
             };
 
             if let Some(position) = &last_received {
@@ -142,6 +144,21 @@ impl BasePipeline {
             self.parallelizer.sink_raw(all_data, &self.sinkers).await?
         }
         Ok((count, last_received_position, last_commit_position))
+    }
+
+    async fn sink_struct(
+        &mut self,
+        mut all_data: Vec<DtItem>,
+    ) -> anyhow::Result<(usize, Option<Position>, Option<Position>)> {
+        let mut data = Vec::new();
+        for i in all_data.drain(..) {
+            if let DtData::Struct { struct_data } = i.dt_data {
+                data.push(struct_data);
+            }
+        }
+        let count = all_data.len();
+        self.parallelizer.sink_struct(data, &self.sinkers).await?;
+        Ok((count, None, None))
     }
 
     async fn sink_dml(
@@ -263,6 +280,7 @@ impl BasePipeline {
     fn get_sink_method(&self, data: &Vec<DtItem>) -> SinkMethod {
         for i in data {
             match i.dt_data {
+                DtData::Struct { .. } => return SinkMethod::Struct,
                 DtData::Ddl { .. } => return SinkMethod::Ddl,
                 DtData::Dml { .. } => match self.sinker_config {
                     SinkerConfig::FoxlakePush { .. }

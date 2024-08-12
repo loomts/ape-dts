@@ -68,12 +68,13 @@ impl ExtractorUtil {
         snapshot_resumer: SnapshotResumer,
         cdc_resumer: CdcResumer,
     ) -> anyhow::Result<Box<dyn Extractor + Send>> {
-        let base_extractor = BaseExtractor {
+        let mut base_extractor = BaseExtractor {
             buffer,
             router,
             shut_down,
             monitor: ExtractorMonitor::new(monitor),
             data_marker,
+            time_filter: TimeFilter::default(),
         };
 
         let buffer_size = config.pipeline.buffer_size;
@@ -134,7 +135,7 @@ impl ExtractorUtil {
             } => {
                 let conn_pool = TaskUtil::create_mysql_conn_pool(&url, 2, enable_sqlx_log).await?;
                 let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
-                let time_filter = TimeFilter::new(&start_time_utc, &end_time_utc)?;
+                base_extractor.time_filter = TimeFilter::new(&start_time_utc, &end_time_utc)?;
                 let extractor = MysqlCdcExtractor {
                     meta_manager,
                     filter,
@@ -148,7 +149,6 @@ impl ExtractorUtil {
                     syncer,
                     base_extractor,
                     resumer: cdc_resumer,
-                    time_filter,
                     gtid_enabled,
                     gtid_set,
                 };
@@ -207,11 +207,10 @@ impl ExtractorUtil {
             } => {
                 let conn_pool = TaskUtil::create_pg_conn_pool(&url, 2, enable_sqlx_log).await?;
                 let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
-                let time_filter = TimeFilter::new(&start_time_utc, &end_time_utc)?;
+                base_extractor.time_filter = TimeFilter::new(&start_time_utc, &end_time_utc)?;
                 let extractor = PgCdcExtractor {
                     meta_manager,
                     filter,
-                    time_filter,
                     url,
                     conn_pool,
                     slot_name,

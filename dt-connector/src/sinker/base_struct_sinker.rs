@@ -1,6 +1,6 @@
 use anyhow::bail;
 use dt_common::log_error;
-use dt_common::meta::ddl_data::DdlData;
+use dt_common::meta::struct_meta::struct_data::StructData;
 use dt_common::{
     config::config_enums::ConflictPolicyEnum, error::Error, log_info, rdb_filter::RdbFilter,
 };
@@ -14,15 +14,14 @@ pub enum DBConnPool {
 }
 
 impl BaseStructSinker {
-    pub async fn sink_ddl(
+    pub async fn sink_structs(
         conn_pool: &DBConnPool,
         conflict_policy: &ConflictPolicyEnum,
-        data: Vec<DdlData>,
+        data: Vec<StructData>,
         filter: &RdbFilter,
     ) -> anyhow::Result<()> {
-        for ddl_data in data {
-            let mut statement = ddl_data.statement.unwrap();
-            for (_, sql) in statement.to_sqls(filter).iter() {
+        for mut struct_data in data {
+            for (_, sql) in struct_data.statement.to_sqls(filter)?.iter() {
                 log_info!("ddl begin: {}", sql);
                 match Self::execute(conn_pool, sql).await {
                     Ok(()) => {

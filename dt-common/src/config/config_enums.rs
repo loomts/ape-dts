@@ -1,10 +1,13 @@
 use std::str::FromStr;
 
+use serde::{Deserialize, Serialize};
 use strum::{Display, EnumString, IntoStaticStr};
 
 use crate::error::Error;
 
-#[derive(Clone, Display, EnumString, IntoStaticStr, Debug, PartialEq, Eq, Default)]
+#[derive(
+    Clone, Display, EnumString, IntoStaticStr, Debug, PartialEq, Eq, Default, Serialize, Deserialize,
+)]
 pub enum DbType {
     #[default]
     #[strum(serialize = "mysql")]

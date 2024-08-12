@@ -1,3 +1,7 @@
+use dt_common::{
+    config::config_enums::DbType,
+    meta::ddl_meta::{ddl_parser::DdlParser, ddl_statement::DdlStatement},
+};
 use dt_connector::meta_fetcher::{
     mysql::mysql_struct_check_fetcher::MysqlStructCheckFetcher,
     pg::pg_struct_check_fetcher::PgStructCheckFetcher,
@@ -9,6 +13,8 @@ use super::{base_test_runner::BaseTestRunner, rdb_test_runner::RdbTestRunner};
 pub struct RdbStructTestRunner {
     pub base: RdbTestRunner,
 }
+
+const PG_GET_INDEXDEF: &'static str = "pg_get_indexdef";
 
 impl RdbStructTestRunner {
     pub async fn new(relative_test_dir: &str) -> anyhow::Result<Self> {
@@ -80,7 +86,7 @@ impl RdbStructTestRunner {
             }
 
             let src_ddl_sql = src_check_fetcher.fetch_database(&src_db_tbs[i].0).await;
-            let dst_ddl_sql = src_check_fetcher.fetch_database(&dst_db_tbs[i].0).await;
+            let dst_ddl_sql = dst_check_fetcher.fetch_database(&dst_db_tbs[i].0).await;
             let key = format!("{}", &dst_db_tbs[i].0);
             let expect_ddl_sql = expect_ddl_sqls.get(&key).unwrap().to_owned();
 
@@ -108,23 +114,81 @@ impl RdbStructTestRunner {
 
         let (src_db_tbs, dst_db_tbs) = self.base.get_compare_db_tbs().unwrap();
         for i in 0..src_db_tbs.len() {
+            let src_db_tb = &src_db_tbs[i];
+            let dst_db_tb = &dst_db_tbs[i];
+
             let src_table = src_check_fetcher
-                .fetch_table(&src_db_tbs[i].0, &src_db_tbs[i].1)
+                .fetch_table(&src_db_tb.0, &src_db_tb.1)
                 .await?;
-            let dst_table = dst_check_fetcher
-                .fetch_table(&dst_db_tbs[i].0, &dst_db_tbs[i].1)
+            let mut dst_table = dst_check_fetcher
+                .fetch_table(&dst_db_tb.0, &dst_db_tb.1)
                 .await?;
 
             println!(
                 "comparing src table: {:?} with dst table: {:?}\n",
-                src_db_tbs[i], dst_db_tbs[i]
+                src_db_tb, dst_db_tb
             );
-            println!("src_table: {:?}\n", src_table);
-            println!("dst_table: {:?}\n", dst_table);
-            assert_eq!(src_table, dst_table);
+
+            if src_db_tb == dst_db_tb {
+                println!("src_table: {:?}\n", src_table);
+                println!("dst_table: {:?}\n", dst_table);
+                assert_eq!(src_table, dst_table);
+                return Ok(());
+            }
+
+            assert_eq!(src_table.columns, dst_table.columns);
+            assert_eq!(src_table.summary, dst_table.summary);
+            assert_eq!(src_table.constraints, dst_table.constraints);
+            assert_eq!(src_table.indexes.len(), dst_table.indexes.len());
+            // when table is routed, the dst pg_get_indexdef is different from src
+            // src pg_get_indexdef: CREATE UNIQUE INDEX full_column_type_pkey ON struct_it_pg2pg_1.full_column_type USING btree (id)
+            // dst pg_get_indexdef: CREATE UNIQUE INDEX full_column_type_pkey ON dst_struct_it_pg2pg_1.full_column_type USING btree (id)
+            let parser = DdlParser::new(DbType::Pg);
+            for (j, src_index) in src_table.indexes.iter().enumerate() {
+                let src_indexdef = src_index.get(PG_GET_INDEXDEF);
+                if src_indexdef.is_none() {
+                    continue;
+                }
+                let dst_index = &mut dst_table.indexes[j];
+
+                let src_indexdef = src_indexdef.unwrap();
+                let dst_indexdef = dst_index.get(PG_GET_INDEXDEF).unwrap();
+                let src_ddl_data = parser.parse(src_indexdef).unwrap();
+                let dst_ddl_data = parser.parse(dst_indexdef).unwrap();
+
+                if let DdlStatement::PgCreateIndex(src) = src_ddl_data.statement {
+                    assert_eq!(src.schema, src_db_tb.0);
+                    assert_eq!(src.tb, src_db_tb.1);
+
+                    if let DdlStatement::PgCreateIndex(dst) = dst_ddl_data.statement {
+                        assert_eq!(dst.schema, dst_db_tb.0);
+                        assert_eq!(dst.tb, dst_db_tb.1);
+
+                        assert_eq!(src.index_name, dst.index_name);
+                        assert_eq!(src.is_unique, dst.is_unique);
+                        assert_eq!(src.is_concurrently, dst.is_concurrently);
+                        assert_eq!(src.if_not_exists, dst.if_not_exists);
+                        assert_eq!(src.is_only, dst.is_only);
+                        assert_eq!(src.unparsed, dst.unparsed);
+                    }
+                }
+
+                // other properties of src_index and dst_index should be same
+                assert_eq!(src_index.len(), dst_index.len());
+                for key in src_index.keys() {
+                    if key == PG_GET_INDEXDEF {
+                        continue;
+                    }
+                    println!("index property: {}", key);
+                    assert_eq!(src_index.get(key), dst_index.get(key));
+                }
+            }
         }
 
-        println!("summary: dst tables: {:?}", src_db_tbs);
+        println!(
+            "summary: src tables: {:?}, dst tables: {:?}",
+            src_db_tbs, dst_db_tbs
+        );
         Ok(())
     }
 

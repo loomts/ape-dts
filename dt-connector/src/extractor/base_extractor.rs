@@ -9,17 +9,15 @@ use dt_common::{
     config::{config_enums::DbType, config_token_parser::ConfigTokenParser},
     error::Error,
     log_error, log_info, log_warn,
-    meta::dt_queue::DtQueue,
+    meta::{ddl_meta::ddl_data::DdlData, dt_queue::DtQueue, struct_meta::struct_data::StructData},
     utils::{sql_util::SqlUtil, time_util::TimeUtil},
 };
 use dt_common::{
     meta::{
-        ddl_data::DdlData,
-        ddl_type::DdlType,
+        ddl_meta::ddl_parser::DdlParser,
         dt_data::{DtData, DtItem},
         position::Position,
         row_data::RowData,
-        sql_parser::ddl_parser::DdlParser,
     },
     time_filter::TimeFilter,
 };
@@ -34,6 +32,7 @@ pub struct BaseExtractor {
     pub shut_down: Arc<AtomicBool>,
     pub monitor: ExtractorMonitor,
     pub data_marker: Option<DataMarker>,
+    pub time_filter: TimeFilter,
 }
 
 impl BaseExtractor {
@@ -49,6 +48,10 @@ impl BaseExtractor {
         dt_data: DtData,
         position: Position,
     ) -> anyhow::Result<()> {
+        if !self.time_filter.started {
+            return Ok(());
+        }
+
         if let Some(data_marker) = &mut self.data_marker {
             if dt_data.is_begin() || dt_data.is_commit() {
                 data_marker.reset();
@@ -92,24 +95,32 @@ impl BaseExtractor {
 
     pub async fn push_row(&mut self, row_data: RowData, position: Position) -> anyhow::Result<()> {
         let row_data = self.router.route_row(row_data);
-        let dt_data = DtData::Dml { row_data };
-        self.push_dt_data(dt_data, position).await
+        self.push_dt_data(DtData::Dml { row_data }, position).await
     }
 
-    pub async fn parse_ddl(&self, schema: &str, query: &str) -> anyhow::Result<DdlData> {
-        let mut ddl_data = DdlData {
-            schema: schema.to_owned(),
-            tb: String::new(),
-            query: query.to_owned(),
-            ddl_type: DdlType::Unknown,
-            statement: None,
-        };
+    pub async fn push_ddl(&mut self, ddl_data: DdlData, position: Position) -> anyhow::Result<()> {
+        let ddl_data = self.router.route_ddl(ddl_data);
+        self.push_dt_data(DtData::Ddl { ddl_data }, position).await
+    }
 
-        let parse_result = DdlParser::parse(query);
+    pub async fn push_struct(&mut self, struct_data: StructData) -> anyhow::Result<()> {
+        let struct_data = self.router.route_struct(struct_data);
+        self.push_dt_data(DtData::Struct { struct_data }, Position::None)
+            .await
+    }
+
+    pub async fn parse_ddl(
+        &self,
+        db_type: &DbType,
+        schema: &str,
+        query: &str,
+    ) -> anyhow::Result<DdlData> {
+        let parser = DdlParser::new(db_type.to_owned());
+        let parse_result = parser.parse(query);
         if let Err(err) = parse_result {
             let error = format!("failed to parse ddl, will try ignore it, please execute the ddl manually in target, sql: {}, error: {}", query, err);
             log_error!("{}", error);
-            bail! {Error::StructError(error)}
+            bail! {Error::Unexpected(error)}
         }
 
         // case 1, execute: use db_1; create table tb_1(id int);
@@ -118,15 +129,9 @@ impl BaseExtractor {
         // binlog query.schema == empty, schema from DdlParser == db_1
         // case 3, execute: use db_1; create table db_2.tb_1(id int);
         // binlog query.schema == db_1, schema from DdlParser == db_2
-        let ddl = parse_result.unwrap();
-        ddl_data.ddl_type = ddl.ddl_type;
-        if let Some(schema) = ddl.schema {
-            ddl_data.schema = schema;
-        }
-        if let Some(tb) = ddl.tb {
-            ddl_data.tb = tb;
-        }
-
+        let mut ddl_data = parse_result.unwrap();
+        ddl_data.default_db = schema.to_string();
+        ddl_data.query = query.to_string();
         Ok(ddl_data)
     }
 

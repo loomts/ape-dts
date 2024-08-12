@@ -8,15 +8,19 @@ pub struct PgCreateSchemaStatement {
 }
 
 impl PgCreateSchemaStatement {
-    pub fn to_sqls(&self, filter: &RdbFilter) -> Vec<(String, String)> {
+    pub fn route(&mut self, dst_schema: &str) {
+        self.schema.name = dst_schema.to_string();
+    }
+
+    pub fn to_sqls(&self, filter: &RdbFilter) -> anyhow::Result<Vec<(String, String)>> {
         let mut sqls = Vec::new();
         if filter.filter_structure(StructureType::Database.into()) {
-            return sqls;
+            return Ok(sqls);
         }
 
         let key = format!("schema.{}", self.schema.name);
         let sql = format!(r#"CREATE SCHEMA IF NOT EXISTS "{}""#, self.schema.name);
         sqls.push((key, sql));
-        sqls
+        Ok(sqls)
     }
 }
