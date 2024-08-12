@@ -14,12 +14,14 @@ pub enum DdlStatement {
 
     MysqlCreateTable(MysqlCreateTableStatement),
     MysqlAlterTable(MysqlAlterTableStatement),
+    MysqlAlterRenameTable(MysqlAlterRenameTableStatement),
     MysqlTruncateTable(MysqlTruncateTableStatement),
     MysqlCreateIndex(MysqlCreateIndexStatement),
     MysqlDropIndex(MysqlDropIndexStatement),
 
     PgCreateTable(PgCreateTableStatement),
     PgAlterTable(PgAlterTableStatement),
+    PgAlterRenameTable(PgAlterRenameTableStatement),
     PgTruncateTable(PgTruncateTableStatement),
     PgCreateIndex(PgCreateIndexStatement),
 
@@ -40,10 +42,10 @@ impl DdlStatement {
         let mut res = Vec::new();
         match self {
             DdlStatement::DropMultiTable(s) => {
-                for db_tb in s.db_tbs.iter() {
+                for (db, tb) in s.db_tbs.iter() {
                     let statement = DropTableStatement {
-                        db: db_tb.db.clone(),
-                        tb: db_tb.tb.clone(),
+                        db: db.clone(),
+                        tb: tb.clone(),
                         if_exists: s.if_exists,
                         unparsed: s.unparsed.clone(),
                     };
@@ -52,10 +54,13 @@ impl DdlStatement {
             }
 
             DdlStatement::RenameMultiTable(s) => {
-                for (i, db_tb) in s.db_tbs.iter().enumerate() {
+                for (i, (db, tb)) in s.db_tbs.iter().enumerate() {
+                    let (new_db, new_tb) = &s.new_db_tbs[i];
                     let statement = RenameTableStatement {
-                        db_tb: db_tb.clone(),
-                        new_db_tb: s.new_db_tbs[i].clone(),
+                        db: db.clone(),
+                        tb: tb.clone(),
+                        new_db: new_db.clone(),
+                        new_tb: new_tb.clone(),
                         unparsed: s.unparsed.clone(),
                     };
                     res.push(DdlStatement::RenameTable(statement));
@@ -102,13 +107,24 @@ impl DdlStatement {
 
             DdlStatement::DropTable(s) => (s.db.clone(), s.tb.clone()),
 
-            DdlStatement::RenameTable(s) => (s.db_tb.db.clone(), s.db_tb.tb.clone()),
+            DdlStatement::RenameTable(s) => (s.db.clone(), s.tb.clone()),
+            DdlStatement::MysqlAlterRenameTable(s) => (s.db.clone(), s.tb.clone()),
+            DdlStatement::PgAlterRenameTable(s) => (s.schema.clone(), s.tb.clone()),
 
             DdlStatement::PgDropIndex(_)
             | DdlStatement::PgDropMultiIndex(_)
             | DdlStatement::DropMultiTable(_)
             | DdlStatement::RenameMultiTable(_)
             | DdlStatement::Unknown => (String::new(), String::new()),
+        }
+    }
+
+    pub fn get_rename_to_db_tb(&self) -> (String, String) {
+        match self {
+            DdlStatement::RenameTable(s) => (s.new_db.clone(), s.new_tb.clone()),
+            DdlStatement::MysqlAlterRenameTable(s) => (s.new_db.clone(), s.new_tb.clone()),
+            DdlStatement::PgAlterRenameTable(s) => (s.new_schema.clone(), s.new_tb.clone()),
+            _ => (String::new(), String::new()),
         }
     }
 
@@ -119,15 +135,41 @@ impl DdlStatement {
         dst_new_db: String,
         dst_new_tb: String,
     ) {
-        if let DdlStatement::RenameTable(s) = self {
-            s.db_tb = DbTb {
-                db: dst_db,
-                tb: dst_tb,
-            };
-            s.new_db_tb = DbTb {
-                db: dst_new_db,
-                tb: dst_new_tb,
-            };
+        match self {
+            DdlStatement::MysqlAlterRenameTable(s) => {
+                if !s.db.is_empty() {
+                    s.db = dst_db;
+                }
+                if !s.new_db.is_empty() {
+                    s.new_db = dst_new_db;
+                }
+                s.tb = dst_tb;
+                s.new_tb = dst_new_tb;
+            }
+
+            DdlStatement::PgAlterRenameTable(s) => {
+                if !s.schema.is_empty() {
+                    s.schema = dst_db;
+                }
+                if !s.new_schema.is_empty() {
+                    s.new_schema = dst_new_db;
+                }
+                s.tb = dst_tb;
+                s.new_tb = dst_new_tb;
+            }
+
+            DdlStatement::RenameTable(s) => {
+                if !s.db.is_empty() {
+                    s.db = dst_db;
+                }
+                if !s.new_db.is_empty() {
+                    s.new_db = dst_new_db;
+                }
+                s.tb = dst_tb;
+                s.new_tb = dst_new_tb;
+            }
+
+            _ => {}
         }
     }
 
@@ -154,50 +196,72 @@ impl DdlStatement {
             }
 
             DdlStatement::MysqlCreateTable(s) => {
-                s.db = dst_db;
+                if !s.db.is_empty() {
+                    s.db = dst_db;
+                }
                 s.tb = dst_tb;
             }
             DdlStatement::MysqlAlterTable(s) => {
-                s.db = dst_db;
+                if !s.db.is_empty() {
+                    s.db = dst_db;
+                }
                 s.tb = dst_tb;
             }
             DdlStatement::MysqlTruncateTable(s) => {
-                s.db = dst_db;
+                if !s.db.is_empty() {
+                    s.db = dst_db;
+                }
                 s.tb = dst_tb;
             }
             DdlStatement::MysqlCreateIndex(s) => {
-                s.db = dst_db;
+                if !s.db.is_empty() {
+                    s.db = dst_db;
+                }
                 s.tb = dst_tb;
             }
             DdlStatement::MysqlDropIndex(s) => {
-                s.db = dst_db;
+                if !s.db.is_empty() {
+                    s.db = dst_db;
+                }
                 s.tb = dst_tb;
             }
 
             DdlStatement::PgCreateTable(s) => {
-                s.schema = dst_db;
+                if !s.schema.is_empty() {
+                    s.schema = dst_db;
+                }
                 s.tb = dst_tb;
             }
             DdlStatement::PgAlterTable(s) => {
-                s.schema = dst_db;
+                if !s.schema.is_empty() {
+                    s.schema = dst_db;
+                }
                 s.tb = dst_tb;
             }
             DdlStatement::PgTruncateTable(s) => {
-                s.schema = dst_db;
+                if !s.schema.is_empty() {
+                    s.schema = dst_db;
+                }
                 s.tb = dst_tb;
             }
             DdlStatement::PgCreateIndex(s) => {
-                s.schema = dst_db;
+                if !s.schema.is_empty() {
+                    s.schema = dst_db;
+                }
                 s.tb = dst_tb;
             }
 
             DdlStatement::DropTable(s) => {
-                s.db = dst_db;
+                if !s.db.is_empty() {
+                    s.db = dst_db;
+                }
                 s.tb = dst_tb;
             }
 
             // not supported
             DdlStatement::RenameTable(_)
+            | DdlStatement::MysqlAlterRenameTable(_)
+            | DdlStatement::PgAlterRenameTable(_)
             | DdlStatement::PgDropIndex(_)
             | DdlStatement::PgDropMultiIndex(_)
             | DdlStatement::DropMultiTable(_)
@@ -267,7 +331,7 @@ pub struct PgCreateTableStatement {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DropMultiTableStatement {
-    pub db_tbs: Vec<DbTb>,
+    pub db_tbs: Vec<(String, String)>,
     pub if_exists: bool,
     pub unparsed: String,
 }
@@ -288,9 +352,29 @@ pub struct MysqlAlterTableStatement {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct MysqlAlterRenameTableStatement {
+    pub db: String,
+    pub tb: String,
+    pub new_db: String,
+    pub new_tb: String,
+    pub unparsed: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PgAlterTableStatement {
     pub schema: String,
     pub tb: String,
+    pub if_exists: bool,
+    pub is_only: bool,
+    pub unparsed: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct PgAlterRenameTableStatement {
+    pub schema: String,
+    pub tb: String,
+    pub new_schema: String,
+    pub new_tb: String,
     pub if_exists: bool,
     pub is_only: bool,
     pub unparsed: String,
@@ -313,15 +397,17 @@ pub struct PgTruncateTableStatement {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RenameMultiTableStatement {
-    pub db_tbs: Vec<DbTb>,
-    pub new_db_tbs: Vec<DbTb>,
+    pub db_tbs: Vec<(String, String)>,
+    pub new_db_tbs: Vec<(String, String)>,
     pub unparsed: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RenameTableStatement {
-    pub db_tb: DbTb,
-    pub new_db_tb: DbTb,
+    pub db: String,
+    pub tb: String,
+    pub new_db: String,
+    pub new_tb: String,
     pub unparsed: String,
 }
 
@@ -369,12 +455,6 @@ pub struct PgDropIndexStatement {
     pub if_exists: bool,
     pub is_concurrently: bool,
     pub unparsed: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct DbTb {
-    pub db: String,
-    pub tb: String,
 }
 
 impl DdlStatement {
@@ -454,10 +534,7 @@ impl DdlStatement {
             DdlStatement::DropTable(s) => {
                 let multi_s = DropMultiTableStatement {
                     if_exists: s.if_exists,
-                    db_tbs: vec![DbTb {
-                        db: s.db.clone(),
-                        tb: s.tb.clone(),
-                    }],
+                    db_tbs: vec![(s.db.clone(), s.tb.clone())],
                     unparsed: s.unparsed.clone(),
                 };
                 multi_s.to_sql(db_type)
@@ -484,6 +561,14 @@ impl DdlStatement {
                 append_unparsed(sql, &s.unparsed)
             }
 
+            DdlStatement::MysqlAlterRenameTable(s) => {
+                let mut sql = "ALTER TABLE".to_string();
+                sql = append_tb(&sql, &s.db, &s.tb, db_type);
+                sql = format!("{} RENAME TO", sql);
+                sql = append_tb(&sql, &s.new_db, &s.new_tb, db_type);
+                append_unparsed(sql, &s.unparsed)
+            }
+
             DdlStatement::PgAlterTable(s) => {
                 let mut sql = "ALTER TABLE".to_string();
                 if s.if_exists {
@@ -496,12 +581,26 @@ impl DdlStatement {
                 append_unparsed(sql, &s.unparsed)
             }
 
+            DdlStatement::PgAlterRenameTable(s) => {
+                let mut sql = "ALTER TABLE".to_string();
+                if s.if_exists {
+                    sql = format!("{} IF EXISTS", sql);
+                }
+                if s.is_only {
+                    sql = format!("{} ONLY", sql);
+                }
+                sql = append_tb(&sql, &s.schema, &s.tb, db_type);
+                sql = format!("{} RENAME TO", sql);
+                sql = append_tb(&sql, &s.new_schema, &s.new_tb, db_type);
+                append_unparsed(sql, &s.unparsed)
+            }
+
             DdlStatement::RenameMultiTable(s) => s.to_sql(db_type),
 
             DdlStatement::RenameTable(s) => {
                 let multi_s = RenameMultiTableStatement {
-                    db_tbs: vec![s.db_tb.clone()],
-                    new_db_tbs: vec![s.new_db_tb.clone()],
+                    db_tbs: vec![(s.db.clone(), s.tb.clone())],
+                    new_db_tbs: vec![(s.new_db.clone(), s.new_tb.clone())],
                     unparsed: s.unparsed.clone(),
                 };
                 multi_s.to_sql(db_type)
@@ -577,8 +676,8 @@ impl DropMultiTableStatement {
             sql = format!("{} IF EXISTS", sql);
         }
 
-        for schema_tb in self.db_tbs.iter() {
-            sql = append_tb(&sql, &schema_tb.db, &schema_tb.tb, db_type);
+        for (db, tb) in self.db_tbs.iter() {
+            sql = append_tb(&sql, db, tb, db_type);
         }
         append_unparsed(sql, &self.unparsed)
     }
@@ -587,11 +686,11 @@ impl DropMultiTableStatement {
 impl RenameMultiTableStatement {
     pub fn to_sql(&self, db_type: &DbType) -> String {
         let mut sql = "RENAME TABLE".to_string();
-        for (i, db_tb) in self.db_tbs.iter().enumerate() {
-            let new_db_tb = &self.new_db_tbs[i];
-            sql = append_tb(&sql, &db_tb.db, &db_tb.tb, db_type);
+        for (i, (db, tb)) in self.db_tbs.iter().enumerate() {
+            let (new_db, new_tb) = &self.new_db_tbs[i];
+            sql = append_tb(&sql, db, tb, db_type);
             sql = format!("{} TO", sql);
-            sql = append_tb(&sql, &new_db_tb.db, &new_db_tb.tb, db_type);
+            sql = append_tb(&sql, new_db, new_tb, db_type);
             if i < self.db_tbs.len() - 1 {
                 sql = format!("{},", sql);
             }

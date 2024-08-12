@@ -8,6 +8,10 @@ pub struct MysqlCreateDatabaseStatement {
 }
 
 impl MysqlCreateDatabaseStatement {
+    pub fn route(&mut self, dst_db: &str) {
+        self.database.name = dst_db.to_string();
+    }
+
     pub fn to_sqls(&self, filter: &RdbFilter) -> anyhow::Result<Vec<(String, String)>> {
         let mut sqls = Vec::new();
         if filter.filter_structure(StructureType::Database.into()) {

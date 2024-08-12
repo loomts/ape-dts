@@ -16,6 +16,21 @@ pub struct MysqlCreateTableStatement {
 }
 
 impl MysqlCreateTableStatement {
+    pub fn route(&mut self, dst_db: &str, dst_tb: &str) {
+        self.table.database_name = dst_db.to_string();
+        self.table.table_name = dst_tb.to_string();
+
+        for index in self.indexes.iter_mut() {
+            index.database_name = dst_db.to_string();
+            index.table_name = dst_tb.to_string();
+        }
+
+        for constraint in self.constraints.iter_mut() {
+            constraint.database_name = dst_db.to_string();
+            constraint.table_name = dst_tb.to_string();
+        }
+    }
+
     pub fn to_sqls(&mut self, filter: &RdbFilter) -> anyhow::Result<Vec<(String, String)>> {
         let mut sqls = Vec::new();
 

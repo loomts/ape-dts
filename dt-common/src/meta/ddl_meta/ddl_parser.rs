@@ -22,11 +22,12 @@ use std::{
 use super::{
     ddl_data::DdlData,
     ddl_statement::{
-        AlterSchemaStatement, DbTb, DropMultiTableStatement, DropSchemaStatement,
-        MysqlAlterTableStatement, MysqlCreateIndexStatement, MysqlCreateTableStatement,
-        MysqlDropIndexStatement, MysqlTruncateTableStatement, PgAlterTableStatement,
-        PgCreateIndexStatement, PgCreateTableStatement, PgDropMultiIndexStatement,
-        PgTruncateTableStatement, RenameMultiTableStatement,
+        AlterSchemaStatement, DropMultiTableStatement, DropSchemaStatement,
+        MysqlAlterRenameTableStatement, MysqlAlterTableStatement, MysqlCreateIndexStatement,
+        MysqlCreateTableStatement, MysqlDropIndexStatement, MysqlTruncateTableStatement,
+        PgAlterRenameTableStatement, PgAlterTableStatement, PgCreateIndexStatement,
+        PgCreateTableStatement, PgDropMultiIndexStatement, PgTruncateTableStatement,
+        RenameMultiTableStatement,
     },
     ddl_type::DdlType,
     keywords::keyword_a_to_c,
@@ -34,8 +35,8 @@ use super::{
 use super::{ddl_statement::AlterDatabaseStatement, keywords::keyword_o_to_s};
 use super::{ddl_statement::CreateDatabaseStatement, keywords::keyword_c_to_e};
 use super::{ddl_statement::CreateSchemaStatement, keywords::keyword_s_to_z};
-use super::{ddl_statement::DropDatabaseStatement, keywords::keyword_i_to_o};
 use super::{ddl_statement::DdlStatement, keywords::keyword_e_to_i};
+use super::{ddl_statement::DropDatabaseStatement, keywords::keyword_i_to_o};
 
 type SchemaTable = (Option<Vec<u8>>, Vec<u8>);
 
@@ -345,14 +346,13 @@ impl DdlParser {
             multispace0,
         ))(i)?;
 
-        let mut schema_tbs = Vec::new();
+        let mut db_tbs = Vec::new();
         for table in table_list {
-            let (schema, tb) = parse_table(table);
-            schema_tbs.push(DbTb { db: schema, tb })
+            db_tbs.push(parse_table(table))
         }
 
         let statement = DropMultiTableStatement {
-            db_tbs: schema_tbs,
+            db_tbs,
             if_exists: if_exists.is_some(),
             unparsed: to_string(remaining_input),
         };
@@ -374,22 +374,54 @@ impl DdlParser {
     }
 
     fn mysql_alter_table<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DdlData> {
-        let (remaining_input, (_, _, _, _, table, _)) = tuple((
+        // https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
+        let rename_to = |i: &'a [u8]| -> IResult<&'a [u8], (String, String)> {
+            let (remaining_input, (_, _, _, new_table, _)) = tuple((
+                tag_no_case("rename"),
+                multispace1,
+                opt(tuple((
+                    alt((tag_no_case("as"), tag_no_case("to"))),
+                    multispace1,
+                ))),
+                |i| self.schema_table(i),
+                multispace0,
+            ))(i)?;
+            Ok((remaining_input, parse_table(new_table)))
+        };
+
+        let (remaining_input, (_, _, _, _, table, _, rename_to, _)) = tuple((
             tag_no_case("alter"),
             multispace1,
             tag_no_case("table"),
             multispace1,
             |i| self.schema_table(i),
             multispace1,
+            opt(rename_to),
+            multispace0,
         ))(i)?;
 
-        let (schema, tb) = parse_table(table);
+        let (db, tb) = parse_table(table);
+        if let Some((new_db, new_tb)) = rename_to {
+            let statement = MysqlAlterRenameTableStatement {
+                db,
+                tb,
+                new_db,
+                new_tb,
+                unparsed: to_string(remaining_input),
+            };
+            let ddl = DdlData {
+                ddl_type: DdlType::AlterTable,
+                statement: DdlStatement::MysqlAlterRenameTable(statement),
+                ..Default::default()
+            };
+            return Ok((remaining_input, ddl));
+        }
+
         let statement = MysqlAlterTableStatement {
-            db: schema,
+            db,
             tb,
             unparsed: to_string(remaining_input),
         };
-
         let ddl = DdlData {
             ddl_type: DdlType::AlterTable,
             statement: DdlStatement::MysqlAlterTable(statement),
@@ -399,18 +431,52 @@ impl DdlParser {
     }
 
     fn pg_alter_table<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DdlData> {
-        let (remaining_input, (_, _, _, _, if_exists, only, table, _)) = tuple((
-            tag_no_case("alter"),
-            multispace1,
-            tag_no_case("table"),
-            multispace1,
-            opt(if_exists),
-            opt(tuple((tag_no_case("only"), multispace1))),
-            |i| self.schema_table(i),
-            multispace1,
-        ))(i)?;
+        // https://www.postgresql.org/docs/16/sql-altertable.html
+        let rename_to = |i: &'a [u8]| -> IResult<&'a [u8], (String, String)> {
+            let (remaining_input, (_, _, _, _, new_table, _)) = tuple((
+                tag_no_case("rename"),
+                multispace1,
+                tag_no_case("to"),
+                multispace1,
+                |i| self.schema_table(i),
+                multispace0,
+            ))(i)?;
+            Ok((remaining_input, parse_table(new_table)))
+        };
+
+        let (remaining_input, (_, _, _, _, if_exists, only, table, _, rename_to, _)) =
+            tuple((
+                tag_no_case("alter"),
+                multispace1,
+                tag_no_case("table"),
+                multispace1,
+                opt(if_exists),
+                opt(tuple((tag_no_case("only"), multispace1))),
+                |i| self.schema_table(i),
+                multispace1,
+                opt(rename_to),
+                multispace0,
+            ))(i)?;
 
         let (schema, tb) = parse_table(table);
+        if let Some((new_schema, new_tb)) = rename_to {
+            let statement = PgAlterRenameTableStatement {
+                schema,
+                tb,
+                new_schema,
+                new_tb,
+                if_exists: if_exists.is_some(),
+                is_only: only.is_some(),
+                unparsed: to_string(remaining_input),
+            };
+            let ddl = DdlData {
+                ddl_type: DdlType::AlterTable,
+                statement: DdlStatement::PgAlterRenameTable(statement),
+                ..Default::default()
+            };
+            return Ok((remaining_input, ddl));
+        }
+
         let statement = PgAlterTableStatement {
             schema,
             tb,
@@ -418,7 +484,6 @@ impl DdlParser {
             is_only: only.is_some(),
             unparsed: to_string(remaining_input),
         };
-
         let ddl = DdlData {
             ddl_type: DdlType::AlterTable,
             statement: DdlStatement::PgAlterTable(statement),
@@ -503,11 +568,8 @@ impl DdlParser {
         for (from, to) in table_to_table_list {
             let from = parse_table(from);
             let to = parse_table(to);
-            db_tbs.push(DbTb {
-                db: from.0,
-                tb: from.1,
-            });
-            new_db_tbs.push(DbTb { db: to.0, tb: to.1 });
+            db_tbs.push(from);
+            new_db_tbs.push(to);
         }
 
         let statement = RenameMultiTableStatement {
@@ -1121,6 +1183,34 @@ mod test_mysql {
     }
 
     #[test]
+    fn test_alter_rename_table_mysql() {
+        let sqls = vec![
+            "ALTER TABLE tb_2 RENAME  tb_3",
+            "alter table tb_2 rename as tb_3",
+            "alter table tb_2 rename to tb_3",
+            "ALTER TABLE `db_1`.tb_2 RENAME  `db_2`.tb_3",
+            "alter table `db_1`.tb_2 rename as `db_2`.tb_3",
+            "alter table `db_1`.tb_2 rename to `db_2`.tb_3",
+        ];
+
+        let expect_sqls = vec![
+            "ALTER TABLE `tb_2` RENAME TO `tb_3`",
+            "ALTER TABLE `tb_2` RENAME TO `tb_3`",
+            "ALTER TABLE `tb_2` RENAME TO `tb_3`",
+            "ALTER TABLE `db_1`.`tb_2` RENAME TO `db_2`.`tb_3`",
+            "ALTER TABLE `db_1`.`tb_2` RENAME TO `db_2`.`tb_3`",
+            "ALTER TABLE `db_1`.`tb_2` RENAME TO `db_2`.`tb_3`",
+        ];
+
+        let parser = DdlParser::new(DbType::Mysql);
+        for i in 0..sqls.len() {
+            let r = parser.parse(sqls[i]).unwrap();
+            assert_eq!(r.ddl_type, DdlType::AlterTable);
+            assert_eq!(r.to_sql(), expect_sqls[i]);
+        }
+    }
+
+    #[test]
     fn test_create_database_mysql() {
         let sqls = vec![
             "create database aaa",
@@ -1586,6 +1676,30 @@ mod test_pg {
         ];
 
         let parser = DdlParser::new(DbType::Mysql);
+        for i in 0..sqls.len() {
+            let r = parser.parse(sqls[i]).unwrap();
+            assert_eq!(r.ddl_type, DdlType::AlterTable);
+            assert_eq!(r.to_sql(), expect_sqls[i]);
+        }
+    }
+
+    #[test]
+    fn test_alter_rename_table_pg() {
+        let sqls = vec![
+            "ALTER TABLE tb_1 RENAME TO tb_2",
+            "alter table tb_1 rename to tb_2",
+            r#"ALTER TABLE IF EXISTS ONLY "schema_1".tb_1 RENAME TO "schema_2".tb_2"#,
+            r#"alter table "schema_1".tb_1 rename to "schema_2".tb_2"#,
+        ];
+
+        let expect_sqls = vec![
+            r#"ALTER TABLE "tb_1" RENAME TO "tb_2""#,
+            r#"ALTER TABLE "tb_1" RENAME TO "tb_2""#,
+            r#"ALTER TABLE IF EXISTS ONLY "schema_1"."tb_1" RENAME TO "schema_2"."tb_2""#,
+            r#"ALTER TABLE "schema_1"."tb_1" RENAME TO "schema_2"."tb_2""#,
+        ];
+
+        let parser = DdlParser::new(DbType::Pg);
         for i in 0..sqls.len() {
             let r = parser.parse(sqls[i]).unwrap();
             assert_eq!(r.ddl_type, DdlType::AlterTable);

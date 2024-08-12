@@ -33,6 +33,14 @@ impl DdlData {
         (db, tb)
     }
 
+    pub fn get_rename_to_db_tb(&self) -> (String, String) {
+        let (mut db, tb) = self.statement.get_rename_to_db_tb();
+        if db.is_empty() {
+            db = self.default_db.clone()
+        }
+        (db, tb)
+    }
+
     pub fn split_to_multi(self) -> Vec<DdlData> {
         let mut res = Vec::new();
         for statement in self.statement.split_to_multi() {

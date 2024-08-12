@@ -29,6 +29,39 @@ pub struct PgCreateTableStatement {
 }
 
 impl PgCreateTableStatement {
+    pub fn route(&mut self, dst_schema: &str, dst_tb: &str) {
+        self.table.schema_name = dst_schema.to_string();
+        self.table.table_name = dst_tb.to_string();
+        for comment in self.table_comments.iter_mut() {
+            comment.schema_name = dst_schema.to_string();
+            comment.table_name = dst_tb.to_string();
+        }
+
+        for comment in self.column_comments.iter_mut() {
+            comment.schema_name = dst_schema.to_string();
+            comment.table_name = dst_tb.to_string();
+        }
+
+        for constraint in self.constraints.iter_mut() {
+            constraint.schema_name = dst_schema.to_string();
+            constraint.table_name = dst_tb.to_string();
+        }
+
+        for index in self.indexes.iter_mut() {
+            index.schema_name = dst_schema.to_string();
+            index.table_name = dst_tb.to_string();
+        }
+
+        for sequence in self.sequences.iter_mut() {
+            sequence.schema_name = dst_schema.to_string();
+        }
+
+        for owner in self.sequence_owners.iter_mut() {
+            owner.schema_name = dst_schema.to_string();
+            owner.table_name = dst_tb.to_string();
+        }
+    }
+
     pub fn to_sqls(&mut self, filter: &RdbFilter) -> anyhow::Result<Vec<(String, String)>> {
         let mut sqls = Vec::new();
 
