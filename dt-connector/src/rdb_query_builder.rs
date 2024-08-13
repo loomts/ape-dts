@@ -308,7 +308,7 @@ impl RdbQueryBuilder<'_> {
 
         if set_pairs.is_empty() {
             bail! {Error::Unexpected(format!(
-                "db: {}, tb: {}, no cols in after, which should not happen in update",
+                "schema: {}, tb: {}, no cols in after, which should not happen in update",
                 self.rdb_tb_meta.schema, self.rdb_tb_meta.tb
             ))}
         }
@@ -385,7 +385,7 @@ impl RdbQueryBuilder<'_> {
                 let col_value = after.get(col);
                 if col_value.is_none() || *col_value.unwrap() == ColValue::None {
                     bail! {
-                        "db: {}, tb: {}, where col: {} is NULL, which should not happen in batch select",
+                        "schema: {}, tb: {}, where col: {} is NULL, which should not happen in batch select",
                         self.rdb_tb_meta.schema, self.rdb_tb_meta.tb, col
                     }
                 }

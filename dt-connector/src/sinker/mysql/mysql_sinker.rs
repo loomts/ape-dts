@@ -69,7 +69,7 @@ impl Sinker for MysqlSinker {
             let query = sqlx::query(&sql);
 
             // create a tmp connection with databse since sqlx conn pool does NOT support `USE db`
-            let (db, _tb) = ddl_data.get_db_tb();
+            let (db, _tb) = ddl_data.get_schema_tb();
             let mut conn_options = MySqlConnectOptions::from_str(&self.url)?;
             if !db.is_empty() {
                 match ddl_data.ddl_type {
@@ -226,7 +226,7 @@ impl MysqlSinker {
                 "INSERT INTO `{}`.`{}`(data_origin_node, src_node, dst_node, n) 
                 VALUES('{}', '{}', '{}', 1) 
                 ON DUPLICATE KEY UPDATE n=n+1",
-                data_marker.marker_db,
+                data_marker.marker_schema,
                 data_marker.marker_tb,
                 data_marker.data_origin_node,
                 data_marker.src_node,

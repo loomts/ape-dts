@@ -53,31 +53,31 @@ impl SnapshotResumer {
         })
     }
 
-    pub fn check_finished(&self, db: &str, tb: &str) -> bool {
+    pub fn check_finished(&self, schema: &str, tb: &str) -> bool {
         let res = self
             .finished_tbs
-            .contains(&(db.to_string(), tb.to_string()));
+            .contains(&(schema.to_string(), tb.to_string()));
         log_info!(
-            "resumer, check finished: db: {}, tb: {}, result: {}",
-            db,
+            "resumer, check finished: schema: {}, tb: {}, result: {}",
+            schema,
             tb,
             res
         );
         res
     }
 
-    pub fn get_resume_value(&self, db: &str, tb: &str, col: &str) -> Option<String> {
+    pub fn get_resume_value(&self, schema: &str, tb: &str, col: &str) -> Option<String> {
         let mut res = None;
         if let Some(value) =
             self.tb_positions
-                .get(&(db.to_string(), tb.to_string(), col.to_string()))
+                .get(&(schema.to_string(), tb.to_string(), col.to_string()))
         {
             res = Some(value.clone());
         }
 
         log_info!(
-            "resumer, get resume value, db: {}, tb: {}, col: {}, result: {:?}",
-            db,
+            "resumer, get resume value, schema: {}, tb: {}, col: {}, result: {:?}",
+            schema,
             tb,
             col,
             res

@@ -145,8 +145,8 @@ impl Prechecker for MySqlPrechecker {
         let (mut models, mut err_msgs): (Vec<DbTable>, Vec<String>) = (Vec::new(), Vec::new());
         if !self.filter_config.do_tbs.is_empty() {
             DbTable::from_str(&self.filter_config.do_tbs, &mut models)
-        } else if !self.filter_config.do_dbs.is_empty() {
-            DbTable::from_str(&self.filter_config.do_dbs, &mut models)
+        } else if !self.filter_config.do_schemas.is_empty() {
+            DbTable::from_str(&self.filter_config.do_schemas, &mut models)
         }
 
         let (dbs, tb_dbs, tbs) = DbTable::get_config_maps(&models).unwrap();
@@ -240,8 +240,8 @@ impl Prechecker for MySqlPrechecker {
         let mut models: Vec<DbTable> = Vec::new();
         if !self.filter_config.do_tbs.is_empty() {
             DbTable::from_str(&self.filter_config.do_tbs, &mut models)
-        } else if !self.filter_config.do_dbs.is_empty() {
-            DbTable::from_str(&self.filter_config.do_dbs, &mut models)
+        } else if !self.filter_config.do_schemas.is_empty() {
+            DbTable::from_str(&self.filter_config.do_schemas, &mut models)
         }
         let (dbs, tb_dbs, _) = DbTable::get_config_maps(&models).unwrap();
         let mut all_db_names = Vec::new();

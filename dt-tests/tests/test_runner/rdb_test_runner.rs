@@ -591,7 +591,7 @@ impl RdbTestRunner {
 
             let ddl = parser.parse(&sql).unwrap();
             if ddl.ddl_type == DdlType::CreateTable {
-                let (mut db, tb) = ddl.get_db_tb();
+                let (mut db, tb) = ddl.get_schema_tb();
                 if db.is_empty() {
                     db = PUBLIC.to_string();
                 }

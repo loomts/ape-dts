@@ -15,8 +15,10 @@ pub struct KafkaRouter {
 impl KafkaRouter {
     pub fn from_config(config: &RouterConfig) -> anyhow::Result<Self> {
         match config {
-            RouterConfig::Rdb { db_map, tb_map, .. } => Ok(Self {
-                db_map: Self::parse_str(db_map)?,
+            RouterConfig::Rdb {
+                schema_map, tb_map, ..
+            } => Ok(Self {
+                db_map: Self::parse_str(schema_map)?,
                 tb_map: Self::parse_str(tb_map)?,
                 cache: HashMap::new(),
             }),

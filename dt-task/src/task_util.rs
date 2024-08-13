@@ -133,7 +133,7 @@ impl TaskUtil {
         log_level == "debug" || log_level == "trace"
     }
 
-    pub async fn list_dbs(url: &str, db_type: &DbType) -> anyhow::Result<Vec<String>> {
+    pub async fn list_schemas(url: &str, db_type: &DbType) -> anyhow::Result<Vec<String>> {
         let mut dbs = match db_type {
             DbType::Mysql => Self::list_mysql_dbs(url).await?,
             DbType::Pg => Self::list_pg_schemas(url).await?,
@@ -144,11 +144,15 @@ impl TaskUtil {
         Ok(dbs)
     }
 
-    pub async fn list_tbs(url: &str, db: &str, db_type: &DbType) -> anyhow::Result<Vec<String>> {
+    pub async fn list_tbs(
+        url: &str,
+        schema: &str,
+        db_type: &DbType,
+    ) -> anyhow::Result<Vec<String>> {
         let mut tbs = match db_type {
-            DbType::Mysql => Self::list_mysql_tbs(url, db).await?,
-            DbType::Pg => Self::list_pg_tbs(url, db).await?,
-            DbType::Mongo => Self::list_mongo_tbs(url, db).await?,
+            DbType::Mysql => Self::list_mysql_tbs(url, schema).await?,
+            DbType::Pg => Self::list_pg_tbs(url, schema).await?,
+            DbType::Mongo => Self::list_mongo_tbs(url, schema).await?,
             _ => Vec::new(),
         };
         tbs.sort();
@@ -157,50 +161,50 @@ impl TaskUtil {
 
     pub async fn check_tb_exist(
         url: &str,
-        db: &str,
+        schema: &str,
         tb: &str,
         db_type: &DbType,
     ) -> anyhow::Result<bool> {
-        let dbs = Self::list_dbs(url, db_type).await?;
-        if !dbs.contains(&db.to_string()) {
+        let schemas = Self::list_schemas(url, db_type).await?;
+        if !schemas.contains(&schema.to_string()) {
             return Ok(false);
         }
 
-        let tbs = Self::list_tbs(url, db, db_type).await?;
+        let tbs = Self::list_tbs(url, schema, db_type).await?;
         Ok(tbs.contains(&tb.to_string()))
     }
 
     pub async fn check_and_create_tb(
         url: &str,
-        db: &str,
+        schema: &str,
         tb: &str,
-        db_sql: &str,
+        schema_sql: &str,
         tb_sql: &str,
         db_type: &DbType,
     ) -> anyhow::Result<()> {
         log_info!(
-            "url: {}, db: {}, tb: {}, db_sql: {}, tb_sql: {}",
+            "url: {}, schema: {}, tb: {}, schema_sql: {}, tb_sql: {}",
             url,
-            db,
+            schema,
             tb,
-            db_sql,
+            schema_sql,
             tb_sql
         );
-        if TaskUtil::check_tb_exist(url, db, tb, db_type).await? {
+        if TaskUtil::check_tb_exist(url, schema, tb, db_type).await? {
             return Ok(());
         }
 
         match db_type {
             DbType::Mysql => {
                 let conn_pool = Self::create_mysql_conn_pool(url, 1, true).await?;
-                sqlx::query(db_sql).execute(&conn_pool).await?;
+                sqlx::query(schema_sql).execute(&conn_pool).await?;
                 sqlx::query(tb_sql).execute(&conn_pool).await?;
                 conn_pool.close().await
             }
 
             DbType::Pg => {
                 let conn_pool = Self::create_pg_conn_pool(url, 1, true).await?;
-                sqlx::query(db_sql).execute(&conn_pool).await?;
+                sqlx::query(schema_sql).execute(&conn_pool).await?;
                 sqlx::query(tb_sql).execute(&conn_pool).await?;
                 conn_pool.close().await
             }

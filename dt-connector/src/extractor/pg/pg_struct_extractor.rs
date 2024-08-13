@@ -55,7 +55,7 @@ impl PgStructExtractor {
 
     pub async fn push_dt_data(&mut self, statement: StructStatement) -> anyhow::Result<()> {
         let struct_data = StructData {
-            db: self.schema.clone(),
+            schema: self.schema.clone(),
             statement,
         };
         self.base_extractor.push_struct(struct_data).await

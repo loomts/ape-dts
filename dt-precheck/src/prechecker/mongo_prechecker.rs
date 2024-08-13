@@ -121,7 +121,7 @@ impl Prechecker for MongoPrechecker {
 
         let invalid_dbs = vec!["admin", "local"];
         for db in invalid_dbs {
-            if !self.fetcher.filter.filter_db(db) {
+            if !self.fetcher.filter.filter_schema(db) {
                 check_error = Some(anyhow::Error::msg(
                     "database 'admin' and 'local' are not supported as source and target.",
                 ));

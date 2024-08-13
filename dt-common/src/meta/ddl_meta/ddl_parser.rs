@@ -346,13 +346,13 @@ impl DdlParser {
             multispace0,
         ))(i)?;
 
-        let mut db_tbs = Vec::new();
+        let mut schema_tbs = Vec::new();
         for table in table_list {
-            db_tbs.push(parse_table(table))
+            schema_tbs.push(parse_table(table))
         }
 
         let statement = DropMultiTableStatement {
-            db_tbs,
+            schema_tbs,
             if_exists: if_exists.is_some(),
             unparsed: to_string(remaining_input),
         };
@@ -510,9 +510,9 @@ impl DdlParser {
             multispace0,
         ))(i)?;
 
-        let (schema, tb) = parse_table(table);
+        let (db, tb) = parse_table(table);
         let statement = MysqlTruncateTableStatement {
-            db: schema,
+            db,
             tb,
             unparsed: to_string(remaining_input),
         };
@@ -563,18 +563,18 @@ impl DdlParser {
             multispace0,
         ))(i)?;
 
-        let mut db_tbs = Vec::new();
-        let mut new_db_tbs = Vec::new();
+        let mut schema_tbs = Vec::new();
+        let mut new_schema_tbs = Vec::new();
         for (from, to) in table_to_table_list {
             let from = parse_table(from);
             let to = parse_table(to);
-            db_tbs.push(from);
-            new_db_tbs.push(to);
+            schema_tbs.push(from);
+            new_schema_tbs.push(to);
         }
 
         let statement = RenameMultiTableStatement {
-            db_tbs,
-            new_db_tbs,
+            schema_tbs,
+            new_schema_tbs,
             unparsed: to_string(remaining_input),
         };
 
@@ -624,7 +624,7 @@ impl DdlParser {
                 multispace0,
             ))(i)?;
 
-        let (schema, tb) = parse_table(table);
+        let (db, tb) = parse_table(table);
         let index_kind_str = if let Some((index_kind, _)) = index_kind {
             Some(to_string(index_kind))
         } else {
@@ -637,7 +637,7 @@ impl DdlParser {
         };
 
         let statement = MysqlCreateIndexStatement {
-            db: schema,
+            db,
             tb,
             index_kind: index_kind_str,
             index_type: index_type_str,
@@ -911,13 +911,13 @@ fn ws_sep_comma(i: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 fn parse_table(table: (Option<Vec<u8>>, Vec<u8>)) -> (String, String) {
-    let db = if let Some(db_raw) = &table.0 {
-        to_string(db_raw)
+    let schema = if let Some(schema_raw) = &table.0 {
+        to_string(schema_raw)
     } else {
         String::new()
     };
     let tb = to_string(&table.1);
-    (db, tb)
+    (schema, tb)
 }
 
 fn to_string(i: &[u8]) -> String {

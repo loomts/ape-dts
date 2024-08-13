@@ -42,9 +42,9 @@ impl DdlStatement {
         let mut res = Vec::new();
         match self {
             DdlStatement::DropMultiTable(s) => {
-                for (db, tb) in s.db_tbs.iter() {
+                for (schema, tb) in s.schema_tbs.iter() {
                     let statement = DropTableStatement {
-                        db: db.clone(),
+                        schema: schema.clone(),
                         tb: tb.clone(),
                         if_exists: s.if_exists,
                         unparsed: s.unparsed.clone(),
@@ -54,12 +54,12 @@ impl DdlStatement {
             }
 
             DdlStatement::RenameMultiTable(s) => {
-                for (i, (db, tb)) in s.db_tbs.iter().enumerate() {
-                    let (new_db, new_tb) = &s.new_db_tbs[i];
+                for (i, (schema, tb)) in s.schema_tbs.iter().enumerate() {
+                    let (new_schema, new_tb) = &s.new_schema_tbs[i];
                     let statement = RenameTableStatement {
-                        db: db.clone(),
+                        schema: schema.clone(),
                         tb: tb.clone(),
-                        new_db: new_db.clone(),
+                        new_schema: new_schema.clone(),
                         new_tb: new_tb.clone(),
                         unparsed: s.unparsed.clone(),
                     };
@@ -84,7 +84,7 @@ impl DdlStatement {
         res
     }
 
-    pub fn get_db_tb(&self) -> (String, String) {
+    pub fn get_schema_tb(&self) -> (String, String) {
         match self {
             DdlStatement::CreateDatabase(s) => (s.db.clone(), String::new()),
             DdlStatement::DropDatabase(s) => (s.db.clone(), String::new()),
@@ -105,9 +105,9 @@ impl DdlStatement {
             DdlStatement::PgTruncateTable(s) => (s.schema.clone(), s.tb.clone()),
             DdlStatement::PgCreateIndex(s) => (s.schema.clone(), s.tb.clone()),
 
-            DdlStatement::DropTable(s) => (s.db.clone(), s.tb.clone()),
+            DdlStatement::DropTable(s) => (s.schema.clone(), s.tb.clone()),
 
-            DdlStatement::RenameTable(s) => (s.db.clone(), s.tb.clone()),
+            DdlStatement::RenameTable(s) => (s.schema.clone(), s.tb.clone()),
             DdlStatement::MysqlAlterRenameTable(s) => (s.db.clone(), s.tb.clone()),
             DdlStatement::PgAlterRenameTable(s) => (s.schema.clone(), s.tb.clone()),
 
@@ -119,9 +119,9 @@ impl DdlStatement {
         }
     }
 
-    pub fn get_rename_to_db_tb(&self) -> (String, String) {
+    pub fn get_rename_to_schema_tb(&self) -> (String, String) {
         match self {
-            DdlStatement::RenameTable(s) => (s.new_db.clone(), s.new_tb.clone()),
+            DdlStatement::RenameTable(s) => (s.new_schema.clone(), s.new_tb.clone()),
             DdlStatement::MysqlAlterRenameTable(s) => (s.new_db.clone(), s.new_tb.clone()),
             DdlStatement::PgAlterRenameTable(s) => (s.new_schema.clone(), s.new_tb.clone()),
             _ => (String::new(), String::new()),
@@ -130,18 +130,18 @@ impl DdlStatement {
 
     pub fn route_rename_table(
         &mut self,
-        dst_db: String,
+        dst_schema: String,
         dst_tb: String,
-        dst_new_db: String,
+        dst_new_schema: String,
         dst_new_tb: String,
     ) {
         match self {
             DdlStatement::MysqlAlterRenameTable(s) => {
                 if !s.db.is_empty() {
-                    s.db = dst_db;
+                    s.db = dst_schema;
                 }
                 if !s.new_db.is_empty() {
-                    s.new_db = dst_new_db;
+                    s.new_db = dst_new_schema;
                 }
                 s.tb = dst_tb;
                 s.new_tb = dst_new_tb;
@@ -149,21 +149,21 @@ impl DdlStatement {
 
             DdlStatement::PgAlterRenameTable(s) => {
                 if !s.schema.is_empty() {
-                    s.schema = dst_db;
+                    s.schema = dst_schema;
                 }
                 if !s.new_schema.is_empty() {
-                    s.new_schema = dst_new_db;
+                    s.new_schema = dst_new_schema;
                 }
                 s.tb = dst_tb;
                 s.new_tb = dst_new_tb;
             }
 
             DdlStatement::RenameTable(s) => {
-                if !s.db.is_empty() {
-                    s.db = dst_db;
+                if !s.schema.is_empty() {
+                    s.schema = dst_schema;
                 }
-                if !s.new_db.is_empty() {
-                    s.new_db = dst_new_db;
+                if !s.new_schema.is_empty() {
+                    s.new_schema = dst_new_schema;
                 }
                 s.tb = dst_tb;
                 s.new_tb = dst_new_tb;
@@ -173,87 +173,87 @@ impl DdlStatement {
         }
     }
 
-    pub fn route(&mut self, dst_db: String, dst_tb: String) {
+    pub fn route(&mut self, dst_schema: String, dst_tb: String) {
         match self {
             DdlStatement::CreateDatabase(s) => {
-                s.db = dst_db;
+                s.db = dst_schema;
             }
             DdlStatement::DropDatabase(s) => {
-                s.db = dst_db;
+                s.db = dst_schema;
             }
             DdlStatement::AlterDatabase(s) => {
-                s.db = dst_db;
+                s.db = dst_schema;
             }
 
             DdlStatement::CreateSchema(s) => {
-                s.schema = dst_db;
+                s.schema = dst_schema;
             }
             DdlStatement::DropSchema(s) => {
-                s.schema = dst_db;
+                s.schema = dst_schema;
             }
             DdlStatement::AlterSchema(s) => {
-                s.schema = dst_db;
+                s.schema = dst_schema;
             }
 
             DdlStatement::MysqlCreateTable(s) => {
                 if !s.db.is_empty() {
-                    s.db = dst_db;
+                    s.db = dst_schema;
                 }
                 s.tb = dst_tb;
             }
             DdlStatement::MysqlAlterTable(s) => {
                 if !s.db.is_empty() {
-                    s.db = dst_db;
+                    s.db = dst_schema;
                 }
                 s.tb = dst_tb;
             }
             DdlStatement::MysqlTruncateTable(s) => {
                 if !s.db.is_empty() {
-                    s.db = dst_db;
+                    s.db = dst_schema;
                 }
                 s.tb = dst_tb;
             }
             DdlStatement::MysqlCreateIndex(s) => {
                 if !s.db.is_empty() {
-                    s.db = dst_db;
+                    s.db = dst_schema;
                 }
                 s.tb = dst_tb;
             }
             DdlStatement::MysqlDropIndex(s) => {
                 if !s.db.is_empty() {
-                    s.db = dst_db;
+                    s.db = dst_schema;
                 }
                 s.tb = dst_tb;
             }
 
             DdlStatement::PgCreateTable(s) => {
                 if !s.schema.is_empty() {
-                    s.schema = dst_db;
+                    s.schema = dst_schema;
                 }
                 s.tb = dst_tb;
             }
             DdlStatement::PgAlterTable(s) => {
                 if !s.schema.is_empty() {
-                    s.schema = dst_db;
+                    s.schema = dst_schema;
                 }
                 s.tb = dst_tb;
             }
             DdlStatement::PgTruncateTable(s) => {
                 if !s.schema.is_empty() {
-                    s.schema = dst_db;
+                    s.schema = dst_schema;
                 }
                 s.tb = dst_tb;
             }
             DdlStatement::PgCreateIndex(s) => {
                 if !s.schema.is_empty() {
-                    s.schema = dst_db;
+                    s.schema = dst_schema;
                 }
                 s.tb = dst_tb;
             }
 
             DdlStatement::DropTable(s) => {
-                if !s.db.is_empty() {
-                    s.db = dst_db;
+                if !s.schema.is_empty() {
+                    s.schema = dst_schema;
                 }
                 s.tb = dst_tb;
             }
@@ -331,14 +331,14 @@ pub struct PgCreateTableStatement {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DropMultiTableStatement {
-    pub db_tbs: Vec<(String, String)>,
+    pub schema_tbs: Vec<(String, String)>,
     pub if_exists: bool,
     pub unparsed: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DropTableStatement {
-    pub db: String,
+    pub schema: String,
     pub tb: String,
     pub if_exists: bool,
     pub unparsed: String,
@@ -397,16 +397,16 @@ pub struct PgTruncateTableStatement {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RenameMultiTableStatement {
-    pub db_tbs: Vec<(String, String)>,
-    pub new_db_tbs: Vec<(String, String)>,
+    pub schema_tbs: Vec<(String, String)>,
+    pub new_schema_tbs: Vec<(String, String)>,
     pub unparsed: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RenameTableStatement {
-    pub db: String,
+    pub schema: String,
     pub tb: String,
-    pub new_db: String,
+    pub new_schema: String,
     pub new_tb: String,
     pub unparsed: String,
 }
@@ -534,7 +534,7 @@ impl DdlStatement {
             DdlStatement::DropTable(s) => {
                 let multi_s = DropMultiTableStatement {
                     if_exists: s.if_exists,
-                    db_tbs: vec![(s.db.clone(), s.tb.clone())],
+                    schema_tbs: vec![(s.schema.clone(), s.tb.clone())],
                     unparsed: s.unparsed.clone(),
                 };
                 multi_s.to_sql(db_type)
@@ -599,8 +599,8 @@ impl DdlStatement {
 
             DdlStatement::RenameTable(s) => {
                 let multi_s = RenameMultiTableStatement {
-                    db_tbs: vec![(s.db.clone(), s.tb.clone())],
-                    new_db_tbs: vec![(s.new_db.clone(), s.new_tb.clone())],
+                    schema_tbs: vec![(s.schema.clone(), s.tb.clone())],
+                    new_schema_tbs: vec![(s.new_schema.clone(), s.new_tb.clone())],
                     unparsed: s.unparsed.clone(),
                 };
                 multi_s.to_sql(db_type)
@@ -676,8 +676,8 @@ impl DropMultiTableStatement {
             sql = format!("{} IF EXISTS", sql);
         }
 
-        for (db, tb) in self.db_tbs.iter() {
-            sql = append_tb(&sql, db, tb, db_type);
+        for (schema, tb) in self.schema_tbs.iter() {
+            sql = append_tb(&sql, schema, tb, db_type);
         }
         append_unparsed(sql, &self.unparsed)
     }
@@ -686,12 +686,12 @@ impl DropMultiTableStatement {
 impl RenameMultiTableStatement {
     pub fn to_sql(&self, db_type: &DbType) -> String {
         let mut sql = "RENAME TABLE".to_string();
-        for (i, (db, tb)) in self.db_tbs.iter().enumerate() {
-            let (new_db, new_tb) = &self.new_db_tbs[i];
-            sql = append_tb(&sql, db, tb, db_type);
+        for (i, (schema, tb)) in self.schema_tbs.iter().enumerate() {
+            let (new_schema, new_tb) = &self.new_schema_tbs[i];
+            sql = append_tb(&sql, schema, tb, db_type);
             sql = format!("{} TO", sql);
-            sql = append_tb(&sql, new_db, new_tb, db_type);
-            if i < self.db_tbs.len() - 1 {
+            sql = append_tb(&sql, new_schema, new_tb, db_type);
+            if i < self.schema_tbs.len() - 1 {
                 sql = format!("{},", sql);
             }
         }
@@ -718,13 +718,13 @@ impl PgDropMultiIndexStatement {
     }
 }
 
-fn append_tb(sql: &str, db: &str, tb: &str, db_type: &DbType) -> String {
+fn append_tb(sql: &str, schema: &str, tb: &str, db_type: &DbType) -> String {
     let tb = SqlUtil::escape_by_db_type(tb, db_type);
-    if db.is_empty() {
+    if schema.is_empty() {
         format!("{} {}", sql, tb)
     } else {
-        let db = SqlUtil::escape_by_db_type(db, db_type);
-        format!("{} {}.{}", sql, db, tb)
+        let schema = SqlUtil::escape_by_db_type(schema, db_type);
+        format!("{} {}.{}", sql, schema, tb)
     }
 }
 
