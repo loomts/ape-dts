@@ -1,4 +1,7 @@
-use std::{collections::HashMap, str::FromStr};
+use std::{
+    collections::{BTreeMap, HashMap},
+    str::FromStr,
+};
 
 use anyhow::bail;
 use dt_common::meta::{
@@ -27,40 +30,6 @@ pub struct MysqlStructFetcher {
     pub filter: Option<RdbFilter>,
     pub meta_manager: MysqlMetaManager,
 }
-
-const SCHEMA_NAME: &str = "SCHEMA_NAME";
-
-const INDEX_NAME: &str = "INDEX_NAME";
-const INDEX_TYPE: &str = "INDEX_TYPE";
-
-const TABLE_SCHEMA: &str = "TABLE_SCHEMA";
-const TABLE_NAME: &str = "TABLE_NAME";
-const TABLE_COMMENT: &str = "TABLE_COMMENT";
-const REFERENCED_TABLE_NAME: &str = "REFERENCED_TABLE_NAME";
-const REFERENCED_COLUMN_NAME: &str = "REFERENCED_COLUMN_NAME";
-
-const COLUMN_NAME: &str = "COLUMN_NAME";
-const COLUMN_TYPE: &str = "COLUMN_TYPE";
-const COLUMN_KEY: &str = "COLUMN_KEY";
-const COLUMN_DEFAULT: &str = "COLUMN_DEFAULT";
-const COLUMN_COMMENT: &str = "COLUMN_COMMENT";
-
-const SEQ_IN_INDEX: &str = "SEQ_IN_INDEX";
-const NON_UNIQUE: &str = "NON_UNIQUE";
-const ORDINAL_POSITION: &str = "ORDINAL_POSITION";
-
-const COMMENT: &str = "COMMENT";
-const PRIMARY: &str = "PRIMARY";
-const ENGINE: &str = "ENGINE";
-const IS_NULLABLE: &str = "IS_NULLABLE";
-const EXTRA: &str = "EXTRA";
-
-const CHARACTER_SET_NAME: &str = "CHARACTER_SET_NAME";
-const COLLATION_NAME: &str = "COLLATION_NAME";
-
-const CONSTRAINT_SCHEMA: &str = "CONSTRAINT_SCHEMA";
-const CONSTRAINT_NAME: &str = "CONSTRAINT_NAME";
-const CHECK_CLAUSE: &str = "CHECK_CLAUSE";
 
 impl MysqlStructFetcher {
     pub async fn get_create_database_statement(
@@ -109,7 +78,7 @@ impl MysqlStructFetcher {
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         if let Some(row) = rows.try_next().await.unwrap() {
-            let schema_name = Self::get_str_with_null(&row, SCHEMA_NAME)?;
+            let schema_name = Self::get_str_with_null(&row, "SCHEMA_NAME")?;
             let default_character_set_name =
                 Self::get_str_with_null(&row, "DEFAULT_CHARACTER_SET_NAME")?;
             let default_collation_name = Self::get_str_with_null(&row, "DEFAULT_COLLATION_NAME")?;
@@ -124,8 +93,8 @@ impl MysqlStructFetcher {
         bail! {Error::StructError(format!("db: {} not found", self.db))}
     }
 
-    async fn get_tables(&mut self, tb: &str) -> anyhow::Result<HashMap<String, Table>> {
-        let mut results: HashMap<String, Table> = HashMap::new();
+    async fn get_tables(&mut self, tb: &str) -> anyhow::Result<BTreeMap<String, Table>> {
+        let mut results: BTreeMap<String, Table> = BTreeMap::new();
 
         // Create Table: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
         let tb_filter = if !tb.is_empty() {
@@ -164,8 +133,8 @@ impl MysqlStructFetcher {
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let (db, tb) = (
-                Self::get_str_with_null(&row, TABLE_SCHEMA)?,
-                Self::get_str_with_null(&row, TABLE_NAME)?,
+                Self::get_str_with_null(&row, "TABLE_SCHEMA")?,
+                Self::get_str_with_null(&row, "TABLE_NAME")?,
             );
 
             if let Some(filter) = &mut self.filter {
@@ -174,19 +143,19 @@ impl MysqlStructFetcher {
                 }
             }
 
-            let engine_name = Self::get_str_with_null(&row, ENGINE)?;
-            let table_comment = Self::get_str_with_null(&row, TABLE_COMMENT)?;
+            let engine_name = Self::get_str_with_null(&row, "ENGINE")?;
+            let table_comment = Self::get_str_with_null(&row, "TABLE_COMMENT")?;
             let column = Column {
-                column_name: Self::get_str_with_null(&row, COLUMN_NAME)?,
-                ordinal_position: row.try_get(ORDINAL_POSITION)?,
-                column_default: row.get(COLUMN_DEFAULT),
-                is_nullable: Self::get_str_with_null(&row, IS_NULLABLE)?,
-                column_type: Self::get_str_with_null(&row, COLUMN_TYPE)?,
-                column_key: Self::get_str_with_null(&row, COLUMN_KEY)?,
-                extra: Self::get_str_with_null(&row, EXTRA)?,
-                column_comment: Self::get_str_with_null(&row, COLUMN_COMMENT)?,
-                character_set_name: Self::get_str_with_null(&row, CHARACTER_SET_NAME)?,
-                collation_name: Self::get_str_with_null(&row, COLLATION_NAME)?,
+                column_name: Self::get_str_with_null(&row, "COLUMN_NAME")?,
+                ordinal_position: row.try_get("ORDINAL_POSITION")?,
+                column_default: row.get("COLUMN_DEFAULT"),
+                is_nullable: Self::get_str_with_null(&row, "IS_NULLABLE")?,
+                column_type: Self::get_str_with_null(&row, "COLUMN_TYPE")?,
+                column_key: Self::get_str_with_null(&row, "COLUMN_KEY")?,
+                extra: Self::get_str_with_null(&row, "EXTRA")?,
+                column_comment: Self::get_str_with_null(&row, "COLUMN_COMMENT")?,
+                character_set_name: Self::get_str_with_null(&row, "CHARACTER_SET_NAME")?,
+                collation_name: Self::get_str_with_null(&row, "COLLATION_NAME")?,
                 generated: None,
             };
 
@@ -236,24 +205,24 @@ impl MysqlStructFetcher {
             FROM information_schema.statistics
             WHERE INDEX_NAME != '{}' AND TABLE_SCHEMA ='{}' {}
             ORDER BY TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX",
-            PRIMARY, self.db, tb_filter
+            "PRIMARY", self.db, tb_filter
         );
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let (table_name, index_name) = (
-                Self::get_str_with_null(&row, TABLE_NAME)?,
-                Self::get_str_with_null(&row, INDEX_NAME)?,
+                Self::get_str_with_null(&row, "TABLE_NAME")?,
+                Self::get_str_with_null(&row, "INDEX_NAME")?,
             );
 
             let column = IndexColumn {
-                column_name: Self::get_str_with_null(&row, COLUMN_NAME)?,
+                column_name: Self::get_str_with_null(&row, "COLUMN_NAME")?,
                 seq_in_index: {
                     if self.meta_manager.version.starts_with("5.") {
-                        let seq_in_index: i32 = row.try_get(SEQ_IN_INDEX)?;
+                        let seq_in_index: i32 = row.try_get("SEQ_IN_INDEX")?;
                         seq_in_index as u32
                     } else {
-                        row.try_get(SEQ_IN_INDEX)?
+                        row.try_get("SEQ_IN_INDEX")?
                     }
                 },
             };
@@ -262,17 +231,17 @@ impl MysqlStructFetcher {
             if let Some(index) = index_map.get_mut(&key) {
                 index.columns.push(column);
             } else {
-                let non_unique = row.try_get(NON_UNIQUE)?;
-                let index_type_str = Self::get_str_with_null(&row, INDEX_TYPE)?;
+                let non_unique = row.try_get("NON_UNIQUE")?;
+                let index_type_str = Self::get_str_with_null(&row, "INDEX_TYPE")?;
                 let index_type = IndexType::from_str(&index_type_str)?;
                 let index_kind = Self::get_index_kind(non_unique, &index_type);
                 let index = Index {
-                    database_name: Self::get_str_with_null(&row, TABLE_SCHEMA)?,
+                    database_name: Self::get_str_with_null(&row, "TABLE_SCHEMA")?,
                     table_name,
                     index_name,
                     index_kind,
                     index_type,
-                    comment: Self::get_str_with_null(&row, COMMENT)?,
+                    comment: Self::get_str_with_null(&row, "COMMENT")?,
                     columns: vec![column],
                     ..Default::default()
                 };
@@ -323,10 +292,10 @@ impl MysqlStructFetcher {
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
-            let database_name = Self::get_str_with_null(&row, CONSTRAINT_SCHEMA)?;
-            let table_name = Self::get_str_with_null(&row, TABLE_NAME)?;
-            let constraint_name = Self::get_str_with_null(&row, CONSTRAINT_NAME)?;
-            let check_clause = Self::get_str_with_null(&row, CHECK_CLAUSE)?;
+            let database_name = Self::get_str_with_null(&row, "CONSTRAINT_SCHEMA")?;
+            let table_name = Self::get_str_with_null(&row, "TABLE_NAME")?;
+            let constraint_name = Self::get_str_with_null(&row, "CONSTRAINT_NAME")?;
+            let check_clause = Self::get_str_with_null(&row, "CHECK_CLAUSE")?;
             let definition = self.unescape(check_clause).await?;
             let constraint = Constraint {
                 database_name,
@@ -378,12 +347,12 @@ impl MysqlStructFetcher {
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
-            let database_name = Self::get_str_with_null(&row, CONSTRAINT_SCHEMA)?;
-            let constraint_name = Self::get_str_with_null(&row, CONSTRAINT_NAME)?;
-            let table_name = Self::get_str_with_null(&row, TABLE_NAME)?;
-            let column_name = Self::get_str_with_null(&row, COLUMN_NAME)?;
-            let referenced_table_name = Self::get_str_with_null(&row, REFERENCED_TABLE_NAME)?;
-            let referenced_column_name = Self::get_str_with_null(&row, REFERENCED_COLUMN_NAME)?;
+            let database_name = Self::get_str_with_null(&row, "CONSTRAINT_SCHEMA")?;
+            let constraint_name = Self::get_str_with_null(&row, "CONSTRAINT_NAME")?;
+            let table_name = Self::get_str_with_null(&row, "TABLE_NAME")?;
+            let column_name = Self::get_str_with_null(&row, "COLUMN_NAME")?;
+            let referenced_table_name = Self::get_str_with_null(&row, "REFERENCED_TABLE_NAME")?;
+            let referenced_column_name = Self::get_str_with_null(&row, "REFERENCED_COLUMN_NAME")?;
             let definition = format!(
                 "(`{}`) REFERENCES `{}`.`{}`(`{}`)",
                 column_name, database_name, referenced_table_name, referenced_column_name

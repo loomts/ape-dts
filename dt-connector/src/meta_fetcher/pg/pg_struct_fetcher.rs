@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use anyhow::bail;
 use dt_common::meta::struct_meta::{
@@ -310,8 +310,8 @@ impl PgStructFetcher {
         Ok(results)
     }
 
-    async fn get_tables(&mut self, tb: &str) -> anyhow::Result<HashMap<String, Table>> {
-        let mut results: HashMap<String, Table> = HashMap::new();
+    async fn get_tables(&mut self, tb: &str) -> anyhow::Result<BTreeMap<String, Table>> {
+        let mut results: BTreeMap<String, Table> = BTreeMap::new();
 
         let tb_filter = if !tb.is_empty() {
             format!("AND table_name = '{}'", tb)
