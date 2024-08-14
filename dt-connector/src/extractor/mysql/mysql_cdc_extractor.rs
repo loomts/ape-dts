@@ -353,7 +353,7 @@ impl MysqlCdcExtractor {
             for ddl_data in ddl_data.split_to_multi() {
                 // invalidate metadata cache
                 self.meta_manager.invalidate_cache_by_ddl_data(&ddl_data);
-                let (db, tb) = ddl_data.get_db_tb();
+                let (db, tb) = ddl_data.get_schema_tb();
                 if !self
                     .filter
                     .filter_ddl(&db, &tb, &ddl_data.ddl_type.to_string())

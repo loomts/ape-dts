@@ -499,8 +499,8 @@ impl TaskConfig {
 
     fn load_filter_config(loader: &IniLoader) -> anyhow::Result<FilterConfig> {
         Ok(FilterConfig {
-            do_dbs: loader.get_optional(FILTER, "do_dbs"),
-            ignore_dbs: loader.get_optional(FILTER, "ignore_dbs"),
+            do_schemas: loader.get_optional(FILTER, "do_dbs"),
+            ignore_schemas: loader.get_optional(FILTER, "ignore_dbs"),
             do_tbs: loader.get_optional(FILTER, "do_tbs"),
             ignore_tbs: loader.get_optional(FILTER, "ignore_tbs"),
             do_events: loader.get_optional(FILTER, "do_events"),
@@ -512,7 +512,7 @@ impl TaskConfig {
 
     fn load_router_config(loader: &IniLoader) -> anyhow::Result<RouterConfig> {
         Ok(RouterConfig::Rdb {
-            db_map: loader.get_optional(ROUTER, "db_map"),
+            schema_map: loader.get_optional(ROUTER, "db_map"),
             tb_map: loader.get_optional(ROUTER, "tb_map"),
             col_map: loader.get_optional(ROUTER, "col_map"),
             topic_map: loader.get_optional(ROUTER, "topic_map"),

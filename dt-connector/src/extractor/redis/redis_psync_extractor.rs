@@ -175,7 +175,7 @@ impl RedisPsyncExtractor<'_> {
         position: Position,
     ) -> anyhow::Result<()> {
         // currently only support db filter
-        if filter.filter_db(&entry.db_id.to_string()) {
+        if filter.filter_schema(&entry.db_id.to_string()) {
             return Ok(());
         }
 

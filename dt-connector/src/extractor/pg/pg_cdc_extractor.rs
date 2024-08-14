@@ -426,7 +426,7 @@ impl PgCdcExtractor {
             for ddl_data in ddl_data.split_to_multi() {
                 // invalidate metadata cache
                 self.meta_manager.invalidate_cache_by_ddl_data(&ddl_data);
-                let (schema, tb) = ddl_data.get_db_tb();
+                let (schema, tb) = ddl_data.get_schema_tb();
 
                 if !self
                     .filter
@@ -482,11 +482,11 @@ impl PgCdcExtractor {
     }
 
     fn filter_event(&mut self, tb_meta: &PgTbMeta, row_type: RowType) -> bool {
-        let db: &String = &tb_meta.basic.schema;
+        let schema = &tb_meta.basic.schema;
         let tb = &tb_meta.basic.tb;
-        let filtered = self.filter.filter_event(db, tb, &row_type.to_string());
+        let filtered = self.filter.filter_event(schema, tb, &row_type.to_string());
         if filtered {
-            return !self.base_extractor.is_data_marker_info(db, tb);
+            return !self.base_extractor.is_data_marker_info(schema, tb);
         }
         filtered
     }

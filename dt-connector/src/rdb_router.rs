@@ -18,13 +18,13 @@ type TbColMap = HashMap<(String, String), HashMap<String, String>>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RdbRouter {
-    // HashMap<src_db, dst_db>
-    pub db_map: HashMap<String, String>,
-    // HashMap<(src_db, src_tb), (dst_db, dst_tb)>
+    // HashMap<src_schema, dst_schema>
+    pub schema_map: HashMap<String, String>,
+    // HashMap<(src_schema, src_tb), (dst_schema, dst_tb)>
     pub tb_map: TbMap,
-    // HashMap<(src_db, src_tb), HashMap<src_col, dst_col>>
+    // HashMap<(src_schema, src_tb), HashMap<src_col, dst_col>>
     pub tb_col_map: TbColMap,
-    // HashMap<(src_db, src_tb), String>
+    // HashMap<(src_schema, src_tb), String>
     pub topic_map: HashMap<(String, String), String>,
 }
 
@@ -32,12 +32,12 @@ impl RdbRouter {
     pub fn from_config(config: &RouterConfig, db_type: &DbType) -> anyhow::Result<Self> {
         match config {
             RouterConfig::Rdb {
-                db_map,
+                schema_map,
                 tb_map,
                 col_map,
                 topic_map,
             } => {
-                let db_map = Self::parse_db_map(db_map, db_type)?;
+                let schema_map = Self::parse_schema_map(schema_map, db_type)?;
                 let mut tb_map = Self::parse_tb_map(tb_map, db_type)?;
                 let (tb_map_2, tb_col_map) = Self::parse_tb_col_map(col_map, db_type)?;
                 for (k, v) in tb_map_2 {
@@ -45,7 +45,7 @@ impl RdbRouter {
                 }
                 let topic_map = Self::parse_topic_map(topic_map, db_type)?;
                 Ok(Self {
-                    db_map,
+                    schema_map,
                     tb_map,
                     tb_col_map,
                     topic_map,
@@ -54,33 +54,33 @@ impl RdbRouter {
         }
     }
 
-    pub fn get_db_map<'a>(&'a self, db: &'a str) -> &'a str {
-        if let Some(dst_db) = self.db_map.get(db) {
-            return dst_db;
+    pub fn get_schema_map<'a>(&'a self, schema: &'a str) -> &'a str {
+        if let Some(dst_schema) = self.schema_map.get(schema) {
+            return dst_schema;
         }
-        db
+        schema
     }
 
-    pub fn get_tb_map<'a>(&'a self, db: &'a str, tb: &'a str) -> (&'a str, &'a str) {
-        if let Some((dst_db, dst_tb)) = self.tb_map.get(&(db.into(), tb.into())) {
-            return (dst_db, dst_tb);
+    pub fn get_tb_map<'a>(&'a self, schema: &'a str, tb: &'a str) -> (&'a str, &'a str) {
+        if let Some((dst_schema, dst_tb)) = self.tb_map.get(&(schema.into(), tb.into())) {
+            return (dst_schema, dst_tb);
         }
-        if let Some(dst_db) = self.db_map.get(db) {
-            return (dst_db, tb);
+        if let Some(dst_schema) = self.schema_map.get(schema) {
+            return (dst_schema, tb);
         }
-        (db, tb)
+        (schema, tb)
     }
 
-    pub fn get_col_map(&self, db: &str, tb: &str) -> Option<&HashMap<String, String>> {
-        self.tb_col_map.get(&(db.into(), tb.into()))
+    pub fn get_col_map(&self, schema: &str, tb: &str) -> Option<&HashMap<String, String>> {
+        self.tb_col_map.get(&(schema.into(), tb.into()))
     }
 
-    pub fn get_topic<'a>(&'a self, db: &str, tb: &str) -> &'a str {
+    pub fn get_topic<'a>(&'a self, schema: &str, tb: &str) -> &'a str {
         // *.*:test,test_db_1.*:test2,test_db_1.no_pk_one_uk:test3
-        if let Some(topic) = self.topic_map.get(&(db.into(), tb.into())) {
+        if let Some(topic) = self.topic_map.get(&(schema.into(), tb.into())) {
             return topic;
         }
-        if let Some(topic) = self.topic_map.get(&(db.into(), "*".into())) {
+        if let Some(topic) = self.topic_map.get(&(schema.into(), "*".into())) {
             return topic;
         }
         // shoud always has a default topic map
@@ -88,16 +88,16 @@ impl RdbRouter {
     }
 
     pub fn reverse(&self) -> Self {
-        let mut reverse_db_map = HashMap::new();
+        let mut reverse_schema_map = HashMap::new();
         let mut reverse_tb_map = HashMap::new();
         let mut reverse_tb_col_map = HashMap::new();
 
-        for (src_db_tb, col_map) in self.tb_col_map.iter() {
+        for (src_schema_tb, col_map) in self.tb_col_map.iter() {
             let mut reverse_col_map = HashMap::new();
             for (src_col, dst_col) in col_map.iter() {
                 reverse_col_map.insert(dst_col.into(), src_col.into());
             }
-            let dst_tb = self.tb_map.get(src_db_tb).unwrap();
+            let dst_tb = self.tb_map.get(src_schema_tb).unwrap();
             reverse_tb_col_map.insert(dst_tb.clone(), reverse_col_map);
         }
 
@@ -105,12 +105,12 @@ impl RdbRouter {
             reverse_tb_map.insert(dst_tb.to_owned(), src_tb.to_owned());
         }
 
-        for (src_db, dst_db) in self.db_map.iter() {
-            reverse_db_map.insert(dst_db.to_owned(), src_db.to_owned());
+        for (src_schema, dst_db) in self.schema_map.iter() {
+            reverse_schema_map.insert(dst_db.to_owned(), src_schema.to_owned());
         }
 
         Self {
-            db_map: reverse_db_map,
+            schema_map: reverse_schema_map,
             tb_map: reverse_tb_map,
             tb_col_map: reverse_tb_col_map,
             // topic_map should not be reversed
@@ -161,41 +161,41 @@ impl RdbRouter {
             DdlStatement::MysqlAlterRenameTable(_)
             | DdlStatement::PgAlterRenameTable(_)
             | DdlStatement::RenameTable(_) => {
-                let (src_db, src_tb) = ddl_data.get_db_tb();
-                let (src_new_db, src_new_tb) = ddl_data.get_rename_to_db_tb();
-                let (dst_db, dst_tb) = self.get_tb_map(&src_db, &src_tb);
-                let (dst_new_db, dst_new_tb) = self.get_tb_map(&src_new_db, &src_new_tb);
+                let (src_schema, src_tb) = ddl_data.get_schema_tb();
+                let (src_new_schema, src_new_tb) = ddl_data.get_rename_to_schema_tb();
+                let (dst_schema, dst_tb) = self.get_tb_map(&src_schema, &src_tb);
+                let (dst_new_schema, dst_new_tb) = self.get_tb_map(&src_new_schema, &src_new_tb);
                 ddl_data.statement.route_rename_table(
-                    dst_db.into(),
+                    dst_schema.into(),
                     dst_tb.into(),
-                    dst_new_db.into(),
+                    dst_new_schema.into(),
                     dst_new_tb.into(),
                 );
             }
 
             _ => {
-                let (src_db, src_tb) = ddl_data.get_db_tb();
-                let (dst_db, dst_tb) = self.get_tb_map(&src_db, &src_tb);
-                ddl_data.statement.route(dst_db.into(), dst_tb.into());
+                let (src_schema, src_tb) = ddl_data.get_schema_tb();
+                let (dst_schema, dst_tb) = self.get_tb_map(&src_schema, &src_tb);
+                ddl_data.statement.route(dst_schema.into(), dst_tb.into());
             }
         }
 
-        let dst_default_db = self.get_db_map(&ddl_data.default_db);
-        ddl_data.default_db = dst_default_db.into();
+        let dst_default_schema = self.get_schema_map(&ddl_data.default_schema);
+        ddl_data.default_schema = dst_default_schema.into();
         ddl_data
     }
 
     pub fn route_struct(&self, mut struct_data: StructData) -> StructData {
         match &mut struct_data.statement {
             StructStatement::MysqlCreateTable(s) => {
-                let (db, tb) = (s.table.database_name.clone(), s.table.table_name.clone());
-                let (dst_db, dst_tb) = self.get_tb_map(&db, &tb);
-                s.route(dst_db, dst_tb)
+                let (schema, tb) = (s.table.database_name.clone(), s.table.table_name.clone());
+                let (dst_schema, dst_tb) = self.get_tb_map(&schema, &tb);
+                s.route(dst_schema, dst_tb)
             }
 
             StructStatement::MysqlCreateDatabase(s) => {
-                let dst_db = self.get_db_map(&s.database.name).to_string();
-                s.route(&dst_db)
+                let dst_schema = self.get_schema_map(&s.database.name).to_string();
+                s.route(&dst_schema)
             }
 
             StructStatement::PgCreateTable(s) => {
@@ -205,27 +205,30 @@ impl RdbRouter {
             }
 
             StructStatement::PgCreateSchema(s) => {
-                let dst_schema = self.get_db_map(&s.schema.name).to_string();
+                let dst_schema = self.get_schema_map(&s.schema.name).to_string();
                 s.route(&dst_schema)
             }
 
             _ => {}
         }
 
-        struct_data.db = self.get_db_map(&struct_data.db).into();
+        struct_data.schema = self.get_schema_map(&struct_data.schema).into();
         struct_data
     }
 
-    fn parse_db_map(config_str: &str, db_type: &DbType) -> anyhow::Result<HashMap<String, String>> {
+    fn parse_schema_map(
+        config_str: &str,
+        db_type: &DbType,
+    ) -> anyhow::Result<HashMap<String, String>> {
         // db_map=src_db_1:dst_db_1,src_db_2:dst_db_2
-        let mut db_map = HashMap::new();
+        let mut schema_map = HashMap::new();
         let tokens = Self::parse_config(config_str, db_type)?;
         let mut i = 0;
         while i < tokens.len() {
-            db_map.insert(tokens[i].to_string(), tokens[i + 1].to_string());
+            schema_map.insert(tokens[i].to_string(), tokens[i + 1].to_string());
             i += 2;
         }
-        Ok(db_map)
+        Ok(schema_map)
     }
 
     #[allow(clippy::type_complexity)]
@@ -255,18 +258,18 @@ impl RdbRouter {
         let tokens = Self::parse_config(config_str, db_type)?;
         let mut i = 0;
         while i < tokens.len() {
-            let src_db_tb = (tokens[i].to_string(), tokens[i + 1].to_string());
-            let dst_db_tb = (tokens[i + 3].to_string(), tokens[i + 4].to_string());
+            let src_schema_tb = (tokens[i].to_string(), tokens[i + 1].to_string());
+            let dst_schema_tb = (tokens[i + 3].to_string(), tokens[i + 4].to_string());
             let src_col = tokens[i + 2].to_string();
             let dst_col = tokens[i + 5].to_string();
 
-            tb_map.insert(src_db_tb.clone(), dst_db_tb);
-            if let Some(col_map) = tb_col_map.get_mut(&src_db_tb) {
+            tb_map.insert(src_schema_tb.clone(), dst_schema_tb);
+            if let Some(col_map) = tb_col_map.get_mut(&src_schema_tb) {
                 col_map.insert(src_col, dst_col);
             } else {
                 let mut col_map = HashMap::new();
                 col_map.insert(src_col, dst_col);
-                tb_col_map.insert(src_db_tb, col_map);
+                tb_col_map.insert(src_schema_tb, col_map);
             }
             i += 6;
         }
@@ -317,10 +320,10 @@ mod tests {
     use super::{RdbRouter, TbColMap, TbMap};
 
     #[test]
-    fn test_parse_db_map() {
+    fn test_parse_schema_map() {
         // mysql
         let config_str = "src_1:dst_1,`src,2'`:dst_2,`src:3,`:`dst:3,`";
-        let db_map = RdbRouter::parse_db_map(config_str, &DbType::Mysql).unwrap();
+        let db_map = RdbRouter::parse_schema_map(config_str, &DbType::Mysql).unwrap();
         assert_eq!(db_map.get("src_1").unwrap(), "dst_1");
         assert_eq!(db_map.get("src,2'").unwrap(), "dst_2");
         assert_eq!(db_map.get("src:3,").unwrap(), "dst:3,");
@@ -328,7 +331,7 @@ mod tests {
 
         // pg
         let config_str = r#"src_1:dst_1,"src,2'":dst_2,"src:3,":"dst:3,""#;
-        let db_map = RdbRouter::parse_db_map(config_str, &DbType::Pg).unwrap();
+        let db_map = RdbRouter::parse_schema_map(config_str, &DbType::Pg).unwrap();
         assert_eq!(db_map.get("src_1").unwrap(), "dst_1");
         assert_eq!(db_map.get("src,2'").unwrap(), "dst_2");
         assert_eq!(db_map.get("src:3,").unwrap(), "dst:3,");
@@ -446,7 +449,7 @@ mod tests {
         let topic_map = "*.*:test,`db:1`.*:test2,`db:1`.`tb:1`:test3";
 
         let config = RouterConfig::Rdb {
-            db_map: db_map_str.into(),
+            schema_map: db_map_str.into(),
             tb_map: tb_map_str.into(),
             col_map: field_map_str.into(),
             topic_map: topic_map.into(),

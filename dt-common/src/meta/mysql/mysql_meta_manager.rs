@@ -64,8 +64,8 @@ impl MysqlMetaManager {
     }
 
     pub fn invalidate_cache_by_ddl_data(&mut self, ddl_data: &DdlData) {
-        let (db, tb) = ddl_data.get_db_tb();
-        self.invalidate_cache(&db, &tb);
+        let (schema, tb) = ddl_data.get_schema_tb();
+        self.invalidate_cache(&schema, &tb);
     }
 
     pub async fn get_tb_meta_by_row_data<'a>(

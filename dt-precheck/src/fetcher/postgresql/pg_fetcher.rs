@@ -93,7 +93,7 @@ impl Fetcher for PgFetcher {
                 while let Some(row) = rows.try_next().await.unwrap() {
                     let (database_name, schema_name): (String, String) =
                         (row.get("catalog_name"), row.get("schema_name"));
-                    if !self.filter.filter_db(&schema_name) {
+                    if !self.filter.filter_schema(&schema_name) {
                         schemas.push(Schema {
                             database_name,
                             schema_name,

@@ -15,7 +15,7 @@ pub struct DataMarker {
     pub do_nodes: HashSet<String>,
     pub ignore_nodes: HashSet<String>,
     // mysql/pg/mongo
-    pub marker_db: String,
+    pub marker_schema: String,
     pub marker_tb: String,
     // redis
     pub marker: String,
@@ -55,7 +55,7 @@ impl DataMarker {
         match *db_type {
             DbType::Mysql | DbType::Pg | DbType::Mongo => {
                 let marker_info: Vec<&str> = config.marker.split('.').collect();
-                me.marker_db = marker_info[0].to_string();
+                me.marker_schema = marker_info[0].to_string();
                 me.marker_tb = marker_info[1].to_string();
             }
             _ => me.marker = config.marker.clone(),
@@ -85,8 +85,8 @@ impl DataMarker {
         }
     }
 
-    pub fn is_marker_info_2(&self, db: &str, tb: &str) -> bool {
-        self.marker_db == db && self.marker_tb == tb
+    pub fn is_marker_info_2(&self, schema: &str, tb: &str) -> bool {
+        self.marker_schema == schema && self.marker_tb == tb
     }
 
     pub fn refresh(&mut self, dt_data: &DtData) {

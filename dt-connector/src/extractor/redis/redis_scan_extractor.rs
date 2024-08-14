@@ -42,7 +42,7 @@ impl Extractor for RedisScanExtractor {
 
         let count = &self.scan_count.to_string();
         for db in self.get_dbs().await? {
-            if self.filter.filter_db(&db) {
+            if self.filter.filter_schema(&db) {
                 continue;
             }
 

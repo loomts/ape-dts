@@ -124,7 +124,7 @@ impl RdbCycleTestRunner {
             &self.base.base.src_prepare_sqls,
         )?;
         for i in 0..db_tbs.len() {
-            if db_tbs[i].0 == data_marker.marker_db && db_tbs[i].1 == data_marker.marker_tb {
+            if db_tbs[i].0 == data_marker.marker_schema && db_tbs[i].1 == data_marker.marker_tb {
                 db_tbs.remove(i);
                 break;
             }
@@ -145,7 +145,7 @@ impl RdbCycleTestRunner {
             .base
             .fetch_data(
                 &(
-                    data_marker.marker_db.to_string(),
+                    data_marker.marker_schema.to_string(),
                     data_marker.marker_tb.to_string(),
                 ),
                 DST,

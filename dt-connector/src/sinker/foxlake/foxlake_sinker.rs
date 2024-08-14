@@ -55,7 +55,7 @@ impl Sinker for FoxlakeSinker {
                 sql
             );
 
-            let (db, _tb) = ddl_data.get_db_tb();
+            let (db, _tb) = ddl_data.get_schema_tb();
             let query = sqlx::query(&sql);
 
             // create a tmp connection with databse since sqlx conn pool does NOT support `USE db`

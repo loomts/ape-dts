@@ -60,12 +60,12 @@ impl Sinker for PgSinker {
 
     async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> anyhow::Result<()> {
         for ddl_data in data {
-            let (db, _tb) = ddl_data.get_db_tb();
+            let (schema, _tb) = ddl_data.get_schema_tb();
             let conn_options = PgConnectOptions::from_str(&self.url)?;
             let mut pool_options = PgPoolOptions::new().max_connections(1);
-            let sql = format!("SET search_path = '{}';", db);
+            let sql = format!("SET search_path = '{}';", schema);
 
-            if !db.is_empty() {
+            if !schema.is_empty() {
                 match ddl_data.ddl_type {
                     DdlType::CreateSchema | DdlType::DropSchema | DdlType::AlterSchema => {}
                     _ => {
@@ -222,12 +222,12 @@ impl PgSinker {
                 VALUES('{}', '{}', '{}', 1) 
                 ON CONFLICT (data_origin_node, src_node, dst_node) 
                 DO UPDATE SET n="{}"."{}".n+1"#,
-                data_marker.marker_db,
+                data_marker.marker_schema,
                 data_marker.marker_tb,
                 data_marker.data_origin_node,
                 data_marker.src_node,
                 data_marker.dst_node,
-                data_marker.marker_db,
+                data_marker.marker_schema,
                 data_marker.marker_tb,
             );
             Some(sql)

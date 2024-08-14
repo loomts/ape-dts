@@ -157,7 +157,7 @@ impl ExtractorUtil {
 
             ExtractorConfig::PgSnapshot {
                 url,
-                schema: db,
+                schema,
                 tb,
                 sample_interval,
             } => {
@@ -169,7 +169,7 @@ impl ExtractorUtil {
                     resumer: snapshot_resumer,
                     slice_size: buffer_size,
                     sample_interval,
-                    schema: db,
+                    schema,
                     tb,
                     base_extractor,
                 };

@@ -36,9 +36,9 @@ pub struct BaseExtractor {
 }
 
 impl BaseExtractor {
-    pub fn is_data_marker_info(&self, db: &str, tb: &str) -> bool {
+    pub fn is_data_marker_info(&self, schema: &str, tb: &str) -> bool {
         if let Some(data_marker) = &self.data_marker {
-            return data_marker.is_marker_info_2(db, tb);
+            return data_marker.is_marker_info_2(schema, tb);
         }
         false
     }
@@ -130,7 +130,7 @@ impl BaseExtractor {
         // case 3, execute: use db_1; create table db_2.tb_1(id int);
         // binlog query.schema == db_1, schema from DdlParser == db_2
         let mut ddl_data = parse_result.unwrap();
-        ddl_data.default_db = schema.to_string();
+        ddl_data.default_schema = schema.to_string();
         ddl_data.query = query.to_string();
         Ok(ddl_data)
     }
@@ -152,14 +152,14 @@ impl BaseExtractor {
             return vec![];
         }
 
-        let db_tb =
+        let schema_tb =
             ConfigTokenParser::parse(heartbeat_tb, &['.'], &SqlUtil::get_escape_pairs(&db_type));
 
-        if db_tb.len() < 2 {
-            log_warn!("heartbeat disabled, heartbeat_tb should be like db.tb or schema.tb");
+        if schema_tb.len() < 2 {
+            log_warn!("heartbeat disabled, heartbeat_tb should be like schema.tb");
             return vec![];
         }
-        db_tb
+        schema_tb
     }
 
     pub fn update_time_filter(time_filter: &mut TimeFilter, timestamp: u32, position: &Position) {

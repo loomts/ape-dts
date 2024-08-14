@@ -89,7 +89,7 @@ impl Fetcher for MysqlFetcher {
             Ok(mut rows) => {
                 while let Some(row) = rows.try_next().await.unwrap() {
                     let schema_name: String = row.get("SCHEMA_NAME");
-                    if !self.filter.filter_db(&schema_name) {
+                    if !self.filter.filter_schema(&schema_name) {
                         results.push(Database {
                             database_name: schema_name,
                         })
@@ -114,13 +114,13 @@ impl Fetcher for MysqlFetcher {
         match rows_result {
             Ok(mut rows) => {
                 while let Some(row) = rows.try_next().await.unwrap() {
-                    let (db, table): (String, String) =
+                    let (db, tb): (String, String) =
                         (row.get("TABLE_SCHEMA"), row.get("TABLE_NAME"));
-                    if !self.filter.filter_tb(&db, &table) {
+                    if !self.filter.filter_tb(&db, &tb) {
                         results.push(Table {
                             database_name: db,
                             schema_name: String::from(""),
-                            table_name: table,
+                            table_name: tb,
                         })
                     }
                 }
