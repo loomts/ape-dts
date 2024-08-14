@@ -6,6 +6,12 @@ pub struct OrcSequencer {
     pub sequence: u64,
 }
 
+pub struct OrcSequenceInfo {
+    pub sequencer_id: i64,
+    pub push_epoch: i64,
+    pub push_sequence: u64,
+}
+
 impl OrcSequencer {
     pub fn new() -> Self {
         Self {
@@ -19,17 +25,20 @@ impl OrcSequencer {
         self.epoch = Utc::now().timestamp();
     }
 
-    pub fn get_sequence(&mut self) -> (i64, String) {
+    pub fn get_sequence(&mut self) -> OrcSequenceInfo {
         if self.sequence >= 999999999 {
             // should never happen, no single table will have so big data
             self.id = Utc::now().timestamp();
             self.sequence = 0;
         }
 
-        let width = 10;
-        let sequence = format!("{:0>width$}_{:0>width$}", self.id, self.sequence);
+        let sequence_info = OrcSequenceInfo {
+            sequencer_id: self.id,
+            push_epoch: self.epoch,
+            push_sequence: self.sequence,
+        };
         self.sequence += 1;
-        (self.epoch, sequence)
+        sequence_info
     }
 }
 

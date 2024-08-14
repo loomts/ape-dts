@@ -50,22 +50,47 @@ impl FoxlakeParallelizer {
         let mut data = Vec::new();
 
         let mut last_push_epoch = 0;
+        let mut first_sequencer_id = 0;
+        if let Some(item) = base.poped_data.front() {
+            if let DtData::Foxlake { file_meta } = &item.dt_data {
+                first_sequencer_id = file_meta.sequencer_id
+            }
+        }
+
         // pop to find the push_epoch of the last item
         while let Ok(item) = base.pop(buffer, &mut record_size_counter).await {
             if let DtData::Foxlake { file_meta } = &item.dt_data {
                 last_push_epoch = file_meta.push_epoch;
+                let sequencer_id = file_meta.sequencer_id;
                 base.poped_data.push_back(item);
+
+                if first_sequencer_id == 0 {
+                    first_sequencer_id = sequencer_id;
+                }
+                if sequencer_id != first_sequencer_id {
+                    break;
+                }
             }
         }
 
         while let Some(item) = base.poped_data.front() {
             if let DtData::Foxlake { file_meta } = &item.dt_data {
-                // to improve merge performance,
-                // make sure all orc files of the same push_epoch be merged in the same batch.
+                // To improve foxlake performance:
+                // 1, the batch should NOT contain duplicate data, so
+                // the batch should only contain orc files from the same sequencer_id,
+                // because a different sequencer_id means the pusher process has restarted,
+                // the first few files of a new pusher may contain duplicate data
+                // with the last few files of the previous pusher.
 
-                // the push_epoch of finished is i64::MAX, which ensures all items
-                // in poped_data to be merged
-                if file_meta.push_epoch < last_push_epoch {
+                // 2, all orc files of the same push_epoch must be merged in the same batch.
+                // we choose to not merge the files of last_push_epoch
+                // since we are not sure whether all the files of last_push_epoch exist in poped_data.
+
+                // 3. the push_epoch of finished is i64::MAX, which ensures all orc files
+                // in poped_data will be merged once the finished file exists in poped_data.
+                if file_meta.sequencer_id == first_sequencer_id
+                    && file_meta.push_epoch < last_push_epoch
+                {
                     data.push(base.poped_data.pop_front().unwrap())
                 } else {
                     break;

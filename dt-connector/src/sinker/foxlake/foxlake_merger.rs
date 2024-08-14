@@ -6,7 +6,7 @@ use std::{
 use anyhow::Context;
 use async_trait::async_trait;
 use dt_common::{
-    config::s3_config::S3Config,
+    config::{config_enums::ExtractType, s3_config::S3Config},
     log_debug, log_info,
     meta::dt_data::{DtData, DtItem},
     monitor::monitor::Monitor,
@@ -22,6 +22,7 @@ pub struct FoxlakeMerger {
     pub s3_client: S3Client,
     pub s3_config: S3Config,
     pub conn_pool: Pool<MySql>,
+    pub extract_type: ExtractType,
 }
 
 #[async_trait]
@@ -60,7 +61,7 @@ impl FoxlakeMerger {
         let mut schema = String::new();
         let mut tb = String::new();
         let mut s3_files = Vec::new();
-        let mut insert_only = true;
+        // let mut insert_only = true;
 
         for dt_item in data {
             if let DtData::Foxlake { file_meta } = dt_item.dt_data {
@@ -69,7 +70,7 @@ impl FoxlakeMerger {
                 schema = file_meta.schema;
                 tb = file_meta.tb;
                 s3_files.push(file_meta.data_file_name);
-                insert_only &= file_meta.insert_only;
+                // insert_only &= file_meta.insert_only;
             }
         }
 
@@ -87,13 +88,19 @@ impl FoxlakeMerger {
         let endpoint = s3.endpoint.trim_start_matches("http://");
 
         let files: Vec<String> = s3_files.iter().map(|i| format!("'{}'", i)).collect();
-        let insert_only = if insert_only { "TRUE" } else { "FALSE" };
+        let addition = match self.extract_type {
+            ExtractType::Snapshot | ExtractType::FoxlakeS3 => {
+                "DEDUPLICATION = 'SOURCE' INSERT_ONLY = true".to_string()
+            }
+            _ => String::new(),
+        };
+
         let sql = format!(
             r#"MERGE INTO TABLE `{}`.`{}` 
             USING URI = '{}/' 
             ENDPOINT = '{}' 
             CREDENTIALS = (ACCESS_KEY_ID='{}' SECRET_ACCESS_KEY='{}') 
-            FILES=({}) FILE_FORMAT = (TYPE='DML_CHANGE_LOG') INSERT_ONLY = {};"#,
+            FILES=({}) FILE_FORMAT = (KIND='DML_CHANGE_LOG') {};"#,
             schema,
             tb,
             s3.root_url,
@@ -101,7 +108,7 @@ impl FoxlakeMerger {
             s3.access_key,
             s3.secret_key,
             files.join(","),
-            insert_only
+            addition
         );
         log_debug!("merge sql: {}", sql);
 

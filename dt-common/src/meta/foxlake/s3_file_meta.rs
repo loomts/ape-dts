@@ -16,7 +16,9 @@ pub struct S3FileMeta {
     pub data_size: usize,
     pub row_count: usize,
     pub last_position: Position,
+    pub sequencer_id: i64,
     pub push_epoch: i64,
+    pub push_sequence: u64,
 }
 
 impl std::fmt::Display for S3FileMeta {

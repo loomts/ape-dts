@@ -468,6 +468,7 @@ impl SinkerUtil {
                         s3_client: s3_client.clone(),
                         monitor: monitor.clone(),
                         conn_pool: conn_pool.clone(),
+                        extract_type: task_config.extractor_basic.extract_type.clone(),
                     };
 
                     let sinker = FoxlakeSinker {
@@ -546,6 +547,7 @@ impl SinkerUtil {
                         s3_client: s3_client.clone(),
                         monitor: monitor.clone(),
                         conn_pool: conn_pool.clone(),
+                        extract_type: task_config.extractor_basic.extract_type.clone(),
                     };
                     sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
                 }
