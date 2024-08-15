@@ -4,6 +4,7 @@ use crate::{
     config::{
         config_enums::DbType, config_token_parser::ConfigTokenParser, filter_config::FilterConfig,
     },
+    meta::{ddl_meta::ddl_type::DdlType, row_type::RowType},
     utils::sql_util::SqlUtil,
 };
 
@@ -74,8 +75,8 @@ impl RdbFilter {
         filter
     }
 
-    pub fn filter_event(&mut self, schema: &str, tb: &str, row_type: &str) -> bool {
-        if !Self::match_all(&self.do_events) && !self.do_events.contains(row_type) {
+    pub fn filter_event(&mut self, schema: &str, tb: &str, row_type: &RowType) -> bool {
+        if !Self::match_all(&self.do_events) && !self.do_events.contains(&row_type.to_string()) {
             return true;
         }
         self.filter_tb(schema, tb)
@@ -85,8 +86,8 @@ impl RdbFilter {
         self.do_ddls.is_empty()
     }
 
-    pub fn filter_ddl(&mut self, schema: &str, tb: &str, ddl_type: &str) -> bool {
-        if !Self::match_all(&self.do_ddls) && !self.do_ddls.contains(ddl_type) {
+    pub fn filter_ddl(&mut self, schema: &str, tb: &str, ddl_type: &DdlType) -> bool {
+        if !Self::match_all(&self.do_ddls) && !self.do_ddls.contains(&ddl_type.to_string()) {
             return true;
         }
 
@@ -370,10 +371,10 @@ mod tests {
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(rdb_fitler.filter_event("a", "bcd", "insert"));
-        assert!(rdb_fitler.filter_event("b", "b", "insert"));
-        assert!(!rdb_fitler.filter_event("a", "cbd", "insert"));
-        assert!(!rdb_fitler.filter_event("b", "cbd", "insert"));
+        assert!(rdb_fitler.filter_event("a", "bcd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("b", "b", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("a", "cbd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("b", "cbd", &RowType::Insert));
     }
 
     #[test]
@@ -387,12 +388,12 @@ mod tests {
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(rdb_fitler.filter_event("a", "b*", "insert"));
-        assert!(rdb_fitler.filter_event("b", "b*", "insert"));
-        assert!(!rdb_fitler.filter_event("a", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("b", "b", "insert"));
-        assert!(rdb_fitler.filter_event("a", "cbd", "insert"));
-        assert!(rdb_fitler.filter_event("b", "cbd", "insert"));
+        assert!(rdb_fitler.filter_event("a", "b*", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("b", "b*", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("a", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("b", "b", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("a", "cbd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("b", "cbd", &RowType::Insert));
     }
 
     #[test]
@@ -404,8 +405,8 @@ mod tests {
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(!rdb_fitler.filter_event("db_test_position.aaa", "b.bbb,.b", "insert"));
-        assert!(!rdb_fitler.filter_event("db_test_position.aaa", "c", "insert"));
+        assert!(!rdb_fitler.filter_event("db_test_position.aaa", "b.bbb,.b", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("db_test_position.aaa", "c", &RowType::Insert));
     }
 
     #[test]
@@ -419,10 +420,10 @@ mod tests {
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(rdb_fitler.filter_event("abc", "bcd", "insert"));
-        assert!(rdb_fitler.filter_event("a", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("b", "cbd", "insert"));
-        assert!(!rdb_fitler.filter_event("b", "cbd", "insert"));
+        assert!(rdb_fitler.filter_event("abc", "bcd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("a", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("b", "cbd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("b", "cbd", &RowType::Insert));
     }
 
     #[test]
@@ -436,10 +437,10 @@ mod tests {
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(!rdb_fitler.filter_event("abc", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("a", "bcd", "insert"));
-        assert!(rdb_fitler.filter_event("bcd", "cbd", "insert"));
-        assert!(rdb_fitler.filter_event("b", "cbd", "insert"));
+        assert!(!rdb_fitler.filter_event("abc", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("a", "bcd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("bcd", "cbd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("b", "cbd", &RowType::Insert));
     }
 
     #[test]
@@ -453,10 +454,10 @@ mod tests {
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(rdb_fitler.filter_event("a", "bcd", "insert"));
-        assert!(rdb_fitler.filter_event("c", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("b", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("bcd", "bcd", "insert"));
+        assert!(rdb_fitler.filter_event("a", "bcd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("c", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("b", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("bcd", "bcd", &RowType::Insert));
     }
 
     #[test]
@@ -470,15 +471,15 @@ mod tests {
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(rdb_fitler.filter_event("a", "bcd", "insert"));
-        assert!(rdb_fitler.filter_event("c", "bcd", "insert"));
-        assert!(rdb_fitler.filter_event("b", "bcd", "insert"));
-        assert!(rdb_fitler.filter_event("bc", "bcd", "insert"));
-        assert!(rdb_fitler.filter_event("abc", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("b*", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("bcd", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("bcde", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("cde", "bcd", "insert"));
+        assert!(rdb_fitler.filter_event("a", "bcd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("c", "bcd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("b", "bcd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("bc", "bcd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("abc", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("b*", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("bcd", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("bcde", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("cde", "bcd", &RowType::Insert));
     }
 
     #[test]
@@ -491,10 +492,10 @@ mod tests {
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(rdb_fitler.filter_event("bcd", "bcd", "insert"));
-        assert!(rdb_fitler.filter_event("cde", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("a", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("abc", "bcd", "insert"));
+        assert!(rdb_fitler.filter_event("bcd", "bcd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("cde", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("a", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("abc", "bcd", &RowType::Insert));
     }
 
     #[test]
@@ -507,14 +508,14 @@ mod tests {
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(rdb_fitler.filter_event("bcd", "bcd", "insert"));
-        assert!(rdb_fitler.filter_event("cde", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("a", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("abc", "bcd", "insert"));
-        assert!(rdb_fitler.filter_event("c", "bcd", "insert"));
-        assert!(rdb_fitler.filter_event("cde", "bcd", "insert"));
-        assert!(rdb_fitler.filter_event("c*", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("c*", "*", "insert"));
+        assert!(rdb_fitler.filter_event("bcd", "bcd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("cde", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("a", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("abc", "bcd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("c", "bcd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("cde", "bcd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("c*", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("c*", "*", &RowType::Insert));
     }
 
     #[test]
@@ -750,9 +751,9 @@ mod tests {
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(!rdb_fitler.filter_event("test_db_1", "aaaa", "insert"));
-        assert!(!rdb_fitler.filter_event("test_db_1", "aaaa", "update"));
-        assert!(!rdb_fitler.filter_event("test_db_1", "aaaa", "delete"));
+        assert!(!rdb_fitler.filter_event("test_db_1", "aaaa", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("test_db_1", "aaaa", &RowType::Update));
+        assert!(!rdb_fitler.filter_event("test_db_1", "aaaa", &RowType::Delete));
 
         // explicitly set do_events
         let config = FilterConfig {
@@ -762,8 +763,8 @@ mod tests {
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(!rdb_fitler.filter_event("test_db_1", "aaaa", "insert"));
-        assert!(rdb_fitler.filter_event("test_db_1", "aaaa", "update"));
-        assert!(rdb_fitler.filter_event("test_db_1", "aaaa", "delete"));
+        assert!(!rdb_fitler.filter_event("test_db_1", "aaaa", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("test_db_1", "aaaa", &RowType::Update));
+        assert!(rdb_fitler.filter_event("test_db_1", "aaaa", &RowType::Delete));
     }
 }

@@ -422,11 +422,9 @@ impl MongoCdcExtractor {
         position: Position,
     ) -> anyhow::Result<()> {
         if SYSTEM_DBS.contains(&row_data.schema.as_str())
-            || self.filter.filter_event(
-                &row_data.schema,
-                &row_data.tb,
-                &row_data.row_type.to_string(),
-            )
+            || self
+                .filter
+                .filter_event(&row_data.schema, &row_data.tb, &row_data.row_type)
         {
             return Ok(());
         }

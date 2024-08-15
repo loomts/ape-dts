@@ -428,10 +428,7 @@ impl PgCdcExtractor {
                 self.meta_manager.invalidate_cache_by_ddl_data(&ddl_data);
                 let (schema, tb) = ddl_data.get_schema_tb();
 
-                if !self
-                    .filter
-                    .filter_ddl(&schema, &tb, &ddl_data.ddl_type.to_string())
-                {
+                if !self.filter.filter_ddl(&schema, &tb, &ddl_data.ddl_type) {
                     self.base_extractor
                         .push_ddl(ddl_data, position.clone())
                         .await?;
@@ -484,7 +481,7 @@ impl PgCdcExtractor {
     fn filter_event(&mut self, tb_meta: &PgTbMeta, row_type: RowType) -> bool {
         let schema = &tb_meta.basic.schema;
         let tb = &tb_meta.basic.tb;
-        let filtered = self.filter.filter_event(schema, tb, &row_type.to_string());
+        let filtered = self.filter.filter_event(schema, tb, &row_type);
         if filtered {
             return !self.base_extractor.is_data_marker_info(schema, tb);
         }

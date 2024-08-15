@@ -150,7 +150,7 @@ impl TaskRunner {
                     continue;
                 }
 
-                if filter.filter_event(schema, tb, &RowType::Insert.to_string()) {
+                if filter.filter_event(schema, tb, &RowType::Insert) {
                     continue;
                 }
 

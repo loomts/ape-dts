@@ -114,6 +114,14 @@ impl TestConfigUtil {
             resume_log_dir,
         ));
 
+        // resumer/resume_config_file
+        let resume_config_file = format!("{}/{}", project_root, config.resumer.resume_config_file);
+        update_configs.push((
+            RESUMER.to_string(),
+            "resume_config_file".to_string(),
+            resume_config_file,
+        ));
+
         // extractor/check_log_dir
         match config.extractor {
             ExtractorConfig::MysqlCheck { check_log_dir, .. }

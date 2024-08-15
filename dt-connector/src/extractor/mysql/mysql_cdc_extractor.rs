@@ -354,10 +354,7 @@ impl MysqlCdcExtractor {
                 // invalidate metadata cache
                 self.meta_manager.invalidate_cache_by_ddl_data(&ddl_data);
                 let (db, tb) = ddl_data.get_schema_tb();
-                if !self
-                    .filter
-                    .filter_ddl(&db, &tb, &ddl_data.ddl_type.to_string())
-                {
+                if !self.filter.filter_ddl(&db, &tb, &ddl_data.ddl_type) {
                     self.base_extractor
                         .push_ddl(ddl_data, position.clone())
                         .await?;
@@ -370,7 +367,7 @@ impl MysqlCdcExtractor {
     fn filter_event(&mut self, table_map_event: &TableMapEvent, row_type: RowType) -> bool {
         let db = &table_map_event.database_name;
         let tb = &table_map_event.table_name;
-        let filtered = self.filter.filter_event(db, tb, &row_type.to_string());
+        let filtered = self.filter.filter_event(db, tb, &row_type);
         if filtered {
             return !self.base_extractor.is_data_marker_info(db, tb);
         }
