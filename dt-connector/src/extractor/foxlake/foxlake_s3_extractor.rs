@@ -1,4 +1,4 @@
-use std::{i64, path::PathBuf, str::FromStr};
+use std::{cmp, i64, path::PathBuf, str::FromStr};
 
 use anyhow::Context;
 use async_trait::async_trait;
@@ -51,17 +51,21 @@ impl FoxlakeS3Extractor {
             let mut finished = false;
             let meta_files = self.list_meta_file(&start_after).await?;
 
-            if !Self::check_continuity(&meta_files, &start_after) {
+            let continuous_meta_files = Self::find_continuous_files(&meta_files, &start_after);
+            if continuous_meta_files.len() != meta_files.len() {
                 log_warn!(
                     "meta files are not continuous, start_after: {:?}, meta_files: {}",
                     start_after,
                     meta_files.join(",")
                 );
+            }
+
+            if continuous_meta_files.is_empty() {
                 TimeUtil::sleep_millis(WAIT_FILE_SECS * 1000).await;
                 continue;
             }
 
-            for file in meta_files.iter() {
+            for file in continuous_meta_files.iter() {
                 if file.ends_with(FINISHED) {
                     finished = true;
                     break;
@@ -89,11 +93,8 @@ impl FoxlakeS3Extractor {
                 break;
             }
 
-            if meta_files.is_empty() {
-                TimeUtil::sleep_millis(WAIT_FILE_SECS * 1000).await;
-            } else {
-                start_after = meta_files.last().map(|s: &String| s.to_string());
-            }
+            // set start_after if only continuous_meta_files is NOT empty
+            start_after = continuous_meta_files.last().map(|s: &String| s.to_string());
         }
         Ok(())
     }
@@ -164,7 +165,7 @@ impl FoxlakeS3Extractor {
         Ok(file_names)
     }
 
-    fn check_continuity(meta_files: &[String], start_after: &Option<String>) -> bool {
+    fn find_continuous_files(meta_files: &[String], start_after: &Option<String>) -> Vec<String> {
         let mut prev_meta_file = &String::new();
         let (mut prev_id, mut prev_sequence) = (0, 0);
         if let Some(v) = start_after {
@@ -172,7 +173,7 @@ impl FoxlakeS3Extractor {
             prev_meta_file = v;
         }
 
-        let mut continuous = true;
+        let mut discontinue_from = meta_files.len();
         for i in 0..meta_files.len() {
             let meta_file = &meta_files[i];
             // finished file
@@ -181,16 +182,20 @@ impl FoxlakeS3Extractor {
             }
 
             let (id, sequence) = Self::parse_meta_file_name(meta_file);
+            // should never happen
             if id == 0 || id < prev_id {
-                return false;
+                return Vec::new();
             }
 
             if id != prev_id {
                 // This is the first file pushed by the same id, which means the pusher progress has restarted.
                 // Abnormal exit of the previous pusher may lead to the discontinuity of the file sequence.
                 // Ignore the discontinuity of previous files since they were pushed by previous pusher.
+
+                // the first sequence of the new pusher should be 0
                 if prev_id != 0 && sequence != 0 {
-                    return false;
+                    discontinue_from = cmp::min(discontinue_from, i);
+                    break;
                 }
 
                 log_info!(
@@ -202,13 +207,14 @@ impl FoxlakeS3Extractor {
                 prev_id = id;
                 prev_sequence = sequence;
                 prev_meta_file = meta_file;
-                continuous = true;
+                // reset when a new pusher found
+                discontinue_from = meta_files.len();
                 continue;
             }
 
             // discontinuity is caused by multiple threads pushing orc files in pusher progress.
             if sequence != prev_sequence + 1 {
-                continuous = false;
+                discontinue_from = cmp::min(discontinue_from, i);
                 log_warn!(
                     "sequence discontinuity, previous meta file: {}, current meta file: {}",
                     prev_meta_file,
@@ -220,7 +226,7 @@ impl FoxlakeS3Extractor {
             prev_meta_file = meta_file;
         }
 
-        continuous
+        meta_files[..discontinue_from].to_vec()
     }
 
     fn parse_meta_file_name(meta_file: &str) -> (u64, u64) {
@@ -253,8 +259,13 @@ mod tests {
 
     #[test]
     fn test_check_continuity() {
-        let transfer =
-            |input: Vec<&str>| -> Vec<String> { input.iter().map(|s| s.to_string()).collect() };
+        let check_continuous_files_count =
+            |meta_files: Vec<&str>, start_after: &Option<String>, expect_count: usize| {
+                let meta_files: Vec<String> = meta_files.iter().map(|s| s.to_string()).collect();
+                let continuous_files =
+                    FoxlakeS3Extractor::find_continuous_files(&meta_files, start_after);
+                assert_eq!(continuous_files.len(), expect_count);
+            };
 
         // start_after = None
         // case 1
@@ -262,30 +273,21 @@ mod tests {
             "data/meta/1721796946_0000000000_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
             "data/meta/1721796946_0000000001_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
         ];
-        assert_eq!(
-            FoxlakeS3Extractor::check_continuity(&transfer(meta_files), &None),
-            true
-        );
+        check_continuous_files_count(meta_files, &None, 2);
 
         // case 2
         let meta_files = vec![
             "data/meta/1721796946_0000000002_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
             "data/meta/1721796946_0000000003_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
         ];
-        assert_eq!(
-            FoxlakeS3Extractor::check_continuity(&transfer(meta_files), &None),
-            true
-        );
+        check_continuous_files_count(meta_files, &None, 2);
 
         // case 3
         let meta_files = vec![
             "data/meta/1721796946_0000000002_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
             "data/meta/1721796946_0000000004_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
         ];
-        assert_eq!(
-            FoxlakeS3Extractor::check_continuity(&transfer(meta_files), &None),
-            false
-        );
+        check_continuous_files_count(meta_files, &None, 1);
 
         // start_after != None
         // case 1
@@ -297,30 +299,21 @@ mod tests {
             "data/meta/1721796946_0000000011_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
             "data/meta/1721796946_0000000012_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
         ];
-        assert_eq!(
-            FoxlakeS3Extractor::check_continuity(&transfer(meta_files), &start_after),
-            true
-        );
+        check_continuous_files_count(meta_files, &start_after, 2);
 
         // case 2
         let meta_files = vec![
             "data/meta/1721796946_0000000012_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
             "data/meta/1721796946_0000000013_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
         ];
-        assert_eq!(
-            FoxlakeS3Extractor::check_continuity(&transfer(meta_files), &start_after),
-            false
-        );
+        check_continuous_files_count(meta_files, &start_after, 0);
 
         // case 3
         let meta_files = vec![
             "data/meta/1721796946_0000000011_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
             "data/meta/1721796946_0000000013_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
         ];
-        assert_eq!(
-            FoxlakeS3Extractor::check_continuity(&transfer(meta_files), &start_after),
-            false
-        );
+        check_continuous_files_count(meta_files, &start_after, 1);
 
         // case 4
         let meta_files = vec![
@@ -329,34 +322,25 @@ mod tests {
             "data/meta/1721796946_0000000014_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
             "data/meta/1721796946_0000000015_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
         ];
-        assert_eq!(
-            FoxlakeS3Extractor::check_continuity(&transfer(meta_files), &start_after),
-            false
-        );
+        check_continuous_files_count(meta_files, &start_after, 2);
 
-        // case 5
+        // case 5, new sequencer_id 1721800418 found and it's first sequence is 0000000000
         let meta_files = vec![
             "data/meta/1721796946_0000000011_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
             "data/meta/1721796946_0000000013_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
             "data/meta/1721800418_0000000000_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
             "data/meta/1721800418_0000000001_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
         ];
-        assert_eq!(
-            FoxlakeS3Extractor::check_continuity(&transfer(meta_files), &start_after),
-            true
-        );
+        check_continuous_files_count(meta_files, &start_after, 4);
 
-        // case 6
+        // case 6, new sequencer_id 1721800418 found but it's first sequence is 0000000001
         let meta_files = vec![
             "data/meta/1721796946_0000000011_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
             "data/meta/1721796946_0000000013_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
             "data/meta/1721800418_0000000001_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
             "data/meta/1721800418_0000000002_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
         ];
-        assert_eq!(
-            FoxlakeS3Extractor::check_continuity(&transfer(meta_files), &start_after),
-            false
-        );
+        check_continuous_files_count(meta_files, &start_after, 1);
 
         // case 7
         let meta_files = vec![
@@ -365,10 +349,7 @@ mod tests {
             "data/meta/1721800418_0000000001_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
             "data/meta/1721800418_0000000002_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
         ];
-        assert_eq!(
-            FoxlakeS3Extractor::check_continuity(&transfer(meta_files), &start_after),
-            false
-        );
+        check_continuous_files_count(meta_files, &start_after, 2);
 
         // case 8
         let meta_files = vec![
@@ -378,10 +359,7 @@ mod tests {
             "data/meta/1721800418_0000000001_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
             "data/meta/1721800418_0000000004_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
         ];
-        assert_eq!(
-            FoxlakeS3Extractor::check_continuity(&transfer(meta_files), &start_after),
-            false
-        );
+        check_continuous_files_count(meta_files, &start_after, 4);
 
         // case 9
         let meta_files = vec![
@@ -392,10 +370,7 @@ mod tests {
             "data/meta/1721800418_0000000004_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
             "data/meta/1721800555_0000000000_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
         ];
-        assert_eq!(
-            FoxlakeS3Extractor::check_continuity(&transfer(meta_files), &start_after),
-            true
-        );
+        check_continuous_files_count(meta_files, &start_after, 6);
 
         // case 10
         let meta_files = vec![
@@ -407,10 +382,19 @@ mod tests {
             "data/meta/1721800555_0000000000_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
             "data/meta/1721800555_0000000002_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
         ];
-        assert_eq!(
-            FoxlakeS3Extractor::check_continuity(&transfer(meta_files), &start_after),
-            false
-        );
+        check_continuous_files_count(meta_files, &start_after, 6);
+
+        // case 11
+        let meta_files = vec![
+            "data/meta/1721800418_0000000000_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
+        ];
+        check_continuous_files_count(meta_files, &start_after, 1);
+
+        // case 12
+        let meta_files = vec![
+            "data/meta/1721800418_0000000001_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
+        ];
+        check_continuous_files_count(meta_files, &start_after, 0);
 
         // finished
         let meta_files = vec![
@@ -418,15 +402,9 @@ mod tests {
             "data/meta/1721796946_0000000012_log_dml_0_0_d6b38c60-c395-4a00-88ae-80025f81d52f.orc",
             "data/meta/finished",
         ];
-        assert_eq!(
-            FoxlakeS3Extractor::check_continuity(&transfer(meta_files), &start_after),
-            true
-        );
+        check_continuous_files_count(meta_files, &start_after, 3);
 
         // empty
-        assert_eq!(
-            FoxlakeS3Extractor::check_continuity(&Vec::new(), &start_after),
-            true
-        );
+        check_continuous_files_count(Vec::new(), &start_after, 0);
     }
 }
