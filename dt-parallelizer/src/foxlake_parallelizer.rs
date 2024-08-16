@@ -36,8 +36,22 @@ impl Parallelizer for FoxlakeParallelizer {
         data: Vec<DtItem>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
     ) -> anyhow::Result<()> {
-        if matches!(self.task_config.sinker, SinkerConfig::FoxlakePush { .. }) {
+        if let SinkerConfig::FoxlakePush {
+            batch_memory_mb, ..
+        } = self.task_config.sinker
+        {
             sinkers[0].lock().await.refresh_meta(Vec::new()).await?;
+            // to avoid generating too many small orc files, each sub_data size
+            // should be as big as possible(smaller than sinker batch_memory_mb)
+            if batch_memory_mb > 0 {
+                let sub_datas =
+                    Self::partition(data, sinkers.len(), batch_memory_mb * 1024 * 1024)?;
+                return self
+                    .base_parallelizer
+                    .base_parallelizer
+                    .sink_raw(sub_datas, sinkers, sinkers.len(), true)
+                    .await;
+            }
         }
         self.base_parallelizer.sink_raw(data, sinkers).await
     }
@@ -100,5 +114,33 @@ impl FoxlakeParallelizer {
 
         base.update_monitor(&record_size_counter).await;
         Ok(data)
+    }
+
+    pub fn partition(
+        data: Vec<DtItem>,
+        parallele_size: usize,
+        sinker_batch_memory_bytes: usize,
+    ) -> anyhow::Result<Vec<Vec<DtItem>>> {
+        let mut sub_datas = Vec::new();
+        sub_datas.push(Vec::new());
+
+        if parallele_size <= 1 {
+            sub_datas[0] = data;
+            return Ok(sub_datas);
+        }
+
+        let mut i = 0;
+        let mut sub_data_size = 0;
+        for item in data {
+            if sub_data_size + item.dt_data.get_data_size() > sinker_batch_memory_bytes {
+                sub_datas.push(Vec::new());
+                i += 1;
+                sub_data_size = 0;
+            }
+
+            sub_data_size += item.dt_data.get_data_size();
+            sub_datas[i].push(item);
+        }
+        Ok(sub_datas)
     }
 }
