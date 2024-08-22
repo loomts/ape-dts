@@ -51,7 +51,7 @@ impl MongoSnapshotExtractor {
 
         let filter = if let Some(resume_value) =
             self.resumer
-                .get_resume_value(&self.db, &self.tb, MongoConstants::ID)
+                .get_resume_value(&self.db, &self.tb, MongoConstants::ID, false)
         {
             let start_id = ObjectId::parse_str(resume_value).unwrap();
             log_info!("start_id: {}", start_id.to_string());

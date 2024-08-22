@@ -1,7 +1,17 @@
+use std::{
+    cmp, i32,
+    sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc, Mutex,
+    },
+};
+
 use async_trait::async_trait;
 use dt_common::meta::{
     adaptor::{mysql_col_value_convertor::MysqlColValueConvertor, sqlx_ext::SqlxMysqlExt},
     col_value::ColValue,
+    dt_data::{DtData, DtItem},
+    dt_queue::DtQueue,
     mysql::{
         mysql_col_type::MysqlColType, mysql_meta_manager::MysqlMetaManager,
         mysql_tb_meta::MysqlTbMeta,
@@ -14,10 +24,12 @@ use futures::TryStreamExt;
 use sqlx::{MySql, Pool};
 
 use dt_common::{config::config_enums::DbType, log_info};
+use tokio::task::JoinHandle;
 
 use crate::{
     close_conn_pool,
     extractor::{base_extractor::BaseExtractor, resumer::snapshot_resumer::SnapshotResumer},
+    rdb_router::RdbRouter,
     Extractor,
 };
 
@@ -26,20 +38,26 @@ pub struct MysqlSnapshotExtractor {
     pub conn_pool: Pool<MySql>,
     pub meta_manager: MysqlMetaManager,
     pub resumer: SnapshotResumer,
-    pub slice_size: usize,
+    pub batch_size: usize,
+    pub parallel_size: usize,
     pub sample_interval: usize,
     pub db: String,
     pub tb: String,
+}
+
+struct ExtractColValue {
+    value: ColValue,
 }
 
 #[async_trait]
 impl Extractor for MysqlSnapshotExtractor {
     async fn extract(&mut self) -> anyhow::Result<()> {
         log_info!(
-            "MysqlSnapshotExtractor starts, schema: `{}`, tb: `{}`, slice_size: {}",
+            "MysqlSnapshotExtractor starts, schema: `{}`, tb: `{}`, batch_size: {}, parallel_size: {}",
             self.db,
             self.tb,
-            self.slice_size
+            self.batch_size,
+            self.parallel_size
         );
         self.extract_internal().await?;
         self.base_extractor.wait_task_finish().await
@@ -52,6 +70,7 @@ impl Extractor for MysqlSnapshotExtractor {
 
 impl MysqlSnapshotExtractor {
     async fn extract_internal(&mut self) -> anyhow::Result<()> {
+        let extracted_count;
         let tb_meta = self
             .meta_manager
             .get_tb_meta(&self.db, &self.tb)
@@ -60,25 +79,59 @@ impl MysqlSnapshotExtractor {
 
         if let Some(order_col) = &tb_meta.basic.order_col {
             let order_col_type = tb_meta.get_col_type(order_col)?;
+            let parallel_extract = self.parallel_size > 1
+                && matches!(
+                    order_col_type,
+                    MysqlColType::Long
+                        | MysqlColType::UnsignedLong
+                        | MysqlColType::LongLong
+                        | MysqlColType::UnsignedLongLong
+                        | MysqlColType::Medium
+                        | MysqlColType::UnsignedMedium
+                );
 
-            let resume_value =
-                if let Some(value) = self.resumer.get_resume_value(&self.db, &self.tb, order_col) {
-                    MysqlColValueConvertor::from_str(order_col_type, &value)?
-                } else {
-                    ColValue::None
-                };
+            let resume_value = if let Some(value) =
+                self.resumer
+                    .get_resume_value(&self.db, &self.tb, order_col, parallel_extract)
+            {
+                MysqlColValueConvertor::from_str(order_col_type, &value)?
+            } else {
+                ColValue::None
+            };
 
-            self.extract_by_slices(&tb_meta, order_col, order_col_type, resume_value)
-                .await?;
+            log_info!(
+                "start extracting data from `{}`.`{}` by batch, order_col: {}, order_col_type: {}, start_value: {}",
+                self.db,
+                self.tb,
+                order_col,
+                order_col_type,
+                resume_value.to_string()
+            );
+
+            extracted_count = if parallel_extract {
+                log_info!("parallel extracting, parallel_size: {}", self.parallel_size);
+                self.parallel_extract_by_batch(&tb_meta, order_col, order_col_type, resume_value)
+                    .await?
+            } else {
+                self.extract_by_batch(&tb_meta, order_col, order_col_type, resume_value)
+                    .await?
+            };
         } else {
-            self.extract_all(&tb_meta).await?;
+            extracted_count = self.extract_all(&tb_meta).await?;
         }
+
+        log_info!(
+            "end extracting data from `{}`.`{}`, all count: {}",
+            self.db,
+            self.tb,
+            extracted_count
+        );
         Ok(())
     }
 
-    async fn extract_all(&mut self, tb_meta: &MysqlTbMeta) -> anyhow::Result<()> {
+    async fn extract_all(&mut self, tb_meta: &MysqlTbMeta) -> anyhow::Result<usize> {
         log_info!(
-            "start extracting data from `{}`.`{}` without slices",
+            "start extracting data from `{}`.`{}` without batch",
             self.db,
             self.tb
         );
@@ -91,40 +144,25 @@ impl MysqlSnapshotExtractor {
                 .push_row(row_data, Position::None)
                 .await?;
         }
-
-        log_info!(
-            "end extracting data from `{}`.`{}`, all count: {}",
-            self.db,
-            self.tb,
-            self.base_extractor.monitor.counters.record_count
-        );
-        Ok(())
+        Ok(self.base_extractor.monitor.counters.record_count)
     }
 
-    async fn extract_by_slices(
+    async fn extract_by_batch(
         &mut self,
         tb_meta: &MysqlTbMeta,
         order_col: &str,
         order_col_type: &MysqlColType,
         resume_value: ColValue,
-    ) -> anyhow::Result<()> {
-        log_info!(
-            "start extracting data from `{}`.`{}` by slices, order_col: {}, start_value: {}",
-            self.db,
-            self.tb,
-            order_col,
-            resume_value.to_string()
-        );
-
+    ) -> anyhow::Result<usize> {
         let mut extracted_count = 0;
         let mut start_value = resume_value;
         let sql1 = format!(
             "SELECT * FROM `{}`.`{}` ORDER BY `{}` ASC LIMIT {}",
-            self.db, self.tb, order_col, self.slice_size
+            self.db, self.tb, order_col, self.batch_size
         );
         let sql2 = format!(
             "SELECT * FROM `{}`.`{}` WHERE `{}` > ? ORDER BY `{}` ASC LIMIT {}",
-            self.db, self.tb, order_col, order_col, self.slice_size
+            self.db, self.tb, order_col, order_col, self.batch_size
         );
 
         loop {
@@ -137,6 +175,7 @@ impl MysqlSnapshotExtractor {
 
             let mut rows = query.fetch(&self.conn_pool);
             let mut slice_count = 0usize;
+
             while let Some(row) = rows.try_next().await.unwrap() {
                 start_value = MysqlColValueConvertor::from_query(&row, order_col, order_col_type)?;
                 extracted_count += 1;
@@ -163,17 +202,218 @@ impl MysqlSnapshotExtractor {
             }
 
             // all data extracted
-            if slice_count < self.slice_size {
+            if slice_count < self.batch_size {
                 break;
             }
         }
 
-        log_info!(
-            "end extracting data from `{}`.`{}`, all count: {}",
-            self.db,
-            self.tb,
-            extracted_count
+        Ok(extracted_count)
+    }
+
+    async fn parallel_extract_by_batch(
+        &mut self,
+        tb_meta: &MysqlTbMeta,
+        order_col: &str,
+        order_col_type: &MysqlColType,
+        resume_value: ColValue,
+    ) -> anyhow::Result<usize> {
+        let all_extracted_count = Arc::new(AtomicUsize::new(0));
+        let parallel_size = self.parallel_size;
+        let batch_size = cmp::max(self.batch_size / parallel_size, 1);
+        let router = Arc::new(self.base_extractor.router.clone());
+
+        let mut start_value = resume_value;
+        let sql1 = format!(
+            "SELECT * FROM `{}`.`{}` ORDER BY `{}` ASC LIMIT {}",
+            self.db, self.tb, order_col, batch_size
         );
-        Ok(())
+        let sql2 = format!(
+            "SELECT * FROM `{}`.`{}` WHERE `{}` > ? AND `{}` <= ? ORDER BY `{}` ASC LIMIT {}",
+            self.db, self.tb, order_col, order_col, order_col, batch_size
+        );
+        let sql3 = format!(
+            "SELECT * FROM `{}`.`{}` WHERE `{}` > ? ORDER BY `{}` ASC LIMIT {}",
+            self.db, self.tb, order_col, order_col, batch_size
+        );
+
+        loop {
+            // send a checkpoint position before each loop
+            self.send_checkpoint_position(order_col, &start_value)
+                .await?;
+
+            let all_finished = Arc::new(AtomicBool::new(false));
+            let last_order_col_value = Arc::new(Mutex::new(ExtractColValue {
+                value: start_value.clone(),
+            }));
+
+            if let ColValue::None = start_value {
+                let mut slice_count = 0;
+                let query = sqlx::query(&sql1);
+                let mut rows = query.fetch(&self.conn_pool);
+                while let Some(row) = rows.try_next().await.unwrap() {
+                    start_value =
+                        MysqlColValueConvertor::from_query(&row, order_col, order_col_type)?;
+                    let row_data = RowData::from_mysql_row(&row, tb_meta);
+                    let position =
+                        Self::build_position(&self.db, &self.tb, order_col, &start_value);
+                    Self::push_row(&self.base_extractor.buffer, &router, row_data, position)
+                        .await?;
+                    slice_count += 1;
+                }
+
+                all_extracted_count.fetch_add(slice_count, Ordering::Release);
+                all_finished.store(slice_count < batch_size, Ordering::Release);
+            } else {
+                let mut futures = Vec::new();
+                for i in 0..parallel_size {
+                    let buffer = self.base_extractor.buffer.clone();
+                    let router = router.clone();
+                    let conn_pool = self.conn_pool.clone();
+                    let db = self.db.clone();
+                    let tb = self.tb.clone();
+                    let tb_meta = tb_meta.clone();
+                    let order_col = order_col.to_string();
+                    let order_col_type = order_col_type.clone();
+
+                    let all_extracted_count = all_extracted_count.clone();
+                    let all_finished = all_finished.clone();
+                    let last_order_col_value = last_order_col_value.clone();
+
+                    let (sub_start_value, sub_end_value) =
+                        Self::get_sub_extractor_range(&start_value, i, batch_size);
+                    let sql = if i == parallel_size - 1 {
+                        // the last extractor
+                        sql3.clone()
+                    } else {
+                        sql2.clone()
+                    };
+
+                    let future: JoinHandle<anyhow::Result<()>> = tokio::spawn(async move {
+                        let mut query = sqlx::query(&sql)
+                            .bind_col_value(Some(&sub_start_value), &order_col_type);
+                        if i < parallel_size - 1 {
+                            query = query.bind_col_value(Some(&sub_end_value), &order_col_type);
+                        }
+                        let mut rows = query.fetch(&conn_pool);
+
+                        let mut order_col_value = ColValue::None;
+                        let mut slice_count = 0;
+                        while let Some(row) = rows.try_next().await.unwrap() {
+                            order_col_value = MysqlColValueConvertor::from_query(
+                                &row,
+                                &order_col,
+                                &order_col_type,
+                            )?;
+
+                            let row_data = RowData::from_mysql_row(&row, &tb_meta);
+                            let position =
+                                Self::build_position(&db, &tb, &order_col, &order_col_value);
+                            Self::push_row(&buffer, &router, row_data, position).await?;
+                            slice_count += 1;
+                        }
+
+                        all_extracted_count.fetch_add(slice_count, Ordering::Release);
+                        if i == parallel_size - 1 {
+                            last_order_col_value.lock().unwrap().value = order_col_value;
+                            all_finished.store(slice_count < batch_size, Ordering::Release);
+                        }
+                        Ok(())
+                    });
+                    futures.push(future);
+                }
+
+                for future in futures {
+                    let _ = future.await.unwrap();
+                }
+
+                start_value = last_order_col_value.lock().unwrap().value.clone();
+                if all_finished.load(Ordering::Acquire) {
+                    break;
+                }
+            }
+        }
+
+        Ok(all_extracted_count.load(Ordering::Acquire))
+    }
+
+    pub async fn push_row(
+        buffer: &Arc<DtQueue>,
+        router: &Arc<RdbRouter>,
+        row_data: RowData,
+        position: Position,
+    ) -> anyhow::Result<()> {
+        let row_data = router.route_row(row_data);
+        let dt_data = DtData::Dml { row_data };
+        let item = DtItem {
+            dt_data,
+            position,
+            data_origin_node: String::new(),
+        };
+        buffer.push(item).await
+    }
+
+    fn get_sub_extractor_range(
+        start_value: &ColValue,
+        extractor_index: usize,
+        batch_size: usize,
+    ) -> (ColValue, ColValue) {
+        let i = extractor_index;
+        let v = match start_value {
+            ColValue::Long(v) => *v as i128,
+            ColValue::UnsignedLong(v) => *v as i128,
+            ColValue::LongLong(v) => *v as i128,
+            ColValue::UnsignedLongLong(v) => *v as i128,
+            _ => 0,
+        };
+
+        let start = v + i as i128 * batch_size as i128;
+        let end = start + batch_size as i128;
+        match start_value {
+            ColValue::Long(_) => (
+                ColValue::Long(cmp::min(start, i32::MAX as i128) as i32),
+                ColValue::Long(cmp::min(end, i32::MAX as i128) as i32),
+            ),
+            ColValue::UnsignedLong(_) => (
+                ColValue::UnsignedLong(cmp::min(start, u32::MAX as i128) as u32),
+                ColValue::UnsignedLong(cmp::min(end, u32::MAX as i128) as u32),
+            ),
+            ColValue::LongLong(_) => (
+                ColValue::LongLong(cmp::min(start, i64::MAX as i128) as i64),
+                ColValue::LongLong(cmp::min(end, i64::MAX as i128) as i64),
+            ),
+            ColValue::UnsignedLongLong(_) => (
+                ColValue::UnsignedLongLong(cmp::min(start, u64::MAX as i128) as u64),
+                ColValue::UnsignedLongLong(cmp::min(end, u64::MAX as i128) as u64),
+            ),
+            _ => (ColValue::None, ColValue::None),
+        }
+    }
+
+    fn build_position(db: &str, tb: &str, order_col: &str, order_col_value: &ColValue) -> Position {
+        if let Some(value) = order_col_value.to_option_string() {
+            Position::RdbSnapshot {
+                db_type: DbType::Mysql.to_string(),
+                schema: db.into(),
+                tb: tb.into(),
+                order_col: order_col.into(),
+                value,
+            }
+        } else {
+            Position::None
+        }
+    }
+
+    async fn send_checkpoint_position(
+        &mut self,
+        order_col: &str,
+        order_col_value: &ColValue,
+    ) -> anyhow::Result<()> {
+        if *order_col_value == ColValue::None {
+            return Ok(());
+        }
+
+        let position = Self::build_position(&self.db, &self.tb, order_col, order_col_value);
+        let commit = DtData::Commit { xid: String::new() };
+        self.base_extractor.push_dt_data(commit, position).await
     }
 }

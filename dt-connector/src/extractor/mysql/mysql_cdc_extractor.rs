@@ -82,11 +82,12 @@ impl Extractor for MysqlCdcExtractor {
             next_event_position,
             gtid_set,
             ..
-        } = &self.resumer.position
+        } = &self.resumer.checkpoint_position
         {
             self.binlog_filename = binlog_filename.to_owned();
             self.binlog_position = next_event_position.to_owned();
             self.gtid_set = gtid_set.to_owned();
+            log_info!("resume from: {}", self.resumer.checkpoint_position);
         }
 
         log_info!(

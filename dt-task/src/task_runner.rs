@@ -158,23 +158,29 @@ impl TaskRunner {
                     ExtractorConfig::MysqlSnapshot {
                         url,
                         sample_interval,
+                        parallel_size,
+                        batch_size,
                         ..
                     } => ExtractorConfig::MysqlSnapshot {
                         url: url.clone(),
                         db: schema.clone(),
                         tb: tb.clone(),
                         sample_interval: *sample_interval,
+                        parallel_size: *parallel_size,
+                        batch_size: *batch_size,
                     },
 
                     ExtractorConfig::PgSnapshot {
                         url,
                         sample_interval,
+                        batch_size,
                         ..
                     } => ExtractorConfig::PgSnapshot {
                         url: url.clone(),
                         schema: schema.clone(),
                         tb: tb.clone(),
                         sample_interval: *sample_interval,
+                        batch_size: *batch_size,
                     },
 
                     ExtractorConfig::MongoSnapshot { url, app_name, .. } => {
@@ -186,14 +192,18 @@ impl TaskRunner {
                         }
                     }
 
-                    ExtractorConfig::FoxlakeS3 { url, s3_config, .. } => {
-                        ExtractorConfig::FoxlakeS3 {
-                            url: url.clone(),
-                            schema: schema.clone(),
-                            tb: tb.clone(),
-                            s3_config: s3_config.clone(),
-                        }
-                    }
+                    ExtractorConfig::FoxlakeS3 {
+                        url,
+                        s3_config,
+                        batch_size,
+                        ..
+                    } => ExtractorConfig::FoxlakeS3 {
+                        url: url.clone(),
+                        schema: schema.clone(),
+                        tb: tb.clone(),
+                        s3_config: s3_config.clone(),
+                        batch_size: *batch_size,
+                    },
 
                     _ => {
                         bail! {Error::ConfigError("unsupported extractor config".into())};

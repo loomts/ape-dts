@@ -1,4 +1,5 @@
 use std::{
+    cmp,
     str::FromStr,
     sync::{atomic::AtomicBool, Arc, Mutex},
 };
@@ -77,7 +78,6 @@ impl ExtractorUtil {
             time_filter: TimeFilter::default(),
         };
 
-        let buffer_size = config.pipeline.buffer_size;
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(&config.runtime.log_level);
         let filter = RdbFilter::from_config(&config.filter, &config.extractor_basic.db_type)?;
 
@@ -87,9 +87,14 @@ impl ExtractorUtil {
                 db,
                 tb,
                 sample_interval,
+                parallel_size,
+                batch_size,
             } => {
                 // max_connections: 1 for extracting data from table, 1 for db-meta-manager
-                let conn_pool = TaskUtil::create_mysql_conn_pool(&url, 2, enable_sqlx_log).await?;
+                let max_connections = cmp::max(2, parallel_size as u32 + 1);
+                let conn_pool =
+                    TaskUtil::create_mysql_conn_pool(&url, max_connections, enable_sqlx_log)
+                        .await?;
                 let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
                 let extractor = MysqlSnapshotExtractor {
                     conn_pool: conn_pool.clone(),
@@ -97,8 +102,9 @@ impl ExtractorUtil {
                     resumer: snapshot_resumer,
                     db,
                     tb,
-                    slice_size: buffer_size,
+                    batch_size,
                     sample_interval,
+                    parallel_size,
                     base_extractor,
                 };
                 Box::new(extractor)
@@ -160,6 +166,7 @@ impl ExtractorUtil {
                 schema,
                 tb,
                 sample_interval,
+                batch_size,
             } => {
                 let conn_pool = TaskUtil::create_pg_conn_pool(&url, 2, enable_sqlx_log).await?;
                 let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
@@ -167,7 +174,7 @@ impl ExtractorUtil {
                     conn_pool,
                     meta_manager,
                     resumer: snapshot_resumer,
-                    slice_size: buffer_size,
+                    batch_size,
                     sample_interval,
                     schema,
                     tb,
@@ -415,6 +422,7 @@ impl ExtractorUtil {
                 schema,
                 tb,
                 s3_config,
+                batch_size,
                 ..
             } => {
                 let s3_client = TaskUtil::create_s3_client(&s3_config);
@@ -425,7 +433,7 @@ impl ExtractorUtil {
                     s3_config,
                     resumer: snapshot_resumer,
                     base_extractor,
-                    slice_size: buffer_size,
+                    batch_size,
                 };
                 Box::new(extractor)
             }

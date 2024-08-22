@@ -21,7 +21,7 @@ pub struct FoxlakeS3Extractor {
     pub s3_config: S3Config,
     pub base_extractor: BaseExtractor,
     pub resumer: SnapshotResumer,
-    pub slice_size: usize,
+    pub batch_size: usize,
     pub schema: String,
     pub tb: String,
 }
@@ -33,10 +33,10 @@ const WAIT_FILE_SECS: u64 = 5;
 impl Extractor for FoxlakeS3Extractor {
     async fn extract(&mut self) -> anyhow::Result<()> {
         log_info!(
-            "FoxlakeS3Extractor starts, schema: `{}`, tb: `{}`, slice_size: {}",
+            "FoxlakeS3Extractor starts, schema: `{}`, tb: `{}`, batch_size: {}",
             self.schema,
             self.tb,
-            self.slice_size
+            self.batch_size
         );
         self.extract_internal().await?;
         self.base_extractor.wait_task_finish().await
@@ -45,7 +45,9 @@ impl Extractor for FoxlakeS3Extractor {
 
 impl FoxlakeS3Extractor {
     async fn extract_internal(&mut self) -> anyhow::Result<()> {
-        let mut start_after = self.resumer.get_resume_value(&self.schema, &self.tb, "");
+        let mut start_after = self
+            .resumer
+            .get_resume_value(&self.schema, &self.tb, "", false);
         log_info!("start extracting from: {:?}", start_after);
         loop {
             let mut finished = false;
@@ -132,7 +134,7 @@ impl FoxlakeS3Extractor {
         );
         let request = ListObjectsV2Request {
             bucket: self.s3_config.bucket.clone(),
-            max_keys: Some(self.slice_size as i64),
+            max_keys: Some(self.batch_size as i64),
             prefix: Some(prefix.clone()),
             start_after: start_after.clone(),
             ..Default::default()

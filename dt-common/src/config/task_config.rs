@@ -63,6 +63,7 @@ const HEARTBEAT_TB: &str = "heartbeat_tb";
 const APP_NAME: &str = "app_name";
 const REVERSE: &str = "reverse";
 const REPL_PORT: &str = "repl_port";
+const PARALLEL_SIZE: &str = "parallel_size";
 // default values
 const APE_DTS: &str = "APE_DTS";
 const ASTRISK: &str = "*";
@@ -71,19 +72,22 @@ impl TaskConfig {
     pub fn new(task_config_file: &str) -> anyhow::Result<Self> {
         let loader = IniLoader::new(task_config_file);
 
-        let (extractor_basic, extractor) = Self::load_extractor_config(&loader)?;
+        let pipeline = Self::load_pipeline_config(&loader);
+        let runtime = Self::load_runtime_config(&loader)?;
+        let resumer = Self::load_resumer_config(&loader, &runtime)?;
+        let (extractor_basic, extractor) = Self::load_extractor_config(&loader, &pipeline)?;
         let (sinker_basic, sinker) = Self::load_sinker_config(&loader)?;
         Ok(Self {
             extractor_basic,
             extractor,
             parallelizer: Self::load_parallelizer_config(&loader)?,
-            pipeline: Self::load_pipeline_config(&loader),
+            pipeline,
             sinker_basic,
             sinker,
-            runtime: Self::load_runtime_config(&loader)?,
+            runtime,
             filter: Self::load_filter_config(&loader)?,
             router: Self::load_router_config(&loader)?,
-            resumer: Self::load_resumer_config(&loader)?,
+            resumer,
             data_marker: Self::load_data_marker_config(&loader)?,
             processor: Self::load_processor_config(&loader)?,
         })
@@ -91,6 +95,7 @@ impl TaskConfig {
 
     fn load_extractor_config(
         loader: &IniLoader,
+        pipeline: &PipelineConfig,
     ) -> anyhow::Result<(BasicExtractorConfig, ExtractorConfig)> {
         let db_type_str: String = loader.get_required(EXTRACTOR, DB_TYPE);
         let extract_type_str: String = loader.get_required(EXTRACTOR, "extract_type");
@@ -103,6 +108,7 @@ impl TaskConfig {
         let keepalive_interval_secs: u64 =
             loader.get_with_default(EXTRACTOR, KEEPALIVE_INTERVAL_SECS, 10);
         let heartbeat_tb = loader.get_optional(EXTRACTOR, HEARTBEAT_TB);
+        let batch_size = loader.get_with_default(EXTRACTOR, BATCH_SIZE, pipeline.buffer_size);
 
         let basic = BasicExtractorConfig {
             db_type: db_type.clone(),
@@ -113,13 +119,15 @@ impl TaskConfig {
         let not_supported_err =
             Error::ConfigError(format!("extract type: {} not supported", extract_type));
 
-        let sinker = match db_type {
+        let extractor = match db_type {
             DbType::Mysql => match extract_type {
                 ExtractType::Snapshot => ExtractorConfig::MysqlSnapshot {
                     url,
                     db: String::new(),
                     tb: String::new(),
                     sample_interval: loader.get_with_default(EXTRACTOR, SAMPLE_INTERVAL, 1),
+                    parallel_size: loader.get_with_default(EXTRACTOR, PARALLEL_SIZE, 1),
+                    batch_size,
                 },
 
                 ExtractType::Cdc => ExtractorConfig::MysqlCdc {
@@ -161,6 +169,7 @@ impl TaskConfig {
                         schema: String::new(),
                         tb: String::new(),
                         s3_config,
+                        batch_size,
                     }
                 }
 
@@ -173,6 +182,7 @@ impl TaskConfig {
                     schema: String::new(),
                     tb: String::new(),
                     sample_interval: loader.get_with_default(EXTRACTOR, SAMPLE_INTERVAL, 1),
+                    batch_size,
                 },
 
                 ExtractType::Cdc => ExtractorConfig::PgCdc {
@@ -288,7 +298,7 @@ impl TaskConfig {
                 ))}
             }
         };
-        Ok((basic, sinker))
+        Ok((basic, extractor))
     }
 
     fn load_sinker_config(loader: &IniLoader) -> anyhow::Result<(BasicSinkerConfig, SinkerConfig)> {
@@ -459,7 +469,7 @@ impl TaskConfig {
         let parallel_type_str =
             loader.get_with_default(PARALLELIZER, "parallel_type", "serial".to_string());
         Ok(ParallelizerConfig {
-            parallel_size: loader.get_with_default(PARALLELIZER, "parallel_size", 1),
+            parallel_size: loader.get_with_default(PARALLELIZER, PARALLEL_SIZE, 1),
             parallel_type: ParallelType::from_str(&parallel_type_str)?,
         })
     }
@@ -519,12 +529,12 @@ impl TaskConfig {
         })
     }
 
-    fn load_resumer_config(loader: &IniLoader) -> anyhow::Result<ResumerConfig> {
-        let mut resume_log_dir: String = loader.get_optional(RESUMER, "resume_log_dir");
-        if resume_log_dir.is_empty() {
-            resume_log_dir = loader.get_with_default(RUNTIME, "log_dir", "./logs".to_string());
-        }
-
+    fn load_resumer_config(
+        loader: &IniLoader,
+        runtime: &RuntimeConfig,
+    ) -> anyhow::Result<ResumerConfig> {
+        let resume_log_dir: String =
+            loader.get_with_default(RESUMER, "resume_log_dir", runtime.log_dir.clone());
         Ok(ResumerConfig {
             resume_config_file: loader.get_optional(RESUMER, "resume_config_file"),
             resume_from_log: loader.get_optional(RESUMER, "resume_from_log"),

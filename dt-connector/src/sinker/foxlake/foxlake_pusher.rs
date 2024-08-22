@@ -115,8 +115,8 @@ impl FoxlakePusher {
         let mut futures = Vec::new();
 
         let mut all_data_size = 0;
-        let all_row_count = items.len();
-        let mut push_row_count = 0;
+        let item_count = items.len();
+        let mut item_index = 0;
 
         let mut batch_data = Vec::new();
         let mut batch_last_position;
@@ -124,10 +124,11 @@ impl FoxlakePusher {
         let mut batch_data_size = 0;
 
         for item in items {
-            push_row_count += 1;
+            item_index += 1;
             batch_last_position = item.position;
             let mut do_push = false;
 
+            // there may be DtData::Commit items, ignore them
             if let DtData::Dml { row_data } = item.dt_data {
                 batch_data_size += row_data.data_size;
 
@@ -150,8 +151,8 @@ impl FoxlakePusher {
                 }
             }
 
-            do_push |= push_row_count >= all_row_count;
-            if !do_push {
+            do_push |= item_index >= item_count;
+            if !do_push || batch_data.is_empty() {
                 continue;
             }
 

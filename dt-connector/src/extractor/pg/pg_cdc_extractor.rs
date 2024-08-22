@@ -73,8 +73,9 @@ const SECS_FROM_1970_TO_2000: i64 = 946_684_800;
 #[async_trait]
 impl Extractor for PgCdcExtractor {
     async fn extract(&mut self) -> anyhow::Result<()> {
-        if let Position::PgCdc { lsn, .. } = &self.resumer.position {
-            self.start_lsn = lsn.to_owned()
+        if let Position::PgCdc { lsn, .. } = &self.resumer.checkpoint_position {
+            self.start_lsn = lsn.to_owned();
+            log_info!("resume from: {}", self.resumer.checkpoint_position);
         };
 
         log_info!(

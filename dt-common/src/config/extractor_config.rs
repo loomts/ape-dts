@@ -20,6 +20,8 @@ pub enum ExtractorConfig {
         db: String,
         tb: String,
         sample_interval: usize,
+        parallel_size: usize,
+        batch_size: usize,
     },
 
     MysqlCdc {
@@ -46,6 +48,7 @@ pub enum ExtractorConfig {
         schema: String,
         tb: String,
         sample_interval: usize,
+        batch_size: usize,
     },
 
     PgCdc {
@@ -137,6 +140,7 @@ pub enum ExtractorConfig {
         schema: String,
         tb: String,
         s3_config: S3Config,
+        batch_size: usize,
     },
 }
 

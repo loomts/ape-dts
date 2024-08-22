@@ -7,25 +7,25 @@ use std::{
 use dt_common::{config::resumer_config::ResumerConfig, utils::file_util::FileUtil};
 use dt_common::{log_info, meta::position::Position};
 
-#[derive(Clone)]
+use super::{CURRENT_POSITION_LOG_FLAG, TAIL_POSITION_COUNT};
+
+#[derive(Clone, Default)]
 pub struct SnapshotResumer {
-    tb_positions: HashMap<DbTbCol, String>,
+    current_tb_positions: HashMap<DbTbCol, String>,
+    checkpoint_tb_positions: HashMap<DbTbCol, String>,
     finished_tbs: HashSet<DbTb>,
 }
 
 type DbTbCol = (String, String, String);
 type DbTb = (String, String);
 
-const TAIL_POSITION_COUNT: usize = 30;
-
 impl SnapshotResumer {
     pub fn from_config(config: &ResumerConfig) -> anyhow::Result<Self> {
-        let mut tb_positions: HashMap<DbTbCol, String> = HashMap::new();
-        let mut finished_tbs: HashSet<DbTb> = HashSet::new();
+        let mut me = Self::default();
 
         if let Ok(file) = File::open(&config.resume_config_file) {
             for line in BufReader::new(file).lines().map_while(Result::ok) {
-                Self::load_resume_line(&mut tb_positions, &mut finished_tbs, &line)
+                me.load_resume_line(&line)
             }
         }
 
@@ -35,22 +35,18 @@ impl SnapshotResumer {
             // since only 1 table is being processed at the same time
             if let Ok(lines) = FileUtil::tail(&position_log, TAIL_POSITION_COUNT) {
                 for line in lines.iter() {
-                    Self::load_resume_line(&mut tb_positions, &mut finished_tbs, line)
+                    me.load_resume_line(line)
                 }
             }
 
             let finished_log = format!("{}/finished.log", config.resume_log_dir);
             if let Ok(file) = File::open(finished_log) {
                 for line in BufReader::new(file).lines().map_while(Result::ok) {
-                    Self::load_resume_line(&mut tb_positions, &mut finished_tbs, &line)
+                    me.load_resume_line(&line)
                 }
             }
         }
-
-        Ok(Self {
-            tb_positions,
-            finished_tbs,
-        })
+        Ok(me)
     }
 
     pub fn check_finished(&self, schema: &str, tb: &str) -> bool {
@@ -66,12 +62,22 @@ impl SnapshotResumer {
         res
     }
 
-    pub fn get_resume_value(&self, schema: &str, tb: &str, col: &str) -> Option<String> {
+    pub fn get_resume_value(
+        &self,
+        schema: &str,
+        tb: &str,
+        col: &str,
+        checkpoint: bool,
+    ) -> Option<String> {
+        let key = (schema.to_string(), tb.to_string(), col.to_string());
+        let tb_positions = if !checkpoint && self.current_tb_positions.contains_key(&key) {
+            &self.current_tb_positions
+        } else {
+            &self.checkpoint_tb_positions
+        };
+
         let mut res = None;
-        if let Some(value) =
-            self.tb_positions
-                .get(&(schema.to_string(), tb.to_string(), col.to_string()))
-        {
+        if let Some(value) = tb_positions.get(&key) {
             res = Some(value.clone());
         }
 
@@ -85,11 +91,14 @@ impl SnapshotResumer {
         res
     }
 
-    fn load_resume_line(
-        tb_positions: &mut HashMap<DbTbCol, String>,
-        finished_tbs: &mut HashSet<DbTb>,
-        line: &str,
-    ) {
+    fn load_resume_line(&mut self, line: &str) {
+        // by default, all positions in resumer.config are checkpoint positions
+        let tb_positions = if line.contains(CURRENT_POSITION_LOG_FLAG) {
+            &mut self.current_tb_positions
+        } else {
+            &mut self.checkpoint_tb_positions
+        };
+
         match Position::from_log(line) {
             Position::RdbSnapshot {
                 schema,
@@ -110,7 +119,7 @@ impl SnapshotResumer {
             }
 
             Position::RdbSnapshotFinished { schema, tb, .. } => {
-                finished_tbs.insert((schema, tb));
+                self.finished_tbs.insert((schema, tb));
             }
 
             _ => {}

@@ -57,10 +57,11 @@ impl Extractor for MongoCdcExtractor {
             resume_token,
             operation_time,
             ..
-        } = &self.resumer.position
+        } = &self.resumer.current_position
         {
             self.resume_token = resume_token.to_owned();
             self.start_timestamp = operation_time.to_owned();
+            log_info!("resume from: {}", self.resumer.current_position);
         };
 
         log_info!(
