@@ -48,7 +48,11 @@ impl Sinker for FoxlakeSinker {
 
     async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> anyhow::Result<()> {
         for ddl_data in data {
-            let sql = ddl_data.to_sql();
+            let mut sql = ddl_data.to_sql();
+            if ddl_data.ddl_type == DdlType::CreateTable && !self.engine.is_empty() {
+                sql = format!("/*+ ENGINE = {} */ {}", self.engine, sql);
+            }
+
             log_info!(
                 "sinking ddl, origin sql: {}, mapped sql: {}",
                 ddl_data.query,
