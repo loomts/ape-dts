@@ -36,7 +36,7 @@ impl Extractor for MysqlStructExtractor {
 
 impl MysqlStructExtractor {
     pub async fn extract_internal(&mut self) -> anyhow::Result<()> {
-        let meta_manager = MysqlMetaManager::new(self.conn_pool.clone()).init().await?;
+        let meta_manager = MysqlMetaManager::new(self.conn_pool.clone()).await?;
         let mut fetcher = MysqlStructFetcher {
             conn_pool: self.conn_pool.to_owned(),
             db: self.db.clone(),

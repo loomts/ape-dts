@@ -21,6 +21,7 @@ pub struct BaseTestRunner {
     pub dst_prepare_sqls: Vec<String>,
     pub src_clean_sqls: Vec<String>,
     pub dst_clean_sqls: Vec<String>,
+    pub meta_center_prepare_sqls: Vec<String>,
 }
 
 static mut LOG4RS_INITED: bool = false;
@@ -53,6 +54,7 @@ impl BaseTestRunner {
             dst_prepare_sqls,
             src_clean_sqls,
             dst_clean_sqls,
+            meta_center_prepare_sqls,
         ) = Self::load_sqls(
             &test_dir,
             &config.extractor_basic.db_type,
@@ -68,6 +70,7 @@ impl BaseTestRunner {
             dst_prepare_sqls,
             src_clean_sqls,
             dst_clean_sqls,
+            meta_center_prepare_sqls,
         })
     }
 
@@ -147,6 +150,7 @@ impl BaseTestRunner {
         Vec<String>,
         Vec<String>,
         Vec<String>,
+        Vec<String>,
     ) {
         let load = |sql_file: &str, db_type: &DbType| -> Vec<String> {
             let full_sql_path = format!("{}/{}", test_dir, sql_file);
@@ -169,6 +173,7 @@ impl BaseTestRunner {
             load("dst_prepare.sql", dst_db_type),
             load("src_clean.sql", src_db_type),
             load("dst_clean.sql", dst_db_type),
+            load("meta_center_prepare.sql", src_db_type),
         )
     }
 

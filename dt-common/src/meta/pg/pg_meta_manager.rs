@@ -21,24 +21,21 @@ pub struct PgMetaManager {
 }
 
 impl PgMetaManager {
-    pub fn new(conn_pool: Pool<Postgres>) -> Self {
+    pub async fn new(conn_pool: Pool<Postgres>) -> anyhow::Result<Self> {
         let type_registry = TypeRegistry::new(conn_pool.clone());
-        PgMetaManager {
+        let mut me = PgMetaManager {
             conn_pool,
             type_registry,
             name_to_tb_meta: HashMap::new(),
             oid_to_tb_meta: HashMap::new(),
-        }
+        };
+        me.type_registry = me.type_registry.init().await?;
+        Ok(me)
     }
 
     pub async fn close(&self) -> anyhow::Result<()> {
         self.conn_pool.close().await;
         Ok(())
-    }
-
-    pub async fn init(mut self) -> anyhow::Result<Self> {
-        self.type_registry = self.type_registry.init().await?;
-        Ok(self)
     }
 
     pub fn get_col_type_by_oid(&mut self, oid: i32) -> anyhow::Result<PgColType> {

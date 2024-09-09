@@ -52,6 +52,8 @@ impl BaseExtractor {
             return Ok(());
         }
 
+        // data_marker does not support DDL event yet.
+        // user needs to ensure only one-way DDL replication exists in the topology
         if let Some(data_marker) = &mut self.data_marker {
             if dt_data.is_begin() || dt_data.is_commit() {
                 data_marker.reset();
@@ -100,6 +102,9 @@ impl BaseExtractor {
 
     pub async fn push_ddl(&mut self, ddl_data: DdlData, position: Position) -> anyhow::Result<()> {
         let ddl_data = self.router.route_ddl(ddl_data);
+        while !self.buffer.is_empty() {
+            TimeUtil::sleep_millis(1).await;
+        }
         self.push_dt_data(DtData::Ddl { ddl_data }, position).await
     }
 

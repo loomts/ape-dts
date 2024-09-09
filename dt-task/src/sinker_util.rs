@@ -81,7 +81,7 @@ impl SinkerUtil {
                 let conn_pool =
                     TaskUtil::create_mysql_conn_pool(&url, parallel_size * 2, enable_sqlx_log)
                         .await?;
-                let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
+                let meta_manager = MysqlMetaManager::new(conn_pool.clone()).await?;
                 // to avoid contention for monitor write lock between sinker threads,
                 // create a monitor for each sinker instead of sharing a single monitor between sinkers,
                 // sometimes a sinker may cost several millis to get write lock for a global monitor.
@@ -113,7 +113,7 @@ impl SinkerUtil {
                 let conn_pool =
                     TaskUtil::create_mysql_conn_pool(&url, parallel_size * 2, enable_sqlx_log)
                         .await?;
-                let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
+                let meta_manager = MysqlMetaManager::new(conn_pool.clone()).await?;
 
                 for _ in 0..parallel_size {
                     let sinker = MysqlChecker {
@@ -133,7 +133,7 @@ impl SinkerUtil {
                 let router = RdbRouter::from_config(&task_config.router, &DbType::Pg)?;
                 let conn_pool =
                     TaskUtil::create_pg_conn_pool(&url, parallel_size * 2, enable_sqlx_log).await?;
-                let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
+                let meta_manager = PgMetaManager::new(conn_pool.clone()).await?;
 
                 for _ in 0..parallel_size {
                     let sinker = PgSinker {
@@ -162,7 +162,7 @@ impl SinkerUtil {
 
                 let conn_pool =
                     TaskUtil::create_pg_conn_pool(&url, parallel_size * 2, enable_sqlx_log).await?;
-                let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
+                let meta_manager = PgMetaManager::new(conn_pool.clone()).await?;
 
                 for _ in 0..parallel_size {
                     let sinker = PgChecker {
@@ -438,9 +438,7 @@ impl SinkerUtil {
                 for _ in 0..parallel_size {
                     let meta_manager =
                         MysqlMetaManager::new_mysql_compatible(conn_pool.clone(), DbType::Foxlake)
-                            .init()
                             .await?;
-
                     let (schema, tb) = match extractor_config.to_owned() {
                         ExtractorConfig::MysqlSnapshot { db, tb, .. } => (Some(db), Some(tb)),
                         ExtractorConfig::PgSnapshot { schema, tb, .. } => (Some(schema), Some(tb)),
@@ -503,9 +501,7 @@ impl SinkerUtil {
                 for _ in 0..parallel_size {
                     let meta_manager =
                         MysqlMetaManager::new_mysql_compatible(conn_pool.clone(), DbType::Foxlake)
-                            .init()
                             .await?;
-
                     let (schema, tb) = match extractor_config.to_owned() {
                         ExtractorConfig::MysqlSnapshot { db, tb, .. } => (Some(db), Some(tb)),
                         ExtractorConfig::PgSnapshot { schema, tb, .. } => (Some(schema), Some(tb)),
@@ -583,12 +579,12 @@ impl SinkerUtil {
         let meta_manager = match task_config.extractor_basic.db_type {
             DbType::Mysql => {
                 let conn_pool = TaskUtil::create_mysql_conn_pool(extractor_url, 1, true).await?;
-                let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
+                let meta_manager = MysqlMetaManager::new(conn_pool.clone()).await?;
                 Some(RdbMetaManager::from_mysql(meta_manager))
             }
             DbType::Pg => {
                 let conn_pool = TaskUtil::create_pg_conn_pool(extractor_url, 1, true).await?;
-                let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
+                let meta_manager = PgMetaManager::new(conn_pool.clone()).await?;
                 Some(RdbMetaManager::from_pg(meta_manager))
             }
             _ => None,

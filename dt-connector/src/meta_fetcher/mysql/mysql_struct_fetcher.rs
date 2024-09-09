@@ -218,7 +218,7 @@ impl MysqlStructFetcher {
             let column = IndexColumn {
                 column_name: Self::get_str_with_null(&row, "COLUMN_NAME")?,
                 seq_in_index: {
-                    if self.meta_manager.version.starts_with("5.") {
+                    if self.meta_manager.meta_fetcher.version.starts_with("5.") {
                         let seq_in_index: i32 = row.try_get("SEQ_IN_INDEX")?;
                         seq_in_index as u32
                     } else {
@@ -263,7 +263,7 @@ impl MysqlStructFetcher {
     ) -> anyhow::Result<HashMap<String, Vec<Constraint>>> {
         let mut results: HashMap<String, Vec<Constraint>> = HashMap::new();
         // mysql 5.7 does not support check constraints
-        if self.meta_manager.version.starts_with("5.") {
+        if self.meta_manager.meta_fetcher.version.starts_with("5.") {
             return Ok(results);
         }
 
