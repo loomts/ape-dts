@@ -62,7 +62,7 @@ impl Parallelizer for MergeParallelizer {
                 let tb_meta = rdb_meta_manager
                     .get_tb_meta(&row_data.schema, &row_data.tb)
                     .await?;
-                if !tb_meta.foreign_keys.is_empty() {
+                if !tb_meta.foreign_keys.is_empty() || !tb_meta.ref_by_foreign_keys.is_empty() {
                     any_fk_tb = true;
                     break;
                 }
