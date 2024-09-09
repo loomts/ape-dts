@@ -87,7 +87,7 @@ impl MysqlMetaFetcher {
             let key_map = Self::parse_keys(&self.conn_pool, schema, tb).await?;
             let (order_col, partition_col, id_cols) =
                 RdbMetaManager::parse_rdb_cols(&key_map, &cols)?;
-            let foreign_keys =
+            let (foreign_keys, ref_by_foreign_keys) =
                 Self::get_foreign_keys(&self.conn_pool, &self.db_type, schema, tb).await?;
 
             let basic = RdbTbMeta {
@@ -99,6 +99,7 @@ impl MysqlMetaFetcher {
                 partition_col,
                 id_cols,
                 foreign_keys,
+                ref_by_foreign_keys,
             };
             let tb_meta = MysqlTbMeta {
                 basic,
@@ -364,14 +365,17 @@ impl MysqlMetaFetcher {
         db_type: &DbType,
         schema: &str,
         tb: &str,
-    ) -> anyhow::Result<Vec<ForeignKey>> {
+    ) -> anyhow::Result<(Vec<ForeignKey>, Vec<ForeignKey>)> {
         let mut foreign_keys = Vec::new();
+        let mut ref_by_foreign_keys = Vec::new();
         if db_type == &DbType::StarRocks {
-            return Ok(foreign_keys);
+            return Ok((foreign_keys, ref_by_foreign_keys));
         }
 
         let sql = format!(
             "SELECT
+                kcu.CONSTRAINT_SCHEMA,
+                kcu.TABLE_NAME,
                 kcu.COLUMN_NAME,
                 kcu.REFERENCED_TABLE_SCHEMA,
                 kcu.REFERENCED_TABLE_NAME,
@@ -381,26 +385,41 @@ impl MysqlMetaFetcher {
             JOIN INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
             ON kcu.CONSTRAINT_NAME = tc.CONSTRAINT_NAME AND kcu.CONSTRAINT_SCHEMA=tc.CONSTRAINT_SCHEMA
             WHERE
-                kcu.CONSTRAINT_SCHEMA = '{}'
-                AND kcu.TABLE_NAME = '{}'
-                AND tc.CONSTRAINT_TYPE = 'FOREIGN KEY'",
-            schema, tb,
+                tc.CONSTRAINT_TYPE = 'FOREIGN KEY'
+                AND (
+                  (kcu.CONSTRAINT_SCHEMA = '{}' AND kcu.TABLE_NAME = '{}')
+                    OR 
+                  (kcu.REFERENCED_TABLE_SCHEMA = '{}' and kcu.REFERENCED_TABLE_NAME = '{}')
+                )
+            ",
+            schema, tb, schema, tb
         );
 
         let mut rows = sqlx::query(&sql).fetch(conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
-            let col: String = row.try_get("COLUMN_NAME")?;
+            let my_schema: String = row.try_get("CONSTRAINT_SCHEMA")?;
+            let my_tb: String = row.try_get("TABLE_NAME")?;
+            let my_col: String = row.try_get("COLUMN_NAME")?;
             let ref_schema: String = row.try_get("REFERENCED_TABLE_SCHEMA")?;
             let ref_tb: String = row.try_get("REFERENCED_TABLE_NAME")?;
             let ref_col: String = row.try_get("REFERENCED_COLUMN_NAME")?;
-            foreign_keys.push(ForeignKey {
-                col: col.to_lowercase(),
+            let key = ForeignKey {
+                schema: my_schema.to_lowercase(),
+                tb: my_tb.to_lowercase(),
+                col: my_col.to_lowercase(),
                 ref_schema: ref_schema.to_lowercase(),
                 ref_tb: ref_tb.to_lowercase(),
                 ref_col: ref_col.to_lowercase(),
-            });
+            };
+
+            if key.schema == schema && key.tb == tb {
+                foreign_keys.push(key.clone());
+            }
+            if key.ref_schema == schema && key.ref_tb == tb {
+                ref_by_foreign_keys.push(key)
+            }
         }
-        Ok(foreign_keys)
+        Ok((foreign_keys, ref_by_foreign_keys))
     }
 
     async fn init_version(&mut self) -> anyhow::Result<()> {
