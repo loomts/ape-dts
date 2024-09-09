@@ -88,10 +88,11 @@ pub enum ParallelType {
     Foxlake,
 }
 
-#[derive(Clone, Debug, IntoStaticStr)]
+#[derive(Clone, Debug, IntoStaticStr, PartialEq, Default)]
 pub enum ConflictPolicyEnum {
     #[strum(serialize = "ignore")]
     Ignore,
+    #[default]
     #[strum(serialize = "interrupt")]
     Interrupt,
 }
@@ -104,4 +105,12 @@ impl FromStr for ConflictPolicyEnum {
             _ => Ok(Self::Interrupt),
         }
     }
+}
+
+#[derive(Display, EnumString, IntoStaticStr, PartialEq)]
+pub enum MetaCenterType {
+    #[strum(serialize = "basic")]
+    Basic,
+    #[strum(serialize = "dbengine")]
+    DbEngine,
 }

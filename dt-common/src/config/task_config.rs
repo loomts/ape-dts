@@ -4,16 +4,19 @@ use std::{
     str::FromStr,
 };
 
-use anyhow::bail;
+use anyhow::{bail, Ok};
 
 use crate::error::Error;
 
 use super::{
-    config_enums::{ConflictPolicyEnum, DbType, ExtractType, ParallelType, SinkType},
+    config_enums::{
+        ConflictPolicyEnum, DbType, ExtractType, MetaCenterType, ParallelType, SinkType,
+    },
     data_marker_config::DataMarkerConfig,
     extractor_config::{BasicExtractorConfig, ExtractorConfig},
     filter_config::FilterConfig,
     ini_loader::IniLoader,
+    meta_center_config::MetaCenterConfig,
     parallelizer_config::ParallelizerConfig,
     pipeline_config::PipelineConfig,
     processor_config::ProcessorConfig,
@@ -36,6 +39,7 @@ pub struct TaskConfig {
     pub filter: FilterConfig,
     pub router: RouterConfig,
     pub resumer: ResumerConfig,
+    pub meta_center: Option<MetaCenterConfig>,
     pub data_marker: Option<DataMarkerConfig>,
     pub processor: Option<ProcessorConfig>,
 }
@@ -51,6 +55,7 @@ const ROUTER: &str = "router";
 const RESUMER: &str = "resumer";
 const DATA_MARKER: &str = "data_marker";
 const PROCESSOR: &str = "processor";
+const META_CENTER: &str = "metacenter";
 // keys
 const CHECK_LOG_DIR: &str = "check_log_dir";
 const DB_TYPE: &str = "db_type";
@@ -64,6 +69,7 @@ const APP_NAME: &str = "app_name";
 const REVERSE: &str = "reverse";
 const REPL_PORT: &str = "repl_port";
 const PARALLEL_SIZE: &str = "parallel_size";
+const DDL_CONFLICT_POLICY: &str = "ddl_conflict_policy";
 // default values
 const APE_DTS: &str = "APE_DTS";
 const ASTRISK: &str = "*";
@@ -90,6 +96,7 @@ impl TaskConfig {
             resumer,
             data_marker: Self::load_data_marker_config(&loader)?,
             processor: Self::load_processor_config(&loader)?,
+            meta_center: Self::load_meta_center_config(&loader)?,
         })
     }
 
@@ -576,5 +583,32 @@ impl TaskConfig {
             lua_code_file,
             lua_code,
         }))
+    }
+
+    fn load_meta_center_config(loader: &IniLoader) -> anyhow::Result<Option<MetaCenterConfig>> {
+        let mut config = MetaCenterConfig::Basic;
+        let db_type: DbType = loader.get_required(EXTRACTOR, DB_TYPE);
+        let meta_type = loader.get_with_default(META_CENTER, "type", MetaCenterType::Basic);
+        if meta_type == MetaCenterType::DbEngine && db_type == DbType::Mysql {
+            let extractor_url: String = loader.get_required(EXTRACTOR, URL);
+            let sinker_url: String = loader.get_required(SINKER, URL);
+            let meta_center_url: String = loader.get_required(META_CENTER, URL);
+            if extractor_url == meta_center_url || sinker_url == meta_center_url {
+                panic!(
+                    "config, [{}].{} should be different with [{}].{} and [{}].{}",
+                    META_CENTER, URL, EXTRACTOR, URL, SINKER, URL
+                );
+            }
+
+            config = MetaCenterConfig::MySqlDbEngine {
+                url: meta_center_url,
+                ddl_conflict_policy: loader.get_with_default(
+                    META_CENTER,
+                    DDL_CONFLICT_POLICY,
+                    ConflictPolicyEnum::Interrupt,
+                ),
+            }
+        }
+        Ok(Some(config))
     }
 }

@@ -5,7 +5,7 @@ use std::{
 };
 
 use dt_common::{
-    config::{extractor_config::ExtractorConfig, task_config::TaskConfig},
+    config::{config_enums::DbType, extractor_config::ExtractorConfig, task_config::TaskConfig},
     meta::dt_queue::DtQueue,
     monitor::monitor::Monitor,
     rdb_filter::RdbFilter,
@@ -14,8 +14,8 @@ use dt_common::{
 use dt_common::{
     meta::{
         avro::avro_converter::AvroConverter, mongo::mongo_cdc_source::MongoCdcSource,
-        mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
-        redis::redis_statistic_type::RedisStatisticType, syncer::Syncer,
+        pg::pg_meta_manager::PgMetaManager, redis::redis_statistic_type::RedisStatisticType,
+        syncer::Syncer,
     },
     utils::redis_util::RedisUtil,
 };
@@ -95,7 +95,13 @@ impl ExtractorUtil {
                 let conn_pool =
                     TaskUtil::create_mysql_conn_pool(&url, max_connections, enable_sqlx_log)
                         .await?;
-                let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
+                let meta_manager = TaskUtil::create_mysql_meta_manager(
+                    &url,
+                    &config.runtime.log_level,
+                    DbType::Mysql,
+                    config.meta_center.clone(),
+                )
+                .await?;
                 let extractor = MysqlSnapshotExtractor {
                     conn_pool: conn_pool.clone(),
                     meta_manager,
@@ -116,7 +122,13 @@ impl ExtractorUtil {
                 batch_size,
             } => {
                 let conn_pool = TaskUtil::create_mysql_conn_pool(&url, 2, enable_sqlx_log).await?;
-                let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
+                let meta_manager = TaskUtil::create_mysql_meta_manager(
+                    &url,
+                    &config.runtime.log_level,
+                    DbType::Mysql,
+                    config.meta_center.clone(),
+                )
+                .await?;
                 let extractor = MysqlCheckExtractor {
                     conn_pool,
                     meta_manager,
@@ -140,7 +152,13 @@ impl ExtractorUtil {
                 end_time_utc,
             } => {
                 let conn_pool = TaskUtil::create_mysql_conn_pool(&url, 2, enable_sqlx_log).await?;
-                let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
+                let meta_manager = TaskUtil::create_mysql_meta_manager(
+                    &url,
+                    &config.runtime.log_level,
+                    DbType::Mysql,
+                    config.meta_center.clone(),
+                )
+                .await?;
                 base_extractor.time_filter = TimeFilter::new(&start_time_utc, &end_time_utc)?;
                 let extractor = MysqlCdcExtractor {
                     meta_manager,
@@ -169,7 +187,7 @@ impl ExtractorUtil {
                 batch_size,
             } => {
                 let conn_pool = TaskUtil::create_pg_conn_pool(&url, 2, enable_sqlx_log).await?;
-                let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
+                let meta_manager = PgMetaManager::new(conn_pool.clone()).await?;
                 let extractor = PgSnapshotExtractor {
                     conn_pool,
                     meta_manager,
@@ -189,7 +207,7 @@ impl ExtractorUtil {
                 batch_size,
             } => {
                 let conn_pool = TaskUtil::create_pg_conn_pool(&url, 2, enable_sqlx_log).await?;
-                let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
+                let meta_manager = PgMetaManager::new(conn_pool.clone()).await?;
                 let extractor = PgCheckExtractor {
                     conn_pool,
                     meta_manager,
@@ -213,7 +231,7 @@ impl ExtractorUtil {
                 end_time_utc,
             } => {
                 let conn_pool = TaskUtil::create_pg_conn_pool(&url, 2, enable_sqlx_log).await?;
-                let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
+                let meta_manager = PgMetaManager::new(conn_pool.clone()).await?;
                 base_extractor.time_filter = TimeFilter::new(&start_time_utc, &end_time_utc)?;
                 let extractor = PgCdcExtractor {
                     meta_manager,

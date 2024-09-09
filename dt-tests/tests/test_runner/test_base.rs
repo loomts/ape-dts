@@ -105,6 +105,15 @@ impl TestBase {
         runner.close().await.unwrap();
     }
 
+    pub async fn run_ddl_meta_center_test(test_dir: &str, start_millis: u64, parse_millis: u64) {
+        let mut runner = RdbTestRunner::new_default(test_dir).await.unwrap();
+        runner
+            .run_ddl_meta_center_test(start_millis, parse_millis)
+            .await
+            .unwrap();
+        runner.close().await.unwrap();
+    }
+
     pub async fn run_check_test(test_dir: &str) {
         let runner = RdbCheckTestRunner::new(test_dir).await.unwrap();
         runner.run_check_test().await.unwrap();

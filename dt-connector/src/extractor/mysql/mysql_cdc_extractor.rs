@@ -351,15 +351,19 @@ impl MysqlCdcExtractor {
             .parse_ddl(&DbType::Mysql, &query.schema, &query.query)
             .await
         {
-            for ddl_data in ddl_data.split_to_multi() {
+            for sub_ddl_data in ddl_data.clone().split_to_multi() {
+                let (db, tb) = sub_ddl_data.get_schema_tb();
                 // invalidate metadata cache
-                self.meta_manager.invalidate_cache_by_ddl_data(&ddl_data);
-                let (db, tb) = ddl_data.get_schema_tb();
-                if !self.filter.filter_ddl(&db, &tb, &ddl_data.ddl_type) {
+                self.meta_manager.invalidate_cache(&db, &tb);
+                if !self.filter.filter_ddl(&db, &tb, &sub_ddl_data.ddl_type) {
                     self.base_extractor
-                        .push_ddl(ddl_data, position.clone())
+                        .push_ddl(sub_ddl_data.clone(), position.clone())
                         .await?;
                 }
+            }
+
+            if let Some(meta_center) = &mut self.meta_manager.meta_center {
+                meta_center.sync_from_ddl(&ddl_data).await?;
             }
         }
         Ok(())

@@ -7,7 +7,8 @@ use chrono::{Duration, Utc};
 use dt_common::{
     config::{
         config_enums::DbType, config_token_parser::ConfigTokenParser,
-        extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
+        extractor_config::ExtractorConfig, meta_center_config::MetaCenterConfig,
+        sinker_config::SinkerConfig, task_config::TaskConfig,
     },
     meta::{ddl_meta::ddl_type::DdlType, time::dt_utc_time::DtNaiveTime},
     utils::{sql_util::SqlUtil, time_util::TimeUtil},
@@ -17,10 +18,12 @@ use dt_common::meta::{
     col_value::ColValue, ddl_meta::ddl_parser::DdlParser,
     mysql::mysql_meta_manager::MysqlMetaManager, row_data::RowData,
 };
-use dt_connector::rdb_router::RdbRouter;
+use dt_connector::{
+    meta_fetcher::mysql::mysql_struct_check_fetcher::MysqlStructCheckFetcher, rdb_router::RdbRouter,
+};
 use dt_task::task_util::TaskUtil;
 
-use sqlx::{MySql, Pool, Postgres};
+use sqlx::{query, MySql, Pool, Postgres, Row};
 use tokio::task::JoinHandle;
 
 use crate::test_config_util::TestConfigUtil;
@@ -33,6 +36,7 @@ pub struct RdbTestRunner {
     pub dst_conn_pool_mysql: Option<Pool<MySql>>,
     pub src_conn_pool_pg: Option<Pool<Postgres>>,
     pub dst_conn_pool_pg: Option<Pool<Postgres>>,
+    pub meta_center_pool_mysql: Option<Pool<MySql>>,
     pub router: RdbRouter,
 }
 
@@ -79,6 +83,14 @@ impl RdbTestRunner {
 
         let config = TaskConfig::new(&base.task_config_file).unwrap();
         let router = RdbRouter::from_config(&config.router, &dst_db_type).unwrap();
+        let meta_center_pool_mysql = match &config.meta_center {
+            Some(MetaCenterConfig::MySqlDbEngine { url, .. }) => Some(
+                TaskUtil::create_mysql_conn_pool(url, 1, false)
+                    .await
+                    .unwrap(),
+            ),
+            _ => None,
+        };
 
         // for pg cdc, recreate publication & slot before each test
         if let ExtractorConfig::PgCdc {
@@ -105,6 +117,7 @@ impl RdbTestRunner {
             dst_conn_pool_mysql,
             src_conn_pool_pg,
             dst_conn_pool_pg,
+            meta_center_pool_mysql,
             router,
             base,
         })
@@ -128,11 +141,8 @@ impl RdbTestRunner {
 
     pub async fn get_dst_mysql_version(&self) -> String {
         if let Some(conn_pool) = &self.dst_conn_pool_mysql {
-            let meta_manager = MysqlMetaManager::new(conn_pool.clone())
-                .init()
-                .await
-                .unwrap();
-            return meta_manager.version.clone();
+            let meta_manager = MysqlMetaManager::new(conn_pool.clone()).await.unwrap();
+            return meta_manager.meta_fetcher.version;
         }
         String::new()
     }
@@ -205,24 +215,66 @@ impl RdbTestRunner {
     pub async fn run_ddl_test(&self, start_millis: u64, parse_millis: u64) -> anyhow::Result<()> {
         self.execute_prepare_sqls().await?;
 
-        self.update_cdc_task_config(start_millis, parse_millis);
+        self.update_cdc_task_config(start_millis, parse_millis)
+            .await?;
         let task = self.base.spawn_task().await?;
         TimeUtil::sleep_millis(start_millis).await;
 
         self.execute_src_sqls(&self.base.src_test_sqls).await?;
-
-        let (mut src_db_tbs, mut dst_db_tbs) = self.get_compare_db_tbs()?;
-        let filtered_db_tbs = self.get_filtered_db_tbs();
-        for i in (0..src_db_tbs.len()).rev() {
-            // do not check filtered tables since they may be dropped
-            if filtered_db_tbs.contains(&src_db_tbs[i]) {
-                src_db_tbs.remove(i);
-                dst_db_tbs.remove(i);
-            }
-        }
-
         self.base.wait_task_finish(&task).await?;
-        assert!(self.compare_data_for_tbs(&src_db_tbs, &dst_db_tbs).await?);
+
+        let (src_db_tbs, dst_db_tbs) = self.get_compare_db_tbs()?;
+        assert!(
+            self.compare_data_for_tbs_ignore_filtered(&src_db_tbs, &dst_db_tbs)
+                .await?
+        );
+        Ok(())
+    }
+
+    pub async fn run_ddl_meta_center_test(
+        &mut self,
+        start_millis: u64,
+        parse_millis: u64,
+    ) -> anyhow::Result<()> {
+        self.execute_prepare_sqls().await?;
+        self.update_cdc_task_config(start_millis, parse_millis)
+            .await?;
+
+        self.execute_src_sqls(&self.base.src_test_sqls).await?;
+
+        // run_ddl_test: start cdc task BEFORE src_test_sqls excuted
+        // run_ddl_meta_center_test: start cdc task AFTER src_test_sqls excuted
+        let task: JoinHandle<()> = self.base.spawn_task().await?;
+        self.base.wait_task_finish(&task).await?;
+
+        // compare table data
+        let (src_db_tbs, dst_db_tbs) = self.get_compare_db_tbs()?;
+        assert!(
+            self.compare_data_for_tbs_ignore_filtered(&src_db_tbs, &dst_db_tbs)
+                .await?
+        );
+
+        // compare show create table
+        let src_fetcher = MysqlStructCheckFetcher {
+            conn_pool: self.src_conn_pool_mysql.as_mut().unwrap().clone(),
+        };
+        let meta_center_fetcher = MysqlStructCheckFetcher {
+            conn_pool: self.meta_center_pool_mysql.as_mut().unwrap().clone(),
+        };
+
+        let filtered_db_tbs = self.get_filtered_db_tbs();
+        for i in 0..src_db_tbs.len() {
+            if filtered_db_tbs.contains(&src_db_tbs[i]) {
+                continue;
+            }
+            let src_ddl_sql = src_fetcher
+                .fetch_table(&src_db_tbs[i].0, &src_db_tbs[i].1)
+                .await;
+            let meta_center_ddl_sql = meta_center_fetcher
+                .fetch_table(&dst_db_tbs[i].0, &dst_db_tbs[i].1)
+                .await;
+            assert_eq!(src_ddl_sql, meta_center_ddl_sql);
+        }
         Ok(())
     }
 
@@ -257,7 +309,7 @@ impl RdbTestRunner {
         self.execute_prepare_sqls().await?;
 
         // start task
-        self.update_cdc_task_config(0, parse_millis);
+        self.update_cdc_task_config(0, parse_millis).await?;
         let task = self.base.spawn_task().await?;
         self.base.wait_task_finish(&task).await.unwrap();
 
@@ -266,15 +318,26 @@ impl RdbTestRunner {
         Ok(())
     }
 
-    pub fn update_cdc_task_config(&self, start_millis: u64, parse_millis: u64) {
+    pub async fn update_cdc_task_config(
+        &self,
+        start_millis: u64,
+        parse_millis: u64,
+    ) -> anyhow::Result<()> {
         let duration = Duration::try_milliseconds((start_millis + parse_millis) as i64).unwrap();
         let end_time_utc = (Utc::now() + duration).format(UTC_FORMAT).to_string();
-        let update_configs = vec![("extractor", "end_time_utc", end_time_utc.as_str())];
+        let (binlog_file, binlog_position) = self.fetch_mysql_binlog_position().await.unwrap();
+        let binlog_position = binlog_position.to_string();
+        let update_configs = vec![
+            ("extractor", "end_time_utc", end_time_utc.as_str()),
+            ("extractor", "binlog_filename", binlog_file.as_str()),
+            ("extractor", "binlog_position", binlog_position.as_str()),
+        ];
         TestConfigUtil::update_task_config_2(
             &self.base.task_config_file,
             &self.base.task_config_file,
             &update_configs,
         );
+        Ok(())
     }
 
     pub async fn spawn_cdc_task(
@@ -284,7 +347,8 @@ impl RdbTestRunner {
     ) -> anyhow::Result<JoinHandle<()>> {
         // start task
         let total_parse_millis = self.get_total_parse_millis(parse_millis);
-        self.update_cdc_task_config(start_millis, total_parse_millis);
+        self.update_cdc_task_config(start_millis, total_parse_millis)
+            .await?;
         let task = self.base.spawn_task().await?;
         TimeUtil::sleep_millis(start_millis).await;
         Ok(task)
@@ -356,7 +420,16 @@ impl RdbTestRunner {
 
     pub async fn execute_prepare_sqls(&self) -> anyhow::Result<()> {
         self.execute_src_sqls(&self.base.src_prepare_sqls).await?;
-        self.execute_dst_sqls(&self.base.dst_prepare_sqls).await
+        self.execute_dst_sqls(&self.base.dst_prepare_sqls).await?;
+        self.execute_meta_center_prepare_sqls(&self.base.meta_center_prepare_sqls)
+            .await
+    }
+
+    pub async fn execute_meta_center_prepare_sqls(&self, sqls: &Vec<String>) -> anyhow::Result<()> {
+        if let Some(pool) = &self.meta_center_pool_mysql {
+            RdbUtil::execute_sqls_mysql(pool, sqls).await?
+        }
+        Ok(())
     }
 
     pub async fn execute_clean_sqls(&self) -> anyhow::Result<()> {
@@ -382,6 +455,21 @@ impl RdbTestRunner {
             RdbUtil::execute_sqls_pg(pool, sqls).await?;
         }
         Ok(())
+    }
+
+    pub async fn compare_data_for_tbs_ignore_filtered(
+        &self,
+        src_db_tbs: &Vec<(String, String)>,
+        dst_db_tbs: &Vec<(String, String)>,
+    ) -> anyhow::Result<bool> {
+        let filtered_db_tbs = self.get_filtered_db_tbs();
+        for i in 0..src_db_tbs.len() {
+            if filtered_db_tbs.contains(&src_db_tbs[i]) {
+                continue;
+            }
+            assert!(self.compare_tb_data(&src_db_tbs[i], &dst_db_tbs[i]).await?)
+        }
+        Ok(true)
     }
 
     pub async fn compare_data_for_tbs(
@@ -658,6 +746,17 @@ impl RdbTestRunner {
             config.extractor_basic.db_type
         } else {
             config.sinker_basic.db_type
+        }
+    }
+
+    async fn fetch_mysql_binlog_position(&self) -> anyhow::Result<(String, u32)> {
+        if let Some(pool) = &self.src_conn_pool_mysql {
+            let row = query("show master status").fetch_one(pool).await?;
+            let binlog_file: String = row.try_get(0)?;
+            let binlog_position = row.try_get(1)?;
+            Ok((binlog_file, binlog_position))
+        } else {
+            Ok((String::new(), 0))
         }
     }
 }

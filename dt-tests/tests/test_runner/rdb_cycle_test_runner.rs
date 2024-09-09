@@ -71,7 +71,9 @@ impl RdbCycleTestRunner {
             // if all sub tasks start at the same time, it may cause lock issues when creating these tables.
             runner
                 .base
-                .update_cdc_task_config(start_millis * sub_paths.len() as u64, parse_millis * 2);
+                .update_cdc_task_config(start_millis * sub_paths.len() as u64, parse_millis * 2)
+                .await
+                .unwrap();
             handlers.push(runner.base.base.spawn_task().await.unwrap());
             TimeUtil::sleep_millis(start_millis).await;
         }

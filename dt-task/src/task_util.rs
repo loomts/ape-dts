@@ -2,9 +2,11 @@ use std::{str::FromStr, time::Duration};
 
 use dt_common::config::s3_config::S3Config;
 use dt_common::config::{
-    config_enums::DbType, sinker_config::SinkerConfig, task_config::TaskConfig,
+    config_enums::DbType, meta_center_config::MetaCenterConfig, sinker_config::SinkerConfig,
+    task_config::TaskConfig,
 };
 use dt_common::log_info;
+use dt_common::meta::mysql::mysql_dbengine_meta_center::MysqlDbEngineMetaCenter;
 use dt_common::meta::{
     mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
     rdb_meta_manager::RdbMetaManager,
@@ -77,13 +79,14 @@ impl TaskUtil {
         let meta_manager = match &config.sinker {
             SinkerConfig::Mysql { url, .. } | SinkerConfig::MysqlCheck { url, .. } => {
                 let mysql_meta_manager =
-                    Self::create_mysql_meta_manager(url, log_level, DbType::Mysql).await?;
+                    Self::create_mysql_meta_manager(url, log_level, DbType::Mysql, None).await?;
                 RdbMetaManager::from_mysql(mysql_meta_manager)
             }
 
             SinkerConfig::Starrocks { url, .. } => {
                 let mysql_meta_manager =
-                    Self::create_mysql_meta_manager(url, log_level, DbType::StarRocks).await?;
+                    Self::create_mysql_meta_manager(url, log_level, DbType::StarRocks, None)
+                        .await?;
                 RdbMetaManager::from_mysql(mysql_meta_manager)
             }
 
@@ -103,12 +106,29 @@ impl TaskUtil {
         url: &str,
         log_level: &str,
         db_type: DbType,
+        meta_center_config: Option<MetaCenterConfig>,
     ) -> anyhow::Result<MysqlMetaManager> {
         let enable_sqlx_log = Self::check_enable_sqlx_log(log_level);
         let conn_pool = Self::create_mysql_conn_pool(url, 1, enable_sqlx_log).await?;
-        MysqlMetaManager::new_mysql_compatible(conn_pool.clone(), db_type)
-            .init()
-            .await
+        let mut meta_manager = MysqlMetaManager::new_mysql_compatible(conn_pool, db_type).await?;
+
+        if let Some(MetaCenterConfig::MySqlDbEngine {
+            url,
+            ddl_conflict_policy,
+            ..
+        }) = &meta_center_config
+        {
+            let meta_center_conn_pool =
+                Self::create_mysql_conn_pool(url, 1, enable_sqlx_log).await?;
+            let meta_center = MysqlDbEngineMetaCenter::new(
+                url.clone(),
+                meta_center_conn_pool,
+                ddl_conflict_policy.clone(),
+            )
+            .await?;
+            meta_manager.meta_center = Some(meta_center);
+        }
+        Ok(meta_manager)
     }
 
     pub async fn create_pg_meta_manager(
@@ -117,7 +137,7 @@ impl TaskUtil {
     ) -> anyhow::Result<PgMetaManager> {
         let enable_sqlx_log = Self::check_enable_sqlx_log(log_level);
         let conn_pool = Self::create_pg_conn_pool(url, 1, enable_sqlx_log).await?;
-        PgMetaManager::new(conn_pool.clone()).init().await
+        PgMetaManager::new(conn_pool.clone()).await
     }
 
     pub async fn create_mongo_client(url: &str, app_name: &str) -> anyhow::Result<mongodb::Client> {

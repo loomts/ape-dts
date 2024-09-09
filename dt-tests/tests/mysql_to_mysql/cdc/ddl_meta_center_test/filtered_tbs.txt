@@ -1,0 +1,6 @@
+test_db_1.drop_tb_1
+test_db_1.drop_tb_2
+test_db_1.rename_tb_1
+test_db_1.rename_tb_2
+test_db_1.rename_tb_3
+test_db_3.tb_1
