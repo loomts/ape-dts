@@ -52,12 +52,13 @@ impl Extractor for RedisCdcExtractor {
             repl_offset,
             now_db_id,
             ..
-        } = &self.resumer.position
+        } = &self.resumer.current_position
         {
             self.repl_id = repl_id.to_owned();
             self.repl_port = repl_port.to_owned();
             self.repl_offset = repl_offset.to_owned();
             self.now_db_id = now_db_id.to_owned();
+            log_info!("resume from: {}", self.resumer.current_position);
         };
 
         log_info!(

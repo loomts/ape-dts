@@ -30,7 +30,7 @@ impl RdbUtil {
         );
 
         let mut query = sqlx::query(&sql);
-        if *db_type == DbType::StarRocks {
+        if *db_type == DbType::StarRocks || *db_type == DbType::Foxlake {
             query = query.disable_arguments();
         }
         let mut rows = query.fetch(conn_pool);
@@ -81,8 +81,7 @@ impl RdbUtil {
         db_type: &DbType,
     ) -> anyhow::Result<MysqlTbMeta> {
         let mut meta_manager =
-            MysqlMetaManager::new_mysql_compatible(conn_pool.clone(), db_type.clone())
-                .init()
+            MysqlMetaManager::new_mysql_compatible(conn_pool.to_owned(), db_type.to_owned())
                 .await?;
         Ok(meta_manager
             .get_tb_meta(&db_tb.0, &db_tb.1)
@@ -94,7 +93,7 @@ impl RdbUtil {
         conn_pool: &Pool<Postgres>,
         db_tb: &(String, String),
     ) -> anyhow::Result<PgTbMeta> {
-        let mut meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
+        let mut meta_manager = PgMetaManager::new(conn_pool.clone()).await?;
         Ok(meta_manager
             .get_tb_meta(&db_tb.0, &db_tb.1)
             .await?

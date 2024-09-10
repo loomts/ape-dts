@@ -34,4 +34,10 @@ mod test {
     async fn struct_postgis_test() {
         TestBase::run_pg_struct_test("pg_to_pg/struct/postgis_test").await;
     }
+
+    // #[tokio::test]
+    #[serial]
+    async fn struct_route_test() {
+        TestBase::run_pg_struct_test("pg_to_pg/struct/route_test").await;
+    }
 }

@@ -37,6 +37,19 @@ mod test {
 
     #[tokio::test]
     #[serial]
+    async fn cdc_ddl_route_test() {
+        TestBase::run_ddl_test("mysql_to_mysql/cdc/ddl_route_test", 3000, 5000).await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn cdc_ddl_meta_center_test() {
+        TestBase::run_ddl_meta_center_test("mysql_to_mysql/cdc/ddl_meta_center_test", 3000, 5000)
+            .await;
+    }
+
+    #[tokio::test]
+    #[serial]
     async fn cdc_timezone_test() {
         println!("cdc_timezone_test can be covered by test: cdc_basic_test, table: one_pk_no_uk, field: f_13 timestamp(6), the default_time_zone for source db is +08:00, the default_time_zone for target db is +07:00 ")
     }
@@ -146,5 +159,11 @@ mod test {
     #[serial]
     async fn cdc_to_reverse_sql_test() {
         TestBase::run_cdc_to_sql_test("mysql_to_mysql/cdc/to_sql_test", true, 1000, 0).await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn cdc_gtid_test() {
+        TestBase::run_cdc_test("mysql_to_mysql/cdc/gtid_test", 3000, 2000).await;
     }
 }

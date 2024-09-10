@@ -3,7 +3,7 @@ use futures::TryStreamExt;
 
 use sqlx::{Pool, Postgres};
 
-use dt_common::{config::config_enums::DbType, log_finished, log_info};
+use dt_common::{config::config_enums::DbType, log_info};
 
 use dt_common::meta::{
     adaptor::{pg_col_value_convertor::PgColValueConvertor, sqlx_ext::SqlxPgExt},
@@ -25,7 +25,7 @@ pub struct PgSnapshotExtractor {
     pub conn_pool: Pool<Postgres>,
     pub meta_manager: PgMetaManager,
     pub resumer: SnapshotResumer,
-    pub slice_size: usize,
+    pub batch_size: usize,
     pub sample_interval: usize,
     pub schema: String,
     pub tb: String,
@@ -35,10 +35,10 @@ pub struct PgSnapshotExtractor {
 impl Extractor for PgSnapshotExtractor {
     async fn extract(&mut self) -> anyhow::Result<()> {
         log_info!(
-            r#"PgSnapshotExtractor starts, schema: "{}", tb: "{}", slice_size: {}"#,
+            r#"PgSnapshotExtractor starts, schema: "{}", tb: "{}", batch_size: {}"#,
             self.schema,
             self.tb,
-            self.slice_size
+            self.batch_size
         );
         self.extract_internal().await?;
         self.base_extractor.wait_task_finish().await
@@ -62,34 +62,24 @@ impl PgSnapshotExtractor {
 
             let resume_value = if let Some(value) =
                 self.resumer
-                    .get_resume_value(&self.schema, &self.tb, order_col)
+                    .get_resume_value(&self.schema, &self.tb, order_col, false)
             {
                 PgColValueConvertor::from_str(order_col_type, &value, &mut self.meta_manager)?
             } else {
                 ColValue::None
             };
 
-            self.extract_by_slices(&tb_meta, order_col, order_col_type, resume_value)
+            self.extract_by_batch(&tb_meta, order_col, order_col_type, resume_value)
                 .await?;
         } else {
             self.extract_all(&tb_meta).await?;
         }
-
-        log_finished!(
-            "{}",
-            Position::RdbSnapshotFinished {
-                db_type: DbType::Pg.to_string(),
-                schema: self.schema.clone(),
-                tb: self.tb.clone(),
-            }
-            .to_string()
-        );
         Ok(())
     }
 
     async fn extract_all(&mut self, tb_meta: &PgTbMeta) -> anyhow::Result<()> {
         log_info!(
-            r#"start extracting data from "{}"."{}" without slices"#,
+            r#"start extracting data from "{}"."{}" without batch"#,
             self.schema,
             self.tb
         );
@@ -112,7 +102,7 @@ impl PgSnapshotExtractor {
         Ok(())
     }
 
-    async fn extract_by_slices(
+    async fn extract_by_batch(
         &mut self,
         tb_meta: &PgTbMeta,
         order_col: &str,
@@ -120,9 +110,11 @@ impl PgSnapshotExtractor {
         resume_value: ColValue,
     ) -> anyhow::Result<()> {
         log_info!(
-            r#"start extracting data from "{}"."{}" by slices"#,
+            r#"start extracting data from "{}"."{}" by batch, order_col: {}, start_value: {}"#,
             self.schema,
-            self.tb
+            self.tb,
+            order_col,
+            resume_value.to_string()
         );
 
         let mut extracted_count = 0;
@@ -165,7 +157,7 @@ impl PgSnapshotExtractor {
             }
 
             // all data extracted
-            if slice_count < self.slice_size {
+            if slice_count < self.batch_size {
                 break;
             }
         }
@@ -199,12 +191,12 @@ impl PgSnapshotExtractor {
                     order_col,
                     order_col_type.short_name,
                     order_col,
-                    self.slice_size
+                    self.batch_size
                 ))
             } else {
                 Ok(format!(
                     r#"SELECT {} FROM "{}"."{}" ORDER BY "{}" ASC LIMIT {}"#,
-                    cols_str, self.schema, self.tb, order_col, self.slice_size
+                    cols_str, self.schema, self.tb, order_col, self.batch_size
                 ))
             }
         } else {

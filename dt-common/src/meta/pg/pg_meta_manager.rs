@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::error::Error;
+use crate::{error::Error, meta::ddl_meta::ddl_data::DdlData};
 use anyhow::{bail, Context};
 use futures::TryStreamExt;
 use sqlx::{Pool, Postgres, Row};
@@ -21,24 +21,21 @@ pub struct PgMetaManager {
 }
 
 impl PgMetaManager {
-    pub fn new(conn_pool: Pool<Postgres>) -> Self {
+    pub async fn new(conn_pool: Pool<Postgres>) -> anyhow::Result<Self> {
         let type_registry = TypeRegistry::new(conn_pool.clone());
-        PgMetaManager {
+        let mut me = PgMetaManager {
             conn_pool,
             type_registry,
             name_to_tb_meta: HashMap::new(),
             oid_to_tb_meta: HashMap::new(),
-        }
+        };
+        me.type_registry = me.type_registry.init().await?;
+        Ok(me)
     }
 
     pub async fn close(&self) -> anyhow::Result<()> {
         self.conn_pool.close().await;
         Ok(())
-    }
-
-    pub async fn init(mut self) -> anyhow::Result<Self> {
-        self.type_registry = self.type_registry.init().await?;
-        Ok(self)
     }
 
     pub fn get_col_type_by_oid(&mut self, oid: i32) -> anyhow::Result<PgColType> {
@@ -79,7 +76,7 @@ impl PgMetaManager {
         schema: &str,
         tb: &str,
     ) -> anyhow::Result<&'a PgTbMeta> {
-        let full_name = format!(r#""{}"."{}""#, schema, tb);
+        let full_name = format!(r#""{}"."{}""#, schema, tb).to_lowercase();
         if !self.name_to_tb_meta.contains_key(&full_name) {
             let oid = Self::get_oid(&self.conn_pool, schema, tb).await?;
             let (cols, col_type_map) =
@@ -87,7 +84,8 @@ impl PgMetaManager {
             let key_map = Self::parse_keys(&self.conn_pool, schema, tb).await?;
             let (order_col, partition_col, id_cols) =
                 RdbMetaManager::parse_rdb_cols(&key_map, &cols)?;
-            let foreign_keys = Self::get_foreign_keys(&self.conn_pool, schema, tb).await?;
+            let (foreign_keys, ref_by_foreign_keys) =
+                Self::get_foreign_keys(&self.conn_pool, schema, tb).await?;
 
             let basic = RdbTbMeta {
                 schema: schema.to_string(),
@@ -98,6 +96,7 @@ impl PgMetaManager {
                 partition_col,
                 id_cols,
                 foreign_keys,
+                ref_by_foreign_keys,
             };
             let tb_meta = PgTbMeta {
                 oid,
@@ -113,11 +112,16 @@ impl PgMetaManager {
     pub fn invalidate_cache(&mut self, schema: &str, tb: &str) {
         // TODO, if schema is not empty but tb is empty, only clear cache for the schema
         if !schema.is_empty() && !tb.is_empty() {
-            let full_name = format!(r#""{}"."{}""#, schema, tb);
+            let full_name = format!(r#""{}"."{}""#, schema, tb).to_lowercase();
             self.name_to_tb_meta.remove(&full_name);
         } else {
             self.name_to_tb_meta.clear();
         }
+    }
+
+    pub fn invalidate_cache_by_ddl_data(&mut self, ddl_data: &DdlData) {
+        let (schema, tb) = ddl_data.get_schema_tb();
+        self.invalidate_cache(&schema, &tb);
     }
 
     async fn parse_cols(
@@ -237,10 +241,13 @@ impl PgMetaManager {
         conn_pool: &Pool<Postgres>,
         schema: &str,
         tb: &str,
-    ) -> anyhow::Result<Vec<ForeignKey>> {
+    ) -> anyhow::Result<(Vec<ForeignKey>, Vec<ForeignKey>)> {
         let mut foreign_keys = Vec::new();
+        let mut ref_by_foreign_keys = Vec::new();
         let sql = format!(
             "SELECT
+            ns.nspname AS schema_name,
+            tab.relname AS table_name,
             a1.attname AS column_name,
             ns_ref.nspname AS referenced_schema_name,
             tab_ref.relname AS referenced_table_name,
@@ -255,24 +262,38 @@ impl PgMetaManager {
             INNER JOIN pg_attribute a2 ON a2.attnum = ANY(c.confkey) AND a2.attrelid = c.confrelid
         WHERE
             c.contype = 'f' 
-            AND ns.nspname = '{}' 
-            AND tab.relname = '{}'",
-            schema, tb
+            AND (
+                ( ns.nspname = '{}' AND tab.relname = '{}' )
+                  OR 
+                ( ns_ref.nspname = '{}' AND tab_ref.relname = '{}')
+              )
+              ",
+            schema, tb, schema, tb
         );
 
         let mut rows = sqlx::query(&sql).fetch(conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
-            let col: String = row.try_get("column_name")?;
+            let my_schema: String = row.try_get("schema_name")?;
+            let my_tb: String = row.try_get("table_name")?;
+            let my_col: String = row.try_get("column_name")?;
             let ref_schema: String = row.try_get("referenced_schema_name")?;
             let ref_tb: String = row.try_get("referenced_table_name")?;
             let ref_col: String = row.try_get("referenced_column_name")?;
-            foreign_keys.push(ForeignKey {
-                col: col.to_lowercase(),
+            let key = ForeignKey {
+                schema: my_schema.to_lowercase(),
+                tb: my_tb.to_lowercase(),
+                col: my_col.to_lowercase(),
                 ref_schema: ref_schema.to_lowercase(),
                 ref_tb: ref_tb.to_lowercase(),
                 ref_col: ref_col.to_lowercase(),
-            });
+            };
+            if key.schema == schema && key.tb == tb {
+                foreign_keys.push(key.clone());
+            }
+            if key.ref_schema == schema && key.ref_tb == tb {
+                ref_by_foreign_keys.push(key)
+            }
         }
-        Ok(foreign_keys)
+        Ok((foreign_keys, ref_by_foreign_keys))
     }
 }

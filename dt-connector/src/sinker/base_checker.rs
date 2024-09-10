@@ -94,21 +94,21 @@ impl BaseChecker {
     #[inline(always)]
     pub fn compare_struct(
         src_statement: &mut StructStatement,
-        dst_statement: &mut Option<StructStatement>,
+        dst_statement: &mut StructStatement,
         filter: &RdbFilter,
     ) -> anyhow::Result<()> {
-        if dst_statement.is_none() {
-            log_miss!("{:?}", src_statement.to_sqls(filter));
+        if matches!(dst_statement, StructStatement::Unknown) {
+            log_miss!("{:?}", src_statement.to_sqls(filter)?);
             return Ok(());
         }
 
         let mut src_sqls = HashMap::new();
-        for (key, sql) in src_statement.to_sqls(filter) {
+        for (key, sql) in src_statement.to_sqls(filter)? {
             src_sqls.insert(key, sql);
         }
 
         let mut dst_sqls = HashMap::new();
-        for (key, sql) in dst_statement.as_mut().unwrap().to_sqls(filter) {
+        for (key, sql) in dst_statement.to_sqls(filter)? {
             dst_sqls.insert(key, sql);
         }
 

@@ -1,4 +1,7 @@
-use super::config_enums::{DbType, ExtractType};
+use super::{
+    config_enums::{DbType, ExtractType},
+    s3_config::S3Config,
+};
 
 #[derive(Clone, Debug)]
 pub enum ExtractorConfig {
@@ -17,6 +20,8 @@ pub enum ExtractorConfig {
         db: String,
         tb: String,
         sample_interval: usize,
+        parallel_size: usize,
+        batch_size: usize,
     },
 
     MysqlCdc {
@@ -24,6 +29,8 @@ pub enum ExtractorConfig {
         binlog_filename: String,
         binlog_position: u32,
         server_id: u64,
+        gtid_enabled: bool,
+        gtid_set: String,
         heartbeat_interval_secs: u64,
         heartbeat_tb: String,
         start_time_utc: String,
@@ -41,6 +48,7 @@ pub enum ExtractorConfig {
         schema: String,
         tb: String,
         sample_interval: usize,
+        batch_size: usize,
     },
 
     PgCdc {
@@ -125,6 +133,14 @@ pub enum ExtractorConfig {
         partition: i32,
         offset: i64,
         ack_interval_secs: u64,
+    },
+
+    FoxlakeS3 {
+        url: String,
+        schema: String,
+        tb: String,
+        s3_config: S3Config,
+        batch_size: usize,
     },
 }
 

@@ -13,16 +13,23 @@ pub struct Monitor {
     pub no_window_counters: HashMap<CounterType, Counter>,
     pub time_window_counters: HashMap<CounterType, TimeWindowCounter>,
     pub time_window_secs: usize,
+    pub max_sub_count: usize,
     pub count_window: usize,
 }
 
 impl Monitor {
-    pub fn new(name: &str, time_window_secs: usize, count_window: usize) -> Self {
+    pub fn new(
+        name: &str,
+        time_window_secs: usize,
+        max_sub_count: usize,
+        count_window: usize,
+    ) -> Self {
         Self {
             name: name.into(),
             no_window_counters: HashMap::new(),
             time_window_counters: HashMap::new(),
             time_window_secs,
+            max_sub_count,
             count_window,
         }
     }
@@ -96,7 +103,8 @@ impl Monitor {
                 if let Some(counter) = self.time_window_counters.get_mut(&counter_type) {
                     counter.add(value, count)
                 } else {
-                    let mut counter = TimeWindowCounter::new(self.time_window_secs);
+                    let mut counter =
+                        TimeWindowCounter::new(self.time_window_secs, self.max_sub_count);
                     counter.add(value, count);
                     self.time_window_counters.insert(counter_type, counter);
                 }

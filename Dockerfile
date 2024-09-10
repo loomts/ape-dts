@@ -1,11 +1,13 @@
 # ARG DIST_IMG=gcr.io/distroless/cc:nonroot
 ARG DIST_IMG=gcr.io/distroless/cc:debug
 
-ARG RUST_VERSION=1.69.0
+ARG RUST_VERSION=1.79
 # ARG RUST_IMG_ALT=-slim-bullseye
 ARG RUST_IMG_ALT=-bullseye
 
 FROM --platform=${BUILDPLATFORM} rust:${RUST_VERSION}${RUST_IMG_ALT} as builder
+
+RUN apt-get update && apt-get -y upgrade && apt-get install -y cmake libclang-dev
 
 ARG TARGETOS
 ARG TARGETARCH

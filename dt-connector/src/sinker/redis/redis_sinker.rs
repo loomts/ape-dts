@@ -7,6 +7,7 @@ use anyhow::bail;
 use async_trait::async_trait;
 use dt_common::error::Error;
 use dt_common::meta::dt_data::DtData;
+use dt_common::meta::dt_data::DtItem;
 use dt_common::meta::rdb_meta_manager::RdbMetaManager;
 use dt_common::meta::redis::command::cmd_encoder::CmdEncoder;
 use dt_common::meta::redis::redis_object::RedisCmd;
@@ -39,7 +40,7 @@ pub struct RedisSinker {
 
 #[async_trait]
 impl Sinker for RedisSinker {
-    async fn sink_raw(&mut self, mut data: Vec<DtData>, _batch: bool) -> anyhow::Result<()> {
+    async fn sink_raw(&mut self, mut data: Vec<DtItem>, _batch: bool) -> anyhow::Result<()> {
         if data.is_empty() {
             return Ok(());
         }
@@ -74,7 +75,7 @@ impl Sinker for RedisSinker {
 impl RedisSinker {
     async fn batch_sink_raw(
         &mut self,
-        data: &mut [DtData],
+        data: &mut [DtItem],
         start_index: usize,
         batch_size: usize,
     ) -> anyhow::Result<()> {
@@ -82,22 +83,22 @@ impl RedisSinker {
         let mut data_size = 0;
 
         let mut cmds = Vec::new();
-        for dt_data in data.iter_mut().skip(start_index).take(batch_size) {
-            data_size += dt_data.get_data_size();
-            cmds.extend_from_slice(&self.rewrite_entry(dt_data)?);
+        for dt_item in data.iter_mut().skip(start_index).take(batch_size) {
+            data_size += dt_item.dt_data.get_data_size();
+            cmds.extend_from_slice(&self.rewrite_entry(&mut dt_item.dt_data)?);
         }
         self.batch_sink(cmds, batch_size).await?;
 
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
 
-    async fn serial_sink_raw(&mut self, data: &mut [DtData]) -> anyhow::Result<()> {
+    async fn serial_sink_raw(&mut self, data: &mut [DtItem]) -> anyhow::Result<()> {
         let start_time = Instant::now();
         let mut data_size = 0;
 
-        for dt_data in data.iter_mut() {
-            data_size += dt_data.get_data_size();
-            let cmds = self.rewrite_entry(dt_data)?;
+        for dt_item in data.iter_mut() {
+            data_size += dt_item.dt_data.get_data_size();
+            let cmds = self.rewrite_entry(&mut dt_item.dt_data)?;
             self.serial_sink(cmds).await?;
         }
 

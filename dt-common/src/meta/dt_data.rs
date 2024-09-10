@@ -3,7 +3,10 @@ use serde_json::json;
 
 use crate::meta::{position::Position, redis::redis_entry::RedisEntry};
 
-use super::{ddl_data::DdlData, row_data::RowData};
+use super::{
+    ddl_meta::ddl_data::DdlData, foxlake::s3_file_meta::S3FileMeta, row_data::RowData,
+    struct_meta::struct_data::StructData,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DtItem {
@@ -20,6 +23,9 @@ impl DtItem {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DtData {
+    Struct {
+        struct_data: StructData,
+    },
     Ddl {
         ddl_data: DdlData,
     },
@@ -33,6 +39,9 @@ pub enum DtData {
     #[serde(skip)]
     Redis {
         entry: RedisEntry,
+    },
+    Foxlake {
+        file_meta: S3FileMeta,
     },
 }
 
@@ -53,8 +62,16 @@ impl DtData {
         match &self {
             DtData::Dml { row_data } => row_data.data_size,
             DtData::Redis { entry } => entry.data_size,
+            DtData::Foxlake { file_meta } => file_meta.data_size,
             // ignore other item types
             _ => 0,
+        }
+    }
+
+    pub fn get_data_count(&self) -> usize {
+        match &self {
+            DtData::Foxlake { file_meta } => file_meta.row_count,
+            _ => 1,
         }
     }
 }

@@ -16,7 +16,7 @@ pub enum DdlType {
     #[strum(serialize = "drop_table")]
     DropTable,
     #[strum(serialize = "truncate_table")]
-    TuncateTable,
+    TruncateTable,
     #[strum(serialize = "rename_table")]
     RenameTable,
     #[strum(serialize = "alter_database")]
@@ -27,6 +27,8 @@ pub enum DdlType {
     AlterTable,
     #[strum(serialize = "create_index")]
     CreateIndex,
+    #[strum(serialize = "drop_index")]
+    DropIndex,
     #[strum(serialize = "unknown")]
     Unknown,
 }

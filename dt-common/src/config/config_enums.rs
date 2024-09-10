@@ -1,10 +1,13 @@
 use std::str::FromStr;
 
+use serde::{Deserialize, Serialize};
 use strum::{Display, EnumString, IntoStaticStr};
 
 use crate::error::Error;
 
-#[derive(Clone, Display, EnumString, IntoStaticStr, Debug, PartialEq, Eq, Default)]
+#[derive(
+    Clone, Display, EnumString, IntoStaticStr, Debug, PartialEq, Eq, Default, Serialize, Deserialize,
+)]
 pub enum DbType {
     #[default]
     #[strum(serialize = "mysql")]
@@ -19,6 +22,8 @@ pub enum DbType {
     Redis,
     #[strum(serialize = "starrocks")]
     StarRocks,
+    #[strum(serialize = "foxlake")]
+    Foxlake,
 }
 
 #[derive(Display, EnumString, IntoStaticStr, Debug, Clone)]
@@ -37,6 +42,8 @@ pub enum ExtractType {
     Scan,
     #[strum(serialize = "reshard")]
     Reshard,
+    #[strum(serialize = "foxlake_s3")]
+    FoxlakeS3,
 }
 
 #[derive(Display, EnumString, IntoStaticStr)]
@@ -53,6 +60,10 @@ pub enum SinkType {
     Statistic,
     #[strum(serialize = "sql")]
     Sql,
+    #[strum(serialize = "push")]
+    Push,
+    #[strum(serialize = "merge")]
+    Merge,
 }
 
 #[derive(EnumString, IntoStaticStr, Clone, Display)]
@@ -73,12 +84,15 @@ pub enum ParallelType {
     Mongo,
     #[strum(serialize = "redis")]
     Redis,
+    #[strum(serialize = "foxlake")]
+    Foxlake,
 }
 
-#[derive(Clone, Debug, IntoStaticStr)]
+#[derive(Clone, Debug, IntoStaticStr, PartialEq, Default)]
 pub enum ConflictPolicyEnum {
     #[strum(serialize = "ignore")]
     Ignore,
+    #[default]
     #[strum(serialize = "interrupt")]
     Interrupt,
 }
@@ -91,4 +105,12 @@ impl FromStr for ConflictPolicyEnum {
             _ => Ok(Self::Interrupt),
         }
     }
+}
+
+#[derive(Display, EnumString, IntoStaticStr, PartialEq)]
+pub enum MetaCenterType {
+    #[strum(serialize = "basic")]
+    Basic,
+    #[strum(serialize = "dbengine")]
+    DbEngine,
 }

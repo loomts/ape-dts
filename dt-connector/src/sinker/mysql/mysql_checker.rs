@@ -17,12 +17,13 @@ use crate::{
     Sinker,
 };
 
-use dt_common::{monitor::monitor::Monitor, rdb_filter::RdbFilter};
+use dt_common::{
+    meta::struct_meta::struct_data::StructData, monitor::monitor::Monitor, rdb_filter::RdbFilter,
+};
 
 use dt_common::meta::{
-    ddl_data::DdlData, mysql::mysql_meta_manager::MysqlMetaManager,
-    rdb_meta_manager::RdbMetaManager, row_data::RowData,
-    struct_meta::statement::struct_statement::StructStatement,
+    mysql::mysql_meta_manager::MysqlMetaManager, rdb_meta_manager::RdbMetaManager,
+    row_data::RowData, struct_meta::statement::struct_statement::StructStatement,
 };
 
 #[derive(Clone)]
@@ -30,7 +31,7 @@ pub struct MysqlChecker {
     pub conn_pool: Pool<MySql>,
     pub meta_manager: MysqlMetaManager,
     pub extractor_meta_manager: RdbMetaManager,
-    pub router: RdbRouter,
+    pub reverse_router: RdbRouter,
     pub batch_size: usize,
     pub monitor: Arc<Mutex<Monitor>>,
     pub filter: RdbFilter,
@@ -57,12 +58,12 @@ impl Sinker for MysqlChecker {
         return close_conn_pool!(self);
     }
 
-    async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> anyhow::Result<()> {
+    async fn sink_struct(&mut self, data: Vec<StructData>) -> anyhow::Result<()> {
         if data.is_empty() {
             return Ok(());
         }
 
-        self.serial_ddl_check(data).await?;
+        self.serial_check_struct(data).await?;
         Ok(())
     }
 }
@@ -92,7 +93,7 @@ impl MysqlChecker {
                         src_row_data,
                         diff_col_values,
                         &mut self.extractor_meta_manager,
-                        &self.router,
+                        &self.reverse_router,
                     )
                     .await?;
                     diff.push(diff_log);
@@ -101,7 +102,7 @@ impl MysqlChecker {
                 let miss_log = BaseChecker::build_miss_log(
                     src_row_data,
                     &mut self.extractor_meta_manager,
-                    &self.router,
+                    &self.reverse_router,
                 )
                 .await?;
                 miss.push(miss_log);
@@ -143,7 +144,7 @@ impl MysqlChecker {
             batch_size,
             &tb_meta.basic,
             &mut self.extractor_meta_manager,
-            &self.router,
+            &self.reverse_router,
         )
         .await?;
         BaseChecker::log_dml(miss, diff);
@@ -151,20 +152,12 @@ impl MysqlChecker {
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, 0, start_time).await
     }
 
-    async fn serial_ddl_check(&mut self, mut data: Vec<DdlData>) -> anyhow::Result<()> {
+    async fn serial_check_struct(&mut self, mut data: Vec<StructData>) -> anyhow::Result<()> {
         for src_data in data.iter_mut() {
-            if src_data.statement.is_none() {
-                continue;
-            }
-
-            let src_statement = src_data.statement.as_mut().unwrap();
+            let src_statement = &mut src_data.statement;
             let db = match src_statement {
-                StructStatement::MysqlCreateDatabase { statement } => {
-                    statement.database.name.clone()
-                }
-                StructStatement::MysqlCreateTable { statement } => {
-                    statement.table.database_name.clone()
-                }
+                StructStatement::MysqlCreateDatabase(s) => s.database.name.clone(),
+                StructStatement::MysqlCreateTable(s) => s.table.database_name.clone(),
                 _ => String::new(),
             };
 
@@ -176,27 +169,23 @@ impl MysqlChecker {
             };
 
             let mut dst_statement = match &src_statement {
-                StructStatement::MysqlCreateDatabase { statement: _ } => {
+                StructStatement::MysqlCreateDatabase(_) => {
                     let dst_statement = struct_fetcher.get_create_database_statement().await?;
-                    Some(StructStatement::MysqlCreateDatabase {
-                        statement: dst_statement,
-                    })
+                    StructStatement::MysqlCreateDatabase(dst_statement)
                 }
 
-                StructStatement::MysqlCreateTable { statement } => {
+                StructStatement::MysqlCreateTable(s) => {
                     let mut dst_statement = struct_fetcher
-                        .get_create_table_statements(&statement.table.table_name)
+                        .get_create_table_statements(&s.table.table_name)
                         .await?;
                     if dst_statement.is_empty() {
-                        None
+                        StructStatement::Unknown
                     } else {
-                        Some(StructStatement::MysqlCreateTable {
-                            statement: dst_statement.remove(0),
-                        })
+                        StructStatement::MysqlCreateTable(dst_statement.remove(0))
                     }
                 }
 
-                _ => None,
+                _ => StructStatement::Unknown,
             };
 
             BaseChecker::compare_struct(src_statement, &mut dst_statement, &self.filter)?;

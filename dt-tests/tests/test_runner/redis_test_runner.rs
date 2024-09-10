@@ -268,7 +268,7 @@ impl RedisTestRunner {
                 src_kvs, dst_kvs
             );
 
-            if self.filter.filter_db(db) {
+            if self.filter.filter_schema(db) {
                 println!("filtered, db: {}, key: {}", db, key);
                 assert_eq!(dst_kvs.len(), 0);
             } else {
@@ -336,7 +336,7 @@ impl RedisTestRunner {
             cmd, src_result, dst_result
         );
 
-        if self.filter.filter_db(db) {
+        if self.filter.filter_schema(db) {
             println!("filtered, db: {}, key: {}", db, key);
             match dst_result {
                 Value::Bulk(v) => assert_eq!(v, vec![]),

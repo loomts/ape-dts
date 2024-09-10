@@ -26,7 +26,7 @@ pub struct KafkaExtractor {
 #[async_trait]
 impl Extractor for KafkaExtractor {
     async fn extract(&mut self) -> anyhow::Result<()> {
-        if let Position::Kafka { offset, .. } = &self.resumer.position {
+        if let Position::Kafka { offset, .. } = &self.resumer.current_position {
             self.offset = offset.to_owned();
         };
 

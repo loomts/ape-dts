@@ -14,4 +14,5 @@ pub struct RdbTbMeta {
     pub partition_col: String,
     pub id_cols: Vec<String>,
     pub foreign_keys: Vec<ForeignKey>,
+    pub ref_by_foreign_keys: Vec<ForeignKey>,
 }

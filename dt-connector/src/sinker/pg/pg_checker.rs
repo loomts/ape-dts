@@ -6,8 +6,10 @@ use std::{
 
 use async_trait::async_trait;
 use dt_common::meta::{
-    ddl_data::DdlData, pg::pg_meta_manager::PgMetaManager, rdb_meta_manager::RdbMetaManager,
-    row_data::RowData, struct_meta::statement::struct_statement::StructStatement,
+    pg::pg_meta_manager::PgMetaManager,
+    rdb_meta_manager::RdbMetaManager,
+    row_data::RowData,
+    struct_meta::{statement::struct_statement::StructStatement, struct_data::StructData},
 };
 use dt_common::{monitor::monitor::Monitor, rdb_filter::RdbFilter};
 use futures::TryStreamExt;
@@ -27,7 +29,7 @@ pub struct PgChecker {
     pub conn_pool: Pool<Postgres>,
     pub meta_manager: PgMetaManager,
     pub extractor_meta_manager: RdbMetaManager,
-    pub router: RdbRouter,
+    pub reverse_router: RdbRouter,
     pub batch_size: usize,
     pub monitor: Arc<Mutex<Monitor>>,
     pub filter: RdbFilter,
@@ -54,12 +56,12 @@ impl Sinker for PgChecker {
         return close_conn_pool!(self);
     }
 
-    async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> anyhow::Result<()> {
+    async fn sink_struct(&mut self, data: Vec<StructData>) -> anyhow::Result<()> {
         if data.is_empty() {
             return Ok(());
         }
 
-        self.serial_ddl_check(data).await?;
+        self.serial_check_struct(data).await?;
         Ok(())
     }
 }
@@ -89,7 +91,7 @@ impl PgChecker {
                         src_row_data,
                         diff_col_values,
                         &mut self.extractor_meta_manager,
-                        &self.router,
+                        &self.reverse_router,
                     )
                     .await?;
                     diff.push(diff_log);
@@ -98,7 +100,7 @@ impl PgChecker {
                 let miss_log = BaseChecker::build_miss_log(
                     src_row_data,
                     &mut self.extractor_meta_manager,
-                    &self.router,
+                    &self.reverse_router,
                 )
                 .await?;
                 miss.push(miss_log);
@@ -140,7 +142,7 @@ impl PgChecker {
             batch_size,
             &tb_meta.basic,
             &mut self.extractor_meta_manager,
-            &self.router,
+            &self.reverse_router,
         )
         .await?;
         BaseChecker::log_dml(miss, diff);
@@ -148,16 +150,12 @@ impl PgChecker {
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, 0, start_time).await
     }
 
-    async fn serial_ddl_check(&mut self, mut data: Vec<DdlData>) -> anyhow::Result<()> {
+    async fn serial_check_struct(&mut self, mut data: Vec<StructData>) -> anyhow::Result<()> {
         for src_data in data.iter_mut() {
-            if src_data.statement.is_none() {
-                continue;
-            }
-
-            let src_statement = src_data.statement.as_mut().unwrap();
+            let src_statement = &mut src_data.statement;
             let schema = match src_statement {
-                StructStatement::PgCreateSchema { statement } => statement.schema.name.clone(),
-                StructStatement::PgCreateTable { statement } => statement.table.schema_name.clone(),
+                StructStatement::PgCreateSchema(s) => s.schema.name.clone(),
+                StructStatement::PgCreateTable(s) => s.table.schema_name.clone(),
                 _ => String::new(),
             };
 
@@ -168,27 +166,23 @@ impl PgChecker {
             };
 
             let mut dst_statement = match &src_statement {
-                StructStatement::PgCreateSchema { statement: _ } => {
+                StructStatement::PgCreateSchema(_) => {
                     let dst_statement = struct_fetcher.get_create_schema_statement().await?;
-                    Some(StructStatement::PgCreateSchema {
-                        statement: dst_statement,
-                    })
+                    StructStatement::PgCreateSchema(dst_statement)
                 }
 
-                StructStatement::PgCreateTable { statement } => {
+                StructStatement::PgCreateTable(statement) => {
                     let mut dst_statement = struct_fetcher
                         .get_create_table_statements(&statement.table.table_name)
                         .await?;
                     if dst_statement.is_empty() {
-                        None
+                        StructStatement::Unknown
                     } else {
-                        Some(StructStatement::PgCreateTable {
-                            statement: dst_statement.remove(0),
-                        })
+                        StructStatement::PgCreateTable(dst_statement.remove(0))
                     }
                 }
 
-                _ => None,
+                _ => StructStatement::Unknown,
             };
 
             BaseChecker::compare_struct(src_statement, &mut dst_statement, &self.filter)?;

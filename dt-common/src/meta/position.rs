@@ -7,9 +7,10 @@ use serde_json::json;
 
 use crate::log_error;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(tag = "type")]
 pub enum Position {
+    #[default]
     None,
     Kafka {
         topic: String,
@@ -32,6 +33,7 @@ pub enum Position {
         server_id: String,
         binlog_filename: String,
         next_event_position: u32,
+        gtid_set: String,
         timestamp: String,
     },
     PgCdc {
@@ -49,6 +51,11 @@ pub enum Position {
         repl_offset: u64,
         now_db_id: i64,
         timestamp: String,
+    },
+    FoxlakeS3 {
+        schema: String,
+        tb: String,
+        s3_meta_file: String,
     },
 }
 

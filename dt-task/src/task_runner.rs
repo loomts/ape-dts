@@ -1,6 +1,8 @@
 use std::{
+    env,
     fs::{self, File},
     io::Read,
+    panic,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex, RwLock,
@@ -9,8 +11,6 @@ use std::{
 };
 
 use anyhow::{bail, Context};
-use concurrent_queue::ConcurrentQueue;
-use dt_common::meta::{dt_data::DtItem, position::Position, row_type::RowType, syncer::Syncer};
 use dt_common::{
     config::{
         config_enums::DbType, config_token_parser::ConfigTokenParser,
@@ -18,9 +18,14 @@ use dt_common::{
     },
     error::Error,
     log_finished, log_info,
+    meta::dt_queue::DtQueue,
     monitor::monitor::Monitor,
     rdb_filter::RdbFilter,
     utils::{sql_util::SqlUtil, time_util::TimeUtil},
+};
+use dt_common::{
+    log_error,
+    meta::{position::Position, row_type::RowType, syncer::Syncer},
 };
 use dt_connector::{
     data_marker::DataMarker,
@@ -63,9 +68,14 @@ impl TaskRunner {
             self.init_log4rs()?;
         }
 
+        env::set_var("RUST_BACKTRACE", "1");
+        panic::set_hook(Box::new(|panic_info| {
+            log_error!("panic: {}", panic_info);
+        }));
+
         let db_type = &self.config.extractor_basic.db_type;
         let router = RdbRouter::from_config(&self.config.router, db_type)?;
-        let snapshot_resumer = SnapshotResumer::from_config(&self.config.resumer, db_type)?;
+        let snapshot_resumer = SnapshotResumer::from_config(&self.config.resumer)?;
         let cdc_resumer = CdcResumer::from_config(&self.config.resumer)?;
 
         match &self.config.extractor {
@@ -73,7 +83,8 @@ impl TaskRunner {
             | ExtractorConfig::PgStruct { url, .. }
             | ExtractorConfig::MysqlSnapshot { url, .. }
             | ExtractorConfig::PgSnapshot { url, .. }
-            | ExtractorConfig::MongoSnapshot { url, .. } => {
+            | ExtractorConfig::MongoSnapshot { url, .. }
+            | ExtractorConfig::FoxlakeS3 { url, .. } => {
                 self.start_multi_task(url, &router, &snapshot_resumer, &cdc_resumer)
                     .await?
             }
@@ -103,43 +114,43 @@ impl TaskRunner {
         let db_type = &self.config.extractor_basic.db_type;
         let mut filter = RdbFilter::from_config(&self.config.filter, db_type)?;
 
-        let dbs = TaskUtil::list_dbs(url, db_type).await?;
-        for db in dbs.iter() {
-            if filter.filter_db(db) {
-                log_info!("db: {} filtered", db);
+        let schemas = TaskUtil::list_schemas(url, db_type).await?;
+        for schema in schemas.iter() {
+            if filter.filter_schema(schema) {
+                log_info!("schema: {} filtered", schema);
                 continue;
             }
 
-            // start a task for each db
-            let db_extractor_config = match &self.config.extractor {
+            // start a task for each schema
+            let schema_extractor_config = match &self.config.extractor {
                 ExtractorConfig::MysqlStruct { url, .. } => Some(ExtractorConfig::MysqlStruct {
                     url: url.clone(),
-                    db: db.clone(),
+                    db: schema.clone(),
                 }),
 
                 ExtractorConfig::PgStruct { url, .. } => Some(ExtractorConfig::PgStruct {
                     url: url.clone(),
-                    schema: db.clone(),
+                    schema: schema.clone(),
                 }),
 
                 _ => None,
             };
 
-            if let Some(extractor_config) = db_extractor_config {
+            if let Some(extractor_config) = schema_extractor_config {
                 self.start_single_task(&extractor_config, router, snapshot_resumer, cdc_resumer)
                     .await?;
                 continue;
             }
 
             // start a task for each tb
-            let tbs = TaskUtil::list_tbs(url, db, db_type).await?;
+            let tbs = TaskUtil::list_tbs(url, schema, db_type).await?;
             for tb in tbs.iter() {
-                if snapshot_resumer.check_finished(db, tb) {
-                    log_info!("db: {}, tb: {} already finished", db, tb);
+                if snapshot_resumer.check_finished(schema, tb) {
+                    log_info!("schema: {}, tb: {} already finished", schema, tb);
                     continue;
                 }
 
-                if filter.filter_event(db, tb, &RowType::Insert.to_string()) {
+                if filter.filter_event(schema, tb, &RowType::Insert) {
                     continue;
                 }
 
@@ -147,33 +158,52 @@ impl TaskRunner {
                     ExtractorConfig::MysqlSnapshot {
                         url,
                         sample_interval,
+                        parallel_size,
+                        batch_size,
                         ..
                     } => ExtractorConfig::MysqlSnapshot {
                         url: url.clone(),
-                        db: db.clone(),
+                        db: schema.clone(),
                         tb: tb.clone(),
                         sample_interval: *sample_interval,
+                        parallel_size: *parallel_size,
+                        batch_size: *batch_size,
                     },
 
                     ExtractorConfig::PgSnapshot {
                         url,
                         sample_interval,
+                        batch_size,
                         ..
                     } => ExtractorConfig::PgSnapshot {
                         url: url.clone(),
-                        schema: db.clone(),
+                        schema: schema.clone(),
                         tb: tb.clone(),
                         sample_interval: *sample_interval,
+                        batch_size: *batch_size,
                     },
 
                     ExtractorConfig::MongoSnapshot { url, app_name, .. } => {
                         ExtractorConfig::MongoSnapshot {
                             url: url.clone(),
                             app_name: app_name.clone(),
-                            db: db.clone(),
+                            db: schema.clone(),
                             tb: tb.clone(),
                         }
                     }
+
+                    ExtractorConfig::FoxlakeS3 {
+                        url,
+                        s3_config,
+                        batch_size,
+                        ..
+                    } => ExtractorConfig::FoxlakeS3 {
+                        url: url.clone(),
+                        schema: schema.clone(),
+                        tb: tb.clone(),
+                        s3_config: s3_config.clone(),
+                        batch_size: *batch_size,
+                    },
 
                     _ => {
                         bail! {Error::ConfigError("unsupported extractor config".into())};
@@ -194,7 +224,12 @@ impl TaskRunner {
         snapshot_resumer: &SnapshotResumer,
         cdc_resumer: &CdcResumer,
     ) -> anyhow::Result<()> {
-        let buffer = Arc::new(ConcurrentQueue::bounded(self.config.pipeline.buffer_size));
+        let max_bytes = self.config.pipeline.buffer_memory_mb * 1024 * 1024;
+        let buffer = Arc::new(DtQueue::new(
+            self.config.pipeline.buffer_size,
+            max_bytes as i64,
+        ));
+
         let shut_down = Arc::new(AtomicBool::new(false));
         let syncer = Arc::new(Mutex::new(Syncer {
             received_position: Position::None,
@@ -217,11 +252,13 @@ impl TaskRunner {
             .map(|data_marker| Arc::new(RwLock::new(data_marker)));
 
         // extractor
-        let monitor_time_window_secs = self.config.pipeline.checkpoint_interval_secs as usize;
+        let monitor_time_window_secs = self.config.pipeline.counter_time_window_secs as usize;
+        let monitor_max_sub_count = self.config.pipeline.counter_max_sub_count as usize;
         let monitor_count_window = self.config.pipeline.buffer_size;
         let extractor_monitor = Arc::new(Mutex::new(Monitor::new(
             "extractor",
             monitor_time_window_secs,
+            monitor_max_sub_count,
             monitor_count_window,
         )));
         let mut extractor = ExtractorUtil::create_extractor(
@@ -242,10 +279,12 @@ impl TaskRunner {
         let sinker_monitor = Arc::new(Mutex::new(Monitor::new(
             "sinker",
             monitor_time_window_secs,
+            monitor_max_sub_count,
             monitor_count_window,
         )));
         let sinkers = SinkerUtil::create_sinkers(
             &self.config,
+            extractor_config,
             sinker_monitor.clone(),
             rw_sinker_data_marker.clone(),
         )
@@ -255,6 +294,7 @@ impl TaskRunner {
         let pipeline_monitor = Arc::new(Mutex::new(Monitor::new(
             "pipeline",
             monitor_time_window_secs,
+            monitor_max_sub_count,
             monitor_count_window,
         )));
         let mut pipeline = self
@@ -294,12 +334,33 @@ impl TaskRunner {
             .await
         });
         try_join!(f1, f2, f3).unwrap();
+
+        // finished log
+        let (schema, tb) = match extractor_config {
+            ExtractorConfig::MysqlSnapshot { db, tb, .. }
+            | ExtractorConfig::MongoSnapshot { db, tb, .. } => (db.to_owned(), tb.to_owned()),
+            ExtractorConfig::PgSnapshot { schema, tb, .. }
+            | ExtractorConfig::FoxlakeS3 { schema, tb, .. } => (schema.to_owned(), tb.to_owned()),
+            _ => (String::new(), String::new()),
+        };
+        if !tb.is_empty() {
+            log_finished!(
+                "{}",
+                Position::RdbSnapshotFinished {
+                    db_type: self.config.extractor_basic.db_type.to_string(),
+                    schema,
+                    tb,
+                }
+                .to_string()
+            );
+        }
+
         Ok(())
     }
 
     async fn create_pipeline(
         &self,
-        buffer: Arc<ConcurrentQueue<DtItem>>,
+        buffer: Arc<DtQueue>,
         shut_down: Arc<AtomicBool>,
         syncer: Arc<Mutex<Syncer>>,
         sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
@@ -332,7 +393,7 @@ impl TaskRunner {
         let pipeline = BasePipeline {
             buffer,
             parallelizer,
-            sinker_basic_config: self.config.sinker_basic.clone(),
+            sinker_config: self.config.sinker.clone(),
             sinkers,
             shut_down,
             checkpoint_interval_secs: self.config.pipeline.checkpoint_interval_secs,
@@ -415,7 +476,7 @@ impl TaskRunner {
 
     async fn pre_single_task(&self, sinker_data_marker: Option<DataMarker>) -> anyhow::Result<()> {
         // create heartbeat table
-        let db_tb = match &self.config.extractor {
+        let schema_tb = match &self.config.extractor {
             ExtractorConfig::MysqlCdc { heartbeat_tb, .. }
             | ExtractorConfig::PgCdc { heartbeat_tb, .. } => ConfigTokenParser::parse(
                 heartbeat_tb,
@@ -425,10 +486,10 @@ impl TaskRunner {
             _ => vec![],
         };
 
-        if db_tb.len() == 2 {
+        if schema_tb.len() == 2 {
             match &self.config.extractor {
                 ExtractorConfig::MysqlCdc { url, .. } => {
-                    let db_sql = format!("CREATE DATABASE IF NOT EXISTS `{}`", db_tb[0]);
+                    let db_sql = format!("CREATE DATABASE IF NOT EXISTS `{}`", schema_tb[0]);
                     let tb_sql = format!(
                         "CREATE TABLE IF NOT EXISTS `{}`.`{}`(
                         server_id INT UNSIGNED,
@@ -441,13 +502,13 @@ impl TaskRunner {
                         flushed_timestamp VARCHAR(255),
                         PRIMARY KEY(server_id)
                     )",
-                        db_tb[0], db_tb[1]
+                        schema_tb[0], schema_tb[1]
                     );
 
                     TaskUtil::check_and_create_tb(
                         url,
-                        &db_tb[0],
-                        &db_tb[1],
+                        &schema_tb[0],
+                        &schema_tb[1],
                         &db_sql,
                         &tb_sql,
                         &DbType::Mysql,
@@ -456,7 +517,7 @@ impl TaskRunner {
                 }
 
                 ExtractorConfig::PgCdc { url, .. } => {
-                    let schema_sql = format!(r#"CREATE SCHEMA IF NOT EXISTS "{}""#, db_tb[0]);
+                    let schema_sql = format!(r#"CREATE SCHEMA IF NOT EXISTS "{}""#, schema_tb[0]);
                     let tb_sql = format!(
                         r#"CREATE TABLE IF NOT EXISTS "{}"."{}"(
                         slot_name character varying(64) not null,
@@ -467,13 +528,13 @@ impl TaskRunner {
                         flushed_timestamp character varying(64),
                         primary key(slot_name)
                     )"#,
-                        db_tb[0], db_tb[1]
+                        schema_tb[0], schema_tb[1]
                     );
 
                     TaskUtil::check_and_create_tb(
                         url,
-                        &db_tb[0],
-                        &db_tb[1],
+                        &schema_tb[0],
+                        &schema_tb[1],
                         &schema_sql,
                         &tb_sql,
                         &DbType::Pg,
@@ -489,8 +550,10 @@ impl TaskRunner {
         if let Some(data_marker) = sinker_data_marker {
             match &self.config.sinker {
                 SinkerConfig::Mysql { url, .. } => {
-                    let db_sql =
-                        format!("CREATE DATABASE IF NOT EXISTS `{}`", data_marker.marker_db);
+                    let db_sql = format!(
+                        "CREATE DATABASE IF NOT EXISTS `{}`",
+                        data_marker.marker_schema
+                    );
                     let tb_sql = format!(
                         "CREATE TABLE IF NOT EXISTS `{}`.`{}` (
                             data_origin_node varchar(255) NOT NULL,
@@ -499,12 +562,12 @@ impl TaskRunner {
                             n bigint DEFAULT NULL,
                             PRIMARY KEY (data_origin_node, src_node, dst_node)
                         )",
-                        data_marker.marker_db, data_marker.marker_tb
+                        data_marker.marker_schema, data_marker.marker_tb
                     );
 
                     TaskUtil::check_and_create_tb(
                         url,
-                        &data_marker.marker_db,
+                        &data_marker.marker_schema,
                         &data_marker.marker_tb,
                         &db_sql,
                         &tb_sql,
@@ -514,8 +577,10 @@ impl TaskRunner {
                 }
 
                 SinkerConfig::Pg { url, .. } => {
-                    let schema_sql =
-                        format!(r#"CREATE SCHEMA IF NOT EXISTS "{}""#, data_marker.marker_db);
+                    let schema_sql = format!(
+                        r#"CREATE SCHEMA IF NOT EXISTS "{}""#,
+                        data_marker.marker_schema
+                    );
                     let tb_sql = format!(
                         r#"CREATE TABLE IF NOT EXISTS "{}"."{}" (
                             data_origin_node varchar(255) NOT NULL,
@@ -524,12 +589,12 @@ impl TaskRunner {
                             n bigint DEFAULT NULL,
                             PRIMARY KEY (data_origin_node, src_node, dst_node)
                         )"#,
-                        data_marker.marker_db, data_marker.marker_tb
+                        data_marker.marker_schema, data_marker.marker_tb
                     );
 
                     TaskUtil::check_and_create_tb(
                         url,
-                        &data_marker.marker_db,
+                        &data_marker.marker_schema,
                         &data_marker.marker_tb,
                         &schema_sql,
                         &tb_sql,

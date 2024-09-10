@@ -16,7 +16,22 @@ pub struct MysqlCreateTableStatement {
 }
 
 impl MysqlCreateTableStatement {
-    pub fn to_sqls(&mut self, filter: &RdbFilter) -> Vec<(String, String)> {
+    pub fn route(&mut self, dst_db: &str, dst_tb: &str) {
+        self.table.database_name = dst_db.to_string();
+        self.table.table_name = dst_tb.to_string();
+
+        for index in self.indexes.iter_mut() {
+            index.database_name = dst_db.to_string();
+            index.table_name = dst_tb.to_string();
+        }
+
+        for constraint in self.constraints.iter_mut() {
+            constraint.database_name = dst_db.to_string();
+            constraint.table_name = dst_tb.to_string();
+        }
+    }
+
+    pub fn to_sqls(&mut self, filter: &RdbFilter) -> anyhow::Result<Vec<(String, String)>> {
         let mut sqls = Vec::new();
 
         if !filter.filter_structure(StructureType::Table.into()) {
@@ -58,7 +73,7 @@ impl MysqlCreateTableStatement {
             }
         }
 
-        sqls
+        Ok(sqls)
     }
 
     fn table_to_sql(table: &mut Table) -> String {
@@ -76,9 +91,13 @@ impl MysqlCreateTableStatement {
 
         // Todo: table partition; column visible, generated(information_schema.column.GENERATION_EXPRESSION)
         let mut sql = format!(
-            "CREATE TABLE `{}`.`{}` ({}{}) ENGINE={} ",
-            table.database_name, table.table_name, columns_sql, pk_str, table.engine_name
+            "CREATE TABLE IF NOT EXISTS `{}`.`{}` ({}{})",
+            table.database_name, table.table_name, columns_sql, pk_str
         );
+
+        if !table.engine_name.is_empty() {
+            sql = format!("{} ENGINE={} ", sql, table.engine_name);
+        }
 
         if !table.character_set.is_empty() {
             sql = format!("{} DEFAULT CHARSET={}", sql, table.character_set);

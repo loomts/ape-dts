@@ -7,29 +7,24 @@ use super::{
     pg_create_table_statement::PgCreateTableStatement,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum StructStatement {
-    MysqlCreateDatabase {
-        statement: MysqlCreateDatabaseStatement,
-    },
-    PgCreateSchema {
-        statement: PgCreateSchemaStatement,
-    },
-    MysqlCreateTable {
-        statement: MysqlCreateTableStatement,
-    },
-    PgCreateTable {
-        statement: PgCreateTableStatement,
-    },
+    MysqlCreateDatabase(MysqlCreateDatabaseStatement),
+    PgCreateSchema(PgCreateSchemaStatement),
+    MysqlCreateTable(MysqlCreateTableStatement),
+    PgCreateTable(PgCreateTableStatement),
+    #[default]
+    Unknown,
 }
 
 impl StructStatement {
-    pub fn to_sqls(&mut self, filter: &RdbFilter) -> Vec<(String, String)> {
+    pub fn to_sqls(&mut self, filter: &RdbFilter) -> anyhow::Result<Vec<(String, String)>> {
         match self {
-            Self::MysqlCreateDatabase { statement } => statement.to_sqls(filter),
-            Self::PgCreateSchema { statement } => statement.to_sqls(filter),
-            Self::MysqlCreateTable { statement } => statement.to_sqls(filter),
-            Self::PgCreateTable { statement } => statement.to_sqls(filter),
+            Self::MysqlCreateDatabase(s) => s.to_sqls(filter),
+            Self::PgCreateSchema(s) => s.to_sqls(filter),
+            Self::MysqlCreateTable(s) => s.to_sqls(filter),
+            Self::PgCreateTable(s) => s.to_sqls(filter),
+            _ => Ok(vec![]),
         }
     }
 }

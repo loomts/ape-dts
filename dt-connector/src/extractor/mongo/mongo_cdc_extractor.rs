@@ -57,10 +57,11 @@ impl Extractor for MongoCdcExtractor {
             resume_token,
             operation_time,
             ..
-        } = &self.resumer.position
+        } = &self.resumer.current_position
         {
             self.resume_token = resume_token.to_owned();
             self.start_timestamp = operation_time.to_owned();
+            log_info!("resume from: {}", self.resumer.current_position);
         };
 
         log_info!(
@@ -422,11 +423,9 @@ impl MongoCdcExtractor {
         position: Position,
     ) -> anyhow::Result<()> {
         if SYSTEM_DBS.contains(&row_data.schema.as_str())
-            || self.filter.filter_event(
-                &row_data.schema,
-                &row_data.tb,
-                &row_data.row_type.to_string(),
-            )
+            || self
+                .filter
+                .filter_event(&row_data.schema, &row_data.tb, &row_data.row_type)
         {
             return Ok(());
         }

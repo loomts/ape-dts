@@ -1,4 +1,7 @@
-use super::config_enums::{ConflictPolicyEnum, DbType};
+use super::{
+    config_enums::{ConflictPolicyEnum, DbType},
+    s3_config::S3Config,
+};
 
 #[derive(Clone, Debug)]
 pub enum SinkerConfig {
@@ -74,6 +77,33 @@ pub enum SinkerConfig {
         url: String,
         batch_size: usize,
         stream_load_url: String,
+    },
+
+    Foxlake {
+        url: String,
+        batch_size: usize,
+        batch_memory_mb: usize,
+        s3_config: S3Config,
+        engine: String,
+    },
+
+    FoxlakePush {
+        url: String,
+        batch_size: usize,
+        batch_memory_mb: usize,
+        s3_config: S3Config,
+    },
+
+    FoxlakeMerge {
+        url: String,
+        batch_size: usize,
+        s3_config: S3Config,
+    },
+
+    FoxlakeStruct {
+        url: String,
+        conflict_policy: ConflictPolicyEnum,
+        engine: String,
     },
 
     Sql {

@@ -4,6 +4,7 @@ use crate::{
     config::{
         config_enums::DbType, config_token_parser::ConfigTokenParser, filter_config::FilterConfig,
     },
+    meta::{ddl_meta::ddl_type::DdlType, row_type::RowType},
     utils::sql_util::SqlUtil,
 };
 
@@ -13,8 +14,8 @@ use regex::Regex;
 #[derive(Debug, Clone)]
 pub struct RdbFilter {
     pub db_type: DbType,
-    pub do_dbs: HashSet<String>,
-    pub ignore_dbs: HashSet<String>,
+    pub do_schemas: HashSet<String>,
+    pub ignore_schemas: HashSet<String>,
     pub do_tbs: HashSet<(String, String)>,
     pub ignore_tbs: HashSet<(String, String)>,
     pub do_events: HashSet<String>,
@@ -28,8 +29,8 @@ impl RdbFilter {
     pub fn from_config(config: &FilterConfig, db_type: &DbType) -> anyhow::Result<Self> {
         Ok(Self {
             db_type: db_type.to_owned(),
-            do_dbs: Self::parse_single_tokens(&config.do_dbs, db_type)?,
-            ignore_dbs: Self::parse_single_tokens(&config.ignore_dbs, db_type)?,
+            do_schemas: Self::parse_single_tokens(&config.do_schemas, db_type)?,
+            ignore_schemas: Self::parse_single_tokens(&config.ignore_schemas, db_type)?,
             do_tbs: Self::parse_pair_tokens(&config.do_tbs, db_type)?,
             ignore_tbs: Self::parse_pair_tokens(&config.ignore_tbs, db_type)?,
             do_events: Self::parse_single_tokens(&config.do_events, db_type)?,
@@ -40,59 +41,60 @@ impl RdbFilter {
         })
     }
 
-    pub fn filter_db(&mut self, db: &str) -> bool {
+    pub fn filter_schema(&mut self, schema: &str) -> bool {
         let tb = "*";
         let escape_pairs = SqlUtil::get_escape_pairs(&self.db_type);
-        let filter = Self::contain_tb(&self.ignore_tbs, db, tb, &escape_pairs)
-            || Self::contain_db(&self.ignore_dbs, db, &escape_pairs);
+        let filter = Self::contain_tb(&self.ignore_tbs, schema, tb, &escape_pairs)
+            || Self::contain_schema(&self.ignore_schemas, schema, &escape_pairs);
 
         if filter {
             return filter;
         }
 
-        let do_tb_db: HashSet<String> = self.do_tbs.iter().map(|(d, _)| d.clone()).collect();
-        let keep = Self::contain_db(&self.do_dbs, db, &escape_pairs)
-            || Self::contain_db(&do_tb_db, db, &escape_pairs);
+        let do_tb_schemas: HashSet<String> = self.do_tbs.iter().map(|(d, _)| d.clone()).collect();
+        let keep = Self::contain_schema(&self.do_schemas, schema, &escape_pairs)
+            || Self::contain_schema(&do_tb_schemas, schema, &escape_pairs);
         !keep
     }
 
-    pub fn filter_tb(&mut self, db: &str, tb: &str) -> bool {
-        if let Some(cache) = self.cache.get(&(db.to_string(), tb.to_string())) {
+    pub fn filter_tb(&mut self, schema: &str, tb: &str) -> bool {
+        if let Some(cache) = self.cache.get(&(schema.to_string(), tb.to_string())) {
             return *cache;
         }
 
         let escape_pairs = SqlUtil::get_escape_pairs(&self.db_type);
-        let filter = Self::contain_tb(&self.ignore_tbs, db, tb, &escape_pairs)
-            || Self::contain_db(&self.ignore_dbs, db, &escape_pairs);
-        let keep = Self::contain_tb(&self.do_tbs, db, tb, &escape_pairs)
-            || Self::contain_db(&self.do_dbs, db, &escape_pairs);
+        let filter = Self::contain_tb(&self.ignore_tbs, schema, tb, &escape_pairs)
+            || Self::contain_schema(&self.ignore_schemas, schema, &escape_pairs);
+        let keep = Self::contain_tb(&self.do_tbs, schema, tb, &escape_pairs)
+            || Self::contain_schema(&self.do_schemas, schema, &escape_pairs);
 
         let filter = filter || !keep;
-        self.cache.insert((db.to_string(), tb.to_string()), filter);
+        self.cache
+            .insert((schema.to_string(), tb.to_string()), filter);
 
         filter
     }
 
-    pub fn filter_event(&mut self, db: &str, tb: &str, row_type: &str) -> bool {
-        if !Self::match_all(&self.do_events) && !self.do_events.contains(row_type) {
+    pub fn filter_event(&mut self, schema: &str, tb: &str, row_type: &RowType) -> bool {
+        if !Self::match_all(&self.do_events) && !self.do_events.contains(&row_type.to_string()) {
             return true;
         }
-        self.filter_tb(db, tb)
+        self.filter_tb(schema, tb)
     }
 
     pub fn filter_all_ddl(&self) -> bool {
         self.do_ddls.is_empty()
     }
 
-    pub fn filter_ddl(&mut self, db: &str, tb: &str, ddl_type: &str) -> bool {
-        if !Self::match_all(&self.do_ddls) && !self.do_ddls.contains(ddl_type) {
+    pub fn filter_ddl(&mut self, schema: &str, tb: &str, ddl_type: &DdlType) -> bool {
+        if !Self::match_all(&self.do_ddls) && !self.do_ddls.contains(&ddl_type.to_string()) {
             return true;
         }
 
         if tb.is_empty() {
-            self.filter_db(db)
+            self.filter_schema(schema)
         } else {
-            self.filter_tb(db, tb)
+            self.filter_tb(schema, tb)
         }
     }
 
@@ -104,8 +106,8 @@ impl RdbFilter {
         self.ignore_cmds.contains(cmd)
     }
 
-    pub fn add_ignore_tb(&mut self, db: &str, tb: &str) {
-        self.ignore_tbs.insert((db.into(), tb.into()));
+    pub fn add_ignore_tb(&mut self, schema: &str, tb: &str) {
+        self.ignore_tbs.insert((schema.into(), tb.into()));
     }
 
     fn match_all(set: &HashSet<String>) -> bool {
@@ -114,12 +116,12 @@ impl RdbFilter {
 
     fn contain_tb(
         set: &HashSet<(String, String)>,
-        db: &str,
+        schema: &str,
         tb: &str,
         escape_pairs: &[(char, char)],
     ) -> bool {
         for i in set.iter() {
-            if Self::match_token(&i.0, db, escape_pairs)
+            if Self::match_token(&i.0, schema, escape_pairs)
                 && Self::match_token(&i.1, tb, escape_pairs)
             {
                 return true;
@@ -128,7 +130,7 @@ impl RdbFilter {
         false
     }
 
-    fn contain_db(set: &HashSet<String>, item: &str, escape_pairs: &[(char, char)]) -> bool {
+    fn contain_schema(set: &HashSet<String>, item: &str, escape_pairs: &[(char, char)]) -> bool {
         for i in set.iter() {
             if Self::match_token(i, item, escape_pairs) {
                 return true;
@@ -362,36 +364,36 @@ mod tests {
     fn test_rdb_filter_ignore_tbs_without_escapes() {
         let db_type = DbType::Mysql;
         let config = FilterConfig {
-            do_dbs: "*".to_string(),
+            do_schemas: "*".to_string(),
             do_tbs: "*.*".to_string(),
             ignore_tbs: "*.b*".to_string(),
             do_events: "insert".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(rdb_fitler.filter_event("a", "bcd", "insert"));
-        assert!(rdb_fitler.filter_event("b", "b", "insert"));
-        assert!(!rdb_fitler.filter_event("a", "cbd", "insert"));
-        assert!(!rdb_fitler.filter_event("b", "cbd", "insert"));
+        assert!(rdb_fitler.filter_event("a", "bcd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("b", "b", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("a", "cbd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("b", "cbd", &RowType::Insert));
     }
 
     #[test]
     fn test_rdb_filter_ignore_tbs_with_escapes() {
         let db_type = DbType::Mysql;
         let config = FilterConfig {
-            do_dbs: "*".to_string(),
+            do_schemas: "*".to_string(),
             do_tbs: "*.*".to_string(),
             ignore_tbs: "*.`b*`,*.c*".to_string(),
             do_events: "insert".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(rdb_fitler.filter_event("a", "b*", "insert"));
-        assert!(rdb_fitler.filter_event("b", "b*", "insert"));
-        assert!(!rdb_fitler.filter_event("a", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("b", "b", "insert"));
-        assert!(rdb_fitler.filter_event("a", "cbd", "insert"));
-        assert!(rdb_fitler.filter_event("b", "cbd", "insert"));
+        assert!(rdb_fitler.filter_event("a", "b*", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("b", "b*", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("a", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("b", "b", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("a", "cbd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("b", "cbd", &RowType::Insert));
     }
 
     #[test]
@@ -403,117 +405,117 @@ mod tests {
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(!rdb_fitler.filter_event("db_test_position.aaa", "b.bbb,.b", "insert"));
-        assert!(!rdb_fitler.filter_event("db_test_position.aaa", "c", "insert"));
+        assert!(!rdb_fitler.filter_event("db_test_position.aaa", "b.bbb,.b", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("db_test_position.aaa", "c", &RowType::Insert));
     }
 
     #[test]
     fn test_rdb_filter_ignore_dbs_without_escapes() {
         let db_type = DbType::Mysql;
         let config = FilterConfig {
-            do_dbs: "*".to_string(),
-            ignore_dbs: "a*".to_string(),
+            do_schemas: "*".to_string(),
+            ignore_schemas: "a*".to_string(),
             do_tbs: "*.*".to_string(),
             do_events: "insert".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(rdb_fitler.filter_event("abc", "bcd", "insert"));
-        assert!(rdb_fitler.filter_event("a", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("b", "cbd", "insert"));
-        assert!(!rdb_fitler.filter_event("b", "cbd", "insert"));
+        assert!(rdb_fitler.filter_event("abc", "bcd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("a", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("b", "cbd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("b", "cbd", &RowType::Insert));
     }
 
     #[test]
     fn test_rdb_filter_ignore_dbs_with_escapes() {
         let db_type = DbType::Mysql;
         let config = FilterConfig {
-            do_dbs: "*".to_string(),
-            ignore_dbs: "`a*`,b*".to_string(),
+            do_schemas: "*".to_string(),
+            ignore_schemas: "`a*`,b*".to_string(),
             do_tbs: "*.*".to_string(),
             do_events: "insert".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(!rdb_fitler.filter_event("abc", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("a", "bcd", "insert"));
-        assert!(rdb_fitler.filter_event("bcd", "cbd", "insert"));
-        assert!(rdb_fitler.filter_event("b", "cbd", "insert"));
+        assert!(!rdb_fitler.filter_event("abc", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("a", "bcd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("bcd", "cbd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("b", "cbd", &RowType::Insert));
     }
 
     #[test]
     fn test_rdb_filter_do_dbs_without_escapes() {
         let db_type = DbType::Mysql;
         let config = FilterConfig {
-            do_dbs: "b*".to_string(),
-            ignore_dbs: "a*".to_string(),
+            do_schemas: "b*".to_string(),
+            ignore_schemas: "a*".to_string(),
             do_tbs: "aaaaaaa.*".to_string(),
             do_events: "insert".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(rdb_fitler.filter_event("a", "bcd", "insert"));
-        assert!(rdb_fitler.filter_event("c", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("b", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("bcd", "bcd", "insert"));
+        assert!(rdb_fitler.filter_event("a", "bcd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("c", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("b", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("bcd", "bcd", &RowType::Insert));
     }
 
     #[test]
     fn test_rdb_filter_do_dbs_with_escapes() {
         let db_type = DbType::Mysql;
         let config = FilterConfig {
-            do_dbs: "`b*`,abc,bcd*,cde".to_string(),
-            ignore_dbs: "a*".to_string(),
+            do_schemas: "`b*`,abc,bcd*,cde".to_string(),
+            ignore_schemas: "a*".to_string(),
             do_tbs: "aaaaaaa.*".to_string(),
             do_events: "insert".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(rdb_fitler.filter_event("a", "bcd", "insert"));
-        assert!(rdb_fitler.filter_event("c", "bcd", "insert"));
-        assert!(rdb_fitler.filter_event("b", "bcd", "insert"));
-        assert!(rdb_fitler.filter_event("bc", "bcd", "insert"));
-        assert!(rdb_fitler.filter_event("abc", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("b*", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("bcd", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("bcde", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("cde", "bcd", "insert"));
+        assert!(rdb_fitler.filter_event("a", "bcd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("c", "bcd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("b", "bcd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("bc", "bcd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("abc", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("b*", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("bcd", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("bcde", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("cde", "bcd", &RowType::Insert));
     }
 
     #[test]
     fn test_rdb_filter_do_tbs_without_escapes() {
         let db_type = DbType::Mysql;
         let config = FilterConfig {
-            ignore_dbs: "b*".to_string(),
+            ignore_schemas: "b*".to_string(),
             do_tbs: "a*.*".to_string(),
             do_events: "insert".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(rdb_fitler.filter_event("bcd", "bcd", "insert"));
-        assert!(rdb_fitler.filter_event("cde", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("a", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("abc", "bcd", "insert"));
+        assert!(rdb_fitler.filter_event("bcd", "bcd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("cde", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("a", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("abc", "bcd", &RowType::Insert));
     }
 
     #[test]
     fn test_rdb_filter_do_tbs_with_escapes() {
         let db_type = DbType::Mysql;
         let config = FilterConfig {
-            ignore_dbs: "b*".to_string(),
+            ignore_schemas: "b*".to_string(),
             do_tbs: "a*.*,`c*`.`*`".to_string(),
             do_events: "insert".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(rdb_fitler.filter_event("bcd", "bcd", "insert"));
-        assert!(rdb_fitler.filter_event("cde", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("a", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("abc", "bcd", "insert"));
-        assert!(rdb_fitler.filter_event("c", "bcd", "insert"));
-        assert!(rdb_fitler.filter_event("cde", "bcd", "insert"));
-        assert!(rdb_fitler.filter_event("c*", "bcd", "insert"));
-        assert!(!rdb_fitler.filter_event("c*", "*", "insert"));
+        assert!(rdb_fitler.filter_event("bcd", "bcd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("cde", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("a", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("abc", "bcd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("c", "bcd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("cde", "bcd", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("c*", "bcd", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("c*", "*", &RowType::Insert));
     }
 
     #[test]
@@ -521,55 +523,55 @@ mod tests {
         let db_type = DbType::Mysql;
         // keep by do_dbs, Not filtered by ignore_dbs
         let config = FilterConfig {
-            do_dbs: "test_db_*".to_string(),
-            ignore_dbs: "test_db_2".to_string(),
+            do_schemas: "test_db_*".to_string(),
+            ignore_schemas: "test_db_2".to_string(),
 
             do_events: "insert".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(!rdb_fitler.filter_db("test_db_1"));
+        assert!(!rdb_fitler.filter_schema("test_db_1"));
 
         // keep by do_dbs, filtered by ignore_dbs exactly
         let config = FilterConfig {
-            do_dbs: "test_db_*".to_string(),
-            ignore_dbs: "test_db_1".to_string(),
+            do_schemas: "test_db_*".to_string(),
+            ignore_schemas: "test_db_1".to_string(),
 
             do_events: "insert".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(rdb_fitler.filter_db("test_db_1"));
+        assert!(rdb_fitler.filter_schema("test_db_1"));
 
         // keep by do_dbs, filtered by ignore_dbs wildchar
         let config = FilterConfig {
-            do_dbs: "test_db_1".to_string(),
-            ignore_dbs: "*".to_string(),
+            do_schemas: "test_db_1".to_string(),
+            ignore_schemas: "*".to_string(),
             do_events: "insert".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(rdb_fitler.filter_db("test_db_1"));
+        assert!(rdb_fitler.filter_schema("test_db_1"));
 
         // keep by do_dbs, NOT all tables filtered by ignore_tbs
         let config = FilterConfig {
-            do_dbs: "test_db_*".to_string(),
+            do_schemas: "test_db_*".to_string(),
             ignore_tbs: "test_db_1.a*".to_string(),
             do_events: "insert".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(!rdb_fitler.filter_db("test_db_1"));
+        assert!(!rdb_fitler.filter_schema("test_db_1"));
 
         // keep by do_dbs, all tables filtered by ignore_tbs
         let config = FilterConfig {
-            do_dbs: "test_db_*".to_string(),
+            do_schemas: "test_db_*".to_string(),
             ignore_tbs: "test_db_1.*".to_string(),
             do_events: "insert".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(rdb_fitler.filter_db("test_db_1"));
+        assert!(rdb_fitler.filter_schema("test_db_1"));
 
         // keep by do_tbs, NOT all tables filtered by ignore_tbs
         let config = FilterConfig {
@@ -579,48 +581,48 @@ mod tests {
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(!rdb_fitler.filter_db("test_db_1"));
+        assert!(!rdb_fitler.filter_schema("test_db_1"));
 
         // keep by do_tbs, all tables filtered by ignore_tbs
         let config = FilterConfig {
-            ignore_dbs: "b*".to_string(),
+            ignore_schemas: "b*".to_string(),
             do_tbs: "test_db_1.one_pk_multi_uk".to_string(),
             ignore_tbs: "test_db_*.*".to_string(),
             do_events: "insert".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(rdb_fitler.filter_db("test_db_1"));
+        assert!(rdb_fitler.filter_schema("test_db_1"));
 
         // keep by do_tbs, NOT filtered by ignore_dbs
         let config = FilterConfig {
-            ignore_dbs: "test_db_2".to_string(),
+            ignore_schemas: "test_db_2".to_string(),
             do_tbs: "test_db_1.one_pk_multi_uk".to_string(),
             do_events: "insert".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(!rdb_fitler.filter_db("test_db_1"));
+        assert!(!rdb_fitler.filter_schema("test_db_1"));
 
         // keep by do_tbs, filtered by ignore_dbs exactly
         let config = FilterConfig {
-            ignore_dbs: "test_db_1".to_string(),
+            ignore_schemas: "test_db_1".to_string(),
             do_tbs: "test_db_1.one_pk_multi_uk".to_string(),
             do_events: "insert".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(rdb_fitler.filter_db("test_db_1"));
+        assert!(rdb_fitler.filter_schema("test_db_1"));
 
         // keep by do_tbs, filtered by ignore_dbs wildchar
         let config = FilterConfig {
-            ignore_dbs: "test_db_*".to_string(),
+            ignore_schemas: "test_db_*".to_string(),
             do_tbs: "test_db_1.one_pk_multi_uk".to_string(),
             do_events: "insert".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(rdb_fitler.filter_db("test_db_1"));
+        assert!(rdb_fitler.filter_schema("test_db_1"));
     }
 
     #[test]
@@ -628,53 +630,53 @@ mod tests {
         let db_type = DbType::Mysql;
         // keep by do_dbs, Not filtered by ignore_dbs
         let config = FilterConfig {
-            do_dbs: "`test_db_*`".to_string(),
-            ignore_dbs: "`test_db_2`".to_string(),
+            do_schemas: "`test_db_*`".to_string(),
+            ignore_schemas: "`test_db_2`".to_string(),
             do_events: "insert".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(!rdb_fitler.filter_db("test_db_*"));
+        assert!(!rdb_fitler.filter_schema("test_db_*"));
 
         // keep by do_dbs, filtered by ignore_dbs exactly
         let config = FilterConfig {
-            do_dbs: "test_db_*".to_string(),
-            ignore_dbs: "`test_db_*`".to_string(),
+            do_schemas: "test_db_*".to_string(),
+            ignore_schemas: "`test_db_*`".to_string(),
             do_events: "insert".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(rdb_fitler.filter_db("test_db_*"));
+        assert!(rdb_fitler.filter_schema("test_db_*"));
 
         // keep by do_dbs, filtered by ignore_dbs wildchar
         let config = FilterConfig {
-            do_dbs: "`test_db_*`".to_string(),
-            ignore_dbs: "test_db*".to_string(),
+            do_schemas: "`test_db_*`".to_string(),
+            ignore_schemas: "test_db*".to_string(),
             do_events: "insert".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(rdb_fitler.filter_db("test_db_*"));
+        assert!(rdb_fitler.filter_schema("test_db_*"));
 
         // keep by do_dbs, NOT all tables filtered by ignore_tbs
         let config = FilterConfig {
-            do_dbs: "`test_db_*`".to_string(),
+            do_schemas: "`test_db_*`".to_string(),
             ignore_tbs: "`test_db_*`.a*".to_string(),
             do_events: "insert".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(!rdb_fitler.filter_db("test_db_*"));
+        assert!(!rdb_fitler.filter_schema("test_db_*"));
 
         // keep by do_dbs, all tables filtered by ignore_tbs
         let config = FilterConfig {
-            do_dbs: "`test_db_*`".to_string(),
+            do_schemas: "`test_db_*`".to_string(),
             ignore_tbs: "`test_db_*`.*".to_string(),
             do_events: "insert".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(rdb_fitler.filter_db("test_db_*"));
+        assert!(rdb_fitler.filter_schema("test_db_*"));
 
         // keep by do_tbs, NOT all tables filtered by ignore_tbs
         let config = FilterConfig {
@@ -684,48 +686,48 @@ mod tests {
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(!rdb_fitler.filter_db("test_db_*"));
+        assert!(!rdb_fitler.filter_schema("test_db_*"));
 
         // keep by do_tbs, all tables filtered by ignore_tbs
         let config = FilterConfig {
-            ignore_dbs: "b*".to_string(),
+            ignore_schemas: "b*".to_string(),
             do_tbs: "`test_db_*`.one_pk_multi_uk".to_string(),
             ignore_tbs: "`test_db_*`.*".to_string(),
             do_events: "insert".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(rdb_fitler.filter_db("test_db_*"));
+        assert!(rdb_fitler.filter_schema("test_db_*"));
 
         // keep by do_tbs, NOT filtered by ignore_dbs
         let config = FilterConfig {
-            ignore_dbs: "test_db_2".to_string(),
+            ignore_schemas: "test_db_2".to_string(),
             do_tbs: "`test_db_*`.one_pk_multi_uk".to_string(),
             do_events: "insert".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(!rdb_fitler.filter_db("test_db_*"));
+        assert!(!rdb_fitler.filter_schema("test_db_*"));
 
         // keep by do_tbs, filtered by ignore_dbs exactly
         let config = FilterConfig {
-            ignore_dbs: "`test_db_*`".to_string(),
+            ignore_schemas: "`test_db_*`".to_string(),
             do_tbs: "test_db_*.one_pk_multi_uk".to_string(),
             do_events: "insert".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(rdb_fitler.filter_db("test_db_*"));
+        assert!(rdb_fitler.filter_schema("test_db_*"));
 
         // keep by do_tbs, filtered by ignore_dbs wildchar
         let config = FilterConfig {
-            ignore_dbs: "test_db*".to_string(),
+            ignore_schemas: "test_db*".to_string(),
             do_tbs: "`test_db_*`.one_pk_multi_uk".to_string(),
             do_events: "insert".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(rdb_fitler.filter_db("test_db_*"));
+        assert!(rdb_fitler.filter_schema("test_db_*"));
 
         // ingore some tbs in db, but not all tbs in db filtered
         let config = FilterConfig {
@@ -734,7 +736,7 @@ mod tests {
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(rdb_fitler.filter_db("test_db_*"));
+        assert!(rdb_fitler.filter_schema("test_db_*"));
     }
 
     #[test]
@@ -743,26 +745,26 @@ mod tests {
 
         // keep do_events emtpy
         let config = FilterConfig {
-            do_dbs: "test_db_*".to_string(),
-            ignore_dbs: "test_db_2".to_string(),
+            do_schemas: "test_db_*".to_string(),
+            ignore_schemas: "test_db_2".to_string(),
             do_events: "*".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(!rdb_fitler.filter_event("test_db_1", "aaaa", "insert"));
-        assert!(!rdb_fitler.filter_event("test_db_1", "aaaa", "update"));
-        assert!(!rdb_fitler.filter_event("test_db_1", "aaaa", "delete"));
+        assert!(!rdb_fitler.filter_event("test_db_1", "aaaa", &RowType::Insert));
+        assert!(!rdb_fitler.filter_event("test_db_1", "aaaa", &RowType::Update));
+        assert!(!rdb_fitler.filter_event("test_db_1", "aaaa", &RowType::Delete));
 
         // explicitly set do_events
         let config = FilterConfig {
-            do_dbs: "test_db_*".to_string(),
-            ignore_dbs: "test_db_2".to_string(),
+            do_schemas: "test_db_*".to_string(),
+            ignore_schemas: "test_db_2".to_string(),
             do_events: "insert".to_string(),
             ..Default::default()
         };
         let mut rdb_fitler = RdbFilter::from_config(&config, &db_type).unwrap();
-        assert!(!rdb_fitler.filter_event("test_db_1", "aaaa", "insert"));
-        assert!(rdb_fitler.filter_event("test_db_1", "aaaa", "update"));
-        assert!(rdb_fitler.filter_event("test_db_1", "aaaa", "delete"));
+        assert!(!rdb_fitler.filter_event("test_db_1", "aaaa", &RowType::Insert));
+        assert!(rdb_fitler.filter_event("test_db_1", "aaaa", &RowType::Update));
+        assert!(rdb_fitler.filter_event("test_db_1", "aaaa", &RowType::Delete));
     }
 }

@@ -1,11 +1,11 @@
 use std::{cmp, sync::Arc};
 
 use async_trait::async_trait;
-use concurrent_queue::ConcurrentQueue;
 use dt_common::config::sinker_config::BasicSinkerConfig;
+use dt_common::meta::ddl_meta::ddl_data::DdlData;
+use dt_common::meta::dt_queue::DtQueue;
 use dt_common::meta::{
-    ddl_data::DdlData, dt_data::DtItem, rdb_meta_manager::RdbMetaManager, row_data::RowData,
-    row_type::RowType,
+    dt_data::DtItem, rdb_meta_manager::RdbMetaManager, row_data::RowData, row_type::RowType,
 };
 use dt_connector::Sinker;
 
@@ -47,7 +47,7 @@ impl Parallelizer for MergeParallelizer {
         "MergeParallelizer".to_string()
     }
 
-    async fn drain(&mut self, buffer: &ConcurrentQueue<DtItem>) -> anyhow::Result<Vec<DtItem>> {
+    async fn drain(&mut self, buffer: &DtQueue) -> anyhow::Result<Vec<DtItem>> {
         self.base_parallelizer.drain(buffer).await
     }
 
@@ -62,7 +62,7 @@ impl Parallelizer for MergeParallelizer {
                 let tb_meta = rdb_meta_manager
                     .get_tb_meta(&row_data.schema, &row_data.tb)
                     .await?;
-                if !tb_meta.foreign_keys.is_empty() {
+                if !tb_meta.foreign_keys.is_empty() || !tb_meta.ref_by_foreign_keys.is_empty() {
                     any_fk_tb = true;
                     break;
                 }

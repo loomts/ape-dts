@@ -1,12 +1,12 @@
 use std::{
+    cmp,
     str::FromStr,
     sync::{atomic::AtomicBool, Arc, Mutex},
 };
 
-use concurrent_queue::ConcurrentQueue;
 use dt_common::{
-    config::{extractor_config::ExtractorConfig, task_config::TaskConfig},
-    meta::dt_data::DtItem,
+    config::{config_enums::DbType, extractor_config::ExtractorConfig, task_config::TaskConfig},
+    meta::dt_queue::DtQueue,
     monitor::monitor::Monitor,
     rdb_filter::RdbFilter,
     time_filter::TimeFilter,
@@ -14,8 +14,8 @@ use dt_common::{
 use dt_common::{
     meta::{
         avro::avro_converter::AvroConverter, mongo::mongo_cdc_source::MongoCdcSource,
-        mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
-        redis::redis_statistic_type::RedisStatisticType, syncer::Syncer,
+        pg::pg_meta_manager::PgMetaManager, redis::redis_statistic_type::RedisStatisticType,
+        syncer::Syncer,
     },
     utils::redis_util::RedisUtil,
 };
@@ -24,6 +24,7 @@ use dt_connector::{
     extractor::{
         base_extractor::BaseExtractor,
         extractor_monitor::ExtractorMonitor,
+        foxlake::foxlake_s3_extractor::FoxlakeS3Extractor,
         kafka::kafka_extractor::KafkaExtractor,
         mongo::{
             mongo_cdc_extractor::MongoCdcExtractor, mongo_check_extractor::MongoCheckExtractor,
@@ -59,7 +60,7 @@ impl ExtractorUtil {
     pub async fn create_extractor(
         config: &TaskConfig,
         extractor_config: &ExtractorConfig,
-        buffer: Arc<ConcurrentQueue<DtItem>>,
+        buffer: Arc<DtQueue>,
         shut_down: Arc<AtomicBool>,
         syncer: Arc<Mutex<Syncer>>,
         monitor: Arc<Mutex<Monitor>>,
@@ -68,15 +69,15 @@ impl ExtractorUtil {
         snapshot_resumer: SnapshotResumer,
         cdc_resumer: CdcResumer,
     ) -> anyhow::Result<Box<dyn Extractor + Send>> {
-        let base_extractor = BaseExtractor {
+        let mut base_extractor = BaseExtractor {
             buffer,
             router,
             shut_down,
             monitor: ExtractorMonitor::new(monitor),
             data_marker,
+            time_filter: TimeFilter::default(),
         };
 
-        let buffer_size = config.pipeline.buffer_size;
         let enable_sqlx_log = TaskUtil::check_enable_sqlx_log(&config.runtime.log_level);
         let filter = RdbFilter::from_config(&config.filter, &config.extractor_basic.db_type)?;
 
@@ -86,18 +87,30 @@ impl ExtractorUtil {
                 db,
                 tb,
                 sample_interval,
+                parallel_size,
+                batch_size,
             } => {
                 // max_connections: 1 for extracting data from table, 1 for db-meta-manager
-                let conn_pool = TaskUtil::create_mysql_conn_pool(&url, 2, enable_sqlx_log).await?;
-                let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
+                let max_connections = cmp::max(2, parallel_size as u32 + 1);
+                let conn_pool =
+                    TaskUtil::create_mysql_conn_pool(&url, max_connections, enable_sqlx_log)
+                        .await?;
+                let meta_manager = TaskUtil::create_mysql_meta_manager(
+                    &url,
+                    &config.runtime.log_level,
+                    DbType::Mysql,
+                    config.meta_center.clone(),
+                )
+                .await?;
                 let extractor = MysqlSnapshotExtractor {
                     conn_pool: conn_pool.clone(),
                     meta_manager,
                     resumer: snapshot_resumer,
                     db,
                     tb,
-                    slice_size: buffer_size,
+                    batch_size,
                     sample_interval,
+                    parallel_size,
                     base_extractor,
                 };
                 Box::new(extractor)
@@ -109,7 +122,13 @@ impl ExtractorUtil {
                 batch_size,
             } => {
                 let conn_pool = TaskUtil::create_mysql_conn_pool(&url, 2, enable_sqlx_log).await?;
-                let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
+                let meta_manager = TaskUtil::create_mysql_meta_manager(
+                    &url,
+                    &config.runtime.log_level,
+                    DbType::Mysql,
+                    config.meta_center.clone(),
+                )
+                .await?;
                 let extractor = MysqlCheckExtractor {
                     conn_pool,
                     meta_manager,
@@ -125,14 +144,22 @@ impl ExtractorUtil {
                 binlog_filename,
                 binlog_position,
                 server_id,
+                gtid_enabled,
+                gtid_set,
                 heartbeat_interval_secs,
                 heartbeat_tb,
                 start_time_utc,
                 end_time_utc,
             } => {
                 let conn_pool = TaskUtil::create_mysql_conn_pool(&url, 2, enable_sqlx_log).await?;
-                let meta_manager = MysqlMetaManager::new(conn_pool.clone()).init().await?;
-                let time_filter = TimeFilter::new(&start_time_utc, &end_time_utc)?;
+                let meta_manager = TaskUtil::create_mysql_meta_manager(
+                    &url,
+                    &config.runtime.log_level,
+                    DbType::Mysql,
+                    config.meta_center.clone(),
+                )
+                .await?;
+                base_extractor.time_filter = TimeFilter::new(&start_time_utc, &end_time_utc)?;
                 let extractor = MysqlCdcExtractor {
                     meta_manager,
                     filter,
@@ -146,26 +173,28 @@ impl ExtractorUtil {
                     syncer,
                     base_extractor,
                     resumer: cdc_resumer,
-                    time_filter,
+                    gtid_enabled,
+                    gtid_set,
                 };
                 Box::new(extractor)
             }
 
             ExtractorConfig::PgSnapshot {
                 url,
-                schema: db,
+                schema,
                 tb,
                 sample_interval,
+                batch_size,
             } => {
                 let conn_pool = TaskUtil::create_pg_conn_pool(&url, 2, enable_sqlx_log).await?;
-                let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
+                let meta_manager = PgMetaManager::new(conn_pool.clone()).await?;
                 let extractor = PgSnapshotExtractor {
                     conn_pool,
                     meta_manager,
                     resumer: snapshot_resumer,
-                    slice_size: buffer_size,
+                    batch_size,
                     sample_interval,
-                    schema: db,
+                    schema,
                     tb,
                     base_extractor,
                 };
@@ -178,7 +207,7 @@ impl ExtractorUtil {
                 batch_size,
             } => {
                 let conn_pool = TaskUtil::create_pg_conn_pool(&url, 2, enable_sqlx_log).await?;
-                let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
+                let meta_manager = PgMetaManager::new(conn_pool.clone()).await?;
                 let extractor = PgCheckExtractor {
                     conn_pool,
                     meta_manager,
@@ -202,12 +231,11 @@ impl ExtractorUtil {
                 end_time_utc,
             } => {
                 let conn_pool = TaskUtil::create_pg_conn_pool(&url, 2, enable_sqlx_log).await?;
-                let meta_manager = PgMetaManager::new(conn_pool.clone()).init().await?;
-                let time_filter = TimeFilter::new(&start_time_utc, &end_time_utc)?;
+                let meta_manager = PgMetaManager::new(conn_pool.clone()).await?;
+                base_extractor.time_filter = TimeFilter::new(&start_time_utc, &end_time_utc)?;
                 let extractor = PgCdcExtractor {
                     meta_manager,
                     filter,
-                    time_filter,
                     url,
                     conn_pool,
                     slot_name,
@@ -404,6 +432,26 @@ impl ExtractorUtil {
                     syncer,
                     resumer: cdc_resumer,
                     base_extractor,
+                };
+                Box::new(extractor)
+            }
+
+            ExtractorConfig::FoxlakeS3 {
+                schema,
+                tb,
+                s3_config,
+                batch_size,
+                ..
+            } => {
+                let s3_client = TaskUtil::create_s3_client(&s3_config);
+                let extractor = FoxlakeS3Extractor {
+                    schema,
+                    tb,
+                    s3_client,
+                    s3_config,
+                    resumer: snapshot_resumer,
+                    base_extractor,
+                    batch_size,
                 };
                 Box::new(extractor)
             }

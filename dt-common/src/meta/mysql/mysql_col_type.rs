@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 use strum::Display;
 
@@ -16,7 +18,7 @@ pub enum MysqlColType {
     UnsignedLongLong,
     Float,
     Double,
-    Decimal,
+    Decimal { precision: u32, scale: u32 },
     Time,
     Date,
     DateTime,
@@ -32,7 +34,7 @@ pub enum MysqlColType {
     VarBinary { length: u16 },
     Blob,
     Bit,
-    Set,
-    Enum,
+    Set { items: HashMap<u64, String> },
+    Enum { items: HashMap<u32, String> },
     Json,
 }

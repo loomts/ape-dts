@@ -1,15 +1,20 @@
 use std::{str::FromStr, time::Duration};
 
+use dt_common::config::s3_config::S3Config;
 use dt_common::config::{
-    config_enums::DbType, sinker_config::SinkerConfig, task_config::TaskConfig,
+    config_enums::DbType, meta_center_config::MetaCenterConfig, sinker_config::SinkerConfig,
+    task_config::TaskConfig,
 };
 use dt_common::log_info;
+use dt_common::meta::mysql::mysql_dbengine_meta_center::MysqlDbEngineMetaCenter;
 use dt_common::meta::{
     mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
     rdb_meta_manager::RdbMetaManager,
 };
 use futures::TryStreamExt;
 use mongodb::options::ClientOptions;
+use rusoto_core::Region;
+use rusoto_s3::S3Client;
 use sqlx::{
     mysql::{MySqlConnectOptions, MySqlPoolOptions},
     postgres::{PgConnectOptions, PgPoolOptions},
@@ -74,13 +79,14 @@ impl TaskUtil {
         let meta_manager = match &config.sinker {
             SinkerConfig::Mysql { url, .. } | SinkerConfig::MysqlCheck { url, .. } => {
                 let mysql_meta_manager =
-                    Self::create_mysql_meta_manager(url, log_level, DbType::Mysql).await?;
+                    Self::create_mysql_meta_manager(url, log_level, DbType::Mysql, None).await?;
                 RdbMetaManager::from_mysql(mysql_meta_manager)
             }
 
             SinkerConfig::Starrocks { url, .. } => {
                 let mysql_meta_manager =
-                    Self::create_mysql_meta_manager(url, log_level, DbType::StarRocks).await?;
+                    Self::create_mysql_meta_manager(url, log_level, DbType::StarRocks, None)
+                        .await?;
                 RdbMetaManager::from_mysql(mysql_meta_manager)
             }
 
@@ -100,12 +106,29 @@ impl TaskUtil {
         url: &str,
         log_level: &str,
         db_type: DbType,
+        meta_center_config: Option<MetaCenterConfig>,
     ) -> anyhow::Result<MysqlMetaManager> {
         let enable_sqlx_log = Self::check_enable_sqlx_log(log_level);
         let conn_pool = Self::create_mysql_conn_pool(url, 1, enable_sqlx_log).await?;
-        MysqlMetaManager::new_mysql_compatible(conn_pool.clone(), db_type)
-            .init()
-            .await
+        let mut meta_manager = MysqlMetaManager::new_mysql_compatible(conn_pool, db_type).await?;
+
+        if let Some(MetaCenterConfig::MySqlDbEngine {
+            url,
+            ddl_conflict_policy,
+            ..
+        }) = &meta_center_config
+        {
+            let meta_center_conn_pool =
+                Self::create_mysql_conn_pool(url, 1, enable_sqlx_log).await?;
+            let meta_center = MysqlDbEngineMetaCenter::new(
+                url.clone(),
+                meta_center_conn_pool,
+                ddl_conflict_policy.clone(),
+            )
+            .await?;
+            meta_manager.meta_center = Some(meta_center);
+        }
+        Ok(meta_manager)
     }
 
     pub async fn create_pg_meta_manager(
@@ -114,7 +137,7 @@ impl TaskUtil {
     ) -> anyhow::Result<PgMetaManager> {
         let enable_sqlx_log = Self::check_enable_sqlx_log(log_level);
         let conn_pool = Self::create_pg_conn_pool(url, 1, enable_sqlx_log).await?;
-        PgMetaManager::new(conn_pool.clone()).init().await
+        PgMetaManager::new(conn_pool.clone()).await
     }
 
     pub async fn create_mongo_client(url: &str, app_name: &str) -> anyhow::Result<mongodb::Client> {
@@ -130,7 +153,7 @@ impl TaskUtil {
         log_level == "debug" || log_level == "trace"
     }
 
-    pub async fn list_dbs(url: &str, db_type: &DbType) -> anyhow::Result<Vec<String>> {
+    pub async fn list_schemas(url: &str, db_type: &DbType) -> anyhow::Result<Vec<String>> {
         let mut dbs = match db_type {
             DbType::Mysql => Self::list_mysql_dbs(url).await?,
             DbType::Pg => Self::list_pg_schemas(url).await?,
@@ -141,11 +164,15 @@ impl TaskUtil {
         Ok(dbs)
     }
 
-    pub async fn list_tbs(url: &str, db: &str, db_type: &DbType) -> anyhow::Result<Vec<String>> {
+    pub async fn list_tbs(
+        url: &str,
+        schema: &str,
+        db_type: &DbType,
+    ) -> anyhow::Result<Vec<String>> {
         let mut tbs = match db_type {
-            DbType::Mysql => Self::list_mysql_tbs(url, db).await?,
-            DbType::Pg => Self::list_pg_tbs(url, db).await?,
-            DbType::Mongo => Self::list_mongo_tbs(url, db).await?,
+            DbType::Mysql => Self::list_mysql_tbs(url, schema).await?,
+            DbType::Pg => Self::list_pg_tbs(url, schema).await?,
+            DbType::Mongo => Self::list_mongo_tbs(url, schema).await?,
             _ => Vec::new(),
         };
         tbs.sort();
@@ -154,50 +181,50 @@ impl TaskUtil {
 
     pub async fn check_tb_exist(
         url: &str,
-        db: &str,
+        schema: &str,
         tb: &str,
         db_type: &DbType,
     ) -> anyhow::Result<bool> {
-        let dbs = Self::list_dbs(url, db_type).await?;
-        if !dbs.contains(&db.to_string()) {
+        let schemas = Self::list_schemas(url, db_type).await?;
+        if !schemas.contains(&schema.to_string()) {
             return Ok(false);
         }
 
-        let tbs = Self::list_tbs(url, db, db_type).await?;
+        let tbs = Self::list_tbs(url, schema, db_type).await?;
         Ok(tbs.contains(&tb.to_string()))
     }
 
     pub async fn check_and_create_tb(
         url: &str,
-        db: &str,
+        schema: &str,
         tb: &str,
-        db_sql: &str,
+        schema_sql: &str,
         tb_sql: &str,
         db_type: &DbType,
     ) -> anyhow::Result<()> {
         log_info!(
-            "url: {}, db: {}, tb: {}, db_sql: {}, tb_sql: {}",
+            "url: {}, schema: {}, tb: {}, schema_sql: {}, tb_sql: {}",
             url,
-            db,
+            schema,
             tb,
-            db_sql,
+            schema_sql,
             tb_sql
         );
-        if TaskUtil::check_tb_exist(url, db, tb, db_type).await? {
+        if TaskUtil::check_tb_exist(url, schema, tb, db_type).await? {
             return Ok(());
         }
 
         match db_type {
             DbType::Mysql => {
                 let conn_pool = Self::create_mysql_conn_pool(url, 1, true).await?;
-                sqlx::query(db_sql).execute(&conn_pool).await?;
+                sqlx::query(schema_sql).execute(&conn_pool).await?;
                 sqlx::query(tb_sql).execute(&conn_pool).await?;
                 conn_pool.close().await
             }
 
             DbType::Pg => {
                 let conn_pool = Self::create_pg_conn_pool(url, 1, true).await?;
-                sqlx::query(db_sql).execute(&conn_pool).await?;
+                sqlx::query(schema_sql).execute(&conn_pool).await?;
                 sqlx::query(tb_sql).execute(&conn_pool).await?;
                 conn_pool.close().await
             }
@@ -289,5 +316,23 @@ impl TaskUtil {
         let tbs = client.database(db).list_collection_names(None).await?;
         client.shutdown().await;
         Ok(tbs)
+    }
+
+    pub fn create_s3_client(s3_config: &S3Config) -> S3Client {
+        let region = if s3_config.endpoint.is_empty() {
+            Region::from_str(&s3_config.region).unwrap()
+        } else {
+            Region::Custom {
+                name: s3_config.region.clone(),
+                endpoint: s3_config.endpoint.clone(),
+            }
+        };
+
+        let credentials = rusoto_credential::StaticProvider::new_minimal(
+            s3_config.access_key.to_owned(),
+            s3_config.secret_key.to_owned(),
+        );
+
+        S3Client::new_with(rusoto_core::HttpClient::new().unwrap(), credentials, region)
     }
 }

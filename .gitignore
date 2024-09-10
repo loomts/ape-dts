@@ -29,3 +29,7 @@ Cargo.lock
 
 ## local env settings
 /**/.env.local
+
+/**/pkg/*
+
+/release

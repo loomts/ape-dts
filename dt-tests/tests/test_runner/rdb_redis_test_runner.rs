@@ -1,5 +1,5 @@
 use anyhow::bail;
-use dt_common::meta::mysql::mysql_col_type::MysqlColType;
+use dt_common::config::config_enums::DbType;
 use dt_common::utils::redis_util::RedisUtil;
 use dt_common::{
     config::{sinker_config::SinkerConfig, task_config::TaskConfig},
@@ -64,7 +64,10 @@ impl RdbRedisTestRunner {
         self.execute_sqls(&self.base.src_test_sqls).await?;
         self.base.start_task().await?;
 
-        let db_tbs = RdbTestRunner::get_compare_db_tbs_from_sqls(&self.base.src_prepare_sqls)?;
+        let db_tbs = RdbTestRunner::get_compare_db_tbs_from_sqls(
+            &DbType::Mysql,
+            &self.base.src_prepare_sqls,
+        )?;
         self.compare_data_for_tbs(&db_tbs).await;
         Ok(())
     }
@@ -95,7 +98,10 @@ impl RdbRedisTestRunner {
             }
         }
 
-        let db_tbs = RdbTestRunner::get_compare_db_tbs_from_sqls(&self.base.src_prepare_sqls)?;
+        let db_tbs = RdbTestRunner::get_compare_db_tbs_from_sqls(
+            &DbType::Mysql,
+            &self.base.src_prepare_sqls,
+        )?;
 
         // insert
         self.execute_sqls(&src_insert_sqls).await?;
@@ -157,15 +163,6 @@ impl RdbRedisTestRunner {
                 for (col, db_v) in row_data.after.unwrap() {
                     // check redis key exists
                     assert!(redis_kvs.contains_key(&col));
-
-                    // TODO
-                    // ignore enum/set columns since for mysql: we get integer in binlog, but string by db select
-                    if matches!(tb_meta.col_type_map.get(&col), Some(MysqlColType::Enum))
-                        || matches!(tb_meta.col_type_map.get(&col), Some(MysqlColType::Set))
-                    {
-                        continue;
-                    }
-
                     // check redis value = db value
                     if let Value::Data(v) = redis_kvs.get(&col).unwrap() {
                         let redis_v_str = String::from_utf8(v.clone()).unwrap();

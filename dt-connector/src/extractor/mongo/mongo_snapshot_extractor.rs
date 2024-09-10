@@ -6,7 +6,7 @@ use dt_common::meta::{
     row_data::RowData,
     row_type::RowType,
 };
-use dt_common::{config::config_enums::DbType, log_finished, log_info};
+use dt_common::{config::config_enums::DbType, log_info};
 use mongodb::{
     bson::{doc, oid::ObjectId, Bson, Document},
     options::FindOptions,
@@ -51,9 +51,10 @@ impl MongoSnapshotExtractor {
 
         let filter = if let Some(resume_value) =
             self.resumer
-                .get_resume_value(&self.db, &self.tb, MongoConstants::ID)
+                .get_resume_value(&self.db, &self.tb, MongoConstants::ID, false)
         {
             let start_id = ObjectId::parse_str(resume_value).unwrap();
+            log_info!("start_id: {}", start_id.to_string());
             Some(doc! {MongoConstants::ID: {"$gt": start_id}})
         } else {
             None
@@ -107,16 +108,6 @@ impl MongoSnapshotExtractor {
             self.db,
             self.tb,
             self.base_extractor.monitor.counters.record_count
-        );
-
-        log_finished!(
-            "{}",
-            Position::RdbSnapshotFinished {
-                db_type: DbType::Mongo.to_string(),
-                schema: self.db.clone(),
-                tb: self.tb.clone(),
-            }
-            .to_string()
         );
         Ok(())
     }

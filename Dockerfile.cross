@@ -1,0 +1,10 @@
+FROM alpine:3.18 as dist
+
+ARG MODULE_NAME="dt-main"
+ARG TARGETOS 
+ARG TARGETARCH
+
+COPY log4rs.yaml /log4rs.yaml
+COPY "tmp/${TARGETARCH}-${TARGETOS}/${MODULE_NAME}" /ape-dts
+
+ENTRYPOINT [ "/ape-dts" ]
