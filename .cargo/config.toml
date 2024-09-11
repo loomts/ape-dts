@@ -23,7 +23,7 @@ linker = "aarch64-linux-musl-gcc"
 # linker = "rust-lld"
 linker = "x86_64-linux-gnu-gcc"
 # fix link error for https://github.com/briansmith/ring, refer to: https://github.com/briansmith/ring/issues/1605#issuecomment-1533940670
-rustflags = ["-C", "link-args=-fstack-protector-all -lssp"]
+# rustflags = ["-C", "link-args=-fstack-protector-all -lssp"]
 # rustflags = ["-C", "target-feature=+crt-static"]
 
 [target.aarch64-unknown-linux-gnu]
