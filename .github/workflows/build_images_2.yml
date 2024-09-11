@@ -27,20 +27,20 @@ jobs:
       - name: Install cross
         run: cargo install cross
 
-      - name: Build for x86_64-unknown-linux-musl
-        run: cross build --target x86_64-unknown-linux-musl --release
+      - name: Build for x86_64
+        run: cross build --target x86_64-unknown-linux-gnu --release
 
-      - name: Build for aarch64-unknown-linux-musl
-        run: cross build --target aarch64-unknown-linux-musl --release
-
-      - name: Upload x86_64 binaries
+      - name: Upload x86_64
         uses: actions/upload-artifact@v2
         with:
           name: x86_64-binaries
-          path: target/x86_64-unknown-linux-musl/release/*
+          path: target/x86_64-unknown-linux-gnu/release/*
 
-      - name: Upload aarch64 binaries
+      - name: Build for aarch64
+        run: cross build --target aarch64-unknown-linux-gnu --release
+
+      - name: Upload aarch64
         uses: actions/upload-artifact@v2
         with:
           name: aarch64-binaries
-          path: target/aarch64-unknown-linux-musl/release/*
+          path: target/aarch64-unknown-linux-gnu/release/*
