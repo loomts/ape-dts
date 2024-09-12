@@ -1,4 +1,4 @@
-name: Cross build linux images
+name: Build and push images
 
 on:
   workflow_dispatch:

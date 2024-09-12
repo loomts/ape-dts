@@ -1,4 +1,4 @@
-name: Cross build linux images
+name: Build and upload to S3
 
 on:
   workflow_dispatch:
@@ -48,7 +48,7 @@ jobs:
           cp target/x86_64-unknown-linux-gnu/release/dt-main bin/amd64-unknown-linux-gnu/
 
       - name: Upload to s3
-      - uses: shallwefootball/s3-upload-action@master
+        uses: shallwefootball/s3-upload-action@master
         with:
           aws_key_id: ${{ secrets.AWS_KEY_ID }}
           aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY}}
