@@ -244,9 +244,18 @@ impl MysqlMetaFetcher {
             "double" => MysqlColType::Double,
 
             "decimal" => {
-                let precision: u32 = row.try_get(NUMERIC_PRECISION).unwrap();
-                let scale: u32 = row.try_get(NUMERIC_SCALE).unwrap();
-                MysqlColType::Decimal { precision, scale }
+                if db_type == &DbType::StarRocks {
+                    let precision: i64 = row.try_get(NUMERIC_PRECISION).unwrap();
+                    let scale: i64 = row.try_get(NUMERIC_SCALE).unwrap();
+                    MysqlColType::Decimal {
+                        precision: precision as u32,
+                        scale: scale as u32,
+                    }
+                } else {
+                    let precision: u32 = row.try_get(NUMERIC_PRECISION).unwrap();
+                    let scale: u32 = row.try_get(NUMERIC_SCALE).unwrap();
+                    MysqlColType::Decimal { precision, scale }
+                }
             }
 
             "enum" => {

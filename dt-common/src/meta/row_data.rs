@@ -132,6 +132,32 @@ impl RowData {
         )
     }
 
+    pub fn convert_raw_string(&mut self) {
+        if let Some(before) = &mut self.before {
+            Self::conver_raw_string_col_values(before);
+        }
+        if let Some(after) = &mut self.after {
+            Self::conver_raw_string_col_values(after);
+        }
+    }
+
+    fn conver_raw_string_col_values(col_values: &mut HashMap<String, ColValue>) {
+        let mut str_col_values: HashMap<String, ColValue> = HashMap::new();
+        for (col, col_value) in col_values.iter() {
+            if let ColValue::RawString(_) = col_value {
+                if let Some(str) = col_value.to_option_string() {
+                    str_col_values.insert(col.into(), ColValue::String(str));
+                } else {
+                    str_col_values.insert(col.to_owned(), ColValue::None);
+                }
+            }
+        }
+
+        for (col, col_value) in str_col_values {
+            col_values.insert(col, col_value);
+        }
+    }
+
     pub fn get_hash_code(&self, tb_meta: &RdbTbMeta) -> u128 {
         let col_values = match self.row_type {
             RowType::Insert => self.after.as_ref().unwrap(),

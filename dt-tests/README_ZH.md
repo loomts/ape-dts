@@ -281,3 +281,10 @@ docker run --name dst-redis-4-0 \
     --save 60 1 \
     --loglevel warning
 ```
+
+# starrocks
+## 目标
+```
+docker run -p 9030:9030 -p 8030:8030 -p 8040:8040 -itd \
+  --name quickstart starrocks/allin1-ubuntu:3.2.11
+```
