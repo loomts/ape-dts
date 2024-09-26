@@ -80,18 +80,21 @@ impl StarRocksSinker {
         let mut data_size = 0;
         // build stream load data
         let mut load_data = Vec::new();
-        for rd in data.iter().skip(start_index).take(batch_size) {
+        let row_type = data[start_index].row_type.clone();
+        for rd in data.iter_mut().skip(start_index).take(batch_size) {
             data_size += rd.data_size;
-            if data[start_index].row_type == RowType::Delete {
+            rd.convert_raw_string();
+            if row_type == RowType::Delete {
                 load_data.push(rd.before.as_ref().unwrap());
             } else {
                 load_data.push(rd.after.as_ref().unwrap());
             }
         }
+
         let body = json!(load_data).to_string();
         let db = &data[start_index].schema;
         let tb = &data[start_index].tb;
-        let op = if data[start_index].row_type == RowType::Delete {
+        let op = if row_type == RowType::Delete {
             "delete"
         } else {
             ""

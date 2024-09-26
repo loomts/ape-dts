@@ -83,7 +83,7 @@ impl MysqlMetaFetcher {
         let full_name = format!("{}.{}", schema, tb).to_lowercase();
         if !self.cache.contains_key(&full_name) {
             let (cols, col_type_map) =
-                Self::parse_cols(&self.conn_pool, &self.db_type, &self.version, schema, tb).await?;
+                Self::parse_cols(&self.conn_pool, &self.db_type, schema, tb).await?;
             let key_map = Self::parse_keys(&self.conn_pool, schema, tb).await?;
             let (order_col, partition_col, id_cols) =
                 RdbMetaManager::parse_rdb_cols(&key_map, &cols)?;
@@ -113,7 +113,6 @@ impl MysqlMetaFetcher {
     async fn parse_cols(
         conn_pool: &Pool<MySql>,
         db_type: &DbType,
-        version: &str,
         schema: &str,
         tb: &str,
     ) -> anyhow::Result<(Vec<String>, HashMap<String, MysqlColType>)> {
@@ -145,7 +144,7 @@ impl MysqlMetaFetcher {
 
         while let Some(row) = rows.try_next().await.unwrap() {
             let col: String = row.try_get(COLUMN_NAME)?;
-            let col_type = Self::get_col_type(db_type, version, &row).await?;
+            let col_type = Self::get_col_type(&row).await?;
             col_type_map.insert(col, col_type);
         }
 
@@ -158,11 +157,7 @@ impl MysqlMetaFetcher {
         Ok((cols, col_type_map))
     }
 
-    async fn get_col_type(
-        db_type: &DbType,
-        version: &str,
-        row: &MySqlRow,
-    ) -> anyhow::Result<MysqlColType> {
+    async fn get_col_type(row: &MySqlRow) -> anyhow::Result<MysqlColType> {
         let column_type: String = row.try_get(COLUMN_TYPE)?;
         let data_type: String = row.try_get(DATA_TYPE)?;
 
@@ -208,22 +203,16 @@ impl MysqlMetaFetcher {
                 }
             }
 
-            "varbinary" => {
-                let length = Self::get_col_length(db_type, version, row).await?;
-                MysqlColType::VarBinary {
-                    length: length as u16,
-                }
-            }
+            "varbinary" => MysqlColType::VarBinary {
+                length: Self::get_u64_col(row, CHARACTER_MAXIMUM_LENGTH) as u16,
+            },
 
-            "binary" => {
-                let length = Self::get_col_length(db_type, version, row).await?;
-                MysqlColType::Binary {
-                    length: length as u8,
-                }
-            }
+            "binary" => MysqlColType::Binary {
+                length: Self::get_u64_col(row, CHARACTER_MAXIMUM_LENGTH) as u8,
+            },
 
             "varchar" | "char" | "tinytext" | "mediumtext" | "longtext" | "text" => {
-                let length = Self::get_col_length(db_type, version, row).await?;
+                let length = Self::get_u64_col(row, CHARACTER_MAXIMUM_LENGTH);
                 let mut charset = String::new();
                 let unchecked: Option<Vec<u8>> = row.get_unchecked(CHARACTER_SET_NAME);
                 if unchecked.is_some() {
@@ -243,11 +232,10 @@ impl MysqlMetaFetcher {
             "float" => MysqlColType::Float,
             "double" => MysqlColType::Double,
 
-            "decimal" => {
-                let precision: u32 = row.try_get(NUMERIC_PRECISION).unwrap();
-                let scale: u32 = row.try_get(NUMERIC_SCALE).unwrap();
-                MysqlColType::Decimal { precision, scale }
-            }
+            "decimal" => MysqlColType::Decimal {
+                precision: Self::get_u64_col(row, NUMERIC_PRECISION) as u32,
+                scale: Self::get_u64_col(row, NUMERIC_SCALE) as u32,
+            },
 
             "enum" => {
                 // enum('x-small','small','medium','large','x-large')
@@ -309,27 +297,16 @@ impl MysqlMetaFetcher {
         Ok(col_type)
     }
 
-    async fn get_col_length(
-        db_type: &DbType,
-        version: &str,
-        row: &MySqlRow,
-    ) -> anyhow::Result<u64> {
-        // with A expression, error will throw for mysql 8.0: ColumnDecode { index: "\"CHARACTER_MAXIMUM_LENGTH\"", source: "mismatched types; Rust type `u64` (as SQL type `BIGINT UNSIGNED`) is not compatible with SQL type `BIGINT`" }'
-        // with B expression, error will throw for mysql 5.7: ColumnDecode { index: "\"CHARACTER_MAXIMUM_LENGTH\"", source: "mismatched types; Rust type `i64` (as SQL type `BIGINT`) is not compatible with SQL type `BIGINT UNSIGNED`" }'
-        // no need to consider versions before 5.*
-        let is_u64 = match *db_type {
-            DbType::Mysql => version.starts_with("5."),
-            DbType::StarRocks => false,
-            DbType::Foxlake => true,
-            _ => false,
-        };
-
-        if is_u64 {
-            let length: u64 = row.try_get(CHARACTER_MAXIMUM_LENGTH).unwrap();
-            Ok(length)
+    fn get_u64_col(row: &MySqlRow, col: &str) -> u64 {
+        // use let length: u64 = row.try_get_unchecked(CHARACTER_MAXIMUM_LENGTH);
+        // instead of let length: u64 = row.try_get(CHARACTER_MAXIMUM_LENGTH)?;
+        // since
+        // in mysql 5.*, CHARACTER_MAXIMUM_LENGTH: bigint(21) unsigned
+        // in mysql 8.*, CHARACTER_MAXIMUM_LENGTH: bigint
+        if let std::result::Result::Ok(v) = row.try_get_unchecked::<u64, &str>(col) {
+            v
         } else {
-            let length: i64 = row.try_get(CHARACTER_MAXIMUM_LENGTH).unwrap();
-            Ok(length as u64)
+            0
         }
     }
 

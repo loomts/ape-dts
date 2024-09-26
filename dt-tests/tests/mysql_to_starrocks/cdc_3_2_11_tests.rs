@@ -7,7 +7,7 @@ mod test {
 
     #[tokio::test]
     #[serial]
-    async fn snapshot_basic_test() {
-        TestBase::run_snapshot_test("mysql_to_starrocks/snapshot/3_1_5/basic_test").await;
+    async fn cdc_basic_test() {
+        TestBase::run_cdc_test("mysql_to_starrocks/cdc/3_2_11/basic_test", 3000, 1000).await;
     }
 }
