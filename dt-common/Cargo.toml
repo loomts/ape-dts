@@ -35,3 +35,7 @@ mlua = { workspace = true }
 anyhow = { workspace = true }
 url = { workspace = true }
 concurrent-queue = { workspace = true }
+# override the features of indirectly dependent packages (openssl-sys/openssl) to ["vendored"]
+# refer: https://github.com/cross-rs/cross/blob/main/docs/recipes.md#openssl
+openssl = { workspace = true }
+openssl-sys = { workspace = true }
