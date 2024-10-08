@@ -1,4 +1,4 @@
-FROM alpine:3.18
+FROM gcr.io/distroless/cc:debug
 
 ARG MODULE_NAME="dt-main"
 ARG TARGETOS 

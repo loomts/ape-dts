@@ -53,9 +53,6 @@ pub enum Error {
     #[error("struct error: {0}")]
     StructError(String),
 
-    #[error("kafka error: {0}")]
-    KafkaError(#[from] kafka::Error),
-
     #[error("avro encode error: {0}")]
     AvroEncodeError(#[from] apache_avro::Error),
 

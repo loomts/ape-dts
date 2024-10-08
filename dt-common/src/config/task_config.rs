@@ -396,8 +396,8 @@ impl TaskConfig {
             DbType::Kafka => SinkerConfig::Kafka {
                 url,
                 batch_size,
-                ack_timeout_secs: loader.get_required(SINKER, "ack_timeout_secs"),
-                required_acks: loader.get_required(SINKER, "required_acks"),
+                ack_timeout_secs: loader.get_with_default(SINKER, "ack_timeout_secs", 5),
+                required_acks: loader.get_with_default(SINKER, "required_acks", "one".to_string()),
             },
 
             DbType::Redis => match sink_type {

@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::test_config_util::TestConfigUtil;
 
 use super::base_test_runner::BaseTestRunner;
@@ -7,6 +9,8 @@ use dt_common::config::task_config::TaskConfig;
 use dt_common::utils::time_util::TimeUtil;
 use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
 use rdkafka::client::DefaultClientContext;
+use rdkafka::consumer::{BaseConsumer, Consumer};
+use rdkafka::metadata::Metadata;
 use rdkafka::ClientConfig;
 use regex::Regex;
 
@@ -56,8 +60,6 @@ impl RdbKafkaRdbTestRunner {
     ) -> anyhow::Result<()> {
         self.src_to_dst_runner.execute_prepare_sqls().await?;
         self.prepare_kafka().await?;
-        // wait for topic creation
-        TimeUtil::sleep_millis(start_millis).await;
 
         // prepare src data
         self.src_to_dst_runner.execute_test_sqls().await?;
@@ -94,7 +96,6 @@ impl RdbKafkaRdbTestRunner {
     pub async fn run_cdc_test(&self, start_millis: u64, parse_millis: u64) -> anyhow::Result<()> {
         self.src_to_dst_runner.execute_prepare_sqls().await?;
         self.prepare_kafka().await?;
-        TimeUtil::sleep_millis(start_millis).await;
 
         // kafka -> dst
         let mut kafka_to_dst_tasks = Vec::new();
@@ -125,20 +126,42 @@ impl RdbKafkaRdbTestRunner {
     }
 
     async fn prepare_kafka(&self) -> anyhow::Result<()> {
-        let mut topics: Vec<String> = vec![];
+        let mut topics: Vec<&str> = vec![];
         for sql in self.src_to_kafka_runner.dst_prepare_sqls.iter() {
             let re = Regex::new(r"create topic ([\w\W]+)").unwrap();
             let cap = re.captures(sql).unwrap();
-            topics.push(cap.get(1).unwrap().as_str().into());
+            topics.push(cap.get(1).unwrap().as_str());
         }
 
         let config = TaskConfig::new(&self.src_to_kafka_runner.task_config_file).unwrap();
         match config.sinker {
             SinkerConfig::Kafka { url, .. } => {
-                let client = Self::create_kafka_admin_client(&url);
+                let check_topic_exist = |meta: &Metadata, topic: &str| -> bool {
+                    for exist_topic in meta.topics() {
+                        if exist_topic.name() == topic && !exist_topic.partitions().is_empty() {
+                            return true;
+                        }
+                    }
+                    false
+                };
+
+                let admin_client = Self::create_kafka_admin_client(&url);
+                let consumer: BaseConsumer = Self::create_kafka_base_consumer(&url);
                 for topic in topics.iter() {
-                    Self::delete_topic(&client, topic).await;
-                    Self::create_topic(&client, topic).await;
+                    // delete_topic/create_topic may fail
+                    let mut meta = consumer.fetch_metadata(Some(topic), Duration::from_secs(10))?;
+                    while check_topic_exist(&meta, topic) {
+                        Self::delete_topic(&admin_client, topic).await;
+                        meta = consumer.fetch_metadata(Some(topic), Duration::from_secs(10))?;
+                        TimeUtil::sleep_millis(100).await;
+                    }
+
+                    while !check_topic_exist(&meta, topic) {
+                        Self::create_topic(&admin_client, topic).await;
+                        meta = consumer.fetch_metadata(Some(topic), Duration::from_secs(10))?;
+                        TimeUtil::sleep_millis(100).await;
+                        println!("kafka topic: [{}] is NOT ready", topic);
+                    }
                 }
             }
             _ => {}
@@ -150,8 +173,14 @@ impl RdbKafkaRdbTestRunner {
         let mut config = ClientConfig::new();
         config.set("bootstrap.servers", url);
         config.set("session.timeout.ms", "10000");
-        let client: AdminClient<DefaultClientContext> = config.create().unwrap();
-        client
+        config.create().unwrap()
+    }
+
+    fn create_kafka_base_consumer(url: &str) -> BaseConsumer {
+        let mut config = ClientConfig::new();
+        config.set("bootstrap.servers", url);
+        config.set("session.timeout.ms", "10000");
+        config.create().unwrap()
     }
 
     async fn create_topic(client: &AdminClient<DefaultClientContext>, topic: &str) {

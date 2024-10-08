@@ -10,11 +10,11 @@ on:
       aws_endpoint:
         required: true
         type: string
-        default: https://s3.cn-northwest-1.amazonaws.com.cn
+        default: https://s3.ap-northeast-1.amazonaws.com
       aws_bucket:
         required: true
         type: string
-        default: foxlake-lognode
+        default: foxlake
       aws_destination_dir:
         required: true
         type: string

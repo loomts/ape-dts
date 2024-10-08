@@ -1,5 +1,6 @@
 use crate::extractor::resumer::cdc_resumer::CdcResumer;
 use crate::{extractor::base_extractor::BaseExtractor, Extractor};
+use anyhow::Context;
 use async_trait::async_trait;
 use std::sync::{Arc, Mutex};
 
@@ -44,12 +45,14 @@ impl Extractor for KafkaExtractor {
 impl KafkaExtractor {
     async fn extract_avro(&mut self, consumer: StreamConsumer) -> anyhow::Result<()> {
         loop {
-            let msg = consumer.recv().await.unwrap();
+            let msg = consumer
+                .recv()
+                .await
+                .with_context(|| format!("KafkaCdcExtractor failed, topic: {}", self.topic))?;
             if let Some(payload) = msg.payload() {
                 let row_data = self
                     .avro_converter
-                    .avro_value_to_row_data(payload.to_vec())
-                    .unwrap();
+                    .avro_value_to_row_data(payload.to_vec())?;
                 let position = Position::Kafka {
                     topic: self.topic.clone(),
                     partition: self.partition,

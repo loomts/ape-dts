@@ -247,7 +247,7 @@ impl SinkerUtil {
                         .with_context(|| {
                             format!("failed to create kafka producer, url: [{}]", url)
                         })?;
-
+                    // the sending performance of RdkafkaSinker is much worse than KafkaSinker
                     let sinker = KafkaSinker {
                         batch_size,
                         router: router.clone(),

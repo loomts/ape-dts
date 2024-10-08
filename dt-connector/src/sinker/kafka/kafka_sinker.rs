@@ -47,6 +47,7 @@ impl KafkaSinker {
         for row_data in data.iter_mut().skip(sinked_count).take(batch_size) {
             data_size += row_data.data_size;
 
+            row_data.convert_raw_string();
             let topic = self.router.get_topic(&row_data.schema, &row_data.tb);
             let key = self.avro_converter.row_data_to_avro_key(row_data).await?;
             let payload = self
@@ -62,6 +63,6 @@ impl KafkaSinker {
 
         self.producer.send_all(&messages)?;
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, data.len(), data_size, start_time).await
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
 }
