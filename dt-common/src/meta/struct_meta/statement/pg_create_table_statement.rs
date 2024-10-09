@@ -65,7 +65,7 @@ impl PgCreateTableStatement {
     pub fn to_sqls(&mut self, filter: &RdbFilter) -> anyhow::Result<Vec<(String, String)>> {
         let mut sqls = Vec::new();
 
-        if !filter.filter_structure(StructureType::Table.into()) {
+        if !filter.filter_structure(&StructureType::Table) {
             for i in self.sequences.iter() {
                 let key = format!("sequence.{}.{}", i.schema_name, i.sequence_name);
                 sqls.push((key, Self::sequence_to_sql(i)));
@@ -99,12 +99,12 @@ impl PgCreateTableStatement {
         for i in self.constraints.iter() {
             match i.constraint_type {
                 ConstraintType::Primary | ConstraintType::Unique => {
-                    if filter.filter_structure(StructureType::Table.into()) {
+                    if filter.filter_structure(&StructureType::Table) {
                         continue;
                     }
                 }
                 _ => {
-                    if filter.filter_structure(StructureType::Constraint.into()) {
+                    if filter.filter_structure(&StructureType::Constraint) {
                         continue;
                     }
                 }
@@ -120,12 +120,12 @@ impl PgCreateTableStatement {
         for i in self.indexes.iter() {
             match i.index_kind {
                 IndexKind::Unique => {
-                    if filter.filter_structure(StructureType::Table.into()) {
+                    if filter.filter_structure(&StructureType::Table) {
                         continue;
                     }
                 }
                 _ => {
-                    if filter.filter_structure(StructureType::Index.into()) {
+                    if filter.filter_structure(&StructureType::Index) {
                         continue;
                     }
                 }
