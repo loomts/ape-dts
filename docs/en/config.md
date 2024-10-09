@@ -28,6 +28,7 @@ col_map=test_db_3.one_pk_no_uk_1.f_0:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_0,te
 
 [pipeline]
 buffer_size=16000
+buffer_memory_mb=200
 checkpoint_interval_secs=10
 max_rps=1000
 
@@ -181,6 +182,7 @@ Same with [filter].
 | Config | Meaning | Example |
 | :-------- | :-------- | :-------- |
 | buffer_size | max cached records in memory | 16000 |
+| buffer_memory_mb | [optional] memory limit for buffer, if reached, new records will be blocked even if buffer_size is not reached, 0 means not set | 200 |
 | checkpoint_interval_secs | interval to flush logs/statistics/position | 10 |
 | max_rps | [optional] max synced records in a second| 1000 |
 

@@ -28,6 +28,7 @@ col_map=test_db_3.one_pk_no_uk_1.f_0:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_0,te
 
 [pipeline]
 buffer_size=16000
+buffer_memory_mb=200
 checkpoint_interval_secs=10
 max_rps=1000
 
@@ -180,6 +181,7 @@ log_dir=./logs
 | 配置 | 作用 | 示例 |
 | :-------- | :-------- | :-------- |
 | buffer_size | 内存中最多缓存数据的条数，数据同步采用多线程 & 批量写入，故须配置此项 | 16000 |
+| buffer_memory_mb | 可选，缓存数据使用内存上限，如果已超上限，则即使数据条数未达 buffer_size，也将阻塞写入。0 代表不设置 | 200 |
 | checkpoint_interval_secs | 任务当前状态（统计数据，同步位点信息等）写入日志的频率，单位：秒 | 10 |
 | max_rps | 可选，限制每秒最多同步数据的条数，避免对数据库性能影响 | 1000 |
 
