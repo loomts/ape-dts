@@ -7,6 +7,7 @@
 db_type=mysql
 extract_type=snapshot
 url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
+batch_size=10000
 
 [sinker]
 db_type=mysql
@@ -28,8 +29,10 @@ col_map=test_db_3.one_pk_no_uk_1.f_0:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_0,te
 
 [pipeline]
 buffer_size=16000
+buffer_memory_mb=200
 checkpoint_interval_secs=10
 max_rps=1000
+counter_time_window_secs=600
 
 [parallelizer]
 parallel_type=snapshot
@@ -76,6 +79,7 @@ col_map=test_db_3.one_pk_no_uk_1.f_0:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_0,te
 buffer_size=16000
 checkpoint_interval_secs=10
 max_rps=1000
+counter_time_window_secs=600
 
 [parallelizer]
 parallel_type=rdb_merge
@@ -88,34 +92,39 @@ log_dir=./logs
 ```
 
 # [extractor]
-| Config | Meaning | Example |
-| :-------- | :-------- | :-------- |
-| db_type | source database type| mysql |
-| extract_type | snapshot, cdc | snapshot |
-| url | database url | mysql://root:123456@127.0.0.1:3307 |
+| Config | Meaning | Example | Default |
+| :-------- | :-------- | :-------- | :-------- |
+| db_type | source database type| mysql | - |
+| extract_type | snapshot, cdc | snapshot | - |
+| url | database url | mysql://root:123456@127.0.0.1:3307 | - |
+| batch_size | number of extracted records in a batch | 10000 | same as [pipeline] buffer_size |
 
 Since different tasks may require extra configs, please refer to examples in dt-tests/tests for more details.
 
 # [sinker]
-| Config | Meaning | Example |
-| :-------- | :-------- | :-------- |
-| db_type | target database type | mysql |
-| sink_type | write, check | write |
-| url | database url | mysql://root:123456@127.0.0.1:3308 |
-| batch_size | number of records written in a batch, 1 for serial | 200 |
+| Config | Meaning | Example | Default |
+| :-------- | :-------- | :-------- | :-------- |
+| db_type | target database type | mysql | - |
+| sink_type | write, check | write | write |
+| url | database url | mysql://root:123456@127.0.0.1:3308 | - |
+| batch_size | number of records written in a batch, 1 for serial | 200 | 200 |
 
 Since different tasks may require extra configs, please refer to examples in dt-tests/tests for more details.
 
 
 # [filter]
 
-| Config | Meaning | Example |
-| :-------- | :-------- | :-------- |
-| do_dbs | databases to be synced | db_1,db_2*,\`db*&#\` |
-| ignore_dbs | databases to be filtered | db_1,db_2*,\`db*&#\` |
-| do_tbs | tables to be synced | db_1.tb_1,db_2*.tb_2*,\`db*&#\`.\`tb*&#\` |
-| ignore_tbs | tables to be filtered | db_1.tb_1,db_2*.tb_2*,\`db*&#\`.\`tb*&#\` |
-| do_events | events to be synced | insert,update,delete |
+| Config | Meaning | Example | Default |
+| :-------- | :-------- | :-------- | :-------- |
+| do_dbs | databases to be synced | db_1,db_2*,\`db*&#\` | - |
+| ignore_dbs | databases to be filtered | db_1,db_2*,\`db*&#\` | - |
+| do_tbs | tables to be synced | db_1.tb_1,db_2*.tb_2*,\`db*&#\`.\`tb*&#\` | - |
+| ignore_tbs | tables to be filtered | db_1.tb_1,db_2*.tb_2*,\`db*&#\`.\`tb*&#\` | - |
+| do_events | events to be synced | insert,update,delete | - |
+| do_ddls | ddls to be synced, for mysql cdc tasks | create_database,drop_database,alter_database,create_table,drop_table,truncate_table,rename_table,alter_table,create_index,drop_index | - |
+| do_structures | structures to be migrated, for mysql/pg structure migration tasks | database,table,constraint,sequence,comment,index | * |
+| ignore_cmds | commands to be filtered, for redis cdc tasks | flushall,flushdb | - |
+
 
 ## Values
 
@@ -152,11 +161,11 @@ Names should be enclosed in escape characters if there are special characters.
 Used in: do_dbs, ignore_dbs, do_tbs and ignore_tbs.
 
 # [router]
-| Config | Meaning | Example |
-| :-------- | :-------- | :-------- |
-| db_map | database mapping | db_1:dst_db_1,db_2:dst_db_2 |
-| tb_map | table mapping | db_1.tb_1:dst_db_1.dst_tb_1,db_1.tb_2:dst_db_1.dst_tb_2 |
-| col_map | column mapping | db_1.tb_1.f_1:dst_db_1.dst_tb_1.dst_f_1,db_1.tb_1.f_2:dst_db_1.dst_tb_1.dst_f_2 |
+| Config | Meaning | Example | Default |
+| :-------- | :-------- | :-------- | :-------- |
+| db_map | database mapping | db_1:dst_db_1,db_2:dst_db_2 | - |
+| tb_map | table mapping | db_1.tb_1:dst_db_1.dst_tb_1,db_1.tb_2:dst_db_1.dst_tb_2 | - |
+| col_map | column mapping | db_1.tb_1.f_1:dst_db_1.dst_tb_1.dst_f_1,db_1.tb_1.f_2:dst_db_1.dst_tb_1.dst_f_2 | - |
 
 ## Values
 
@@ -178,17 +187,19 @@ Not supported.
 Same with [filter].
 
 # [pipeline]
-| Config | Meaning | Example |
-| :-------- | :-------- | :-------- |
-| buffer_size | max cached records in memory | 16000 |
-| checkpoint_interval_secs | interval to flush logs/statistics/position | 10 |
-| max_rps | [optional] max synced records in a second| 1000 |
+| Config | Meaning | Example | Default |
+| :-------- | :-------- | :-------- | :-------- |
+| buffer_size | max cached records in memory | 16000 | 16000 |
+| buffer_memory_mb | [optional] memory limit for buffer, if reached, new records will be blocked even if buffer_size is not reached, 0 means not set | 200 | 0 |
+| checkpoint_interval_secs | interval to flush logs/statistics/position | 10 | 10 |
+| max_rps | [optional] max synced records in a second| 1000 | - |
+| counter_time_window_secs | time window for monitor counters | 10 | same with [pipeline] checkpoint_interval_secs |
 
 # [parallelizer]
-| Config | Meaning | Example |
-| :-------- | :-------- | :-------- |
-| parallel_type | parallel type | snapshot |
-| parallel_size | threads for parallel syncing | 8 |
+| Config | Meaning | Example | Default |
+| :-------- | :-------- | :-------- | :-------- |
+| parallel_type | parallel type | snapshot | serial |
+| parallel_size | threads for parallel syncing | 8 | 1 |
 
 ## parallel_type
 
@@ -203,8 +214,8 @@ Same with [filter].
 
 
 # [runtime]
-| Config | Meaning | Example |
-| :-------- | :-------- | :-------- |
-| log_level | level | info/warn/error/debug/trace |
-| log4rs_file | log4rs config file | ./log4rs.yaml |
-| log_dir | output dir | ./logs |
+| Config | Meaning | Example | Default |
+| :-------- | :-------- | :-------- | :-------- |
+| log_level | level | info/warn/error/debug/trace | info |
+| log4rs_file | log4rs config file | ./log4rs.yaml | ./log4rs.yaml |
+| log_dir | output dir | ./logs | ./logs |

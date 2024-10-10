@@ -7,6 +7,7 @@
 db_type=mysql
 extract_type=snapshot
 url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
+batch_size=10000
 
 [sinker]
 db_type=mysql
@@ -28,8 +29,10 @@ col_map=test_db_3.one_pk_no_uk_1.f_0:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_0,te
 
 [pipeline]
 buffer_size=16000
+buffer_memory_mb=200
 checkpoint_interval_secs=10
 max_rps=1000
+counter_time_window_secs=600
 
 [parallelizer]
 parallel_type=snapshot
@@ -75,6 +78,7 @@ col_map=test_db_3.one_pk_no_uk_1.f_0:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_0,te
 buffer_size=16000
 checkpoint_interval_secs=10
 max_rps=1000
+counter_time_window_secs=600
 
 [parallelizer]
 parallel_type=rdb_merge
@@ -87,33 +91,38 @@ log_dir=./logs
 ```
 
 # [extractor]
-| 配置 | 作用 | 示例 |
-| :-------- | :-------- | :-------- |
-| db_type | 源库类型| mysql |
-| extract_type | 拉取类型（全量：snapshot，增量：cdc） | snapshot |
-| url | 源库连接信息 | mysql://root:123456@127.0.0.1:3307 |
+| 配置 | 作用 | 示例 | 默认 |
+| :-------- | :-------- | :-------- | :-------- |
+| db_type | 源库类型| mysql | - |
+| extract_type | 拉取类型（全量：snapshot，增量：cdc） | snapshot | - |
+| url | 源库连接信息 | mysql://root:123456@127.0.0.1:3307 | - |
+| batch_size | 批量拉取数据条数 | 10000 | 和 [pipeline] buffer_size 一致 |
 
 不同任务类型需要不同的参数，详情请参考各个示例。
 
 # [sinker]
-| 配置 | 作用 | 示例 |
-| :-------- | :-------- | :-------- |
-| db_type | 目标库类型| mysql |
-| sink_type | 拉取类型（写入：write，校验：check） | write |
-| url | 目标库连接信息 | mysql://root:123456@127.0.0.1:3308 |
-| batch_size | 批量写入数据条数，1 代表串行 | 200 |
+| 配置 | 作用 | 示例 | 默认 |
+| :-------- | :-------- | :-------- | :-------- |
+| db_type | 目标库类型| mysql | - |
+| sink_type | 拉取类型（写入：write，校验：check） | write | write |
+| url | 目标库连接信息 | mysql://root:123456@127.0.0.1:3308 | - |
+| batch_size | 批量写入数据条数，1 代表串行 | 200 | 200 |
 
 不同任务类型需要不同的参数，详情请参考各个示例。
 
 # [filter]
 
-| 配置 | 作用 | 示例 |
-| :-------- | :-------- | :-------- |
-| do_dbs | 需同步的库 | db_1,db_2*,\`db*&#\` |
-| ignore_dbs | 需过滤的库 | db_1,db_2*,\`db*&#\` |
-| do_tbs | 需同步的表 | db_1.tb_1,db_2*.tb_2*,\`db*&#\`.\`tb*&#\` |
-| ignore_tbs | 需过滤的表 | db_1.tb_1,db_2*.tb_2*,\`db*&#\`.\`tb*&#\` |
-| do_events | 需同步的事件 | insert、update、delete |
+| 配置 | 作用 | 示例 | 默认 |
+| :-------- | :-------- | :-------- | :-------- |
+| do_dbs | 需同步的库 | db_1,db_2*,\`db*&#\` | - |
+| ignore_dbs | 需过滤的库 | db_1,db_2*,\`db*&#\` | - |
+| do_tbs | 需同步的表 | db_1.tb_1,db_2*.tb_2*,\`db*&#\`.\`tb*&#\` | - |
+| ignore_tbs | 需过滤的表 | db_1.tb_1,db_2*.tb_2*,\`db*&#\`.\`tb*&#\` | - |
+| do_events | 需同步的事件 | insert、update、delete | - |
+| do_ddls | 需同步的 ddl，适用于 mysql cdc 任务 | create_database,drop_database,alter_database,create_table,drop_table,truncate_table,rename_table,alter_table,create_index,drop_index | - |
+| do_structures | 需同步的结构，适用于 mysql/pg 结构迁移任务 | database,table,constraint,sequence,comment,index | * |
+| ignore_cmds | 需忽略的命令，适用于 redis 增量任务 | flushall,flushdb | - |
+
 
 ## 取值范围
 
@@ -151,11 +160,11 @@ log_dir=./logs
 适用范围：do_dbs，ignore_dbs，do_tbs，ignore_tbs。
 
 # [router]
-| 配置 | 作用 | 示例 |
-| :-------- | :-------- | :-------- |
-| db_map | 库级映射 | db_1:dst_db_1,db_2:dst_db_2 |
-| tb_map | 表级映射 | db_1.tb_1:dst_db_1.dst_tb_1,db_1.tb_2:dst_db_1.dst_tb_2 |
-| col_map | 列级映射 | db_1.tb_1.f_1:dst_db_1.dst_tb_1.dst_f_1,db_1.tb_1.f_2:dst_db_1.dst_tb_1.dst_f_2 |
+| 配置 | 作用 | 示例 | 默认 |
+| :-------- | :-------- | :-------- | :-------- |
+| db_map | 库级映射 | db_1:dst_db_1,db_2:dst_db_2 | - |
+| tb_map | 表级映射 | db_1.tb_1:dst_db_1.dst_tb_1,db_1.tb_2:dst_db_1.dst_tb_2 | - |
+| col_map | 列级映射 | db_1.tb_1.f_1:dst_db_1.dst_tb_1.dst_f_1,db_1.tb_1.f_2:dst_db_1.dst_tb_1.dst_f_2 | - |
 
 ## 取值范围
 
@@ -177,17 +186,19 @@ log_dir=./logs
 和 [filter] 的规则一致。
 
 # [pipeline]
-| 配置 | 作用 | 示例 |
-| :-------- | :-------- | :-------- |
-| buffer_size | 内存中最多缓存数据的条数，数据同步采用多线程 & 批量写入，故须配置此项 | 16000 |
-| checkpoint_interval_secs | 任务当前状态（统计数据，同步位点信息等）写入日志的频率，单位：秒 | 10 |
-| max_rps | 可选，限制每秒最多同步数据的条数，避免对数据库性能影响 | 1000 |
+| 配置 | 作用 | 示例 | 默认 |
+| :-------- | :-------- | :-------- | :-------- |
+| buffer_size | 内存中最多缓存数据的条数，数据同步采用多线程 & 批量写入，故须配置此项 | 16000 | 16000 |
+| buffer_memory_mb | 可选，缓存数据使用内存上限，如果已超上限，则即使数据条数未达 buffer_size，也将阻塞写入。0 代表不设置 | 200 | 0 |
+| checkpoint_interval_secs | 任务当前状态（统计数据，同步位点信息等）写入日志的频率，单位：秒 | 10 | 10 |
+| max_rps | 可选，限制每秒最多同步数据的条数，避免对数据库性能影响 | 1000 | - |
+| counter_time_window_secs | 监控统计信息的时间窗口 | 10 | 和 [pipeline] checkpoint_interval_secs 一致|
 
 # [parallelizer]
-| 配置 | 作用 | 示例 |
-| :-------- | :-------- | :-------- |
-| parallel_type | 并发类型 | snapshot |
-| parallel_size | 并发线程数 | 8 |
+| 配置 | 作用 | 示例 | 默认 |
+| :-------- | :-------- | :-------- | :-------- |
+| parallel_type | 并发类型 | snapshot | serial |
+| parallel_size | 并发线程数 | 8 | 1 |
 
 ## parallel_type 类型
 
@@ -205,10 +216,10 @@ log_dir=./logs
 
 
 # [runtime]
-| 配置 | 作用 | 示例 |
-| :-------- | :-------- | :-------- |
-| log_level | 日志级别 | info/warn/error/debug/trace |
-| log4rs_file | log4rs 配置地点，通常不需要改 | ./log4rs.yaml |
-| log_dir | 日志输出目录 | ./logs |
+| 配置 | 作用 | 示例 | 默认 |
+| :-------- | :-------- | :-------- | :-------- |
+| log_level | 日志级别 | info/warn/error/debug/trace | info |
+| log4rs_file | log4rs 配置地点，通常不需要改 | ./log4rs.yaml | ./log4rs.yaml |
+| log_dir | 日志输出目录 | ./logs | ./logs |
 
 通常不需要修改。

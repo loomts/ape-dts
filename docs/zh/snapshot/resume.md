@@ -1,47 +1,56 @@
 # 简介
 
-如果同步任务异常中断，则需要进行断点续传。
+任务进度会定期记录在 position.log / finished.log 中。
 
-请注意，同步任务本身并不具备自动断点续传的能力。在任务退出后，用户可以在 [position.log](../position.md) 中找到任务退出前的进度信息，并将这些信息更新到 task_config.ini 的 [resumer] 配置。
+任务中断后，需要用户手动重启，默认重启后任务将从头开始同步。
 
-如果使用更新的 task_config.ini 重启任务，将从断点处开始同步数据。
+为避免重复同步已完成的数据，可根据 position.log / finished.log 进行断点续传。
+
+## 支持范围
+- mysql 源端
+- pg 源端
+- mongo 源端
+
+# 进度日志
+详细解释可参考 [位点信息](../position.md)
+
+## position.log
+```
+2024-10-10 04:04:08.152044 | current_position | {"type":"RdbSnapshot","db_type":"mysql","schema":"test_db","tb":"b","order_col":"id","value":"6"}
+2024-10-10 04:04:08.152181 | checkpoint_position | {"type":"None"}
+```
+
+## finished.log
+```
+2024-10-10 04:04:07.803422 | {"type":"RdbSnapshotFinished","db_type":"mysql","schema":"test_db","tb":"a"}
+2024-10-10 04:04:08.844988 | {"type":"RdbSnapshotFinished","db_type":"mysql","schema":"test_db","tb":"b"}
+```
 
 # 配置
+## 从进度日志断点续传
+```
+[resumer]
+resume_from_log=true
+resume_log_dir=
+```
+- resume_log_dir 为可选，默认为当前任务的日志目录。
+- 任务重启后，finished.log 中的表将不会被重复同步。
+- 正在同步且未完成的表，会根据 position.log 中记录的最新进度，从断点处开始同步。
 
-在 [迁移配置](./migration.md) 的基础上添加 [resumer] 配置，目前支持 MySQL 和 PG。
+## 指定进度信息文件
+- 除了 resume_from_log，用户也可选择指定进度文件。
+```
+[resumer]
+resume_config_file=./resume.config
+```
 
-`tb_positions` ：为一个经 json 序列化的 map。它的 key 为 库名.表名.排序列，value 为排序列的起始值，配置了此项的表将会从指定起始值同步数据。
-
-`finished_tbs` ：已经完成的表，将不会被同步。
-
-`resume_from_log` ：是否从任务中断前输出的 position.log 和 finished.log 解析出任务进度，并根据该进度自动断点续传。不配置则为 false。
-
-`resume_log_dir` ：指定 position.log 和 finished.log 的位置，不配置则默认为该任务的运行日志输出目录。
+- resume config 文件内容格式基本和 position.log / finished.log 保持一致，如：
+```
+| current_position | {"type":"RdbSnapshot","db_type":"mysql","schema":"test_db","tb":"a","order_col":"id","value":"6"}
+{"type":"RdbSnapshotFinished","db_type":"mysql","schema":"test_db","tb":"d"}
+```
 
 参考测试用例：
 - dt-tests/tests/mysql_to_mysql/snapshot/resume_test
 - dt-tests/tests/pg_to_pg/snapshot/resume_test
-
-## MySQL
-
-支持转义符 `，参考下例。
-
-```
-[resumer]
-tb_positions={"test_db_1.no_pk_no_uk.f_0":"5","test_db_1.one_pk_no_uk.f_0":"5","test_db_1.no_pk_one_uk.f_0":"5","test_db_1.no_pk_multi_uk.f_0":"5","test_db_1.one_pk_multi_uk.f_0":"5","`test_db_@`.`resume_table_*$4`.`p.k`":"1"}
-finished_tbs=`test_db_@`.`finished_table_*$1`,`test_db_@`.`finished_table_*$2`
-resume_from_log=true
-resume_log_dir=./logs
-```
-
-## PG
-
-支持转义符 "，参考下例。
-
-```
-[resumer]
-tb_positions={"public.resume_table_2.\"p.k\"":"1","\"test_db_*.*\".\"resume_table_*$5\".\"p.k\"":"1","public.\"resume_table_*$4\".\"p.k\"":"1","public.resume_table_1.pk":"1","public.resume_table_3.f_0":"1"}
-finished_tbs="test_db_*.*"."finished_table_*$1","test_db_*.*"."finished_table_*$2"
-resume_from_log=true
-resume_log_dir=./logs
-```
+- dt-tests/tests/mongo_to_mongo/snapshot/resume_test

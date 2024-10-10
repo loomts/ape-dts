@@ -1,6 +1,6 @@
 # 简介
 
-我们把进度信息记录在 position.log 中。位点刷新频率可在 [pipeline] 的 checkpoint_interval_secs 中配置。
+我们把进度信息记录在 position.log 中。位点刷新频率可在 [pipeline] checkpoint_interval_secs 中配置。
 
 # 增量
 
@@ -31,8 +31,8 @@
 
 Mongo 增量任务没有记录 checkpoint_position，您可以：
 
-- 使用 operation_time 做断点续传（对应 extractor 配置 source=op_log）。
-- 使用 resume_token 做断点续传（对应 extractor 配置 source=change_stream）。
+- 使用 operation_time 做断点续传（对应 [extractor] source=op_log）。
+- 使用 resume_token 做断点续传（对应 [extractor] source=change_stream）。
 
 ```
 2024-02-28 09:47:25.554048 | current_position | {"MongoCdc":{"resume_token":"","operation_time":1709113643,"timestamp":"2024-02-28 09:47:23.000 UTC-0000"}}

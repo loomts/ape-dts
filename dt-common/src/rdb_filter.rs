@@ -4,7 +4,10 @@ use crate::{
     config::{
         config_enums::DbType, config_token_parser::ConfigTokenParser, filter_config::FilterConfig,
     },
-    meta::{ddl_meta::ddl_type::DdlType, row_type::RowType},
+    meta::{
+        ddl_meta::ddl_type::DdlType, row_type::RowType,
+        struct_meta::structure::structure_type::StructureType,
+    },
     utils::sql_util::SqlUtil,
 };
 
@@ -98,8 +101,9 @@ impl RdbFilter {
         }
     }
 
-    pub fn filter_structure(&self, structure_type: &str) -> bool {
-        !Self::match_all(&self.do_structures) && !self.do_structures.contains(structure_type)
+    pub fn filter_structure(&self, structure_type: &StructureType) -> bool {
+        !Self::match_all(&self.do_structures)
+            && !self.do_structures.contains(&structure_type.to_string())
     }
 
     pub fn filter_cmd(&self, cmd: &str) -> bool {
