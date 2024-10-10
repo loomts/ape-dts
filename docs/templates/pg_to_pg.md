@@ -43,6 +43,7 @@ buffer_size=100
 db_type=pg
 extract_type=snapshot
 url=postgres://postgres:postgres@127.0.0.1:5433/postgres?options[statement_timeout]=10s
+batch_size=10000
 
 [sinker]
 db_type=pg
@@ -160,6 +161,7 @@ log_dir=./logs
 db_type=pg
 extract_type=snapshot
 url=postgres://postgres:postgres@127.0.0.1:5433/postgres?options[statement_timeout]=10s
+batch_size=10000
 
 [sinker]
 db_type=pg

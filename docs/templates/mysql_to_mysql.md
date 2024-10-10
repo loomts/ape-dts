@@ -45,6 +45,7 @@ buffer_size=100
 db_type=mysql
 extract_type=snapshot
 url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
+batch_size=10000
 
 [sinker]
 db_type=mysql
@@ -163,6 +164,7 @@ log_dir=./logs
 db_type=mysql
 extract_type=snapshot
 url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
+batch_size=10000
 
 [sinker]
 db_type=mysql
