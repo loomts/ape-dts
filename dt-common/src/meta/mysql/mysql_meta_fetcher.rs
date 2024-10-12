@@ -82,7 +82,7 @@ impl MysqlMetaFetcher {
     ) -> anyhow::Result<&'a MysqlTbMeta> {
         let full_name = format!("{}.{}", schema, tb).to_lowercase();
         if !self.cache.contains_key(&full_name) {
-            let (cols, col_type_map) =
+            let (cols, col_origin_type_map, col_type_map) =
                 Self::parse_cols(&self.conn_pool, &self.db_type, schema, tb).await?;
             let key_map = Self::parse_keys(&self.conn_pool, schema, tb).await?;
             let (order_col, partition_col, id_cols) =
@@ -94,6 +94,7 @@ impl MysqlMetaFetcher {
                 schema: schema.to_string(),
                 tb: tb.to_string(),
                 cols,
+                col_origin_type_map,
                 key_map,
                 order_col,
                 partition_col,
@@ -115,8 +116,13 @@ impl MysqlMetaFetcher {
         db_type: &DbType,
         schema: &str,
         tb: &str,
-    ) -> anyhow::Result<(Vec<String>, HashMap<String, MysqlColType>)> {
+    ) -> anyhow::Result<(
+        Vec<String>,
+        HashMap<String, String>,
+        HashMap<String, MysqlColType>,
+    )> {
         let mut cols = Vec::new();
+        let mut col_origin_type_map = HashMap::new();
         let mut col_type_map = HashMap::new();
 
         let sql = format!("DESC `{}`.`{}`", schema, tb);
@@ -144,7 +150,8 @@ impl MysqlMetaFetcher {
 
         while let Some(row) = rows.try_next().await.unwrap() {
             let col: String = row.try_get(COLUMN_NAME)?;
-            let col_type = Self::get_col_type(&row).await?;
+            let (origin_type, col_type) = Self::get_col_type(&row).await?;
+            col_origin_type_map.insert(col.clone(), origin_type);
             col_type_map.insert(col, col_type);
         }
 
@@ -154,10 +161,10 @@ impl MysqlMetaFetcher {
                 schema, tb
             )) }
         }
-        Ok((cols, col_type_map))
+        Ok((cols, col_origin_type_map, col_type_map))
     }
 
-    async fn get_col_type(row: &MySqlRow) -> anyhow::Result<MysqlColType> {
+    async fn get_col_type(row: &MySqlRow) -> anyhow::Result<(String, MysqlColType)> {
         let column_type: String = row.try_get(COLUMN_TYPE)?;
         let data_type: String = row.try_get(DATA_TYPE)?;
 
@@ -294,7 +301,7 @@ impl MysqlMetaFetcher {
             _ => MysqlColType::Unkown,
         };
 
-        Ok(col_type)
+        Ok((data_type.to_string(), col_type))
     }
 
     fn get_u64_col(row: &MySqlRow, col: &str) -> u64 {

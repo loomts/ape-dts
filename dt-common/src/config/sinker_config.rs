@@ -57,6 +57,7 @@ pub enum SinkerConfig {
         batch_size: usize,
         ack_timeout_secs: u64,
         required_acks: String,
+        with_field_defs: bool,
     },
 
     Redis {

@@ -221,6 +221,7 @@ impl SinkerUtil {
                 batch_size,
                 ack_timeout_secs,
                 required_acks,
+                with_field_defs,
             } => {
                 let router = RdbRouter::from_config(
                     &task_config.router,
@@ -229,7 +230,7 @@ impl SinkerUtil {
                 )?;
                 // kafka sinker may need meta data from RDB extractor
                 let meta_manager = Self::get_extractor_meta_manager(task_config).await?;
-                let avro_converter = AvroConverter::new(meta_manager);
+                let avro_converter = AvroConverter::new(meta_manager, with_field_defs);
 
                 let brokers = vec![url.to_string()];
                 let acks = match required_acks.as_str() {

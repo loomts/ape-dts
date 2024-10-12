@@ -7,7 +7,7 @@ use async_trait::async_trait;
 
 use crate::{call_batch_fn, rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker};
 
-use dt_common::monitor::monitor::Monitor;
+use dt_common::{meta::ddl_meta::ddl_data::DdlData, monitor::monitor::Monitor};
 
 use dt_common::meta::{avro::avro_converter::AvroConverter, row_data::RowData};
 
@@ -31,6 +31,27 @@ impl Sinker for KafkaSinker {
         call_batch_fn!(self, data, Self::send_avro);
         Ok(())
     }
+
+    async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> anyhow::Result<()> {
+        let mut messages = Vec::new();
+        for ddl_data in data {
+            let topic = self.router.get_topic(&ddl_data.default_schema, "");
+            let payload = self.avro_converter.ddl_data_to_avro_value(ddl_data).await?;
+            messages.push(Record {
+                key: String::new(),
+                value: payload,
+                topic,
+                partition: -1,
+            });
+        }
+        self.producer.send_all(&messages)?;
+        Ok(())
+    }
+
+    async fn refresh_meta(&mut self, data: Vec<DdlData>) -> anyhow::Result<()> {
+        self.avro_converter.refresh_meta(&data);
+        Ok(())
+    }
 }
 
 impl KafkaSinker {
@@ -52,7 +73,8 @@ impl KafkaSinker {
             let key = self.avro_converter.row_data_to_avro_key(row_data).await?;
             let payload = self
                 .avro_converter
-                .row_data_to_avro_value(row_data.clone())?;
+                .row_data_to_avro_value(row_data.clone())
+                .await?;
             messages.push(Record {
                 key,
                 value: payload,

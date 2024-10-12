@@ -50,15 +50,15 @@ impl KafkaExtractor {
                 .await
                 .with_context(|| format!("KafkaCdcExtractor failed, topic: {}", self.topic))?;
             if let Some(payload) = msg.payload() {
-                let row_data = self
+                let dt_data = self
                     .avro_converter
-                    .avro_value_to_row_data(payload.to_vec())?;
+                    .avro_value_to_dt_data(payload.to_vec())?;
                 let position = Position::Kafka {
                     topic: self.topic.clone(),
                     partition: self.partition,
                     offset: msg.offset(),
                 };
-                self.base_extractor.push_row(row_data, position).await?;
+                self.base_extractor.push_dt_data(dt_data, position).await?;
             }
         }
     }
