@@ -5,8 +5,8 @@ use anyhow::bail;
 use crate::error::Error;
 
 use super::{
-    mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
-    rdb_tb_meta::RdbTbMeta,
+    ddl_meta::ddl_data::DdlData, mysql::mysql_meta_manager::MysqlMetaManager,
+    pg::pg_meta_manager::PgMetaManager, rdb_tb_meta::RdbTbMeta,
 };
 
 #[derive(Clone)]
@@ -58,6 +58,15 @@ impl RdbMetaManager {
         bail! {Error::Unexpected(
             "no available meta_manager in partitioner".into(),
         )}
+    }
+
+    pub fn invalidate_cache_by_ddl_data(&mut self, ddl_data: &DdlData) {
+        if let Some(mysql_meta_manager) = &mut self.mysql_meta_manager {
+            mysql_meta_manager.invalidate_cache_by_ddl_data(ddl_data);
+        }
+        if let Some(pg_meta_manager) = &mut self.pg_meta_manager {
+            pg_meta_manager.invalidate_cache_by_ddl_data(ddl_data);
+        }
     }
 
     pub fn parse_rdb_cols(

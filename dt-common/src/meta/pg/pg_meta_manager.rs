@@ -79,7 +79,7 @@ impl PgMetaManager {
         let full_name = format!(r#""{}"."{}""#, schema, tb).to_lowercase();
         if !self.name_to_tb_meta.contains_key(&full_name) {
             let oid = Self::get_oid(&self.conn_pool, schema, tb).await?;
-            let (cols, col_type_map) =
+            let (cols, col_origin_type_map, col_type_map) =
                 Self::parse_cols(&self.conn_pool, &mut self.type_registry, schema, tb).await?;
             let key_map = Self::parse_keys(&self.conn_pool, schema, tb).await?;
             let (order_col, partition_col, id_cols) =
@@ -91,6 +91,7 @@ impl PgMetaManager {
                 schema: schema.to_string(),
                 tb: tb.to_string(),
                 cols,
+                col_origin_type_map,
                 key_map,
                 order_col,
                 partition_col,
@@ -129,8 +130,13 @@ impl PgMetaManager {
         type_registry: &mut TypeRegistry,
         schema: &str,
         tb: &str,
-    ) -> anyhow::Result<(Vec<String>, HashMap<String, PgColType>)> {
+    ) -> anyhow::Result<(
+        Vec<String>,
+        HashMap<String, String>,
+        HashMap<String, PgColType>,
+    )> {
         let mut cols = Vec::new();
+        let mut col_origin_type_map = HashMap::new();
         let mut col_type_map = HashMap::new();
 
         // get cols of the table
@@ -169,10 +175,11 @@ impl PgMetaManager {
                 .get(&col_type_oid)
                 .unwrap()
                 .clone();
+            col_origin_type_map.insert(col.clone(), col_type.short_name.clone());
             col_type_map.insert(col, col_type);
         }
 
-        Ok((cols, col_type_map))
+        Ok((cols, col_origin_type_map, col_type_map))
     }
 
     async fn parse_keys(

@@ -420,7 +420,7 @@ impl ExtractorUtil {
                 ack_interval_secs,
             } => {
                 let meta_manager = TaskUtil::create_rdb_meta_manager(config).await?;
-                let avro_converter = AvroConverter::new(meta_manager);
+                let avro_converter = AvroConverter::new(meta_manager, false);
                 let extractor = KafkaExtractor {
                     url,
                     group,
