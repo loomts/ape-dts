@@ -9,28 +9,19 @@
 
 
 ## Tasks supported
+|  | mysql -> mysql | pg -> pg | mongo -> mongo | redis -> redis | mysql -> kafka | pg -> kafka|
+| :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- |
+| Snapshot | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
+| CDC | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
+| Data check/revise/review | &#10004; | &#10004; | &#10004; | | | |
+| Structure migration/check | &#10004; | &#10004; | | | |
 
-|  | mysql -> mysql | pg -> pg | mongo -> mongo | redis -> redis |
-| :-------- | :-------- | :-------- | :-------- | :-------- |
-|  Snapshot | &#10004; | &#10004; | &#10004; | &#10004; |
-| CDC | &#10004; | &#10004; | &#10004; | &#10004; |
-| Data check/revise/review | &#10004; | &#10004; | &#10004; | |
-| Structure migration/check | &#10004; | &#10004; |  |  |
 
+# Quick starts
 
-# Quick start
+## Tutorial
 
-## Run demo in docker
-
-Task configurations are in ini format. For more details, refer to [config details](./docs/en/config.md), [snapshot migration](./docs/en/snapshot/migration.md) and [CDC data sync](./docs/en/cdc/migration.md).
-
-```
-docker run -it \
---entrypoint sh \
--v [absolute-path]/task_config.ini:/task_config.ini \
-apecloud/ape-dts:0.1.13.hotfix4 \
--c "/ape-dts /task_config.ini"
-```
+- [mysql -> mysql](./docs/en/tutorial/mysql_to_mysql.md)
 
 ## Run tests
 
