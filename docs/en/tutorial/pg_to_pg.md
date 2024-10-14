@@ -1,55 +1,47 @@
-# Migrate Data from MySQL to MySQL
+# Migrate Data from Postgres to Postgres
 
 # Prerequisites
 - docker
 
-# Prepare MySQL Instances
+# Prepare Postgres Instances
 
 ## Source
+```
+docker run --name some-postgres-1 \
+-p 5433:5432 \
+-e POSTGRES_PASSWORD=postgres \
+-e TZ=Etc/GMT-8 \
+-d postgis/postgis:latest
+```
+
+- set wal_level to logical
 
 ```
-docker run -d --name some-mysql-1 \
---platform linux/x86_64 \
--it \
--p 3307:3306 -e MYSQL_ROOT_PASSWORD="123456" \
- mysql:5.7.40 --lower_case_table_names=1 --character-set-server=utf8 --collation-server=utf8_general_ci \
- --datadir=/var/lib/mysql \
- --user=mysql \
- --server_id=1 \
- --log_bin=/var/lib/mysql/mysql-bin.log \
- --max_binlog_size=100M \
- --gtid_mode=ON \
- --enforce_gtid_consistency=ON \
- --binlog_format=ROW \
- --default_time_zone=+08:00
+psql -h 127.0.0.1 -U postgres -d postgres -p 5432 -W
+
+ALTER SYSTEM SET wal_level = logical;
+
+-- restart container
+docker restart some-postgres-1
 ```
 
 ## Target
 
 ```
-docker run -d --name some-mysql-2 \
---platform linux/x86_64 \
--it \
--p 3308:3306 -e MYSQL_ROOT_PASSWORD="123456" \
- mysql:5.7.40 --lower_case_table_names=1 --character-set-server=utf8 --collation-server=utf8_general_ci \
- --datadir=/var/lib/mysql \
- --user=mysql \
- --server_id=1 \
- --log_bin=/var/lib/mysql/mysql-bin.log \
- --max_binlog_size=100M \
- --gtid_mode=ON \
- --enforce_gtid_consistency=ON \
- --binlog_format=ROW \
- --default_time_zone=+07:00
+docker run --name some-postgres-2 \
+-p 5434:5432 \
+-e POSTGRES_PASSWORD=postgres \
+-e TZ=Etc/GMT-7 \
+-d postgis/postgis:latest
 ```
 
 # Migrate Structures
 
 ## prepare data
 ```
-mysql -h127.0.0.1 -uroot -p123456 -P3307
+psql -h 127.0.0.1 -U postgres -d postgres -p 5433 -W
 
-CREATE DATABASE test_db;
+CREATE SCHEMA test_db;
 CREATE TABLE test_db.tb_1(id int, value int, primary key(id));
 ```
 
@@ -61,13 +53,13 @@ mkdir -p /tmp/ape_dts
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
 extract_type=struct
-db_type=mysql
-url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
+db_type=pg
+url=postgres://postgres:postgres@127.0.0.1:5433/postgres?options[statement_timeout]=10s
 
 [sinker]
 sink_type=struct
-db_type=mysql
-url=mysql://root:123456@127.0.0.1:3308?ssl-mode=disabled
+db_type=pg
+url=postgres://postgres:postgres@127.0.0.1:5434/postgres?options[statement_timeout]=10s
 
 [filter]
 do_dbs=test_db
@@ -89,23 +81,23 @@ apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/ape-dts:distross.1 /ta
 
 ## check results
 ```
-mysql -h127.0.0.1 -uroot -p123456 -uroot -P3308
+psql -h 127.0.0.1 -U postgres -d postgres -p 5434 -W
 
-SHOW TABLES IN test_db;
+SET search_path TO test_db;
+\d
 ```
 
 ```
-+-------------------+
-| Tables_in_test_db |
-+-------------------+
-| tb_1              |
-+-------------------+
+         List of relations
+ Schema  | Name | Type  |  Owner   
+---------+------+-------+----------
+ test_db | tb_1 | table | postgres
 ```
 
 # Migrate Snapshot Data
 ## prepare data
 ```
-mysql -h127.0.0.1 -uroot -p123456 -P3307
+psql -h 127.0.0.1 -U postgres -d postgres -p 5433 -W
 
 INSERT INTO test_db.tb_1 VALUES(1,1),(2,2),(3,3),(4,4);
 ```
@@ -114,14 +106,14 @@ INSERT INTO test_db.tb_1 VALUES(1,1),(2,2),(3,3),(4,4);
 ```
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
-db_type=mysql
+db_type=pg
 extract_type=snapshot
-url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
+url=postgres://postgres:postgres@127.0.0.1:5433/postgres?options[statement_timeout]=10s
 
 [sinker]
-db_type=mysql
+db_type=pg
 sink_type=write
-url=mysql://root:123456@127.0.0.1:3308?ssl-mode=disabled
+url=postgres://postgres:postgres@127.0.0.1:5434/postgres?options[statement_timeout]=10s
 
 [filter]
 do_dbs=test_db
@@ -145,20 +137,18 @@ apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/ape-dts:distross.1 /ta
 
 # check results
 ```
-mysql -h127.0.0.1 -uroot -p123456 -uroot -P3308
+psql -h 127.0.0.1 -U postgres -d postgres -p 5434 -W
 
-SELECT * FROM test_db.tb_1;
+SELECT * FROM test_db.tb_1 ORDER BY id;
 ```
 
 ```
-+----+-------+
-| id | value |
-+----+-------+
-|  1 |     1 |
-|  2 |     2 |
-|  3 |     3 |
-|  4 |     4 |
-+----+-------+
+ id | value 
+----+-------
+  1 |     1
+  2 |     2
+  3 |     3
+  4 |     4
 ```
 
 # Check Data
@@ -167,7 +157,7 @@ SELECT * FROM test_db.tb_1;
 ## prepare data
 - change target table records
 ```
-mysql -h127.0.0.1 -uroot -p123456 -uroot -P3308
+psql -h 127.0.0.1 -U postgres -d postgres -p 5434 -W
 
 DELETE FROM test_db.tb_1 WHERE id=1;
 UPDATE test_db.tb_1 SET value=1 WHERE id=2;
@@ -177,14 +167,14 @@ UPDATE test_db.tb_1 SET value=1 WHERE id=2;
 ```
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
-db_type=mysql
+db_type=pg
 extract_type=snapshot
-url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
+url=postgres://postgres:postgres@127.0.0.1:5433/postgres?options[statement_timeout]=10s
 
 [sinker]
-db_type=mysql
+db_type=pg
 sink_type=check
-url=mysql://root:123456@127.0.0.1:3308?ssl-mode=disabled
+url=postgres://postgres:postgres@127.0.0.1:5434/postgres?options[statement_timeout]=10s
 
 [filter]
 do_dbs=test_db
@@ -224,15 +214,15 @@ apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/ape-dts:distross.1 /ta
 ```
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
-db_type=mysql
+db_type=pg
 extract_type=check_log
-url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
+url=postgres://postgres:postgres@127.0.0.1:5433/postgres?options[statement_timeout]=10s
 check_log_dir=./check_data_task_log
 
 [sinker]
-db_type=mysql
+db_type=pg
 sink_type=write
-url=mysql://root:123456@127.0.0.1:3308?ssl-mode=disabled
+url=postgres://postgres:postgres@127.0.0.1:5434/postgres?options[statement_timeout]=10s
 
 [filter]
 do_events=*
@@ -256,9 +246,9 @@ apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/ape-dts:distross.1 /ta
 
 ## check results
 ```
-mysql -h127.0.0.1 -uroot -p123456 -uroot -P3308
+psql -h 127.0.0.1 -U postgres -d postgres -p 5434 -W
 
-SELECT * FROM test_db.tb_1;
+SELECT * FROM test_db.tb_1 ORDER BY id;
 ```
 
 ```
@@ -279,15 +269,15 @@ SELECT * FROM test_db.tb_1;
 ```
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
-db_type=mysql
+db_type=pg
 extract_type=check_log
-url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
+url=postgres://postgres:postgres@127.0.0.1:5433/postgres?options[statement_timeout]=10s
 check_log_dir=./check_data_task_log
 
 [sinker]
-db_type=mysql
+db_type=pg
 sink_type=check
-url=mysql://root:123456@127.0.0.1:3308?ssl-mode=disabled
+url=postgres://postgres:postgres@127.0.0.1:5434/postgres?options[statement_timeout]=10s
 
 [filter]
 do_events=*
@@ -319,20 +309,20 @@ apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/ape-dts:distross.1 /ta
 ```
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
-db_type=mysql
+db_type=pg
 extract_type=cdc
-server_id=2000
-url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
+url=postgres://postgres:postgres@127.0.0.1:5433/postgres?options[statement_timeout]=10s
+slot_name=ape_test
 
 [filter]
 do_dbs=test_db
 do_events=insert,update,delete
 
 [sinker]
-db_type=mysql
+db_type=pg
 sink_type=write
 batch_size=200
-url=mysql://root:123456@127.0.0.1:3308?ssl-mode=disabled
+url=postgres://postgres:postgres@127.0.0.1:5434/postgres?options[statement_timeout]=10s
 
 [parallelizer]
 parallel_type=rdb_merge
@@ -352,7 +342,7 @@ apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/ape-dts:distross.1 /ta
 
 ## change data in source table
 ```
-mysql -h127.0.0.1 -uroot -p123456 -uroot -P3307
+psql -h 127.0.0.1 -U postgres -d postgres -p 5433 -W
 
 DELETE FROM test_db.tb_1 WHERE id=1;
 UPDATE test_db.tb_1 SET value=2000000 WHERE id=2;
@@ -361,9 +351,9 @@ INSERT INTO test_db.tb_1 VALUES(5,5);
 
 ## check results
 ```
-mysql -h127.0.0.1 -uroot -p123456 -uroot -P3308
+psql -h 127.0.0.1 -U postgres -d postgres -p 5434 -W
 
-SELECT * FROM test_db.tb_1;
+SELECT * FROM test_db.tb_1 ORDER BY id;
 ```
 
 ```
