@@ -17,7 +17,7 @@ docker run --name some-postgres-1 \
 - set wal_level to logical
 
 ```
-psql -h 127.0.0.1 -U postgres -d postgres -p 5432 -W
+psql -h 127.0.0.1 -U postgres -d postgres -p 5433 -W
 
 ALTER SYSTEM SET wal_level = logical;
 
