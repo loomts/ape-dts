@@ -1,16 +1,16 @@
-# Migrate Data from Mongo to Mongo
+# Migrate data from Mongo to Mongo
 
 # Prerequisites
-- docker
+- [prerequisites](./prerequisites.md)
 
-# Prepare Mongo Instances
+# Prepare Mongo instances
 
 ## Source
 
 ```
 docker run -d --name src-mongo \
     -p 27017:27017 \
-    mongo:6.0 --replSet rs0
+    "$MONGO_IMAGE" --replSet rs0
 
 -- enable and check oplog 
 docker exec -it src-mongo mongosh --quiet --eval "rs.initiate()"
@@ -23,11 +23,11 @@ docker run -d --name dst-mongo \
 	-e MONGO_INITDB_ROOT_USERNAME=ape_dts \
 	-e MONGO_INITDB_ROOT_PASSWORD=123456 \
     -p 27018:27017 \
-	mongo:6.0
+	"$MONGO_IMAGE"
 ```
 
-# Migrate Snapshot Data
-## prepare data
+# Migrate snapshot data
+## Prepare data
 ```
 docker exec -it src-mongo mongosh --quiet
 
@@ -49,7 +49,7 @@ db.tb_1.find();
 ]
 ```
 
-## start task
+## Start task
 ```
 rm -rf /tmp/ape_dts
 mkdir -p /tmp/ape_dts
@@ -82,10 +82,10 @@ EOL
 ```
 docker run --rm --network host \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
-apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/ape-dts:distross.1 /task_config.ini 
+"$APE_DTS_IMAGE" /task_config.ini 
 ```
 
-# check results
+# Check results
 ```
 docker exec -it dst-mongo mongosh \
 --host localhost --port 27017 --authenticationDatabase admin -u ape_dts -p 123456 \
@@ -101,10 +101,10 @@ docker exec -it dst-mongo mongosh \
 ]
 ```
 
-# Check Data
+# Check data
 - check the differences between target data and source data
 
-## prepare data
+## Prepare data
 - change target table records
 ```
 docker exec -it dst-mongo mongosh \
@@ -115,7 +115,7 @@ db.tb_1.deleteOne({ "_id": "1" });
 db.tb_1.updateOne({ "_id" : "2" }, { "$set": { "age" : 200000 } });
 ```
 
-## start task
+## Start task
 ```
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
@@ -146,10 +146,10 @@ EOL
 docker run --rm --network host \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
 -v "/tmp/ape_dts/check_data_task_log/:/logs/" \
-apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/ape-dts:distross.1 /task_config.ini 
+"$APE_DTS_IMAGE" /task_config.ini 
 ```
 
-## check results
+## Check results
 - cat /tmp/ape_dts/check_data_task_log/check/miss.log
 ```
 {"log_type":"Miss","schema":"test_db","tb":"tb_1","id_col_values":{"_id":"{\"String\":\"1\"}"},"diff_col_values":{}}
@@ -159,10 +159,10 @@ apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/ape-dts:distross.1 /ta
 {"log_type":"Diff","schema":"test_db","tb":"tb_1","id_col_values":{"_id":"{\"String\":\"2\"}"},"diff_col_values":{"doc":{"src":"{ \"_id\": \"2\", \"name\": \"d\", \"age\": \"2\" }","dst":"{ \"_id\": \"2\", \"name\": \"d\", \"age\": 200000 }"}}}
 ```
 
-# Revise Data
+# Revise data
 - revise target data based on "check data" task results
 
-## start task
+## Start task
 ```
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
@@ -193,10 +193,10 @@ EOL
 docker run --rm --network host \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
 -v "/tmp/ape_dts/check_data_task_log/check/:/check_data_task_log/" \
-apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/ape-dts:distross.1 /task_config.ini 
+"$APE_DTS_IMAGE" /task_config.ini 
 ```
 
-## check results
+## Check results
 ```
 docker exec -it dst-mongo mongosh \
 --host localhost --port 27017 --authenticationDatabase admin -u ape_dts -p 123456 \
@@ -212,10 +212,10 @@ docker exec -it dst-mongo mongosh \
 ]
 ```
 
-# Review Data
+# Review data
 - check if target data revised based on "check data" task results
 
-## start task
+## Start task
 ```
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
@@ -247,15 +247,15 @@ docker run --rm --network host \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
 -v "/tmp/ape_dts/check_data_task_log/check/:/check_data_task_log/" \
 -v "/tmp/ape_dts/review_data_task_log/:/logs/" \
-apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/ape-dts:distross.1 /task_config.ini 
+"$APE_DTS_IMAGE" /task_config.ini 
 ```
 
-## check results
+## Check results
 - /tmp/ape_dts/review_data_task_log/check/miss.log and /tmp/ape_dts/review_data_task_log/check/diff.log should be empty
 
-# Cdc Task
+# Cdc task
 
-## start task
+## Start task
 ```
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
@@ -286,10 +286,10 @@ EOL
 ```
 docker run --rm --network host \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
-apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/ape-dts:distross.1 /task_config.ini 
+"$APE_DTS_IMAGE" /task_config.ini 
 ```
 
-## change data in source table
+## Change source data
 ```
 docker exec -it src-mongo mongosh --quiet
 
@@ -299,7 +299,7 @@ db.tb_1.updateOne({ "_id" : "2" }, { "$set": { "age" : 200000 } });
 db.tb_1.insertOne({ "name": "b", "age": "5" });
 ```
 
-## check results
+## Check results
 ```
 docker exec -it dst-mongo mongosh \
 --host localhost --port 27017 --authenticationDatabase admin -u ape_dts -p 123456 \

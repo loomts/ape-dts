@@ -41,41 +41,10 @@ url={mysql_sinker_url}
 
 - 本文均在 mac 上以 docker 搭建测试环境为例。
 
-# postgres 环境搭建
+# Postgres 环境搭建
 
 ## 源
-```
-docker run --name some-postgres-1 \
--p 5433:5432 \
--e POSTGRES_PASSWORD=postgres \
--e TZ=Etc/GMT-8 \
--d postgis/postgis:latest
-```
-
-- 如要执行增量测试，需设置 wal_level。
-
-```
-- 进入容器
-docker exec -it some-postgres-1 bash
-
-- 登录数据库 
-psql -h 127.0.0.1 -U postgres -d postgres -p 5432 -W
-
-- 执行 sql
-ALTER SYSTEM SET wal_level = logical;
-
-- 退出并重启容器
-```
-
-## 目标
-
-```
-docker run --name some-postgres-2 \
--p 5434:5432 \
--e POSTGRES_PASSWORD=postgres \
--e TZ=Etc/GMT-7 \
--d postgis/postgis:latest
-```
+[创建 Postgres](/docs/en/tutorial/pg_to_pg.md)
 
 ## 如要执行 [charset 相关测试](../dt-tests/tests/pg_to_pg/snapshot/charset_euc_cn_test)
 - 在源和目标分别预建数据库 postgres_euc_cn。
@@ -88,110 +57,16 @@ CREATE DATABASE postgres_euc_cn
   TEMPLATE template0;
 ```
 
-# mysql 环境搭建
+# MySQL 环境搭建
+[创建 MySQL](/docs/en/tutorial/mysql_to_mysql.md)
 
-## 源
+# Mongo
+[创建 Mongo](/docs/en/tutorial/mongo_to_mongo.md)
 
-```
-docker run -d --name some-mysql-1 \
---platform linux/x86_64 \
--it \
--p 3307:3306 -e MYSQL_ROOT_PASSWORD="123456" \
- mysql:5.7.40 --lower_case_table_names=1 --character-set-server=utf8 --collation-server=utf8_general_ci \
- --datadir=/var/lib/mysql \
- --user=mysql \
- --server_id=1 \
- --log_bin=/var/lib/mysql/mysql-bin.log \
- --max_binlog_size=100M \
- --gtid_mode=ON \
- --enforce_gtid_consistency=ON \
- --binlog_format=ROW \
- --default_time_zone=+08:00
-```
+# Kafka
+[创建 Kafka](/docs/en/tutorial/mysql_to_kafka_consumer.md)
 
-## 目标
-
-```
-docker run -d --name some-mysql-2 \
---platform linux/x86_64 \
--it \
--p 3308:3306 -e MYSQL_ROOT_PASSWORD="123456" \
- mysql:5.7.40 --lower_case_table_names=1 --character-set-server=utf8 --collation-server=utf8_general_ci \
- --datadir=/var/lib/mysql \
- --user=mysql \
- --server_id=1 \
- --log_bin=/var/lib/mysql/mysql-bin.log \
- --max_binlog_size=100M \
- --gtid_mode=ON \
- --enforce_gtid_consistency=ON \
- --binlog_format=ROW \
- --default_time_zone=+07:00
-```
-
-# mongo
-
-## 源
-- 只有 Mongo ReplicaSet 才支持 cdc，故如需执行增量测试，源端需要创建为 ReplicaSet。
-
-- 1，创建 docker network。
-
-```
-docker network create mongo-network
-```
-
-- 2，启动 mongo ReplicaSet 的 3 个节点。
-
-```
-docker run -d --name mongo1 --network mongo-network -p 9042:9042 mongo:6.0 --replSet rs0  --port 9042
-docker run -d --name mongo2 --network mongo-network -p 9142:9142 mongo:6.0 --replSet rs0  --port 9142
-docker run -d --name mongo3 --network mongo-network -p 9242:9242 mongo:6.0 --replSet rs0  --port 9242
-```
-
-- 3，设置 ReplicaSet。
-
-```
-- 进入其中一个容器
-docker exec -it mongo1 bash
-
-- 连接数据库
-mongosh --host localhost --port 9042
-
-- 执行 sql
-> config = {"_id" : "rs0", "members" : [{"_id" : 0,"host" : "mongo1:9042"},{"_id" : 1,"host" : "mongo2:9142"},{"_id" : 2,"host" : "mongo3:9242"}]}
-> rs.initiate(config)
-> rs.status()
-```
-
-- 4，创建用户。
-
-```
-> use admin
-> db.createUser({user: "ape_dts", pwd: "123456", roles: ["root"]})
-```
-
-- 5，修改本地 /etc/hosts。
-
-```
-127.0.0.1 mongo1 mongo2 mongo3
-```
-
-- 6，尝试本地连接。
-
-```
-mongo "mongodb://ape_dts:123456@mongo1:9042/?replicaSet=rs0"
-```
-
-## 目标
-
-```
-docker run -d --name dst-mongo \
-	-e MONGO_INITDB_ROOT_USERNAME=ape_dts \
-	-e MONGO_INITDB_ROOT_PASSWORD=123456 \
-    -p 27018:27017 \
-	mongo:6.0
-```
-
-# redis
+# Redis
 ## 镜像版本
 - redis 不同版本的数据格式差距较大，我们支持 2.8 - 7.*，rebloom，rejson。
 - redis:7.0
@@ -282,7 +157,7 @@ docker run --name dst-redis-4-0 \
     --loglevel warning
 ```
 
-# starrocks
+# Starrocks
 ## 目标
 ```
 docker run -p 9030:9030 -p 8030:8030 -p 8040:8040 -itd \

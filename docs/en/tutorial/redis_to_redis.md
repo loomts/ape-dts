@@ -1,16 +1,16 @@
-# Migrate Data from Redis to Redis
+# Migrate data from Redis to Redis
 
 # Prerequisites
-- docker
+- [prerequisites](./prerequisites.md)
 
-# Prepare Redis Instances
+# Prepare Redis instances
 
 ## Source
 
 ```
 docker run --name src-redis-7-0 \
     -p 6380:6379 \
-    -d redis:7.0 redis-server \
+    -d "$REDIS_IMAGE" redis-server \
     --requirepass 123456 \
     --save 60 1 \
     --loglevel warning
@@ -21,14 +21,14 @@ docker run --name src-redis-7-0 \
 ```
 docker run --name dst-redis-7-0 \
     -p 6390:6379 \
-    -d redis:7.0 redis-server \
+    -d "$REDIS_IMAGE" redis-server \
     --requirepass 123456 \
     --save 60 1 \
     --loglevel warning
 ```
 
-# Migrate Snapshot Data
-## prepare data
+# Migrate snapshot data
+## Prepare data
 ```
 telnet 127.0.0.1 6380
 auth 123456
@@ -40,7 +40,7 @@ SELECT 1
 SET key_2 val_2
 ```
 
-## start task
+## Start task
 ```
 rm -rf /tmp/ape_dts
 mkdir -p /tmp/ape_dts
@@ -73,10 +73,10 @@ EOL
 ```
 docker run --rm --network host \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
-apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/ape-dts:distross.1 /task_config.ini 
+"$APE_DTS_IMAGE" /task_config.ini 
 ```
 
-# check results
+# Check results
 ```
 telnet 127.0.0.1 6390
 auth 123456
@@ -94,10 +94,10 @@ $5
 val_2
 ```
 
-# Snapshot + Cdc Task
+# Snapshot + Cdc task
 - Currently we do not support synchronizing only cdc data, the cdc task will first migrate the snapshot data and then synchronize the cdc data.
 
-## clear target data
+## Clear target data
 ```
 telnet 127.0.0.1 6390
 auth 123456
@@ -105,7 +105,7 @@ auth 123456
 flushall
 ```
 
-## start task
+## Start task
 ```
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
@@ -140,10 +140,10 @@ EOL
 ```
 docker run --rm --network host \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
-apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/ape-dts:distross.1 /task_config.ini 
+"$APE_DTS_IMAGE" /task_config.ini 
 ```
 
-## change source data
+## Change source data
 ```
 telnet 127.0.0.1 6380
 auth 123456
@@ -155,7 +155,7 @@ SELECT 1
 SET key_4 val_4
 ```
 
-## check results
+## Check results
 ```
 telnet 127.0.0.1 6390
 auth 123456

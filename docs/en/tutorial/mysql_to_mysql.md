@@ -1,9 +1,9 @@
-# Migrate Data from MySQL to MySQL
+# Migrate data from MySQL to MySQL
 
 # Prerequisites
-- docker
+- [prerequisites](./prerequisites.md)
 
-# Prepare MySQL Instances
+# Prepare MySQL instances
 
 ## Source
 
@@ -12,7 +12,7 @@ docker run -d --name some-mysql-1 \
 --platform linux/x86_64 \
 -it \
 -p 3307:3306 -e MYSQL_ROOT_PASSWORD="123456" \
- mysql:5.7.40 --lower_case_table_names=1 --character-set-server=utf8 --collation-server=utf8_general_ci \
+ "$MYSQL_IMAGE" --lower_case_table_names=1 --character-set-server=utf8 --collation-server=utf8_general_ci \
  --datadir=/var/lib/mysql \
  --user=mysql \
  --server_id=1 \
@@ -31,7 +31,7 @@ docker run -d --name some-mysql-2 \
 --platform linux/x86_64 \
 -it \
 -p 3308:3306 -e MYSQL_ROOT_PASSWORD="123456" \
- mysql:5.7.40 --lower_case_table_names=1 --character-set-server=utf8 --collation-server=utf8_general_ci \
+ "$MYSQL_IMAGE" --lower_case_table_names=1 --character-set-server=utf8 --collation-server=utf8_general_ci \
  --datadir=/var/lib/mysql \
  --user=mysql \
  --server_id=1 \
@@ -43,9 +43,9 @@ docker run -d --name some-mysql-2 \
  --default_time_zone=+07:00
 ```
 
-# Migrate Structures
+# Migrate structures
 
-## prepare data
+## Prepare data
 ```
 mysql -h127.0.0.1 -uroot -p123456 -P3307
 
@@ -53,7 +53,7 @@ CREATE DATABASE test_db;
 CREATE TABLE test_db.tb_1(id int, value int, primary key(id));
 ```
 
-## start task
+## Start task
 ```
 rm -rf /tmp/ape_dts
 mkdir -p /tmp/ape_dts
@@ -84,10 +84,10 @@ EOL
 ```
 docker run --rm --network host \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
-apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/ape-dts:distross.1 /task_config.ini 
+"$APE_DTS_IMAGE" /task_config.ini 
 ```
 
-## check results
+## Check results
 ```
 mysql -h127.0.0.1 -uroot -p123456 -uroot -P3308
 
@@ -102,15 +102,15 @@ SHOW TABLES IN test_db;
 +-------------------+
 ```
 
-# Migrate Snapshot Data
-## prepare data
+# Migrate snapshot data
+## Prepare data
 ```
 mysql -h127.0.0.1 -uroot -p123456 -P3307
 
 INSERT INTO test_db.tb_1 VALUES(1,1),(2,2),(3,3),(4,4);
 ```
 
-## start task
+## Start task
 ```
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
@@ -140,10 +140,10 @@ EOL
 ```
 docker run --rm --network host \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
-apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/ape-dts:distross.1 /task_config.ini 
+"$APE_DTS_IMAGE" /task_config.ini 
 ```
 
-# check results
+# Check results
 ```
 mysql -h127.0.0.1 -uroot -p123456 -uroot -P3308
 
@@ -161,10 +161,10 @@ SELECT * FROM test_db.tb_1;
 +----+-------+
 ```
 
-# Check Data
+# Check data
 - check the differences between target data and source data
 
-## prepare data
+## Prepare data
 - change target table records
 ```
 mysql -h127.0.0.1 -uroot -p123456 -uroot -P3308
@@ -173,7 +173,7 @@ DELETE FROM test_db.tb_1 WHERE id=1;
 UPDATE test_db.tb_1 SET value=1 WHERE id=2;
 ```
 
-## start task
+## Start task
 ```
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
@@ -204,10 +204,10 @@ EOL
 docker run --rm --network host \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
 -v "/tmp/ape_dts/check_data_task_log/:/logs/" \
-apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/ape-dts:distross.1 /task_config.ini 
+"$APE_DTS_IMAGE" /task_config.ini 
 ```
 
-## check results
+## Check results
 - cat /tmp/ape_dts/check_data_task_log/check/miss.log
 ```
 {"log_type":"Miss","schema":"test_db","tb":"tb_1","id_col_values":{"id":"1"},"diff_col_values":{}}
@@ -217,10 +217,10 @@ apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/ape-dts:distross.1 /ta
 {"log_type":"Diff","schema":"test_db","tb":"tb_1","id_col_values":{"id":"2"},"diff_col_values":{"value":{"src":"2","dst":"1"}}}
 ```
 
-# Revise Data
+# Revise data
 - revise target data based on "check data" task results
 
-## start task
+## Start task
 ```
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
@@ -251,10 +251,10 @@ EOL
 docker run --rm --network host \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
 -v "/tmp/ape_dts/check_data_task_log/check/:/check_data_task_log/" \
-apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/ape-dts:distross.1 /task_config.ini 
+"$APE_DTS_IMAGE" /task_config.ini 
 ```
 
-## check results
+## Check results
 ```
 mysql -h127.0.0.1 -uroot -p123456 -uroot -P3308
 
@@ -272,10 +272,10 @@ SELECT * FROM test_db.tb_1;
 +----+-------+
 ```
 
-# Review Data
+# Review data
 - check if target data revised based on "check data" task results
 
-## start task
+## Start task
 ```
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
@@ -307,15 +307,15 @@ docker run --rm --network host \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
 -v "/tmp/ape_dts/check_data_task_log/check/:/check_data_task_log/" \
 -v "/tmp/ape_dts/review_data_task_log/:/logs/" \
-apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/ape-dts:distross.1 /task_config.ini 
+"$APE_DTS_IMAGE" /task_config.ini 
 ```
 
-## check results
+## Check results
 - /tmp/ape_dts/review_data_task_log/check/miss.log and /tmp/ape_dts/review_data_task_log/check/diff.log should be empty
 
-# Cdc Task
+# Cdc task
 
-## start task
+## Start task
 ```
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
@@ -347,10 +347,10 @@ EOL
 ```
 docker run --rm --network host \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
-apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/ape-dts:distross.1 /task_config.ini 
+"$APE_DTS_IMAGE" /task_config.ini 
 ```
 
-## change data in source table
+## Change source data
 ```
 mysql -h127.0.0.1 -uroot -p123456 -uroot -P3307
 
@@ -359,7 +359,7 @@ UPDATE test_db.tb_1 SET value=2000000 WHERE id=2;
 INSERT INTO test_db.tb_1 VALUES(5,5);
 ```
 
-## check results
+## Check results
 ```
 mysql -h127.0.0.1 -uroot -p123456 -uroot -P3308
 

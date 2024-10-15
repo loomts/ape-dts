@@ -1,13 +1,13 @@
-# Migrate Data from MySQL to MySQL
+# Migrate data from MySQL to Kafka
 
 # Prerequisites
-- docker
+- [prerequisites](./prerequisites.md)
 - python3
 
-# Prepare MySQL Instance
+# Prepare MySQL instance
 refer to [mysql to mysql](./mysql_to_mysql.md)
 
-# Prepare Kafka Instance
+# Prepare Kafka instance
 - start zookeeper
 ```
 rm -rf /tmp/ape_dts/kafka/zookeeper_data
@@ -17,7 +17,7 @@ docker run --name some-zookeeper \
 -p 2181:2181 \
 -v "/tmp/ape_dts/kafka/zookeeper_data:/bitnami" \
 -e ALLOW_ANONYMOUS_LOGIN=yes \
--d docker.io/bitnami/zookeeper:3.8
+-d "$ZOOKEEPER_IMAGE"
 ```
 
 - start kafka
@@ -35,7 +35,7 @@ docker run --name some-kafka \
 -e KAFKA_CFG_LISTENERS=CLIENT://:9092,EXTERNAL://:9093 \
 -e KAFKA_CFG_ADVERTISED_LISTENERS=CLIENT://127.0.0.1:9092,EXTERNAL://127.0.0.1:9093 \
 -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=CLIENT \
--d docker.io/bitnami/kafka:latest
+-d "$KAFKA_IMAGE"
 ```
 
 - create test topic
@@ -43,8 +43,8 @@ docker run --name some-kafka \
 docker exec -it some-kafka /opt/bitnami/kafka/bin/kafka-topics.sh --create --topic test --bootstrap-server localhost:9093
 ```
 
-# Send Snapshot Data to Kafka
-## prepare data
+# Send snapshot data to Kafka
+## Prepare data
 ```
 mysql -h127.0.0.1 -uroot -p123456 -P3307
 
@@ -53,7 +53,7 @@ CREATE TABLE test_db.tb_1(id int, value int, primary key(id));
 INSERT INTO test_db.tb_1 VALUES(1,1),(2,2),(3,3),(4,4);
 ```
 
-## start task
+## Start task
 ```
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
@@ -87,11 +87,11 @@ EOL
 ```
 docker run --rm --network host \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
-apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/ape-dts:distross.1 /task_config.ini 
+"$APE_DTS_IMAGE" /task_config.ini 
 ```
 
-# Send Cdc Data to Kafka
-## start task
+# Send cdc data to Kafka
+## Start task
 ```
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
@@ -127,10 +127,10 @@ EOL
 ```
 docker run --rm --network host \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
-apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/ape-dts:distross.1 /task_config.ini 
+"$APE_DTS_IMAGE" /task_config.ini 
 ```
 
-## make changes in mysql
+## Make changes in mysql
 ```
 mysql -h127.0.0.1 -uroot -p123456 -uroot -P3307
 
@@ -141,5 +141,5 @@ UPDATE test_db_2.tb_2 SET value=100000 WHERE id=1;
 DELETE FROM test_db_2.tb_2;
 ```
 
-# Run Kafka Customer Demo
+# Run Kafka customer demo
 - [refer to demo](https://github.com/apecloud/cubetran_udf_python)

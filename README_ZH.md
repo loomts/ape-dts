@@ -23,9 +23,14 @@
 # 快速上手
 
 ## 教程
-
+- [prerequisites](./docs/en/tutorial/prerequisites.md)
 - [mysql -> mysql](./docs/en/tutorial/mysql_to_mysql.md)
-
+- [pg -> pg](./docs/en/tutorial/pg_to_pg.md)
+- [mongo -> mongo](./docs/en/tutorial/mongo_to_mongo.md)
+- [redis -> redis](./docs/en/tutorial/redis_to_redis.md)
+- [mysql -> kafka -> consumer](./docs/en/tutorial/mysql_to_kafka_consumer.md)
+- [pg -> kafka -> consumer](./docs/en/tutorial/pg_to_kafka_consumer.md)
+- [etl by lua](./docs/en/tutorial/etl_by_lua.md)
 
 ## 测试用例
 - [参考文档](./dt-tests/README_ZH.md)

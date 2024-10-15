@@ -1,17 +1,17 @@
-# Migrate Data from Postgres to Postgres
+# Migrate data from Postgres to Kafka
 
 # Prerequisites
-- docker
+- [prerequisites](./prerequisites.md)
 - python3
 
-# Prepare Postgres Instance
+# Prepare Postgres instance
 refer to [pg to pg](./pg_to_pg.md)
 
-# Prepare Kafka Instance
+# Prepare Kafka instance
 refer to [mysql to kafka](./pg_to_kafka_constomer.md)
 
-# Send Snapshot Data to Kafka
-## prepare data
+# Send snapshot data to Kafka
+## Prepare data
 ```
 psql -h 127.0.0.1 -U postgres -d postgres -p 5433 -W
 
@@ -20,7 +20,7 @@ CREATE TABLE test_db.tb_1(id int, value int, primary key(id));
 INSERT INTO test_db.tb_1 VALUES(1,1),(2,2),(3,3),(4,4);
 ```
 
-## start task
+## Start task
 ```
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
@@ -54,11 +54,11 @@ EOL
 ```
 docker run --rm --network host \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
-apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/ape-dts:distross.1 /task_config.ini 
+"$APE_DTS_IMAGE" /task_config.ini 
 ```
 
-# Send Cdc Data to Kafka
-## start task
+# Send cdc data to Kafka
+## Start task
 ```
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
@@ -94,10 +94,10 @@ EOL
 ```
 docker run --rm --network host \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
-apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/ape-dts:distross.1 /task_config.ini 
+"$APE_DTS_IMAGE" /task_config.ini 
 ```
 
-## make changes in postgres
+## Make changes in postgres
 ```
 psql -h 127.0.0.1 -U postgres -d postgres -p 5433 -W
 
@@ -108,5 +108,5 @@ UPDATE test_db_2.tb_2 SET value=100000 WHERE id=1;
 DELETE FROM test_db_2.tb_2;
 ```
 
-# Run Kafka Customer Demo
+# Run Kafka customer demo
 - [refer to demo](https://github.com/apecloud/cubetran_udf_python)
