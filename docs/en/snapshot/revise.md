@@ -4,7 +4,7 @@ Based on the check results, you can initiate a revision task.
 
 The check results serve as a guide for specifying the scope for revision, and you still need to get the current data for each row from the source database, to fix the data.
 
-# Example: mysql_to_mysql
+# Example: MySQl_to_MySQl
 ```
 [extractor]
 db_type=mysql

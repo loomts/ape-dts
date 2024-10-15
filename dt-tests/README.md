@@ -42,35 +42,7 @@ url={mysql_sinker_url}
 - Examples work in docker, mac.
 
 # Postgres
-
-## Source
-```
-docker run --name some-postgres-1 \
--p 5433:5432 \
--e POSTGRES_PASSWORD=postgres \
--e TZ=Etc/GMT-8 \
--d postgis/postgis:latest
-```
-
-- To run cdc test, set wal_level.
-
-```
-docker exec -it some-postgres-1 bash
-
-psql -h 127.0.0.1 -U postgres -d postgres -p 5432 -W
-
-ALTER SYSTEM SET wal_level = logical;
-```
-
-## Target
-
-```
-docker run --name some-postgres-2 \
--p 5434:5432 \
--e POSTGRES_PASSWORD=postgres \
--e TZ=Etc/GMT-7 \
--d postgis/postgis:latest
-```
+[Prepare Postgres instances](/docs/en/tutorial/pg_to_pg.md)
 
 ## To run [charset tests](../dt-tests/tests/pg_to_pg/snapshot/charset_euc_cn_test)
 - Create database "postgres_euc_cn" in both source and target.
@@ -84,107 +56,13 @@ CREATE DATABASE postgres_euc_cn
 ```
 
 # MySQL
-
-## Source
-
-```
-docker run -d --name some-mysql-1 \
---platform linux/x86_64 \
--it \
--p 3307:3306 -e MYSQL_ROOT_PASSWORD="123456" \
- mysql:5.7.40 --lower_case_table_names=1 --character-set-server=utf8 --collation-server=utf8_general_ci \
- --datadir=/var/lib/mysql \
- --user=mysql \
- --server_id=1 \
- --log_bin=/var/lib/mysql/mysql-bin.log \
- --max_binlog_size=100M \
- --gtid_mode=ON \
- --enforce_gtid_consistency=ON \
- --binlog_format=ROW \
- --default_time_zone=+08:00
-```
-
-## Target
-
-```
-docker run -d --name some-mysql-2 \
---platform linux/x86_64 \
--it \
--p 3308:3306 -e MYSQL_ROOT_PASSWORD="123456" \
- mysql:5.7.40 --lower_case_table_names=1 --character-set-server=utf8 --collation-server=utf8_general_ci \
- --datadir=/var/lib/mysql \
- --user=mysql \
- --server_id=1 \
- --log_bin=/var/lib/mysql/mysql-bin.log \
- --max_binlog_size=100M \
- --gtid_mode=ON \
- --enforce_gtid_consistency=ON \
- --binlog_format=ROW \
- --default_time_zone=+07:00
-```
+[Prepare MySQL instances](/docs/en/tutorial/mysql_to_mysql.md)
 
 # Mongo
+[Prepare Mongo instances](/docs/en/tutorial/mongo_to_mongo.md)
 
-## Source
-- Mongo source needs to be ReplicaSet which supports cdc.
-
-- 1, Create docker network.
-
-```
-docker network create mongo-network
-```
-
-- 2, Create mongo ReplicaSet containers.
-
-```
-docker run -d --name mongo1 --network mongo-network -p 9042:9042 mongo:6.0 --replSet rs0  --port 9042
-docker run -d --name mongo2 --network mongo-network -p 9142:9142 mongo:6.0 --replSet rs0  --port 9142
-docker run -d --name mongo3 --network mongo-network -p 9242:9242 mongo:6.0 --replSet rs0  --port 9242
-```
-
-- 3, Setup ReplicaSet.
-
-```
-- enter any container
-docker exec -it mongo1 bash
-
-- login mongo
-mongosh --host localhost --port 9042
-
-- execute sql
-> config = {"_id" : "rs0", "members" : [{"_id" : 0,"host" : "mongo1:9042"},{"_id" : 1,"host" : "mongo2:9142"},{"_id" : 2,"host" : "mongo3:9242"}]}
-> rs.initiate(config)
-> rs.status()
-```
-
-- 4, Create user.
-
-```
-> use admin
-> db.createUser({user: "ape_dts", pwd: "123456", roles: ["root"]})
-```
-
-- 5, Update /etc/hosts on mac.
-
-```
-127.0.0.1 mongo1 mongo2 mongo3
-```
-
-- 6, Test connecting.
-
-```
-mongo "mongodb://ape_dts:123456@mongo1:9042/?replicaSet=rs0"
-```
-
-## Target
-
-```
-docker run -d --name dst-mongo \
-	-e MONGO_INITDB_ROOT_USERNAME=ape_dts \
-	-e MONGO_INITDB_ROOT_PASSWORD=123456 \
-    -p 27018:27017 \
-	mongo:6.0
-```
+# Kafka
+[Prepare Kafka instances](/docs/en/tutorial/mysql_to_kafka_consumer.md)
 
 # Redis
 ## Images
