@@ -30,6 +30,7 @@
 - [redis -> redis](./docs/en/tutorial/redis_to_redis.md)
 - [mysql -> kafka -> consumer](./docs/en/tutorial/mysql_to_kafka_consumer.md)
 - [pg -> kafka -> consumer](./docs/en/tutorial/pg_to_kafka_consumer.md)
+- [snapshot + cdc without data loss](./docs/en/tutorial/snapshot_and_cdc_without_data_loss.md)
 - [etl by lua](./docs/en/tutorial/etl_by_lua.md)
 
 ## 测试用例
