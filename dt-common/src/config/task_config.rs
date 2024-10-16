@@ -197,6 +197,8 @@ impl TaskConfig {
                     slot_name: loader.get_required(EXTRACTOR, "slot_name"),
                     pub_name: loader.get_optional(EXTRACTOR, "pub_name"),
                     start_lsn: loader.get_optional(EXTRACTOR, "start_lsn"),
+                    recreate_slot_if_exists: loader
+                        .get_optional(EXTRACTOR, "recreate_slot_if_exists"),
                     keepalive_interval_secs,
                     heartbeat_interval_secs,
                     heartbeat_tb,

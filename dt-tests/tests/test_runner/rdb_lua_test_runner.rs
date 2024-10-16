@@ -10,9 +10,9 @@ pub struct RdbLuaTestRunner {
 impl RdbLuaTestRunner {
     pub async fn new(relative_test_dir: &str) -> anyhow::Result<Self> {
         let src_to_dst_runner =
-            RdbTestRunner::new_default(&format!("{}/src_to_dst", relative_test_dir)).await?;
+            RdbTestRunner::new(&format!("{}/src_to_dst", relative_test_dir)).await?;
         let expect_to_dst_runner =
-            RdbTestRunner::new(&format!("{}/expect_to_dst", relative_test_dir), false).await?;
+            RdbTestRunner::new(&format!("{}/expect_to_dst", relative_test_dir)).await?;
         Ok(Self {
             src_to_dst_runner,
             expect_to_dst_runner,

@@ -60,6 +60,7 @@ pub struct PgCdcExtractor {
     pub slot_name: String,
     pub pub_name: String,
     pub start_lsn: String,
+    pub recreate_slot_if_exists: bool,
     pub keepalive_interval_secs: u64,
     pub heartbeat_interval_secs: u64,
     pub heartbeat_tb: String,
@@ -103,6 +104,7 @@ impl PgCdcExtractor {
             pub_name: self.pub_name.clone(),
             slot_name: self.slot_name.clone(),
             start_lsn: self.start_lsn.clone(),
+            recreate_slot_if_exists: self.recreate_slot_if_exists,
         };
         let (stream, actual_start_lsn) = cdc_client.connect().await?;
         tokio::pin!(stream);

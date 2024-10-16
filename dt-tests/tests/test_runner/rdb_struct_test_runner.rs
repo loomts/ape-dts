@@ -18,7 +18,7 @@ const PG_GET_INDEXDEF: &'static str = "pg_get_indexdef";
 
 impl RdbStructTestRunner {
     pub async fn new(relative_test_dir: &str) -> anyhow::Result<Self> {
-        let base = RdbTestRunner::new_default(relative_test_dir).await.unwrap();
+        let base = RdbTestRunner::new(relative_test_dir).await.unwrap();
         Ok(Self { base })
     }
 

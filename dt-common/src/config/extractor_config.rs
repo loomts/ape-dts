@@ -56,6 +56,7 @@ pub enum ExtractorConfig {
         slot_name: String,
         pub_name: String,
         start_lsn: String,
+        recreate_slot_if_exists: bool,
         keepalive_interval_secs: u64,
         heartbeat_interval_secs: u64,
         heartbeat_tb: String,

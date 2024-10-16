@@ -24,9 +24,9 @@ const UTC_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 impl RdbSqlTestRunner {
     pub async fn new(relative_test_dir: &str, reverse: bool) -> anyhow::Result<Self> {
         let src_to_sql_runner =
-            RdbTestRunner::new_default(&format!("{}/src_to_sql", relative_test_dir)).await?;
+            RdbTestRunner::new(&format!("{}/src_to_sql", relative_test_dir)).await?;
         let src_to_dst_runner =
-            RdbTestRunner::new(&format!("{}/src_to_dst", relative_test_dir), false).await?;
+            RdbTestRunner::new(&format!("{}/src_to_dst", relative_test_dir)).await?;
         Ok(Self {
             src_to_sql_runner,
             src_to_dst_runner,
