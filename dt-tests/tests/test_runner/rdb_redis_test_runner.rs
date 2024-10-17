@@ -164,7 +164,7 @@ impl RdbRedisTestRunner {
                     // check redis key exists
                     assert!(redis_kvs.contains_key(&col));
                     // check redis value = db value
-                    if let Value::Data(v) = redis_kvs.get(&col).unwrap() {
+                    if let Value::BulkString(v) = redis_kvs.get(&col).unwrap() {
                         let redis_v_str = String::from_utf8(v.clone()).unwrap();
                         if let Some(db_v_str) = db_v.to_option_string() {
                             if redis_v_str != db_v_str {

@@ -25,7 +25,7 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn cdc_cmds_test() {
-        TestBase::run_redis_cdc_test("redis_to_redis/cdc/7_0/cmds_test", 2000, 15000).await;
+        TestBase::run_redis_cdc_test("redis_to_redis/cdc/7_0/cmds_test", 2000, 5000).await;
     }
 
     #[tokio::test]

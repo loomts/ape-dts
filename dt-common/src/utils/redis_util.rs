@@ -33,7 +33,7 @@ impl RedisUtil {
     ) -> anyhow::Result<Vec<ClusterNode>> {
         let cmd = RedisCmd::from_str_args(&["cluster", "nodes"]);
         let value = conn.req_packed_command(&CmdEncoder::encode(&cmd))?;
-        if let redis::Value::Data(data) = value {
+        if let redis::Value::BulkString(data) = value {
             let nodes_str = String::from_utf8(data)?;
             let nodes = Self::parse_cluster_nodes(&nodes_str)?;
             let master_nodes = nodes.into_iter().filter(|i| i.is_master).collect();
@@ -63,7 +63,7 @@ impl RedisUtil {
     pub fn get_redis_version(conn: &mut redis::Connection) -> anyhow::Result<f32> {
         let cmd = RedisCmd::from_str_args(&["INFO"]);
         let value = conn.req_packed_command(&CmdEncoder::encode(&cmd))?;
-        if let redis::Value::Data(data) = value {
+        if let redis::Value::BulkString(data) = value {
             let info = String::from_utf8(data)?;
             log_info!("redis INFO result: {}", info);
             let re = Regex::new(r"redis_version:(\S+)").unwrap();
@@ -91,11 +91,15 @@ impl RedisUtil {
     pub fn parse_result_as_string(value: Value) -> anyhow::Result<Vec<String>> {
         let mut results = Vec::new();
         match value {
-            Value::Data(data) => {
+            Value::BulkString(data) => {
                 results.push(String::from_utf8_lossy(&data).to_string());
             }
 
-            Value::Bulk(data) => {
+            Value::SimpleString(data) => {
+                results.push(data);
+            }
+
+            Value::Array(data) | Value::Set(data) => {
                 for i in data {
                     let sub_results = Self::parse_result_as_string(i)?;
                     results.extend_from_slice(&sub_results);
@@ -104,7 +108,17 @@ impl RedisUtil {
 
             Value::Int(data) => results.push(data.to_string()),
 
-            Value::Status(data) => results.push(data),
+            Value::Double(data) => {
+                results.push(format!("{}", data));
+            }
+
+            Value::Boolean(data) => {
+                results.push(format!("{}", data));
+            }
+
+            Value::BigNumber(data) => {
+                results.push(data.to_string());
+            }
 
             _ => {
                 bail! {Error::RedisResultError(
