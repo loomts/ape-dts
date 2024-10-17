@@ -48,12 +48,8 @@ const UTC_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 
 #[allow(dead_code)]
 impl RdbTestRunner {
-    pub async fn new_default(relative_test_dir: &str) -> anyhow::Result<Self> {
-        Self::new(relative_test_dir, true).await
-    }
-
-    pub async fn new(relative_test_dir: &str, recreate_pub_and_slot: bool) -> anyhow::Result<Self> {
-        let mut base = BaseTestRunner::new(relative_test_dir).await.unwrap();
+    pub async fn new(relative_test_dir: &str) -> anyhow::Result<Self> {
+        let base = BaseTestRunner::new(relative_test_dir).await.unwrap();
 
         // prepare conn pools
         let mut src_conn_pool_mysql = None;
@@ -91,26 +87,6 @@ impl RdbTestRunner {
             ),
             _ => None,
         };
-
-        // for pg cdc, recreate publication & slot before each test
-        if let ExtractorConfig::PgCdc {
-            slot_name,
-            pub_name,
-            ..
-        } = config.extractor
-        {
-            if recreate_pub_and_slot {
-                let pub_name = if pub_name.is_empty() {
-                    format!("{}_publication_for_all_tables", slot_name)
-                } else {
-                    pub_name.clone()
-                };
-                let drop_pub_sql = format!("DROP PUBLICATION IF EXISTS {}", pub_name);
-                let drop_slot_sql= format!("SELECT pg_drop_replication_slot(slot_name) FROM pg_replication_slots WHERE slot_name = '{}'", slot_name);
-                base.src_prepare_sqls.push(drop_pub_sql);
-                base.src_prepare_sqls.push(drop_slot_sql);
-            }
-        }
 
         Ok(Self {
             src_conn_pool_mysql,

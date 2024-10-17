@@ -35,11 +35,11 @@ impl RedisTestUtil {
         let result = self.execute_cmd(conn, &cmd);
 
         let mut kvs = HashMap::new();
-        if let redis::Value::Bulk(mut values) = result {
+        if let redis::Value::Array(mut values) = result {
             for _i in (0..values.len()).step_by(2) {
                 let k = values.remove(0);
                 let v = values.remove(0);
-                if let redis::Value::Data(k) = k {
+                if let redis::Value::BulkString(k) = k {
                     kvs.insert(String::from_utf8(k).unwrap(), v);
                 } else {
                     assert!(false);
@@ -55,7 +55,7 @@ impl RedisTestUtil {
         let mut dbs = Vec::new();
         let cmd = "INFO keyspace";
         match self.execute_cmd(conn, &cmd) {
-            redis::Value::Data(data) => {
+            redis::Value::BulkString(data) => {
                 let spaces = String::from_utf8(data).unwrap();
                 for space in spaces.split("\r\n").collect::<Vec<&str>>() {
                     if space.contains("db") {
@@ -64,7 +64,7 @@ impl RedisTestUtil {
                     }
                 }
             }
-            _ => {}
+            _ => assert!(false),
         }
         dbs
     }
@@ -73,10 +73,10 @@ impl RedisTestUtil {
         let mut keys = Vec::new();
         let cmd = format!("KEYS {}", match_pattern);
         match self.execute_cmd(conn, &cmd) {
-            redis::Value::Bulk(values) => {
+            redis::Value::Array(values) => {
                 for v in values {
                     match v {
-                        redis::Value::Data(data) => {
+                        redis::Value::BulkString(data) => {
                             let key = String::from_utf8(data).unwrap();
                             if SYSTEM_KEYS.contains(&key.as_str()) {
                                 continue;
@@ -97,7 +97,7 @@ impl RedisTestUtil {
         let cmd = format!("type {}", self.escape_key(key));
         let value = self.execute_cmd(conn, &cmd);
         match value {
-            redis::Value::Status(key_type) => {
+            redis::Value::SimpleString(key_type) => {
                 return key_type;
             }
             _ => assert!(false),

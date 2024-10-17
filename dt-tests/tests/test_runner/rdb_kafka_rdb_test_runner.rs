@@ -30,7 +30,7 @@ pub struct RdbKafkaRdbTestRunner {
 impl RdbKafkaRdbTestRunner {
     pub async fn new(relative_test_dir: &str) -> anyhow::Result<Self> {
         let src_to_dst_runner =
-            RdbTestRunner::new_default(&format!("{}/src_to_dst", relative_test_dir)).await?;
+            RdbTestRunner::new(&format!("{}/src_to_dst", relative_test_dir)).await?;
         let src_to_kafka_runner =
             BaseTestRunner::new(&format!("{}/src_to_kafka", relative_test_dir)).await?;
 
