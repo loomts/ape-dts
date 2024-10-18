@@ -46,7 +46,7 @@ impl AvroConverter {
         }
     }
 
-    pub fn refresh_meta(&mut self, data: &Vec<DdlData>) {
+    pub fn refresh_meta(&mut self, data: &[DdlData]) {
         if let Some(meta_manager) = &mut self.meta_manager {
             for ddl_data in data.iter() {
                 meta_manager.invalidate_cache_by_ddl_data(ddl_data);
@@ -197,7 +197,7 @@ impl AvroConverter {
         let tb = avro_to_string(avro_map.remove(TB));
         let operation = avro_to_string(avro_map.remove(OPERATION));
 
-        if operation == DDL.to_string() {
+        if operation == *DDL {
             let get_extra_string = |extra: &Option<HashMap<String, ColValue>>, key: &str| {
                 if let Some(extra) = extra {
                     if let Some(v) = extra.get(key) {
