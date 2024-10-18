@@ -1,4 +1,4 @@
-# 简介
+# 任务进度位点
 
 我们把进度信息记录在 position.log 中。位点刷新频率可在 [pipeline] checkpoint_interval_secs 中配置。
 

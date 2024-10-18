@@ -1,4 +1,5 @@
-# Introduction
+# Modify data by Lua
+
 During data sync, a user may need to modify the data manually.
 
 In ape-dts tasks, the user can provide a Lua script to process each row data, such as:

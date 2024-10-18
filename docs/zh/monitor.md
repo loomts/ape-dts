@@ -1,4 +1,4 @@
-# 简介
+# 监控信息
 
 在任务运行过程中，我们提供了一系列 counter 来记录当前状态。counter 会定时（[pipeline] 的 checkpoint_interval_secs 配置）写入到 monitor.log。
 

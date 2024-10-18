@@ -1,4 +1,4 @@
-# Execute snapshot and cdc tasks serially without data loss
+# Execute snapshot and CDC tasks serially without data loss
 
 In most data migration/import scenarios, you may want to migrate snapshot first, then subscribe to source cdc data and synchronize it to target.
 

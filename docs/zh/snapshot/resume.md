@@ -1,4 +1,4 @@
-# 简介
+# 断点续传
 
 任务进度会定期记录在 position.log / finished.log 中。
 

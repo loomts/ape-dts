@@ -1,4 +1,5 @@
-# Introduction
+# Generate sqls from CDC data
+
 Subscribe to data changes in the source database and generate sqls / reverse sqls, stored in sql.log.
 
 Supported databases:

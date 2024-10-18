@@ -8,7 +8,7 @@
 - In Rust.
 
 
-## Tasks supported
+## Supported task types
 |  | mysql -> mysql | pg -> pg | mongo -> mongo | redis -> redis | mysql -> kafka | pg -> kafka|
 | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- |
 | Snapshot | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
@@ -28,7 +28,7 @@
 - [mysql -> kafka -> consumer](./docs/en/tutorial/mysql_to_kafka_consumer.md)
 - [pg -> kafka -> consumer](./docs/en/tutorial/pg_to_kafka_consumer.md)
 - [snapshot + cdc without data loss](./docs/en/tutorial/snapshot_and_cdc_without_data_loss.md)
-- [etl by lua](./docs/en/tutorial/etl_by_lua.md)
+- [modify data by lua](./docs/en/tutorial/etl_by_lua.md)
 
 ## Run tests
 
@@ -37,17 +37,21 @@ Refer to [docs](./dt-tests/README.md) for more details.
 # More docs
 - Configurations
     - [config details](./docs/en/config.md)
+- Structures
+    - [migration](./docs/en/structure/migration.md)
+    - [check](./docs/en/structure/check.md)
+    - [check by Liquibase](./docs/en/structure/check_by_liquibase.md)
 - Snapshot tasks
     - [migration](./docs/en/snapshot/migration.md)
     - [check](./docs/en/snapshot/check.md)
     - [revise](./docs/en/snapshot/revise.md)
     - [review](./docs/en/snapshot/review.md)
 - CDC tasks
-    - [data sync](./docs/en/cdc/migration.md)
-    - [heartbeat](./docs/en/cdc/heartbeat.md)
-    - [two-way data sync](./docs/en/cdc/two_way.md)
+    - [data sync](./docs/en/cdc/sync.md)
+    - [heartbeat to source database](./docs/en/cdc/heartbeat.md)
+    - [two-way data sync](./docs/en/cdc/two_way.md)  
 - Data processing
-    - [custom lua script](./docs/en/etl/lua.md)
+    - [modify data by lua](./docs/en/etl/lua.md)
 
 # Contributions
 
@@ -71,21 +75,8 @@ cargo build
 cargo clippy --workspace
 ```
 
-## Build docker image
-
-- arm64
-```
-docker buildx build \
---platform linux/arm64 --tag ape-dts:0.1.0-test-arm64 \
---build-arg MODULE_NAME=dt-main --load . 
-```
-
-- amd64
-```
-docker buildx build \
---platform linux/amd64 --tag ape-dts:0.1.0-test-amd64 \
---build-arg MODULE_NAME=dt-main --load . 
-```
+## Build images
+[build images](./docs/en/build_images.md)
 
 # Contact us
 

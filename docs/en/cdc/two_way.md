@@ -1,4 +1,4 @@
-# Introduction
+# Two-way CDC data synchronization
 
 In a distributed system, the source and target databases may not necessarily have a simple master-slave relationship. Sometimes they can independently accept data changes, but data sync is still needed to ensure that they both have complete data.
 

@@ -1,48 +1,11 @@
-# Introduction
+# Migrate structures
 
 - Database: MySQL, PG.
 - Migrated Objects: database(mysql), schema(pg), table, comment, index, sequence(pg), constraints.
 
-# Configurations
+# Example: MySQL -> MySQL
 
-```
-[extractor]
-extract_type=struct
-db_type=mysql
-url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
-
-[sinker]
-sink_type=struct
-db_type=mysql
-batch_size=1
-url=mysql://root:123456@127.0.0.1:3308?ssl-mode=disabled
-conflict_policy=interrupt
-
-[filter]
-do_dbs=struct_it_mysql2mysql_1
-ignore_dbs=
-do_tbs=
-ignore_tbs=
-do_events=
-
-[router]
-db_map=
-tb_map=
-col_map=
-
-[parallelizer]
-parallel_type=serial
-parallel_size=1
-
-[runtime]
-log_level=info
-log4rs_file=./log4rs.yaml
-log_dir=./logs
-
-[pipeline]
-checkpoint_interval_secs=10
-buffer_size=100
-```
+Refer to [task templates](../../templates/mysql_to_mysql.md) and [tutorial](../tutorial/mysql_to_mysql.md)
 
 ## Note
 

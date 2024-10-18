@@ -1,46 +1,10 @@
-# 简介
+# 结构校验
 
 结构迁移后，您可使用两种校验方式。一种是我们自带的，一种是第三方 [liquibase](./check_liquibase.md)。本文档主要介绍前者。
 
-# 配置
+# 示例: MySQL -> MySQL
 
-```
-[extractor]
-db_type=mysql
-extract_type=struct
-url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
-
-[sinker]
-db_type=mysql
-sink_type=check
-url=mysql://root:123456@127.0.0.1:3308?ssl-mode=disabled
-batch_size=1
-
-[filter]
-do_dbs=
-ignore_dbs=
-do_tbs=struct_check_test_1.*
-ignore_tbs=
-do_events=
-
-[router]
-db_map=
-tb_map=
-col_map=
-
-[parallelizer]
-parallel_type=rdb_check
-parallel_size=1
-
-[pipeline]
-buffer_size=100
-checkpoint_interval_secs=10
-
-[runtime]
-log_level=info
-log4rs_file=./log4rs.yaml
-log_dir=./logs
-```
+参考 [任务模版](../../templates/mysql_to_mysql.md)
 
 # 校验结果
 

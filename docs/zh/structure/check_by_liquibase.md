@@ -1,10 +1,10 @@
-# Introduction
+# 使用 Liquibase 做结构校验
 
-Liquibase is an open-source software used for managing database schema changes. You can learn more about it by visiting the [Liquibase official website](https://www.liquibase.org/) and exploring the [GitHub repository](https://github.com/liquibase/liquibase).
+Liquibase 是一款管理数据库结构变更的开源软件，点击 [Liquibase 官网](https://www.liquibase.org/) 和 [Git 仓库](https://github.com/liquibase/liquibase) 可了解详情。
 
-Since it provides comparisons for database structures, we made a docker image(apecloud/ape-dts-structure-checker:0.0.1) based on Liquibase, which can be used for check tasks after structure migration. Refer to code changes in this [GitHub repository](https://github.com/qianyiwen2019/liquibase/tree/ape_diff_tool).
+基于 Liquibase 提供的数据库结构对比功能，我们包装了 docker 镜像 apecloud/ape-dts-structure-checker:0.0.1，用于结构迁移后的校验，相应代码改动位于此 [Git 仓库](https://github.com/qianyiwen2019/liquibase/tree/ape_diff_tool)。
 
-# Examples
+# 用例
 
 ## MySQL
 ```
@@ -30,17 +30,18 @@ docker run \
 apecloud/ape-dts-structure-checker:0.0.1
 ```
 
-# Parameters
+# 参数说明
 
-- URL: Target database url.
-- USERNAME: Target username.
-- PASSWORD: Target password.
-- REFERENCE_URL: Source database url.
-- REFERENCE_USERNAME: Source username.
-- REFERENCE_PASSWORD: Source password.
+- URL：目标库地址。
+- USERNAME：目标库用户名。
+- PASSWORD：目标库密码。
+- REFERENCE_URL：源库地址。
+- REFERENCE_USERNAME：源库用户名。
+- REFERENCE_PASSWORD：源库密码。
 
-# Results
+# 校验结果
 
+校验结果类似如下：
 ```
 Compared Schemas: test_db_1
 Product Name: EQUAL
