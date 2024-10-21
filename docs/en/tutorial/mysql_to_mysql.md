@@ -376,3 +376,68 @@ SELECT * FROM test_db.tb_1;
 |  5 |       5 |
 +----+---------+
 ```
+
+# Cdc task with gtid
+## Start task
+```
+cat <<EOL > /tmp/ape_dts/task_config.ini
+[extractor]
+db_type=mysql
+extract_type=cdc
+server_id=2000
+url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
+gtid_enabled=true
+gtid_set=
+
+[filter]
+do_dbs=test_db
+do_events=insert,update,delete
+
+[sinker]
+db_type=mysql
+sink_type=write
+batch_size=200
+url=mysql://root:123456@127.0.0.1:3308?ssl-mode=disabled
+
+[parallelizer]
+parallel_type=rdb_merge
+parallel_size=8
+
+[pipeline]
+buffer_size=16000
+checkpoint_interval_secs=1
+EOL
+```
+
+```
+docker run --rm --network host \
+-v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
+"$APE_DTS_IMAGE" /task_config.ini 
+```
+
+## Change source data
+```
+mysql -h127.0.0.1 -uroot -p123456 -uroot -P3307
+
+DELETE FROM test_db.tb_1 WHERE id=3;
+UPDATE test_db.tb_1 SET value=2000000 WHERE id=4;
+INSERT INTO test_db.tb_1 VALUES(6,6);
+```
+
+## Check results
+```
+mysql -h127.0.0.1 -uroot -p123456 -uroot -P3308
+
+SELECT * FROM test_db.tb_1;
+```
+
+```
++----+---------+
+| id | value   |
++----+---------+
+|  2 | 2000000 |
+|  4 | 2000000 |
+|  5 |       5 |
+|  6 |       6 |
++----+---------+
+```

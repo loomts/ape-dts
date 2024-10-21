@@ -13,10 +13,17 @@ If task interrupts, use checkpoint_position as the starting point for new task, 
 
 ## MySQL
 
-Use binlog_filename + next_event_position as position.
+Depends on gtid enabled or not, refer to [tutorial](./tutorial/mysql_to_mysql.md):
+
+- Use binlog_filename + next_event_position as position if gtid disabled.
 
 ```
 2024-10-18 05:21:45.207788 | checkpoint_position | {"type":"MysqlCdc","server_id":"","binlog_filename":"mysql-bin.000004","next_event_position":44315,"gtid_set":"","timestamp":"2024-10-18 05:21:44.000"}
+```
+
+- Use gtid_set as position if gtid enabled.
+```
+2024-10-18 05:22:41.201208 | checkpoint_position | {"type":"MysqlCdc","server_id":"","binlog_filename":"mysql-bin.000004","next_event_position":50865,"gtid_set":"9663a096-8adc-11ef-b617-0242ac110002:1-3112","timestamp":"2024-10-18 05:22:41.000"}
 ```
 
 ## Postgres

@@ -8,7 +8,7 @@
 
 ## 支持任务类型
 
-目前已成熟的任务类型有：
+目前支持的成熟任务类型：
 
 <br/>
 
@@ -39,7 +39,7 @@
 # 更多文档
 - 配置
     - [配置详解](./docs/zh/config.md)
-- 库表结构
+- 库表结构任务
     - [结构迁移](./docs/zh/structure/migration.md)
     - [结构校验](./docs/zh/structure/check.md)
     - [使用 Liquibase 做结构校验](./docs/zh/structure/check_by_liquibase.md)
@@ -66,6 +66,9 @@
     - [mongo -> mongo](./docs/templates/mongo_to_mongo.md)
     - [redis -> redis](./docs/templates/redis_to_redis.md)
     - [mysql -> kafka](./docs/templates/mysql_to_kafka.md)
+
+# Benchmark
+- [mysql -> mysql](./docs/zh/benchmark.md)
 
 # 开发
 ## 架构

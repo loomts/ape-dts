@@ -13,10 +13,17 @@
 
 ## MySQL
 
-使用 binlog_filename + next_event_position（即 binlog_position）做断点续传。
+根据是否使用 gtid，分为两种，参考 [教程](../en/tutorial/mysql_to_mysql.md)
+
+- 不使用 gtid，用 binlog_filename + next_event_position（即 binlog_position）做断点续传。
 
 ```
 2024-10-18 05:21:45.207788 | checkpoint_position | {"type":"MysqlCdc","server_id":"","binlog_filename":"mysql-bin.000004","next_event_position":44315,"gtid_set":"","timestamp":"2024-10-18 05:21:44.000"}
+```
+
+- 使用 gtid，用 gtid_set 做断点续传
+```
+2024-10-18 05:22:41.201208 | checkpoint_position | {"type":"MysqlCdc","server_id":"","binlog_filename":"mysql-bin.000004","next_event_position":50865,"gtid_set":"9663a096-8adc-11ef-b617-0242ac110002:1-3112","timestamp":"2024-10-18 05:22:41.000"}
 ```
 
 ## Postgres

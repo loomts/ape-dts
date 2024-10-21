@@ -37,7 +37,7 @@ Refer to [docs](./dt-tests/README.md) for details.
 # More docs
 - Configurations
     - [config details](./docs/en/config.md)
-- Structures
+- Structure tasks
     - [migration](./docs/en/structure/migration.md)
     - [check](./docs/en/structure/check.md)
     - [check by Liquibase](./docs/en/structure/check_by_liquibase.md)
@@ -64,6 +64,9 @@ Refer to [docs](./dt-tests/README.md) for details.
     - [mongo -> mongo](./docs/templates/mongo_to_mongo.md)
     - [redis -> redis](./docs/templates/redis_to_redis.md)
     - [mysql -> kafka](./docs/templates/mysql_to_kafka.md)
+
+# Benchmark
+- [mysql -> mysql](./docs/en/benchmark.md)
 
 # Contributions
 
