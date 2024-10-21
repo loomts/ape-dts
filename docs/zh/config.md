@@ -1,6 +1,6 @@
 # 配置详情
 
-# 示例: MySQL_to_MySQL
+# 示例: MySQL -> MySQL
 
 参考 [任务模版](../templates/mysql_to_mysql.md) 和 [教程](../en/tutorial/mysql_to_mysql.md)
 

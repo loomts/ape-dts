@@ -122,7 +122,7 @@ marker=ape_trans_mysql.topo1
 - marker：数据打标表，所有节点上的打标表需保持一致。
 
 
-# 示例: MySQL_to_MySQL
+# 示例: MySQL -> MySQL
 
 下面以拓扑中包含两个节点（node1，node2）的双向同步为例。
 

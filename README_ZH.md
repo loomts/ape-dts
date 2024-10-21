@@ -60,6 +60,12 @@
 - 监控
     - [监控信息](./docs/zh/monitor.md)
     - [位点信息](./docs/zh/position.md)
+- 任务模版
+    - [mysql -> mysql](./docs/templates/mysql_to_mysql.md)
+    - [pg -> pg](./docs/templates/pg_to_pg.md)
+    - [mongo -> mongo](./docs/templates/mongo_to_mongo.md)
+    - [redis -> redis](./docs/templates/redis_to_redis.md)
+    - [mysql -> kafka](./docs/templates/mysql_to_kafka.md)
 
 # 开发
 ## 架构

@@ -1,19 +1,19 @@
-# 任务进度位点
+# Task progress info
 
-任务进度记录在 position.log 中。刷新频率可在 [pipeline] checkpoint_interval_secs 中配置。
+Task progress will be recorded periodically in position.log(configuration: [pipeline] checkpoint_interval_secs).
 
-# 增量
+# CDC
 
-对于增量任务，因为我们只保证目标库与源库的最终一致性，而不保证源库事务在目标库重放时的完整性，position.log 中记录 current_position 和 checkpoint_position 两份信息。
+For CDC tasks, we only guarantee eventual consistency between target and source, binlog/wal for a big transaction in source may be synced to target by multiple parts. Thus, we will record both current_position and checkpoint_position in position.log.
 
-- current_position：已同步的数据的位点信息，可能处在源库某个大事务 binlog 的中间位置。
-- checkpoint_position：已同步的完整的事务的位点信息。
+- current_position: position of synced data, may be in the middle of a large transaction binlog/wal.
+- checkpoint_position: position of the last synced transaction binlog/wal.
 
-如果任务中断，要使用 position.log 中的位点信息做断点续传，优先使用 checkpoint_position 作为新任务的起点，使用 current_position 可能导致 extractor 解析增量数据失败。
+If task interrupts, use checkpoint_position as the starting point for new task, refer to [CDC task resume](./cdc/resume.md), using current_position may cause errors when parsing binlog/wal.
 
 ## MySQL
 
-使用 binlog_filename + next_event_position（即 binlog_position）做断点续传。
+Use binlog_filename + next_event_position as position.
 
 ```
 2024-10-18 05:21:45.207788 | checkpoint_position | {"type":"MysqlCdc","server_id":"","binlog_filename":"mysql-bin.000004","next_event_position":44315,"gtid_set":"","timestamp":"2024-10-18 05:21:44.000"}
@@ -21,7 +21,7 @@
 
 ## Postgres
 
-使用 lsn 做断点续传。
+Use lsn as position.
 
 ```
 2024-10-18 05:22:22.419787 | checkpoint_position | {"type":"PgCdc","lsn":"0/5D65CB0","timestamp":"2024-10-18 05:22:21.756"}
@@ -29,14 +29,13 @@
 
 ## Mongo
 
-Mongo 增量任务没有记录 checkpoint_position，根据拉取数据方式不同，分为：
+Only current_position for Mongo, depends on source types:
 
-- 使用 operation_time 做断点续传（对应 [extractor] source=op_log）。
-- 使用 resume_token 做断点续传（对应 [extractor] source=change_stream）。
+- Use operation_time as position ([extractor] source=op_log).
+- Use resume_token as position ([extractor] source=change_stream).
 
 ```
 2024-10-18 05:19:25.877182 | current_position | {"type":"MongoCdc","resume_token":"","operation_time":1729228763,"timestamp":"2024-10-18 05:19:23.000"}
-
 ```
 
 ```
@@ -46,21 +45,21 @@ Mongo 增量任务没有记录 checkpoint_position，根据拉取数据方式不
 
 ## Redis
 
-位点信息如下，暂不支持断点续传。
+Use repl_offset as position.
 
 ```
 2024-10-18 05:23:41.019195 | checkpoint_position | {"type":"Redis","repl_id":"1cd12b27acff56526106e343b9f4ff623b5e4c14","repl_port":10008,"repl_offset":2056,"now_db_id":0,"timestamp":""}
 ```
 
-# 全量
+# Snapshot
 
-全量任务如果包含多个库/多张表，则会按照 **先库后表** 排序，**依次同步** 各张表，有且只有一张表处于同步中。
+If the snapshot task contains multiple databases/tables, tables will be sorted **first by database name and then table name**, and they will be migrated to the target **one by one**.
 
-如果表具有 **单一列构成的 主键/唯一键**，则 extractor 会以此列作为排序列，并从小到大分片拉取。如果表没有排序列，则 extractor 会流式拉取该表所有数据。
+If a table has a **single column** **primary key/unique key**, extractor will use it as sorting column and pull data in batches(configuration: [extractor] batch_size) from small to large, otherwise the table will be pulled in a stream.
 
 ## default.log
 
-某张表同步开始/完成，则在 default.log 中记录：
+Once a table migrating starts/ends, in default.log:
 
 ```
 2024-02-28 10:07:35.531681 - INFO - [14778588] - start extracting data from `test_db_1`.`one_pk_no_uk` by slices
@@ -69,7 +68,7 @@ Mongo 增量任务没有记录 checkpoint_position，根据拉取数据方式不
 
 ## finished.log
 
-某张表同步完成，则在 finished.log 中记录：
+Once a table migrating ends, in finished.log:
 
 ```
 2024-10-10 04:04:07.803422 | {"type":"RdbSnapshotFinished","db_type":"mysql","schema":"test_db","tb":"a"}
@@ -77,9 +76,8 @@ Mongo 增量任务没有记录 checkpoint_position，根据拉取数据方式不
 
 ## position.log
 
-如果表数据较多，则会将当前进度信息写入 position.log。
-
-全量进度存储的是当前 **正在同步的表** 的 **最后一条已同步数据** 的排序列的值，该值可用于断点续传。
+The progress of migrating tables will be logged in position.log.
+Use the sorting column's value of the **last migrated record** as position.
 
 ### MySQL
 

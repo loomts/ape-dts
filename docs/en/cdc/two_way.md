@@ -119,7 +119,7 @@ marker=ape_trans_mysql.topo1
 
 
 
-# Example: MySQL_to_MySQL
+# Example: MySQL -> MySQL
 
 Here is an example for two-way data sync.
 

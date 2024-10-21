@@ -1,18 +1,19 @@
-# 断点续传
+# Resume at breakpoint
 
-任务进度会定期记录在 position.log / finished.log 中。
+Task progress will be recorded periodically in position.log / finished.log.
 
-任务中断后，需要用户手动重启，默认重启后任务将从头开始同步。
+If a task interrupts, you need to restart it manually. By default, it will start from the beginning.
 
-为避免重复同步已完成的数据，可根据 position.log / finished.log 进行断点续传。
+To avoid handling duplicate data, the task can resume at the breakpoint in position.log / finished.log.
 
-## 支持范围
-- MySQL 源端
-- Postgres 源端
-- Mongo 源端
 
-# 进度日志
-详细解释可参考 [位点信息](../position.md)
+## Supported
+- MySQL as source
+- Postgres as source
+- Mongo as source
+
+# Position Info
+[position Info](../position.md)
 
 ## position.log
 ```
@@ -26,35 +27,36 @@
 2024-10-10 04:04:08.844988 | {"type":"RdbSnapshotFinished","db_type":"mysql","schema":"test_db","tb":"b"}
 ```
 
-# 配置
-## 从进度日志断点续传
+# Configurations
+## Resume from position.log & finished.log
 ```
 [resumer]
 resume_from_log=true
 resume_log_dir=
 ```
-- resume_log_dir 为可选，默认为当前任务的日志目录。
-- 任务重启后，finished.log 中的表将不会被重复同步。
-- 正在同步且未完成的表，会根据 position.log 中记录的最新进度，从断点处开始同步。
-- 如果一张表没有 **单一列构成的 主键/唯一键**，则 position.log 中不会产生位点信息，但 finished.log 中会有完成信息。
+- resume_log_dir is optional, defaults to the log directory of current task.
+- tables in finished.log won't be migrated.
+- uncompleted tables will be migrated from the breakpoint based on position.log.
+- if a table does not have a single column **primary key/unique key**, no progress info will be in position.log, but it will be in finished.log once finished.
 
-## 指定进度信息文件
-- 除了 resume_from_log，用户也可选择指定进度文件。
+## Set resume config file
+- you can choose another position info file besides resume_from_log.
+
 ```
 [resumer]
 resume_config_file=./resume.config
 ```
 
-- resume.config 文件内容格式基本和 position.log / finished.log 保持一致，如：
+- resume.config has same contents as position.log/finished.log, example:
+
 ```
 | current_position | {"type":"RdbSnapshot","db_type":"mysql","schema":"test_db","tb":"a","order_col":"id","value":"6"}
 {"type":"RdbSnapshotFinished","db_type":"mysql","schema":"test_db","tb":"d"}
 ```
 
-- 如果同一张表的进度在 position.log 和 resume.config 中都存在，优先使用 position.log。
+- if a tables exists in both position.log and resume.config, position.log will be used.
 
-
-# 例子
+# Example
 - task_config.ini
 ```
 [resumer]
@@ -84,12 +86,13 @@ resume_config_file=./resume.config
 2024-03-29 07:02:24.463777 | current_position | {"type":"RdbSnapshot","db_type":"mysql","schema":"test_db_@","tb":"in_position_log_table_*$1","order_col":"p.k","value":"1"}
 ```
 
-- `test_db_@`.`finished_table_*$1`, `test_db_@`.`finished_table_*$2` 在 resume.config 标记为 finished.
-- `test_db_@`.`in_finished_log_table_*$1`, `test_db_@`.`in_finished_log_table_*$2` 在 finished.log 中标记为 finished.
-- `test_db_1`.`one_pk_no_uk`, `test_db_1`.`one_pk_multi_uk`, `test_db_@`.`resume_table_*$4` 在 resume.config 中有位点信息。
-- `test_db_@`.`in_position_log_table_*$1` 在 position.log 中有位点信息。
+- `test_db_@`.`finished_table_*$1`, `test_db_@`.`finished_table_*$2` are marked finished in resume.config.
+- `test_db_@`.`in_finished_log_table_*$1`, `test_db_@`.`in_finished_log_table_*$2` are marked finished in finished.log.
+- `test_db_1`.`one_pk_no_uk`, `test_db_1`.`one_pk_multi_uk`, `test_db_@`.`resume_table_*$4` have position info in resume.config.
+- `test_db_@`.`in_position_log_table_*$1` have position info in position.log.
 
-任务启动后，default.log 中有如下日志：
+
+After task restarts, default.log:
 
 ```
 2024-10-18 06:51:10.161794 - INFO - [1180981] - resumer, get resume value, schema: test_db_1, tb: one_pk_multi_uk, col: f_0, result: Some("5")
@@ -102,7 +105,7 @@ resume_config_file=./resume.config
 2024-10-18 06:51:13.390645 - INFO - [1180981] - resumer, get resume value, schema: test_db_@, tb: resume_table_*$4, col: p.k, result: Some("1")
 ```
 
-## 参考测试用例
+## Refer to tests
 - dt-tests/tests/mysql_to_mysql/snapshot/resume_test
 - dt-tests/tests/pg_to_pg/snapshot/resume_test
 - dt-tests/tests/mongo_to_mongo/snapshot/resume_test

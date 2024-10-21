@@ -26,7 +26,7 @@ Processed data will continue subsequent processes of the task.
 
 - Global variables passed into Lua:
 
-| Variable | Data Type | Meaning |
+| Variable | Data Type | Description |
 | :-------- | :-------- | :-------- |
 | schema | string | database name(mysql) / schema name(postgres) |
 | tb | string | table name |

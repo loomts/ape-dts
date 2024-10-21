@@ -1,12 +1,12 @@
 # 监控信息
 
-在任务运行过程中，我们提供了一系列 counter 来记录当前状态。counter 会定时（[pipeline] 的 checkpoint_interval_secs 配置）写入到 monitor.log。
+在任务运行过程中，我们提供了一系列 counter 来记录当前状态。counter 会定时（配置：[pipeline] checkpoint_interval_secs）写入到 monitor.log。
 
 # 时间窗口 counter
 
 该类 counter 本身是一个数组容器。任务运行时，每当状态变化（如：成功写入一批数据到目标），就会往 counter 容器中推入一个新的 sub counter，用于记录该次变化产生的增量（如：该次写入的数据条数）。
 
-- counter 具有时间窗口（如：10s），超出窗口的旧数据会被丢弃，保证只包含最近一个时间窗口的数据。
+- counter 具有时间窗口（配置：[pipeline] counter_time_window_secs），过期数据会被丢弃，仅包含最近一个时间窗口的数据。
 - counter 用于记录动态实时数据，如：最近一个时间窗口内，同步的数据条数。
 - counter 上还会提供一系列聚合算法，如：最近一个时间窗口内，平均每秒同步的数据条数。
 
@@ -40,7 +40,7 @@
 
 ```
 [pipeline]
-checkpoint_interval_secs=10
+counter_time_window_secs=60
 ```
 
 ## extractor
@@ -51,10 +51,10 @@ checkpoint_interval_secs=10
 ```
 
 ### counter 说明
-| counter | 窗口类型 | 说明 |
+| counter | counter 类型 | 说明 |
 | :-------- | :-------- | :-------- |
 | record_count | 时间窗口 | 拉取数据条数 |
-| data_bytes | 时间窗口 | 拉取数据 byte 数 |
+| data_bytes | 时间窗口 | 拉取数据 bytes |
 
 <br/>
 
@@ -94,7 +94,7 @@ checkpoint_interval_secs=10
 | rt_per_query | 时间窗口 | 单次写入耗时，单位：微秒 |
 | records_per_query | 时间窗口 | 单次写入数据条数 |
 | record_count | 时间窗口 | 写入数据条数 |
-| data_bytes | 时间窗口 | 写入数据 byte 数 |
+| data_bytes | 时间窗口 | 写入数据 bytes |
 
 <br/>
 

@@ -5,7 +5,7 @@
 Refer to [task templates](../templates/mysql_to_mysql.md) and [tutorial](../en/tutorial/mysql_to_mysql.md)
 
 # [extractor]
-| Config | Meaning | Example | Default |
+| Config | Description | Example | Default |
 | :-------- | :-------- | :-------- | :-------- |
 | db_type | source database type| mysql | - |
 | extract_type | snapshot, cdc | snapshot | - |
@@ -15,7 +15,7 @@ Refer to [task templates](../templates/mysql_to_mysql.md) and [tutorial](../en/t
 Since different tasks may require extra configs, please refer to examples in dt-tests/tests for more details.
 
 # [sinker]
-| Config | Meaning | Example | Default |
+| Config | Description | Example | Default |
 | :-------- | :-------- | :-------- | :-------- |
 | db_type | target database type | mysql | - |
 | sink_type | write, check | write | write |
@@ -27,7 +27,7 @@ Since different tasks may require extra configs, please refer to examples in dt-
 
 # [filter]
 
-| Config | Meaning | Example | Default |
+| Config | Description | Example | Default |
 | :-------- | :-------- | :-------- | :-------- |
 | do_dbs | databases to be synced | db_1,db_2*,\`db*&#\` | - |
 | ignore_dbs | databases to be filtered | db_1,db_2*,\`db*&#\` | - |
@@ -53,7 +53,7 @@ Since different tasks may require extra configs, please refer to examples in dt-
 
 ## Wildcard
 
-| Wildcard | Meaning |
+| Wildcard | Description |
 | :-------- | :-------- |
 | * | Matches multiple characters |
 | ? | Matches 0 or 1 characters |
@@ -74,7 +74,7 @@ Names should be enclosed in escape characters if there are special characters.
 Used in: do_dbs, ignore_dbs, do_tbs and ignore_tbs.
 
 # [router]
-| Config | Meaning | Example | Default |
+| Config | Description | Example | Default |
 | :-------- | :-------- | :-------- | :-------- |
 | db_map | database mapping | db_1:dst_db_1,db_2:dst_db_2 | - |
 | tb_map | table mapping | db_1.tb_1:dst_db_1.dst_tb_1,db_1.tb_2:dst_db_1.dst_tb_2 | - |
@@ -100,7 +100,7 @@ Not supported.
 Same with [filter].
 
 # [pipeline]
-| Config | Meaning | Example | Default |
+| Config | Description | Example | Default |
 | :-------- | :-------- | :-------- | :-------- |
 | buffer_size | max cached records in memory | 16000 | 16000 |
 | buffer_memory_mb | [optional] memory limit for buffer, if reached, new records will be blocked even if buffer_size is not reached, 0 means not set | 200 | 0 |
@@ -109,7 +109,7 @@ Same with [filter].
 | counter_time_window_secs | time window for monitor counters | 10 | same with [pipeline] checkpoint_interval_secs |
 
 # [parallelizer]
-| Config | Meaning | Example | Default |
+| Config | Description | Example | Default |
 | :-------- | :-------- | :-------- | :-------- |
 | parallel_type | parallel type | snapshot | serial |
 | parallel_size | threads for parallel syncing | 8 | 1 |
@@ -127,7 +127,7 @@ Same with [filter].
 
 
 # [runtime]
-| Config | Meaning | Example | Default |
+| Config | Description | Example | Default |
 | :-------- | :-------- | :-------- | :-------- |
 | log_level | level | info/warn/error/debug/trace | info |
 | log4rs_file | log4rs config file | ./log4rs.yaml | ./log4rs.yaml |

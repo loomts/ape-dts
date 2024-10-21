@@ -32,7 +32,7 @@
 
 ## Run tests
 
-Refer to [docs](./dt-tests/README.md) for more details.
+Refer to [docs](./dt-tests/README.md) for details.
 
 # More docs
 - Configurations
@@ -46,12 +46,24 @@ Refer to [docs](./dt-tests/README.md) for more details.
     - [check](./docs/en/snapshot/check.md)
     - [revise](./docs/en/snapshot/revise.md)
     - [review](./docs/en/snapshot/review.md)
+    - [resume at breakpoint](./docs/en/snapshot/resume.md)
 - CDC tasks
     - [data sync](./docs/en/cdc/sync.md)
     - [heartbeat to source database](./docs/en/cdc/heartbeat.md)
     - [two-way data sync](./docs/en/cdc/two_way.md)  
+    - [generate sqls from CDC](./docs/en/cdc/to_sql.md)
+    - [resume at breakpoint](./docs/en/cdc/resume.md)
 - Data processing
     - [modify data by lua](./docs/en/etl/lua.md)
+- Monitor
+    - [monitor info](./docs/en/monitor.md)
+    - [position info](./docs/en/position.md)
+- Task Templates
+    - [mysql -> mysql](./docs/templates/mysql_to_mysql.md)
+    - [pg -> pg](./docs/templates/pg_to_pg.md)
+    - [mongo -> mongo](./docs/templates/mongo_to_mongo.md)
+    - [redis -> redis](./docs/templates/redis_to_redis.md)
+    - [mysql -> kafka](./docs/templates/mysql_to_kafka.md)
 
 # Contributions
 
