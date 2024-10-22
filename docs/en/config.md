@@ -12,7 +12,7 @@ Refer to [task templates](../templates/mysql_to_mysql.md) and [tutorial](../en/t
 | url | database url | mysql://root:123456@127.0.0.1:3307 | - |
 | batch_size | number of extracted records in a batch | 10000 | same as [pipeline] buffer_size |
 
-Since different tasks may require extra configs, please refer to examples in dt-tests/tests for more details.
+Since different tasks may require extra configs, please refer to examples in dt-tests/tests and [task templates](/docs/templates/).
 
 # [sinker]
 | Config | Description | Example | Default |
@@ -22,8 +22,7 @@ Since different tasks may require extra configs, please refer to examples in dt-
 | url | database url | mysql://root:123456@127.0.0.1:3308 | - |
 | batch_size | number of records written in a batch, 1 for serial | 200 | 200 |
 
-Since different tasks may require extra configs, please refer to examples in dt-tests/tests for more details.
-
+Since different tasks may require extra configs, please refer to examples in dt-tests/tests and [task templates](/docs/templates/).
 
 # [filter]
 
@@ -79,6 +78,7 @@ Used in: do_dbs, ignore_dbs, do_tbs and ignore_tbs.
 | db_map | database mapping | db_1:dst_db_1,db_2:dst_db_2 | - |
 | tb_map | table mapping | db_1.tb_1:dst_db_1.dst_tb_1,db_1.tb_2:dst_db_1.dst_tb_2 | - |
 | col_map | column mapping | db_1.tb_1.f_1:dst_db_1.dst_tb_1.dst_f_1,db_1.tb_1.f_2:dst_db_1.dst_tb_1.dst_f_2 | - |
+| topic_map | table -> kafka topic mapping, for mysql/pg -> kafka tasks. required | \*.\*:default_topic,test_db_2.\*:topic2,test_db_2.tb_1:topic3 | \* |
 
 ## Values
 
@@ -90,6 +90,7 @@ Used in: do_dbs, ignore_dbs, do_tbs and ignore_tbs.
 
 - tb_map > db_map.
 - col_map only works for column mapping. If a table needs database + table + column mapping, tb_map and db_map must be set, and the database/table mapping rules in col_map must be consistent with those of tb_map/db_map.
+- topic_map, test_db_2.tb_1:topic3 > test_db_2.\*:topic2 > \*.\*:default_topic.
 
 ## Wildcard
 

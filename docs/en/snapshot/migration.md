@@ -26,6 +26,9 @@ Refer to [task templates](../../templates/mysql_to_mysql.md) and [tutorial](../t
 
 - Modify performance parameters if needed:
 ```
+[extractor]
+batch_size=10000
+
 [pipeline]
 buffer_size=16000
 checkpoint_interval_secs=10

@@ -23,7 +23,7 @@
 # 快速上手
 
 ## 教程
-- [先决条件](./docs/en/tutorial/prerequisites.md)
+- [前提条件](./docs/en/tutorial/prerequisites.md)
 - [mysql -> mysql](./docs/en/tutorial/mysql_to_mysql.md)
 - [pg -> pg](./docs/en/tutorial/pg_to_pg.md)
 - [mongo -> mongo](./docs/en/tutorial/mongo_to_mongo.md)
@@ -66,9 +66,28 @@
     - [mongo -> mongo](./docs/templates/mongo_to_mongo.md)
     - [redis -> redis](./docs/templates/redis_to_redis.md)
     - [mysql -> kafka](./docs/templates/mysql_to_kafka.md)
+    - [pg -> kafka](./docs/templates/pg_to_kafka.md)
 
 # Benchmark
-- [mysql -> mysql](./docs/zh/benchmark.md)
+- MySQL -> MySQL，全量
+
+| 同步方式 | 节点规格 | rps（rows per second) | 源 MySQL 负荷（cpu/内存） | 目标 MySQL 负荷（cpu/内存） |
+| :-------- | :-------- | :-------- | :-------- | :-------- | 
+| ape_dts | 1c2g | 71428 | 8.2% / 5.2% | 211% / 5.1% |
+| ape_dts | 2c4g | 99403 | 14.0% / 5.2% | 359% / 5.1% |
+| ape_dts | 4c8g | 126582 | 13.8% / 5.2% | 552% / 5.1% |
+| debezium | 4c8g |	4051 | 21.5% / 5.2% | 51.2% / 5.1% |
+
+- MySQL -> MySQL, 增量
+
+| 同步方式 | 节点规格 | rps（rows per second) | 源 MySQL 负荷（cpu/内存） | 目标 MySQL 负荷（cpu/内存） |
+| :-------- | :-------- | :-------- | :-------- | :-------- |
+| ape_dts | 1c2g | 15002 | 18.8% / 5.2% | 467% / 6.5% | 
+| ape_dts | 2c4g | 24692 | 18.1% / 5.2% | 687% / 6.5% | 
+| ape_dts | 4c8g | 26287 | 18.2% / 5.2% | 685% / 6.5% |
+| debezium | 4c8g | 2951 | 20.4% / 5.2% | 98% / 6.5% |
+
+- 更多 benchmark [细节](./docs/zh/benchmark.md)
 
 # 开发
 ## 架构

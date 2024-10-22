@@ -11,6 +11,8 @@ Supported data changes:
 
 # Examples
 
+Refer to [task templates](../../templates/mysql_to_mysql.md)
+
 ## Example 1: generate sqls
 ```
 [extractor]

@@ -1,4 +1,8 @@
-# snapshot
+# Mongo -> Mongo templates
+
+Refer to [config details](/docs/en/config.md) for explanations of common fields.
+
+# Snapshot
 ```
 [extractor]
 db_type=mongo
@@ -37,7 +41,7 @@ log4rs_file=./log4rs.yaml
 log_dir=./logs
 ```
 
-# cdc, by op_log
+# CDC, by op_log
 ```
 [extractor]
 db_type=mongo
@@ -78,7 +82,14 @@ log_level=info
 log4rs_file=./log4rs.yaml
 ```
 
-# cdc, by change_stream
+- [extractor]
+
+| Config | Description | Example | Default |
+| :-------- | :-------- | :-------- | :-------- |
+| source | op_log / change_stream | op_log | change_stream |
+| start_timestamp | the starting UTC timestamp to pull op logs from | 1728525445 | 0, which means from newest |
+
+# CDC, by change_stream
 ```
 [extractor]
 db_type=mongo
@@ -119,7 +130,13 @@ log_level=info
 log4rs_file=./log4rs.yaml
 ```
 
-# check
+- [extractor]
+
+| Config | Description | Example | Default |
+| :-------- | :-------- | :-------- | :-------- |
+| resume_token | the resume_token to pull change stream from | - | empty, which means from newest |
+
+# Data check
 ```
 [extractor]
 db_type=mongo
@@ -158,13 +175,15 @@ log4rs_file=./log4rs.yaml
 log_dir=./logs
 ```
 
-# revise
+- the output will be in {log_dir}/check/
+
+# Data revise
 ```
 [extractor]
 db_type=mongo
 extract_type=check_log
 url=mongodb://ape_dts:123456@mongo1:9042/?replicaSet=rs0
-check_log_dir=./logs/origin_check_log
+check_log_dir=./check_task/logs/check
 batch_size=200
 
 [sinker]
@@ -199,7 +218,13 @@ log4rs_file=./log4rs.yaml
 log_dir=./logs
 ```
 
-# review
+- [extractor]
+
+| Config | Description | Example | Default |
+| :-------- | :-------- | :-------- | :-------- |
+| check_log_dir | the directory of check log, required | ./check_task/logs/check | - |
+
+# Data review
 ```
 [extractor]
 db_type=mongo
@@ -239,3 +264,5 @@ log_level=info
 log4rs_file=./log4rs.yaml
 log_dir=./logs
 ```
+
+- the output will be in {log_dir}/check/

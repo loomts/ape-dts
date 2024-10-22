@@ -32,7 +32,7 @@
 
 ## Run tests
 
-Refer to [docs](./dt-tests/README.md) for details.
+Refer to [test docs](./dt-tests/README.md) for details.
 
 # More docs
 - Configurations
@@ -64,9 +64,28 @@ Refer to [docs](./dt-tests/README.md) for details.
     - [mongo -> mongo](./docs/templates/mongo_to_mongo.md)
     - [redis -> redis](./docs/templates/redis_to_redis.md)
     - [mysql -> kafka](./docs/templates/mysql_to_kafka.md)
+    - [pg -> kafka](./docs/templates/pg_to_kafka.md)
 
 # Benchmark
-- [mysql -> mysql](./docs/en/benchmark.md)
+- MySQL -> MySQL, Snapshot
+
+| Method | Node Specs | RPS(rows per second) | Source MySQL Load (CPU/Memory) | Target MySQL Load (CPU/Memory) |
+| :-------- | :-------- | :-------- | :-------- | :-------- | 
+| ape_dts | 1c2g | 71428 | 8.2% / 5.2% | 211% / 5.1% |
+| ape_dts | 2c4g | 99403 | 14.0% / 5.2% | 359% / 5.1% |
+| ape_dts | 4c8g | 126582 | 13.8% / 5.2% | 552% / 5.1% |
+| debezium | 4c8g |	4051 | 21.5% / 5.2% | 51.2% / 5.1% |
+
+- MySQL -> MySQL, CDC
+
+| Method | Node Specs | RPS(rows per second) | Source MySQL Load (CPU/Memory) | Target MySQL Load (CPU/Memory) |
+| :-------- | :-------- | :-------- | :-------- | :-------- |
+| ape_dts | 1c2g | 15002 | 18.8% / 5.2% | 467% / 6.5% | 
+| ape_dts | 2c4g | 24692 | 18.1% / 5.2% | 687% / 6.5% | 
+| ape_dts | 4c8g | 26287 | 18.2% / 5.2% | 685% / 6.5% |
+| debezium | 4c8g | 2951 | 20.4% / 5.2% | 98% / 6.5% |
+
+- more benchmark [details](./docs/en/benchmark.md)
 
 # Contributions
 

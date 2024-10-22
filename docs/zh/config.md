@@ -12,7 +12,7 @@
 | url | 源库连接信息 | mysql://root:123456@127.0.0.1:3307 | - |
 | batch_size | 批量拉取数据条数 | 10000 | 和 [pipeline] buffer_size 一致 |
 
-不同任务类型需要不同的参数，详情请参考各个示例。
+不同任务类型需要不同的参数，详情请参考 dt-tests/tests 及 [任务模版](/docs/templates/)。
 
 # [sinker]
 | 配置 | 作用 | 示例 | 默认 |
@@ -22,7 +22,7 @@
 | url | 目标库连接信息 | mysql://root:123456@127.0.0.1:3308 | - |
 | batch_size | 批量写入数据条数，1 代表串行 | 200 | 200 |
 
-不同任务类型需要不同的参数，详情请参考各个示例。
+不同任务类型需要不同的参数，详情请参考 dt-tests/tests 及 [任务模版](/docs/templates/)。
 
 # [filter]
 
@@ -79,6 +79,7 @@
 | db_map | 库级映射 | db_1:dst_db_1,db_2:dst_db_2 | - |
 | tb_map | 表级映射 | db_1.tb_1:dst_db_1.dst_tb_1,db_1.tb_2:dst_db_1.dst_tb_2 | - |
 | col_map | 列级映射 | db_1.tb_1.f_1:dst_db_1.dst_tb_1.dst_f_1,db_1.tb_1.f_2:dst_db_1.dst_tb_1.dst_f_2 | - |
+| topic_map | 表名 -> kafka topic 映射，适用于 mysql/pg -> kafka 任务 | \*.\*:default_topic,test_db_2.\*:topic2,test_db_2.tb_1:topic3 | \* |
 
 ## 取值范围
 
@@ -90,6 +91,7 @@
 
 - tb_map > db_map。
 - col_map 只专注于 **列** 映射，而不做 **库/表** 映射。也就是说，如果某张表需要 **库 + 表 + 列** 映射，需先配置好 tb_map 和 db_map，且 col_map 中的 **库/表** 映射规则需和 tb_map/db_map 的映射规则保持一致。
+- topic_map，test_db_2.tb_1:topic3 > test_db_2.\*:topic2 > \*.\*:default_topic。
 
 ## 通配符
 
