@@ -85,10 +85,13 @@ Refer to [docs](./dt-tests/README.md) for details.
 
 ## Coding
 
+Build
 ```
 cargo build
 cargo clippy --workspace
 ```
+
+Make sure all related tests passed.
 
 ## Build images
 [build images](./docs/en/build_images.md)

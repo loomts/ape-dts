@@ -82,14 +82,16 @@
 - dt-task：根据配置创建 extractor，sinker，pipeline，parallelizer 以组装任务
 - dt-common：通用基础模块，基础数据结构，元数据管理
 - dt-tests：集成测试
-- dt-precheck: 任务预检查，**这部分将被移除**
 
 ## 写代码
 
+编译及检查
 ```
 cargo build
 cargo clippy --workspace
 ```
+
+确保相关测试通过
 
 ## 生成镜像
 [生成镜像](./docs/en/build_images.md)
