@@ -1,6 +1,8 @@
-# struct
-- do_structures: one or multiple in [database,table,constraint,sequence,comment,index]. default: all.
-- conflict_policy: interrupt/ignore.
+# MySQL -> MySQL templates
+
+Refer to [config details](/docs/en/config.md) for explanations of common fields.
+
+# Struct
 ```
 [extractor]
 extract_type=struct
@@ -39,7 +41,19 @@ checkpoint_interval_secs=10
 buffer_size=100
 ```
 
-# snapshot
+- [fiter]
+
+| Config | Description | Example | Default |
+| :-------- | :-------- | :-------- | :-------- |
+| conflict_policy | interrupt / ignore | interrupt | interrupt |
+
+- [sinker]
+
+| Config | Description | Example | Default |
+| :-------- | :-------- | :-------- | :-------- |
+| do_structures |  one or multiple in [database,table,constraint,sequence,comment,index]| database,table | *, which means all |
+
+# Snapshot
 ```
 [extractor]
 db_type=mysql
@@ -79,7 +93,7 @@ log4rs_file=./log4rs.yaml
 log_dir=./logs
 ```
 
-# cdc
+# CDC
 ```
 [extractor]
 db_type=mysql
@@ -121,7 +135,64 @@ log_level=info
 log4rs_file=./log4rs.yaml
 ```
 
-# struct check
+- [extractor]
+
+| Config | Description | Example | Default |
+| :-------- | :-------- | :-------- | :-------- |
+| binlog_filename | the starting binlog file, if empty,  will pull binlog from the last position of the last file | mysql-bin.000035 | empty |
+| binlog_position | the starting position in binlog_file to pull binlog, only works when binlog_filename is NOT empty | 5299302 | 0 |
+| server_id | the identifier of the client, required  | 2000 | - |
+
+# CDC with gtid
+```
+[extractor]
+db_type=mysql
+extract_type=cdc
+gtid_enabled=true
+gtid_set=6d3960f6-4b36-11ef-8614-0242ac110002:1-10,787d08c4-4b36-11ef-8614-0242ac110006:1-5
+server_id=2000
+url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
+
+[filter]
+ignore_dbs=
+do_dbs=
+do_tbs=test_db.*
+ignore_tbs=
+do_events=insert,update,delete
+
+[sinker]
+db_type=mysql
+sink_type=write
+batch_size=200
+url=mysql://root:123456@127.0.0.1:3308?ssl-mode=disabled
+
+[router]
+tb_map=
+col_map=
+db_map=
+
+[parallelizer]
+parallel_type=rdb_merge
+parallel_size=8
+
+[pipeline]
+buffer_size=16000
+checkpoint_interval_secs=10
+
+[runtime]
+log_dir=./logs
+log_level=info
+log4rs_file=./log4rs.yaml
+```
+
+- [extractor]
+
+| Config | Description | Example | Default |
+| :-------- | :-------- | :-------- | :-------- |
+| gtid_enabled | use Gtid_Set to pull binlog | true | false |
+| gtid_set | the starting Gtid_Set to pull binlog from | 6d3960f6-4b36-11ef-8614-0242ac110002:1-10 | empty, which means from the latest Executed_Gtid_Set |
+
+# Struct check
 ```
 [extractor]
 db_type=mysql
@@ -158,7 +229,9 @@ log4rs_file=./log4rs.yaml
 log_dir=./logs
 ```
 
-# data check
+- the output will be in {log_dir}/check/
+
+# Data check
 ```
 [extractor]
 db_type=mysql
@@ -198,13 +271,15 @@ log4rs_file=./log4rs.yaml
 log_dir=./logs
 ```
 
-# data revise
+- the output will be in {log_dir}/check/
+
+# Data revise
 ```
 [extractor]
 db_type=mysql
 extract_type=check_log
 url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
-check_log_dir=./logs/check
+check_log_dir=./check_task/logs/check
 batch_size=200
 
 [sinker]
@@ -239,7 +314,13 @@ log4rs_file=./log4rs.yaml
 log_dir=./logs
 ```
 
-# data review
+- [extractor]
+
+| Config | Description | Example | Default |
+| :-------- | :-------- | :-------- | :-------- |
+| check_log_dir | the directory of check log, required | ./check_task/logs/check | - |
+
+# Data review
 ```
 [extractor]
 db_type=mysql
@@ -280,7 +361,9 @@ log4rs_file=./log4rs.yaml
 log_dir=./logs
 ```
 
-# cdc to sqls
+- the output will be in {log_dir}/check/
+
+# CDC to sqls
 ```
 [extractor]
 db_type=mysql
@@ -314,7 +397,9 @@ log4rs_file=./log4rs.yaml
 log_dir=./logs
 ```
 
-# cdc to reverse sqls
+- the output will be in {log_dir}/sql.log
+
+# CDC to reverse sqls
 ```
 [extractor]
 db_type=mysql
@@ -348,3 +433,5 @@ log_level=info
 log4rs_file=./log4rs.yaml
 log_dir=./logs
 ```
+
+- the output will be in {log_dir}/sql.log

@@ -1,4 +1,4 @@
-# 简介
+# 全量数据迁移
 
 如果全量任务包含多个库/多张表，则会按照 **先库后表** 排序，**依次同步** 各张表，每次有且只有一张表处于同步中。
 
@@ -6,45 +6,9 @@
 
 如果表没有排序列，则 extractor 会流式拉取该表所有数据。
 
-# 示例: MySQl_to_MySQl
+# 示例: MySQL -> MySQL
 
-```
-[extractor]
-db_type=mysql
-extract_type=snapshot
-url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
-
-[sinker]
-db_type=mysql
-sink_type=write
-url=mysql://root:123456@127.0.0.1:3308?ssl-mode=disabled
-batch_size=200
-
-[filter]
-do_dbs=
-ignore_dbs=
-do_tbs=test_db_1.*
-ignore_tbs=
-do_events=insert
-
-[router]
-db_map=
-tb_map=
-col_map=
-
-[parallelizer]
-parallel_type=snapshot
-parallel_size=8
-
-[pipeline]
-buffer_size=16000
-checkpoint_interval_secs=10
-
-[runtime]
-log_level=info
-log4rs_file=./log4rs.yaml
-log_dir=./logs
-```
+参考 [任务模版](../../templates/mysql_to_mysql.md) 和 [教程](../../en/tutorial/mysql_to_mysql.md)
 
 # 并发算法
 

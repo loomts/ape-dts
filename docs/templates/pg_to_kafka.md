@@ -1,13 +1,14 @@
-# MySQL -> Kafka templates
+# Postgres -> Kafka templates
 
 Refer to [config details](/docs/en/config.md) for explanations of common fields.
 
 # Snapshot
 ```
 [extractor]
-db_type=mysql
+db_type=pg
 extract_type=snapshot
-url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
+url=postgres://postgres:postgres@127.0.0.1:5433/postgres?options[statement_timeout]=10s
+batch_size=10000
 
 [filter]
 ignore_dbs=
@@ -45,12 +46,11 @@ log4rs_file=./log4rs.yaml
 # CDC
 ```
 [extractor]
-db_type=mysql
+db_type=pg
 extract_type=cdc
-binlog_position=0
-binlog_filename=
-server_id=2000
-url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
+url=postgres://postgres:postgres@127.0.0.1:5433/postgres?options[statement_timeout]=10s
+start_lsn=0/406DE430
+slot_name=ape_test
 
 [filter]
 ignore_dbs=

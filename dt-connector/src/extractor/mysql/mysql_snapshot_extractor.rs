@@ -1,5 +1,5 @@
 use std::{
-    cmp, i32,
+    cmp,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc, Mutex,

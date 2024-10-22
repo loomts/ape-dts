@@ -9,6 +9,10 @@ async fn cdc_basic_test() {
 }
 ```
 
+```
+cargo test --package dt-tests --test integration_test -- mysql_to_mysql::cdc_tests::test::cdc_basic_test --nocapture 
+```
+
 - 测试用例包括：
   - task_config.ini
   - src_prepare.sql
@@ -20,14 +24,14 @@ async fn cdc_basic_test() {
   - 1，对源库执行 src_prepare.sql。
   - 2，对目标库执行 dst_prepare.sql。
   - 3，启动 数据同步 任务的线程。
-  - 4，停顿若干毫秒（可根据测试环境的性能和网络状况，修改测试用例的预设值），等待任务初始化。
+  - 4，停顿若干毫秒（start_millis，根据测试环境的性能和网络状况，你可修改测试用例的预设值），等待任务初始化。
   - 5，对源库执行 src_test.sql。
-  - 6，对目标库执行 dst_test.sql。
-  - 7，停顿若干毫秒，等待数据同步完成。
+  - 6，对目标库执行 dst_test.sql（如果有）。
+  - 7，停顿若干毫秒（parse_millis，同前，你可根据实际情况修改），等待数据同步完成。
   - 8，对比源和目标数据。
 
 # 配置
-- 所有数据库的 extractor url，sinker url 均配置在 .env 文件，各测试用例的 task_config.ini 中引用。
+- 所有数据库的 extractor url，sinker url 均配置在 ./tests/.env 文件，各测试用例的 task_config.ini 中引用。
 
 ```
 [extractor]
@@ -39,7 +43,7 @@ url={mysql_sinker_url}
 
 # 测试环境搭建
 
-- 本文均在 mac 上以 docker 搭建测试环境为例。
+- 本文均以 docker 搭建测试环境为例。[参考](/docs/en/tutorial/prerequisites.md)
 
 # Postgres 环境搭建
 
@@ -67,7 +71,10 @@ CREATE DATABASE postgres_euc_cn
 [创建 Kafka](/docs/en/tutorial/mysql_to_kafka_consumer.md)
 
 # Redis
-## 镜像版本
+[创建 Redis](/docs/en/tutorial/redis_to_redis.md)
+
+## 更多版本
+
 - redis 不同版本的数据格式差距较大，我们支持 2.8 - 7.*，rebloom，rejson。
 - redis:7.0
 - redis:6.0
@@ -79,7 +86,7 @@ CREATE DATABASE postgres_euc_cn
 - redislabs/rejson:2.6.4
 - mac 上无法部署 2.8，rebloom，rejson 镜像，可在 EKS(amazon)/AKS(azure)/ACK(alibaba) 上部署，参考目录：dt-tests/k8s/redis。
 
-## 源
+### 源
 
 ```
 docker run --name src-redis-7-0 \
@@ -118,7 +125,7 @@ docker run --name src-redis-4-0 \
     --loglevel warning
 ```
 
-## 目标
+### 目标
 
 ```
 docker run --name dst-redis-7-0 \

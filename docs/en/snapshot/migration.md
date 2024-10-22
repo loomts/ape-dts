@@ -1,4 +1,4 @@
-# Introduction
+# Migrate snapshot data
 
 If the snapshot task contains multiple databases/tables, tables will be sorted **first by database name and then table name**, and they will be migrated to the target **one by one**. Only one table will be in the sync process at a time.
 
@@ -6,44 +6,9 @@ If the table has a single primary/unique key, the extractor will use this key as
 
 If the table does not have a sorting column, the extractor will pull all data in stream.
 
-# Example: MySQl_to_MySQl
-```
-[extractor]
-db_type=mysql
-extract_type=snapshot
-url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
+# Example: MySQL -> MySQL
 
-[sinker]
-db_type=mysql
-sink_type=write
-url=mysql://root:123456@127.0.0.1:3308?ssl-mode=disabled
-batch_size=200
-
-[filter]
-do_dbs=
-ignore_dbs=
-do_tbs=test_db_1.*
-ignore_tbs=
-do_events=insert
-
-[router]
-db_map=
-tb_map=
-col_map=
-
-[parallelizer]
-parallel_type=snapshot
-parallel_size=8
-
-[pipeline]
-buffer_size=16000
-checkpoint_interval_secs=10
-
-[runtime]
-log_level=info
-log4rs_file=./log4rs.yaml
-log_dir=./logs
-```
+Refer to [task templates](../../templates/mysql_to_mysql.md) and [tutorial](../tutorial/mysql_to_mysql.md)
 
 # Parallel computing
 
@@ -61,6 +26,9 @@ log_dir=./logs
 
 - Modify performance parameters if needed:
 ```
+[extractor]
+batch_size=10000
+
 [pipeline]
 buffer_size=16000
 checkpoint_interval_secs=10

@@ -310,11 +310,7 @@ impl MysqlMetaFetcher {
         // since
         // in mysql 5.*, CHARACTER_MAXIMUM_LENGTH: bigint(21) unsigned
         // in mysql 8.*, CHARACTER_MAXIMUM_LENGTH: bigint
-        if let std::result::Result::Ok(v) = row.try_get_unchecked::<u64, &str>(col) {
-            v
-        } else {
-            0
-        }
+        row.try_get_unchecked::<u64, &str>(col).unwrap_or_default()
     }
 
     async fn parse_keys(

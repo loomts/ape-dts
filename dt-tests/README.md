@@ -9,6 +9,10 @@ async fn cdc_basic_test() {
 }
 ```
 
+```
+cargo test --package dt-tests --test integration_test -- mysql_to_mysql::cdc_tests::test::cdc_basic_test --nocapture 
+```
+
 - A test contains: 
   - task_config.ini
   - src_prepare.sql
@@ -16,18 +20,18 @@ async fn cdc_basic_test() {
   - src_test.sql
   - dst_test.sql
 
-- Typical steps for running a test: 
+- Steps for running a test: 
   - 1, execute src_prepare.sql in source database.
   - 2, execute dst_prepare.sql in target database.
   - 3, start data sync task.
-  - 4, sleep some milliseconds for task initialization.
+  - 4, sleep some milliseconds for task initialization (start_millis, you may change it based on source/target performance).
   - 5, execute src_test.sql in source database.
-  - 6, execute dst_test.sql in target database.
-  - 7, sleep some milliseconds for data sync.
+  - 6, execute dst_test.sql (if exists) in target database.
+  - 7, sleep some milliseconds for data sync (parse_millis, change it if needed).
   - 8, compare data of source and target.
 
 # Config
-- All database urls are configured in .env file and referenced in task_config.ini of tests.
+- All database urls are configured in ./tests/.env file and referenced in task_config.ini of tests.
 
 ```
 [extractor]
@@ -39,7 +43,7 @@ url={mysql_sinker_url}
 
 # Init test env
 
-- Examples work in docker, mac.
+- Examples work in docker. [prerequisites](/docs/en/tutorial/prerequisites.md)
 
 # Postgres
 [Prepare Postgres instances](/docs/en/tutorial/pg_to_pg.md)
@@ -65,7 +69,9 @@ CREATE DATABASE postgres_euc_cn
 [Prepare Kafka instances](/docs/en/tutorial/mysql_to_kafka_consumer.md)
 
 # Redis
-## Images
+[Prepare Redis instances](/docs/en/tutorial/redis_to_redis.md)
+
+## More versions
 - Data format varies in different redis versions, we support 2.8 - 7.*, rebloom, rejson.
 - redis:7.0
 - redis:6.0
@@ -77,7 +83,7 @@ CREATE DATABASE postgres_euc_cn
 - redislabs/rejson:2.6.4
 - Can not deploy 2.8,rebloom,rejson on mac, you may deploy them in EKS(amazon)/AKS(azure)/ACK(alibaba), refer to: dt-tests/k8s/redis.
 
-## Source
+### Source
 
 ```
 docker run --name src-redis-7-0 \
@@ -116,7 +122,7 @@ docker run --name src-redis-4-0 \
     --loglevel warning
 ```
 
-## Target
+### Target
 
 ```
 docker run --name dst-redis-7-0 \

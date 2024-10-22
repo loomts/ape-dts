@@ -1,120 +1,32 @@
-# Examples: MySQL_to_MySQL
+# Config details
 
-## Snapshot
+# Config content
 
-```
-[extractor]
-db_type=mysql
-extract_type=snapshot
-url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
-batch_size=10000
-
-[sinker]
-db_type=mysql
-sink_type=write
-url=mysql://root:123456@127.0.0.1:3308?ssl-mode=disabled
-batch_size=200
-
-[filter]
-do_dbs=
-ignore_dbs=
-do_tbs=test_db_1.*,test_db_2.*,test_db_3.*
-ignore_tbs=
-do_events=insert
-
-[router]
-db_map=test_db_1:dst_test_db_1
-tb_map=test_db_2.one_pk_no_uk_1:dst_test_db_2.dst_one_pk_no_uk_1
-col_map=test_db_3.one_pk_no_uk_1.f_0:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_0,test_db_3.one_pk_no_uk_1.f_1:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_1
-
-[pipeline]
-buffer_size=16000
-buffer_memory_mb=200
-checkpoint_interval_secs=10
-max_rps=1000
-counter_time_window_secs=600
-
-[parallelizer]
-parallel_type=snapshot
-parallel_size=8
-
-[runtime]
-log_level=info
-log4rs_file=./log4rs.yaml
-log_dir=./logs
-```
-
-## CDC
-
-```
-[extractor]
-db_type=mysql
-extract_type=cdc
-binlog_position=637309
-binlog_filename=mysql-bin.000006
-server_id=2000
-url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
-heartbeat_interval_secs=1
-heartbeat_tb=test_db_1.ape_dts_heartbeat
-
-[sinker]
-db_type=mysql
-sink_type=write
-url=mysql://root:123456@127.0.0.1:3308?ssl-mode=disabled
-batch_size=200
-
-[filter]
-do_dbs=
-ignore_dbs=
-do_tbs=test_db_1.*,test_db_2.*,test_db_3.*
-ignore_tbs=
-do_events=insert,update,delete
-
-[router]
-db_map=test_db_1:dst_test_db_1
-tb_map=test_db_2.one_pk_no_uk_1:dst_test_db_2.dst_one_pk_no_uk_1
-col_map=test_db_3.one_pk_no_uk_1.f_0:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_0,test_db_3.one_pk_no_uk_1.f_1:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_1
-
-[pipeline]
-buffer_size=16000
-checkpoint_interval_secs=10
-max_rps=1000
-counter_time_window_secs=600
-
-[parallelizer]
-parallel_type=rdb_merge
-parallel_size=8
-
-[runtime]
-log_level=info
-log4rs_file=./log4rs.yaml
-log_dir=./logs
-```
+Refer to [task templates](../templates/mysql_to_mysql.md) and [tutorial](../en/tutorial/mysql_to_mysql.md)
 
 # [extractor]
-| Config | Meaning | Example | Default |
+| Config | Description | Example | Default |
 | :-------- | :-------- | :-------- | :-------- |
 | db_type | source database type| mysql | - |
 | extract_type | snapshot, cdc | snapshot | - |
 | url | database url | mysql://root:123456@127.0.0.1:3307 | - |
 | batch_size | number of extracted records in a batch | 10000 | same as [pipeline] buffer_size |
 
-Since different tasks may require extra configs, please refer to examples in dt-tests/tests for more details.
+Since different tasks may require extra configs, please refer to examples in dt-tests/tests and [task templates](/docs/templates/).
 
 # [sinker]
-| Config | Meaning | Example | Default |
+| Config | Description | Example | Default |
 | :-------- | :-------- | :-------- | :-------- |
 | db_type | target database type | mysql | - |
 | sink_type | write, check | write | write |
 | url | database url | mysql://root:123456@127.0.0.1:3308 | - |
 | batch_size | number of records written in a batch, 1 for serial | 200 | 200 |
 
-Since different tasks may require extra configs, please refer to examples in dt-tests/tests for more details.
-
+Since different tasks may require extra configs, please refer to examples in dt-tests/tests and [task templates](/docs/templates/).
 
 # [filter]
 
-| Config | Meaning | Example | Default |
+| Config | Description | Example | Default |
 | :-------- | :-------- | :-------- | :-------- |
 | do_dbs | databases to be synced | db_1,db_2*,\`db*&#\` | - |
 | ignore_dbs | databases to be filtered | db_1,db_2*,\`db*&#\` | - |
@@ -140,7 +52,7 @@ Since different tasks may require extra configs, please refer to examples in dt-
 
 ## Wildcard
 
-| Wildcard | Meaning |
+| Wildcard | Description |
 | :-------- | :-------- |
 | * | Matches multiple characters |
 | ? | Matches 0 or 1 characters |
@@ -161,11 +73,12 @@ Names should be enclosed in escape characters if there are special characters.
 Used in: do_dbs, ignore_dbs, do_tbs and ignore_tbs.
 
 # [router]
-| Config | Meaning | Example | Default |
+| Config | Description | Example | Default |
 | :-------- | :-------- | :-------- | :-------- |
 | db_map | database mapping | db_1:dst_db_1,db_2:dst_db_2 | - |
 | tb_map | table mapping | db_1.tb_1:dst_db_1.dst_tb_1,db_1.tb_2:dst_db_1.dst_tb_2 | - |
 | col_map | column mapping | db_1.tb_1.f_1:dst_db_1.dst_tb_1.dst_f_1,db_1.tb_1.f_2:dst_db_1.dst_tb_1.dst_f_2 | - |
+| topic_map | table -> kafka topic mapping, for mysql/pg -> kafka tasks. required | \*.\*:default_topic,test_db_2.\*:topic2,test_db_2.tb_1:topic3 | \* |
 
 ## Values
 
@@ -177,6 +90,7 @@ Used in: do_dbs, ignore_dbs, do_tbs and ignore_tbs.
 
 - tb_map > db_map.
 - col_map only works for column mapping. If a table needs database + table + column mapping, tb_map and db_map must be set, and the database/table mapping rules in col_map must be consistent with those of tb_map/db_map.
+- topic_map, test_db_2.tb_1:topic3 > test_db_2.\*:topic2 > \*.\*:default_topic.
 
 ## Wildcard
 
@@ -187,7 +101,7 @@ Not supported.
 Same with [filter].
 
 # [pipeline]
-| Config | Meaning | Example | Default |
+| Config | Description | Example | Default |
 | :-------- | :-------- | :-------- | :-------- |
 | buffer_size | max cached records in memory | 16000 | 16000 |
 | buffer_memory_mb | [optional] memory limit for buffer, if reached, new records will be blocked even if buffer_size is not reached, 0 means not set | 200 | 0 |
@@ -196,7 +110,7 @@ Same with [filter].
 | counter_time_window_secs | time window for monitor counters | 10 | same with [pipeline] checkpoint_interval_secs |
 
 # [parallelizer]
-| Config | Meaning | Example | Default |
+| Config | Description | Example | Default |
 | :-------- | :-------- | :-------- | :-------- |
 | parallel_type | parallel type | snapshot | serial |
 | parallel_size | threads for parallel syncing | 8 | 1 |
@@ -214,7 +128,7 @@ Same with [filter].
 
 
 # [runtime]
-| Config | Meaning | Example | Default |
+| Config | Description | Example | Default |
 | :-------- | :-------- | :-------- | :-------- |
 | log_level | level | info/warn/error/debug/trace | info |
 | log4rs_file | log4rs config file | ./log4rs.yaml | ./log4rs.yaml |

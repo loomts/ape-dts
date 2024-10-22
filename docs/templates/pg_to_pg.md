@@ -1,4 +1,8 @@
-# struct
+# Postgres -> Postgres templates
+
+Refer to [config details](/docs/en/config.md) for explanations of common fields.
+
+# Struct
 ```
 [extractor]
 extract_type=struct
@@ -37,7 +41,7 @@ checkpoint_interval_secs=10
 buffer_size=100
 ```
 
-# snapshot
+# Snapshot
 ```
 [extractor]
 db_type=pg
@@ -77,7 +81,7 @@ log4rs_file=./log4rs.yaml
 log_dir=./logs
 ```
 
-# cdc
+# CDC
 ```
 [extractor]
 db_type=pg
@@ -118,7 +122,16 @@ log_level=info
 log4rs_file=./log4rs.yaml
 ```
 
-# struct check
+- [extractor]
+
+| Config | Description | Example | Default |
+| :-------- | :-------- | :-------- | :-------- |
+| slot_name | the slot name to pull wal, required | ape_test | - |
+| start_lsn | the starting lsn to pull wal from, required | 0/406DE430 | - |
+
+- refer to [create slot and get starting lsn](/docs/en/tutorial/snapshot_and_cdc_without_data_loss.md)
+
+# Struct check
 ```
 [extractor]
 db_type=pg
@@ -155,7 +168,9 @@ log4rs_file=./log4rs.yaml
 log_dir=./logs
 ```
 
-# data check
+- the output will be in {log_dir}/check/
+
+# Data check
 ```
 [extractor]
 db_type=pg
@@ -195,7 +210,9 @@ log4rs_file=./log4rs.yaml
 log_dir=./logs
 ```
 
-# data revise
+- the output will be in {log_dir}/check/
+
+# Data revise
 ```
 [extractor]
 db_type=pg
@@ -236,7 +253,13 @@ log4rs_file=./log4rs.yaml
 log_dir=./logs
 ```
 
-# data review
+- [extractor]
+
+| Config | Description | Example | Default |
+| :-------- | :-------- | :-------- | :-------- |
+| check_log_dir | the directory of check log, required | ./check_task/logs/check | - |
+
+# Data review
 ```
 [extractor]
 db_type=pg
@@ -277,7 +300,9 @@ log4rs_file=./log4rs.yaml
 log_dir=./logs
 ```
 
-# cdc to sqls
+- the output will be in {log_dir}/check/
+
+# CDC to sqls
 ```
 [extractor]
 db_type=pg
@@ -310,7 +335,9 @@ log4rs_file=./log4rs.yaml
 log_dir=./logs
 ```
 
-# cdc to reverse sqls
+- the output will be in {log_dir}/sql.log
+
+# CDC to reverse sqls
 ```
 [extractor]
 db_type=pg
@@ -343,3 +370,5 @@ log_level=info
 log4rs_file=./log4rs.yaml
 log_dir=./logs
 ```
+
+- the output will be in {log_dir}/sql.log

@@ -110,7 +110,7 @@ impl KeyParser {
 
                     // limit: if lastkey is has the value of -1, we use the limit to stop the search by a factor.
                     // 0 and 1 mean no limit. 2 means half of the remaining arguments, 3 means a third, and so on.
-                    let mut limit_count = i32::max_value();
+                    let mut limit_count = i32::MAX;
                     if spec.find_keys_range_limit >= 2 {
                         limit_count = (arg_cout - begin) / (spec.find_keys_range_limit);
                     }

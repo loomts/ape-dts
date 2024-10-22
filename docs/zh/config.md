@@ -1,94 +1,8 @@
-# 示例: MySQL_to_MySQL
+# 配置详情
 
-## 全量
+# 示例: MySQL -> MySQL
 
-```
-[extractor]
-db_type=mysql
-extract_type=snapshot
-url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
-batch_size=10000
-
-[sinker]
-db_type=mysql
-sink_type=write
-url=mysql://root:123456@127.0.0.1:3308?ssl-mode=disabled
-batch_size=200
-
-[filter]
-do_dbs=
-ignore_dbs=
-do_tbs=test_db_1.*,test_db_2.*,test_db_3.*
-ignore_tbs=
-do_events=insert
-
-[router]
-db_map=test_db_1:dst_test_db_1
-tb_map=test_db_2.one_pk_no_uk_1:dst_test_db_2.dst_one_pk_no_uk_1
-col_map=test_db_3.one_pk_no_uk_1.f_0:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_0,test_db_3.one_pk_no_uk_1.f_1:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_1
-
-[pipeline]
-buffer_size=16000
-buffer_memory_mb=200
-checkpoint_interval_secs=10
-max_rps=1000
-counter_time_window_secs=600
-
-[parallelizer]
-parallel_type=snapshot
-parallel_size=8
-
-[runtime]
-log_level=info
-log4rs_file=./log4rs.yaml
-log_dir=./logs
-```
-
-## 增量
-```
-[extractor]
-db_type=mysql
-extract_type=cdc
-binlog_position=637309
-binlog_filename=mysql-bin.000006
-server_id=2000
-url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
-heartbeat_interval_secs=1
-heartbeat_tb=test_db_1.ape_dts_heartbeat
-
-[sinker]
-db_type=mysql
-sink_type=write
-url=mysql://root:123456@127.0.0.1:3308?ssl-mode=disabled
-batch_size=200
-
-[filter]
-do_dbs=
-ignore_dbs=
-do_tbs=test_db_1.*,test_db_2.*,test_db_3.*
-ignore_tbs=
-do_events=insert,update,delete
-
-[router]
-db_map=test_db_1:dst_test_db_1
-tb_map=test_db_2.one_pk_no_uk_1:dst_test_db_2.dst_one_pk_no_uk_1
-col_map=test_db_3.one_pk_no_uk_1.f_0:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_0,test_db_3.one_pk_no_uk_1.f_1:dst_test_db_3.dst_one_pk_no_uk_1.dst_f_1
-
-[pipeline]
-buffer_size=16000
-checkpoint_interval_secs=10
-max_rps=1000
-counter_time_window_secs=600
-
-[parallelizer]
-parallel_type=rdb_merge
-parallel_size=8
-
-[runtime]
-log_level=info
-log4rs_file=./log4rs.yaml
-log_dir=./logs
-```
+参考 [任务模版](../templates/mysql_to_mysql.md) 和 [教程](../en/tutorial/mysql_to_mysql.md)
 
 # [extractor]
 | 配置 | 作用 | 示例 | 默认 |
@@ -98,7 +12,7 @@ log_dir=./logs
 | url | 源库连接信息 | mysql://root:123456@127.0.0.1:3307 | - |
 | batch_size | 批量拉取数据条数 | 10000 | 和 [pipeline] buffer_size 一致 |
 
-不同任务类型需要不同的参数，详情请参考各个示例。
+不同任务类型需要不同的参数，详情请参考 dt-tests/tests 及 [任务模版](/docs/templates/)。
 
 # [sinker]
 | 配置 | 作用 | 示例 | 默认 |
@@ -108,7 +22,7 @@ log_dir=./logs
 | url | 目标库连接信息 | mysql://root:123456@127.0.0.1:3308 | - |
 | batch_size | 批量写入数据条数，1 代表串行 | 200 | 200 |
 
-不同任务类型需要不同的参数，详情请参考各个示例。
+不同任务类型需要不同的参数，详情请参考 dt-tests/tests 及 [任务模版](/docs/templates/)。
 
 # [filter]
 
@@ -165,6 +79,7 @@ log_dir=./logs
 | db_map | 库级映射 | db_1:dst_db_1,db_2:dst_db_2 | - |
 | tb_map | 表级映射 | db_1.tb_1:dst_db_1.dst_tb_1,db_1.tb_2:dst_db_1.dst_tb_2 | - |
 | col_map | 列级映射 | db_1.tb_1.f_1:dst_db_1.dst_tb_1.dst_f_1,db_1.tb_1.f_2:dst_db_1.dst_tb_1.dst_f_2 | - |
+| topic_map | 表名 -> kafka topic 映射，适用于 mysql/pg -> kafka 任务 | \*.\*:default_topic,test_db_2.\*:topic2,test_db_2.tb_1:topic3 | \* |
 
 ## 取值范围
 
@@ -176,6 +91,7 @@ log_dir=./logs
 
 - tb_map > db_map。
 - col_map 只专注于 **列** 映射，而不做 **库/表** 映射。也就是说，如果某张表需要 **库 + 表 + 列** 映射，需先配置好 tb_map 和 db_map，且 col_map 中的 **库/表** 映射规则需和 tb_map/db_map 的映射规则保持一致。
+- topic_map，test_db_2.tb_1:topic3 > test_db_2.\*:topic2 > \*.\*:default_topic。
 
 ## 通配符
 

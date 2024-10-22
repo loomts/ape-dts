@@ -1,4 +1,5 @@
-# Introduction
+# Generate sqls from CDC data
+
 Subscribe to data changes in the source database and generate sqls / reverse sqls, stored in sql.log.
 
 Supported databases:
@@ -9,6 +10,8 @@ Supported data changes:
 - DML
 
 # Examples
+
+Refer to [task templates](../../templates/mysql_to_mysql.md)
 
 ## Example 1: generate sqls
 ```

@@ -8,7 +8,7 @@
 - In Rust.
 
 
-## Tasks supported
+## Supported task types
 |  | mysql -> mysql | pg -> pg | mongo -> mongo | redis -> redis | mysql -> kafka | pg -> kafka|
 | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- |
 | Snapshot | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
@@ -28,26 +28,64 @@
 - [mysql -> kafka -> consumer](./docs/en/tutorial/mysql_to_kafka_consumer.md)
 - [pg -> kafka -> consumer](./docs/en/tutorial/pg_to_kafka_consumer.md)
 - [snapshot + cdc without data loss](./docs/en/tutorial/snapshot_and_cdc_without_data_loss.md)
-- [etl by lua](./docs/en/tutorial/etl_by_lua.md)
+- [modify data by lua](./docs/en/tutorial/etl_by_lua.md)
 
 ## Run tests
 
-Refer to [docs](./dt-tests/README.md) for more details.
+Refer to [test docs](./dt-tests/README.md) for details.
 
 # More docs
 - Configurations
     - [config details](./docs/en/config.md)
+- Structure tasks
+    - [migration](./docs/en/structure/migration.md)
+    - [check](./docs/en/structure/check.md)
+    - [check by Liquibase](./docs/en/structure/check_by_liquibase.md)
 - Snapshot tasks
     - [migration](./docs/en/snapshot/migration.md)
     - [check](./docs/en/snapshot/check.md)
     - [revise](./docs/en/snapshot/revise.md)
     - [review](./docs/en/snapshot/review.md)
+    - [resume at breakpoint](./docs/en/snapshot/resume.md)
 - CDC tasks
-    - [data sync](./docs/en/cdc/migration.md)
-    - [heartbeat](./docs/en/cdc/heartbeat.md)
-    - [two-way data sync](./docs/en/cdc/two_way.md)
+    - [data sync](./docs/en/cdc/sync.md)
+    - [heartbeat to source database](./docs/en/cdc/heartbeat.md)
+    - [two-way data sync](./docs/en/cdc/two_way.md)  
+    - [generate sqls from CDC](./docs/en/cdc/to_sql.md)
+    - [resume at breakpoint](./docs/en/cdc/resume.md)
 - Data processing
-    - [custom lua script](./docs/en/etl/lua.md)
+    - [modify data by lua](./docs/en/etl/lua.md)
+- Monitor
+    - [monitor info](./docs/en/monitor.md)
+    - [position info](./docs/en/position.md)
+- Task Templates
+    - [mysql -> mysql](./docs/templates/mysql_to_mysql.md)
+    - [pg -> pg](./docs/templates/pg_to_pg.md)
+    - [mongo -> mongo](./docs/templates/mongo_to_mongo.md)
+    - [redis -> redis](./docs/templates/redis_to_redis.md)
+    - [mysql -> kafka](./docs/templates/mysql_to_kafka.md)
+    - [pg -> kafka](./docs/templates/pg_to_kafka.md)
+
+# Benchmark
+- MySQL -> MySQL, Snapshot
+
+| Method | Node Specs | RPS(rows per second) | Source MySQL Load (CPU/Memory) | Target MySQL Load (CPU/Memory) |
+| :-------- | :-------- | :-------- | :-------- | :-------- | 
+| ape_dts | 1c2g | 71428 | 8.2% / 5.2% | 211% / 5.1% |
+| ape_dts | 2c4g | 99403 | 14.0% / 5.2% | 359% / 5.1% |
+| ape_dts | 4c8g | 126582 | 13.8% / 5.2% | 552% / 5.1% |
+| debezium | 4c8g |	4051 | 21.5% / 5.2% | 51.2% / 5.1% |
+
+- MySQL -> MySQL, CDC
+
+| Method | Node Specs | RPS(rows per second) | Source MySQL Load (CPU/Memory) | Target MySQL Load (CPU/Memory) |
+| :-------- | :-------- | :-------- | :-------- | :-------- |
+| ape_dts | 1c2g | 15002 | 18.8% / 5.2% | 467% / 6.5% | 
+| ape_dts | 2c4g | 24692 | 18.1% / 5.2% | 687% / 6.5% | 
+| ape_dts | 4c8g | 26287 | 18.2% / 5.2% | 685% / 6.5% |
+| debezium | 4c8g | 2951 | 20.4% / 5.2% | 98% / 6.5% |
+
+- more benchmark [details](./docs/en/benchmark.md)
 
 # Contributions
 
@@ -66,26 +104,16 @@ Refer to [docs](./dt-tests/README.md) for more details.
 
 ## Coding
 
+Build
 ```
 cargo build
 cargo clippy --workspace
 ```
 
-## Build docker image
+Make sure all related tests passed.
 
-- arm64
-```
-docker buildx build \
---platform linux/arm64 --tag ape-dts:0.1.0-test-arm64 \
---build-arg MODULE_NAME=dt-main --load . 
-```
-
-- amd64
-```
-docker buildx build \
---platform linux/amd64 --tag ape-dts:0.1.0-test-amd64 \
---build-arg MODULE_NAME=dt-main --load . 
-```
+## Build images
+[build images](./docs/en/build_images.md)
 
 # Contact us
 

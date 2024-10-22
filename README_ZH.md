@@ -8,7 +8,7 @@
 
 ## 支持任务类型
 
-目前已成熟的任务类型有：
+目前支持的成熟任务类型：
 
 <br/>
 
@@ -23,15 +23,15 @@
 # 快速上手
 
 ## 教程
-- [prerequisites](./docs/en/tutorial/prerequisites.md)
+- [前提条件](./docs/en/tutorial/prerequisites.md)
 - [mysql -> mysql](./docs/en/tutorial/mysql_to_mysql.md)
 - [pg -> pg](./docs/en/tutorial/pg_to_pg.md)
 - [mongo -> mongo](./docs/en/tutorial/mongo_to_mongo.md)
 - [redis -> redis](./docs/en/tutorial/redis_to_redis.md)
-- [mysql -> kafka -> consumer](./docs/en/tutorial/mysql_to_kafka_consumer.md)
-- [pg -> kafka -> consumer](./docs/en/tutorial/pg_to_kafka_consumer.md)
-- [snapshot + cdc without data loss](./docs/en/tutorial/snapshot_and_cdc_without_data_loss.md)
-- [etl by lua](./docs/en/tutorial/etl_by_lua.md)
+- [mysql -> kafka -> 消费者](./docs/en/tutorial/mysql_to_kafka_consumer.md)
+- [pg -> kafka -> 消费者](./docs/en/tutorial/pg_to_kafka_consumer.md)
+- [全量 + 增量且不丢失数据](./docs/en/tutorial/snapshot_and_cdc_without_data_loss.md)
+- [使用 Lua 加工数据](./docs/en/tutorial/etl_by_lua.md)
 
 ## 测试用例
 - [参考文档](./dt-tests/README_ZH.md)
@@ -39,6 +39,10 @@
 # 更多文档
 - 配置
     - [配置详解](./docs/zh/config.md)
+- 库表结构任务
+    - [结构迁移](./docs/zh/structure/migration.md)
+    - [结构校验](./docs/zh/structure/check.md)
+    - [使用 Liquibase 做结构校验](./docs/zh/structure/check_by_liquibase.md)
 - 全量任务
     - [迁移](./docs/zh/snapshot/migration.md)
     - [校验](./docs/zh/snapshot/check.md)
@@ -46,14 +50,44 @@
     - [复查](./docs/zh/snapshot/review.md)
     - [断点续传](./docs/zh/snapshot/resume.md)
 - 增量任务
-    - [迁移](./docs/zh/cdc/migration.md)
-    - [心跳](./docs/zh/cdc/heartbeat.md)
+    - [迁移](./docs/zh/cdc/sync.md)
+    - [开启源库心跳](./docs/zh/cdc/heartbeat.md)
     - [双向同步](./docs/zh/cdc/two_way.md)
+    - [增量数据转 sql](./docs/zh/cdc/to_sql.md)
+    - [断点续传](./docs/zh/cdc/resume.md)
 - 数据加工
-    - [自定义 lua 脚本](./docs/zh/etl/lua.md)
+    - [使用 Lua 加工数据](./docs/zh/etl/lua.md)
 - 监控
-    - [监控](./docs/zh/monitor.md)
+    - [监控信息](./docs/zh/monitor.md)
     - [位点信息](./docs/zh/position.md)
+- 任务模版
+    - [mysql -> mysql](./docs/templates/mysql_to_mysql.md)
+    - [pg -> pg](./docs/templates/pg_to_pg.md)
+    - [mongo -> mongo](./docs/templates/mongo_to_mongo.md)
+    - [redis -> redis](./docs/templates/redis_to_redis.md)
+    - [mysql -> kafka](./docs/templates/mysql_to_kafka.md)
+    - [pg -> kafka](./docs/templates/pg_to_kafka.md)
+
+# Benchmark
+- MySQL -> MySQL，全量
+
+| 同步方式 | 节点规格 | rps（rows per second) | 源 MySQL 负荷（cpu/内存） | 目标 MySQL 负荷（cpu/内存） |
+| :-------- | :-------- | :-------- | :-------- | :-------- | 
+| ape_dts | 1c2g | 71428 | 8.2% / 5.2% | 211% / 5.1% |
+| ape_dts | 2c4g | 99403 | 14.0% / 5.2% | 359% / 5.1% |
+| ape_dts | 4c8g | 126582 | 13.8% / 5.2% | 552% / 5.1% |
+| debezium | 4c8g |	4051 | 21.5% / 5.2% | 51.2% / 5.1% |
+
+- MySQL -> MySQL, 增量
+
+| 同步方式 | 节点规格 | rps（rows per second) | 源 MySQL 负荷（cpu/内存） | 目标 MySQL 负荷（cpu/内存） |
+| :-------- | :-------- | :-------- | :-------- | :-------- |
+| ape_dts | 1c2g | 15002 | 18.8% / 5.2% | 467% / 6.5% | 
+| ape_dts | 2c4g | 24692 | 18.1% / 5.2% | 687% / 6.5% | 
+| ape_dts | 4c8g | 26287 | 18.2% / 5.2% | 685% / 6.5% |
+| debezium | 4c8g | 2951 | 20.4% / 5.2% | 98% / 6.5% |
+
+- 更多 benchmark [细节](./docs/zh/benchmark.md)
 
 # 开发
 ## 架构
@@ -67,30 +101,19 @@
 - dt-task：根据配置创建 extractor，sinker，pipeline，parallelizer 以组装任务
 - dt-common：通用基础模块，基础数据结构，元数据管理
 - dt-tests：集成测试
-- dt-precheck: 任务预检查，**这部分将被移除**
 
 ## 写代码
 
+编译及检查
 ```
 cargo build
 cargo clippy --workspace
 ```
 
-## 创建 docker 镜像
+确保相关测试通过
 
-- arm64
-```
-docker buildx build \
---platform linux/arm64 --tag ape-dts:0.1.0-test-arm64 \
---build-arg MODULE_NAME=dt-main --load . 
-```
-
-- amd64
-```
-docker buildx build \
---platform linux/amd64 --tag ape-dts:0.1.0-test-amd64 \
---build-arg MODULE_NAME=dt-main --load . 
-```
+## 生成镜像
+[生成镜像](./docs/en/build_images.md)
 
 # 技术交流
 [Slack社区](https://join.slack.com/t/kubeblocks/shared_invite/zt-22cx2f84x-BPZvnLRqBOGdZ_XSjELh4Q)

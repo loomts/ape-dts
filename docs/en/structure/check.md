@@ -1,45 +1,9 @@
-# Introduction
+# Check structures
 
 After structure migration, you can choose from two methods for verification. One is provided by us, and the other is an open source tool called [Liquibase](./check_liquibase.md). This document primarily focuses on the former one.
 
-# Example: MySQL_to_MySQL
-```
-[extractor]
-db_type=mysql
-extract_type=struct
-url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
-
-[sinker]
-db_type=mysql
-sink_type=check
-url=mysql://root:123456@127.0.0.1:3308?ssl-mode=disabled
-batch_size=1
-
-[filter]
-do_dbs=
-ignore_dbs=
-do_tbs=struct_check_test_1.*
-ignore_tbs=
-do_events=
-
-[router]
-db_map=
-tb_map=
-col_map=
-
-[parallelizer]
-parallel_type=rdb_check
-parallel_size=1
-
-[pipeline]
-buffer_size=100
-checkpoint_interval_secs=10
-
-[runtime]
-log_level=info
-log4rs_file=./log4rs.yaml
-log_dir=./logs
-```
+# Example: MySQL -> MySQL
+Refer to [task templates](../../templates/mysql_to_mysql.md)
 
 # Results
 

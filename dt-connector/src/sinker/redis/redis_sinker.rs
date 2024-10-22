@@ -251,7 +251,7 @@ impl RedisSinker {
 }
 
 impl RedisSinker {
-    async fn batch_sink(&mut self, cmds: &Vec<RedisCmd>) -> anyhow::Result<()> {
+    async fn batch_sink(&mut self, cmds: &[RedisCmd]) -> anyhow::Result<()> {
         if cmds.is_empty() {
             return Ok(());
         }
@@ -264,7 +264,7 @@ impl RedisSinker {
         }
 
         for cmd in cmds.iter() {
-            packed_cmds.extend_from_slice(&CmdEncoder::encode(&cmd));
+            packed_cmds.extend_from_slice(&CmdEncoder::encode(cmd));
         }
 
         if self.data_marker.is_some() {
