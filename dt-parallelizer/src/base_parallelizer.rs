@@ -9,6 +9,7 @@ use ratelimit::Ratelimiter;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
+#[derive(Default)]
 pub struct BaseParallelizer {
     pub poped_data: VecDeque<DtItem>,
     pub monitor: Arc<Mutex<Monitor>>,
@@ -36,6 +37,23 @@ impl BaseParallelizer {
             }
         }
 
+        self.update_monitor(&record_size_counter).await;
+        Ok(data)
+    }
+
+    pub async fn drain_by_count(
+        &mut self,
+        buffer: &DtQueue,
+        max_count: usize,
+    ) -> anyhow::Result<Vec<DtItem>> {
+        let mut data = Vec::new();
+        let mut record_size_counter = Counter::new(0, 0);
+        while let Ok(item) = self.pop(buffer, &mut record_size_counter).await {
+            data.push(item);
+            if data.len() >= max_count {
+                break;
+            }
+        }
         self.update_monitor(&record_size_counter).await;
         Ok(data)
     }

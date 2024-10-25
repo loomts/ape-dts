@@ -12,7 +12,7 @@ To avoid syncing duplicate data, the task can resume at the breakpoint in finish
 - Mongo as source
 
 # Position Info
-[position Info](../position.md)
+[position Info](../monitor/position.md)
 
 ## MySQL position.log
 ```

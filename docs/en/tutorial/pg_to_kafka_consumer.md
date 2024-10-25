@@ -1,4 +1,4 @@
-# Migrate data from Postgres to Kafka
+# Send Postgres data to Kafka
 
 # Prerequisites
 - [prerequisites](./prerequisites.md)
@@ -8,7 +8,7 @@
 refer to [pg to pg](./pg_to_pg.md)
 
 # Prepare Kafka instance
-refer to [mysql to kafka](./pg_to_kafka_constomer.md)
+refer to [mysql to kafka](./mysql_to_kafka_consumer.md)
 
 # Send snapshot data to Kafka
 ## Prepare data
@@ -108,5 +108,6 @@ UPDATE test_db_2.tb_2 SET value=100000 WHERE id=1;
 DELETE FROM test_db_2.tb_2;
 ```
 
-# Run Kafka customer demo
-- [refer to demo](https://github.com/apecloud/cubetran_udf_python)
+# Run Kafka consumer demo
+- [python demo](https://github.com/apecloud/cubetran_udf_python)
+- [golang demo](https://github.com/apecloud/cubetran_udf_golang)

@@ -196,12 +196,12 @@ impl BasePipeline {
         Ok((count, last_received_position, last_commit_position))
     }
 
-    fn fetch_raw(data: &[DtItem]) -> (Option<Position>, Option<Position>) {
+    pub fn fetch_raw(data: &[DtItem]) -> (Option<Position>, Option<Position>) {
         let mut last_received_position = Option::None;
         let mut last_commit_position = Option::None;
         for i in data.iter() {
             match &i.dt_data {
-                DtData::Commit { .. } => {
+                DtData::Commit { .. } | DtData::Ddl { .. } => {
                     last_commit_position = Some(i.position.clone());
                     last_received_position = last_commit_position.clone();
                     continue;

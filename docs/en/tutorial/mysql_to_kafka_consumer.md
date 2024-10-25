@@ -1,4 +1,4 @@
-# Migrate data from MySQL to Kafka
+# Send MySQL data to Kafka
 
 # Prerequisites
 - [prerequisites](./prerequisites.md)
@@ -130,7 +130,7 @@ docker run --rm --network host \
 "$APE_DTS_IMAGE" /task_config.ini 
 ```
 
-## Make changes in mysql
+## Make changes in MySQL
 ```
 mysql -h127.0.0.1 -uroot -p123456 -uroot -P3307
 
@@ -141,5 +141,6 @@ UPDATE test_db_2.tb_2 SET value=100000 WHERE id=1;
 DELETE FROM test_db_2.tb_2;
 ```
 
-# Run Kafka customer demo
-- [refer to demo](https://github.com/apecloud/cubetran_udf_python)
+# Run Kafka consumer demo
+- [python demo](https://github.com/apecloud/cubetran_udf_python)
+- [golang demo](https://github.com/apecloud/cubetran_udf_golang)

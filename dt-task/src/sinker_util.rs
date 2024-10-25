@@ -18,7 +18,6 @@ use dt_common::{
         avro::avro_converter::AvroConverter,
         mysql::mysql_meta_manager::MysqlMetaManager,
         pg::pg_meta_manager::PgMetaManager,
-        rdb_meta_manager::RdbMetaManager,
         redis::{redis_statistic_type::RedisStatisticType, redis_write_method::RedisWriteMethod},
     },
     utils::redis_util::RedisUtil,
@@ -49,6 +48,8 @@ use dt_connector::{
 use kafka::producer::{Producer, RequiredAcks};
 use reqwest::{redirect::Policy, Url};
 use rusoto_s3::S3Client;
+
+use crate::extractor_util::ExtractorUtil;
 
 use super::task_util::TaskUtil;
 
@@ -106,7 +107,7 @@ impl SinkerUtil {
                 let reverse_router =
                     RdbRouter::from_config(&task_config.router, &DbType::Mysql)?.reverse();
                 let filter = RdbFilter::from_config(&task_config.filter, &DbType::Mysql)?;
-                let extractor_meta_manager = Self::get_extractor_meta_manager(task_config)
+                let extractor_meta_manager = ExtractorUtil::get_extractor_meta_manager(task_config)
                     .await?
                     .unwrap();
 
@@ -156,7 +157,7 @@ impl SinkerUtil {
                 let reverse_router =
                     RdbRouter::from_config(&task_config.router, &DbType::Pg)?.reverse();
                 let filter = RdbFilter::from_config(&task_config.filter, &DbType::Pg)?;
-                let extractor_meta_manager = Self::get_extractor_meta_manager(task_config)
+                let extractor_meta_manager = ExtractorUtil::get_extractor_meta_manager(task_config)
                     .await?
                     .unwrap();
 
@@ -229,7 +230,7 @@ impl SinkerUtil {
                     &task_config.extractor_basic.db_type,
                 )?;
                 // kafka sinker may need meta data from RDB extractor
-                let meta_manager = Self::get_extractor_meta_manager(task_config).await?;
+                let meta_manager = ExtractorUtil::get_extractor_meta_manager(task_config).await?;
                 let avro_converter = AvroConverter::new(meta_manager, with_field_defs);
 
                 let brokers = vec![url.to_string()];
@@ -302,7 +303,7 @@ impl SinkerUtil {
                 is_cluster,
             } => {
                 // redis sinker may need meta data from RDB extractor
-                let meta_manager = Self::get_extractor_meta_manager(task_config).await?;
+                let meta_manager = ExtractorUtil::get_extractor_meta_manager(task_config).await?;
                 let mut conn = RedisUtil::create_redis_conn(&url).await?;
                 let version = RedisUtil::get_redis_version(&mut conn)?;
                 let method = RedisWriteMethod::from_str(&method)?;
@@ -408,7 +409,7 @@ impl SinkerUtil {
                 )?;
 
                 for _ in 0..parallel_size {
-                    let meta_manager = Self::get_extractor_meta_manager(task_config)
+                    let meta_manager = ExtractorUtil::get_extractor_meta_manager(task_config)
                         .await?
                         .unwrap();
                     let sinker = SqlSinker {
@@ -571,25 +572,5 @@ impl SinkerUtil {
             }
         };
         Ok(sub_sinkers)
-    }
-
-    async fn get_extractor_meta_manager(
-        task_config: &TaskConfig,
-    ) -> anyhow::Result<Option<RdbMetaManager>> {
-        let extractor_url = &task_config.extractor_basic.url;
-        let meta_manager = match task_config.extractor_basic.db_type {
-            DbType::Mysql => {
-                let conn_pool = TaskUtil::create_mysql_conn_pool(extractor_url, 1, true).await?;
-                let meta_manager = MysqlMetaManager::new(conn_pool.clone()).await?;
-                Some(RdbMetaManager::from_mysql(meta_manager))
-            }
-            DbType::Pg => {
-                let conn_pool = TaskUtil::create_pg_conn_pool(extractor_url, 1, true).await?;
-                let meta_manager = PgMetaManager::new(conn_pool.clone()).await?;
-                Some(RdbMetaManager::from_pg(meta_manager))
-            }
-            _ => None,
-        };
-        Ok(meta_manager)
     }
 }

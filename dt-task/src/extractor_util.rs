@@ -6,7 +6,10 @@ use std::{
 
 use dt_common::{
     config::{config_enums::DbType, extractor_config::ExtractorConfig, task_config::TaskConfig},
-    meta::dt_queue::DtQueue,
+    meta::{
+        dt_queue::DtQueue, mysql::mysql_meta_manager::MysqlMetaManager,
+        rdb_meta_manager::RdbMetaManager,
+    },
     monitor::monitor::Monitor,
     rdb_filter::RdbFilter,
     time_filter::TimeFilter,
@@ -459,5 +462,25 @@ impl ExtractorUtil {
             }
         };
         Ok(extractor)
+    }
+
+    pub async fn get_extractor_meta_manager(
+        task_config: &TaskConfig,
+    ) -> anyhow::Result<Option<RdbMetaManager>> {
+        let extractor_url = &task_config.extractor_basic.url;
+        let meta_manager = match task_config.extractor_basic.db_type {
+            DbType::Mysql => {
+                let conn_pool = TaskUtil::create_mysql_conn_pool(extractor_url, 1, true).await?;
+                let meta_manager = MysqlMetaManager::new(conn_pool.clone()).await?;
+                Some(RdbMetaManager::from_mysql(meta_manager))
+            }
+            DbType::Pg => {
+                let conn_pool = TaskUtil::create_pg_conn_pool(extractor_url, 1, true).await?;
+                let meta_manager = PgMetaManager::new(conn_pool.clone()).await?;
+                Some(RdbMetaManager::from_pg(meta_manager))
+            }
+            _ => None,
+        };
+        Ok(meta_manager)
     }
 }

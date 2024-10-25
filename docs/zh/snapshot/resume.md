@@ -12,7 +12,7 @@
 - Mongo 源端
 
 # 进度日志
-详细解释可参考 [位点信息](../position.md)
+详细解释可参考 [位点信息](../monitor/position.md)
 
 ## position.log
 ```

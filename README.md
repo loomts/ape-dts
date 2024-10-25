@@ -27,6 +27,7 @@
 - [redis -> redis](./docs/en/tutorial/redis_to_redis.md)
 - [mysql -> kafka -> consumer](./docs/en/tutorial/mysql_to_kafka_consumer.md)
 - [pg -> kafka -> consumer](./docs/en/tutorial/pg_to_kafka_consumer.md)
+- [mysql/pg -> ape_dts(HTTP server) -> consumer](./docs/en/tutorial/mysql_to_http_server_consumer.md)
 - [snapshot + cdc without data loss](./docs/en/tutorial/snapshot_and_cdc_without_data_loss.md)
 - [modify data by lua](./docs/en/tutorial/etl_by_lua.md)
 
@@ -53,18 +54,20 @@ Refer to [test docs](./dt-tests/README.md) for details.
     - [two-way data sync](./docs/en/cdc/two_way.md)  
     - [generate sqls from CDC](./docs/en/cdc/to_sql.md)
     - [resume at breakpoint](./docs/en/cdc/resume.md)
+- Custom consumers
+    - [mysql/pg -> kafka -> consumer](./docs/en/consumer/kafka_consumer.md)
+    - [mysql/pg -> ape_dts(HTTP server) -> consumer](./docs/en/consumer/http_consumer.md)
 - Data processing
     - [modify data by lua](./docs/en/etl/lua.md)
 - Monitor
-    - [monitor info](./docs/en/monitor.md)
-    - [position info](./docs/en/position.md)
+    - [monitor info](./docs/en/monitor/monitor.md)
+    - [position info](./docs/en/monitor/position.md)
 - Task Templates
     - [mysql -> mysql](./docs/templates/mysql_to_mysql.md)
     - [pg -> pg](./docs/templates/pg_to_pg.md)
     - [mongo -> mongo](./docs/templates/mongo_to_mongo.md)
     - [redis -> redis](./docs/templates/redis_to_redis.md)
-    - [mysql -> kafka](./docs/templates/mysql_to_kafka.md)
-    - [pg -> kafka](./docs/templates/pg_to_kafka.md)
+    - [mysql/pg -> kafka](./docs/templates/rdb_to_kafka.md)
 
 # Benchmark
 - MySQL -> MySQL, Snapshot

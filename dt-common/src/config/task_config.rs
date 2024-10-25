@@ -1,7 +1,6 @@
 use std::{
     fs::{self, File},
     io::Read,
-    str::FromStr,
 };
 
 use anyhow::{bail, Ok};
@@ -10,7 +9,8 @@ use crate::error::Error;
 
 use super::{
     config_enums::{
-        ConflictPolicyEnum, DbType, ExtractType, MetaCenterType, ParallelType, SinkType,
+        ConflictPolicyEnum, DbType, ExtractType, MetaCenterType, ParallelType, PipelineType,
+        SinkType,
     },
     data_marker_config::DataMarkerConfig,
     extractor_config::{BasicExtractorConfig, ExtractorConfig},
@@ -104,11 +104,8 @@ impl TaskConfig {
         loader: &IniLoader,
         pipeline: &PipelineConfig,
     ) -> anyhow::Result<(BasicExtractorConfig, ExtractorConfig)> {
-        let db_type_str: String = loader.get_required(EXTRACTOR, DB_TYPE);
-        let extract_type_str: String = loader.get_required(EXTRACTOR, "extract_type");
-        let db_type = DbType::from_str(&db_type_str)?;
-        let extract_type = ExtractType::from_str(&extract_type_str)?;
-
+        let db_type: DbType = loader.get_required(EXTRACTOR, DB_TYPE);
+        let extract_type: ExtractType = loader.get_required(EXTRACTOR, "extract_type");
         let url: String = loader.get_optional(EXTRACTOR, URL);
         let heartbeat_interval_secs: u64 =
             loader.get_with_default(EXTRACTOR, HEARTBEAT_INTERVAL_SECS, 10);
@@ -311,11 +308,12 @@ impl TaskConfig {
     }
 
     fn load_sinker_config(loader: &IniLoader) -> anyhow::Result<(BasicSinkerConfig, SinkerConfig)> {
-        let db_type_str: String = loader.get_required(SINKER, DB_TYPE);
-        let sink_type_str = loader.get_with_default(SINKER, "sink_type", "write".to_string());
-        let db_type = DbType::from_str(&db_type_str)?;
-        let sink_type = SinkType::from_str(&sink_type_str)?;
+        let sink_type = loader.get_with_default(SINKER, "sink_type", SinkType::Write);
+        if let SinkType::Dummy = sink_type {
+            return Ok((BasicSinkerConfig::default(), SinkerConfig::Dummy));
+        }
 
+        let db_type: DbType = loader.get_required(SINKER, DB_TYPE);
         let url: String = loader.get_optional(SINKER, URL);
         let batch_size: usize = loader.get_with_default(SINKER, BATCH_SIZE, 200);
 
@@ -325,8 +323,8 @@ impl TaskConfig {
             batch_size,
         };
 
-        let conflict_policy_str: String = loader.get_optional(SINKER, "conflict_policy");
-        let conflict_policy = ConflictPolicyEnum::from_str(&conflict_policy_str)?;
+        let conflict_policy: ConflictPolicyEnum =
+            loader.get_with_default(SINKER, "conflict_policy", ConflictPolicyEnum::Interrupt);
 
         let not_supported_err =
             Error::ConfigError(format!("sinker db type: {} not supported", db_type));
@@ -418,8 +416,6 @@ impl TaskConfig {
                     statistic_log_dir: loader.get_optional(SINKER, "statistic_log_dir"),
                 },
 
-                SinkType::Dummy => SinkerConfig::Dummy,
-
                 _ => bail! { not_supported_err },
             },
 
@@ -476,11 +472,13 @@ impl TaskConfig {
     }
 
     fn load_parallelizer_config(loader: &IniLoader) -> anyhow::Result<ParallelizerConfig> {
-        let parallel_type_str =
-            loader.get_with_default(PARALLELIZER, "parallel_type", "serial".to_string());
         Ok(ParallelizerConfig {
             parallel_size: loader.get_with_default(PARALLELIZER, PARALLEL_SIZE, 1),
-            parallel_type: ParallelType::from_str(&parallel_type_str)?,
+            parallel_type: loader.get_with_default(
+                PARALLELIZER,
+                "parallel_type",
+                ParallelType::Serial,
+            ),
         })
     }
 
@@ -497,6 +495,8 @@ impl TaskConfig {
             counter_max_sub_count: loader.get_with_default(PIPELINE, "counter_max_sub_count", 1000),
             max_rps: loader.get_optional(PIPELINE, "max_rps"),
             buffer_memory_mb: loader.get_optional(PIPELINE, "buffer_memory_mb"),
+            pipeline_type: loader.get_with_default(PIPELINE, "pipeline_type", PipelineType::Basic),
+            http_port: loader.get_with_default(PIPELINE, "http_port", 10231),
         };
 
         if config.counter_time_window_secs == 0 {
