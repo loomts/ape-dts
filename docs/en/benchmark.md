@@ -4,7 +4,7 @@
 
 Use [sysbench](https://github.com/akopytov/sysbench) to generate snapshot data and binlogs.
 
-Run tests with ape_dts and [debezium](https://github.com/debezium/debezium).
+Run tests with [ape_dts](/docs/en/tutorial/mysql_to_mysql.md) and [debezium](https://github.com/debezium/debezium).
 
 ## Test Environment
 

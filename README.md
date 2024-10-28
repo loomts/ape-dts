@@ -90,6 +90,12 @@ Refer to [test docs](./dt-tests/README.md) for details.
 | ape_dts | 4c8g | 26287 | 18.2% / 5.2% | 685% / 6.5% |
 | debezium | 4c8g | 2951 | 20.4% / 5.2% | 98% / 6.5% |
 
+- Image size
+
+| ape_dts:2.0.1	| debezium/connect:2.7 |
+| :-------- | :-------- |
+| 86.4 MB |	1.38 GB |
+
 - more benchmark [details](./docs/en/benchmark.md)
 
 # Contributions
