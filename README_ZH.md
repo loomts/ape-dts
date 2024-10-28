@@ -30,7 +30,8 @@
 - [redis -> redis](./docs/en/tutorial/redis_to_redis.md)
 - [mysql -> kafka -> 消费者](./docs/en/tutorial/mysql_to_kafka_consumer.md)
 - [pg -> kafka -> 消费者](./docs/en/tutorial/pg_to_kafka_consumer.md)
-- [mysql/pg -> ape_dts(HTTP server) -> 消费者](./docs/en/tutorial/mysql_to_http_server_consumer.md)
+- [mysql -> ape_dts(HTTP server) -> 消费者](./docs/en/tutorial/mysql_to_http_server_consumer.md)
+- [pg -> ape_dts(HTTP server) -> 消费者](./docs/en/tutorial/pg_to_http_server_consumer.md)
 - [全量 + 增量且不丢失数据](./docs/en/tutorial/snapshot_and_cdc_without_data_loss.md)
 - [使用 Lua 加工数据](./docs/en/tutorial/etl_by_lua.md)
 
@@ -70,6 +71,7 @@
     - [mongo -> mongo](./docs/templates/mongo_to_mongo.md)
     - [redis -> redis](./docs/templates/redis_to_redis.md)
     - [mysql/pg -> kafka](./docs/templates/rdb_to_kafka.md)
+    - [mysql/pg -> ape_dts(HTTP server)](./docs/templates/rdb_to_http_server.md)
 
 # Benchmark
 - MySQL -> MySQL，全量

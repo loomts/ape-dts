@@ -34,6 +34,7 @@ pub struct HttpServerPipeline {
     pub avro_converter: AvroConverter,
     pub checkpoint_interval_secs: u64,
     pub batch_sink_interval_secs: u64,
+    pub http_host: String,
     pub http_port: u64,
 
     acked_batch_id: Arc<AtomicU64>,
@@ -83,6 +84,7 @@ impl HttpServerPipeline {
         avro_converter: AvroConverter,
         checkpoint_interval_secs: u64,
         batch_sink_interval_secs: u64,
+        http_host: &str,
         http_port: u64,
     ) -> Self {
         Self {
@@ -92,6 +94,7 @@ impl HttpServerPipeline {
             avro_converter,
             checkpoint_interval_secs,
             batch_sink_interval_secs,
+            http_host: http_host.into(),
             http_port,
             acked_batch_id: Default::default(),
             sent_batch_id: Default::default(),
@@ -118,7 +121,7 @@ impl Pipeline for HttpServerPipeline {
                     .service(web::resource("/fetch_old").route(web::get().to(fetch_old)))
                     .service(web::resource("/ack").route(web::post().to(ack)))
             })
-            .bind(format!("127.0.0.1:{}", self.http_port))
+            .bind(format!("{}:{}", self.http_host, self.http_port))
             .unwrap()
             .run(),
         )

@@ -1,16 +1,13 @@
-# Send Postgres data to Kafka
+# Start as HTTP server and extract Postgres data
 
 # Prerequisites
 - [prerequisites](./prerequisites.md)
 - python3
 
-# Prepare Postgres instance
+# Prepare Postgres instances
 refer to [pg to pg](./pg_to_pg.md)
 
-# Prepare Kafka instance
-refer to [mysql to kafka](./mysql_to_kafka_consumer.md)
-
-# Send Snapshot data to Kafka
+# Snapshot task
 ## Prepare data
 ```
 psql -h 127.0.0.1 -U postgres -d postgres -p 5433 -W
@@ -26,74 +23,72 @@ cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
 db_type=pg
 extract_type=snapshot
-url=postgres://postgres:postgres@127.0.0.1:5433/postgres?options[statement_timeout]=10s
+url=postgres://postgres:postgres@host.docker.internal:5433/postgres?options[statement_timeout]=10s
 
 [sinker]
-db_type=kafka
-sink_type=write
-url=127.0.0.1:9093
-with_field_defs=true
+sink_type=dummy
+
+[parallelizer]
+parallel_type=serial
+parallel_size=1
 
 [filter]
 do_dbs=test_db
 do_events=insert
 
-[router]
-topic_map=*.*:test
-
-[parallelizer]
-parallel_type=snapshot
-parallel_size=8
-
 [pipeline]
 buffer_size=16000
 checkpoint_interval_secs=1
+pipeline_type=http_server
+http_host=0.0.0.0
+http_port=10231
+with_field_defs=true
 EOL
 ```
 
 ```
-docker run --rm --network host \
+docker run --rm \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
+-p 10231:10231 \
 "$APE_DTS_IMAGE" /task_config.ini 
 ```
 
-# Send CDC data to Kafka
+# CDC task
 ## Start task
 ```
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
 db_type=pg
 extract_type=cdc
-url=postgres://postgres:postgres@127.0.0.1:5433/postgres?options[statement_timeout]=10s
+url=postgres://postgres:postgres@host.docker.internal:5433/postgres?options[statement_timeout]=10s
 slot_name=ape_test
+
+[sinker]
+sink_type=dummy
+
+[parallelizer]
+parallel_type=serial
+parallel_size=1
 
 [filter]
 do_dbs=test_db,test_db_2
 do_events=insert,update,delete
 do_ddls=*
 
-[router]
-topic_map=*.*:test
-
-[sinker]
-db_type=kafka
-sink_type=write
-url=127.0.0.1:9093
-with_field_defs=true
-
-[parallelizer]
-parallel_type=serial
-parallel_size=1
-
 [pipeline]
 buffer_size=16000
 checkpoint_interval_secs=1
+pipeline_type=http_server
+http_host=0.0.0.0
+http_port=10231
+with_field_defs=true
 EOL
 ```
 
 ```
-docker run --rm --network host \
+docker run --rm \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
+-p 10231:10231 \
 "$APE_DTS_IMAGE" /task_config.ini 
 ```
 
@@ -108,6 +103,6 @@ UPDATE test_db_2.tb_2 SET value=100000 WHERE id=1;
 DELETE FROM test_db_2.tb_2;
 ```
 
-# Run Kafka consumer demo
+# Start consumer
 - [python demo](https://github.com/apecloud/cubetran_udf_python)
 - [golang demo](https://github.com/apecloud/cubetran_udf_golang)

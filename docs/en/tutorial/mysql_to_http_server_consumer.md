@@ -1,4 +1,4 @@
-# Start as Http server
+# Start as HTTP server and extract MySQL data
 
 # Prerequisites
 - [prerequisites](./prerequisites.md)
@@ -23,7 +23,7 @@ cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
 db_type=mysql
 extract_type=snapshot
-url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
+url=mysql://root:123456@host.docker.internal:3307?ssl-mode=disabled
 
 [sinker]
 sink_type=dummy
@@ -40,13 +40,16 @@ do_events=insert
 buffer_size=16000
 checkpoint_interval_secs=1
 pipeline_type=http_server
+http_host=0.0.0.0
 http_port=10231
+with_field_defs=true
 EOL
 ```
 
 ```
-docker run --rm --network host \
+docker run --rm \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
+-p 10231:10231 \
 "$APE_DTS_IMAGE" /task_config.ini 
 ```
 
@@ -83,8 +86,9 @@ curl "http://127.0.0.1:10231/info"
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
 db_type=mysql
-extract_type=snapshot
-url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
+extract_type=cdc
+server_id=2000
+url=mysql://root:123456@host.docker.internal:3307?ssl-mode=disabled
 
 [sinker]
 sink_type=dummy
@@ -94,20 +98,24 @@ parallel_type=serial
 parallel_size=1
 
 [filter]
-do_dbs=test_db
-do_events=insert
+do_dbs=test_db,test_db_2
+do_events=insert,update,delete
+do_ddls=*
 
 [pipeline]
 buffer_size=16000
 checkpoint_interval_secs=1
 pipeline_type=http_server
+http_host=0.0.0.0
 http_port=10231
+with_field_defs=true
 EOL
 ```
 
 ```
-docker run --rm --network host \
+docker run --rm \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
+-p 10231:10231 \
 "$APE_DTS_IMAGE" /task_config.ini 
 ```
 

@@ -43,7 +43,7 @@ docker run --name some-kafka \
 docker exec -it some-kafka /opt/bitnami/kafka/bin/kafka-topics.sh --create --topic test --bootstrap-server localhost:9093
 ```
 
-# Send snapshot data to Kafka
+# Send Snapshot data to Kafka
 ## Prepare data
 ```
 mysql -h127.0.0.1 -uroot -p123456 -P3307
@@ -90,7 +90,7 @@ docker run --rm --network host \
 "$APE_DTS_IMAGE" /task_config.ini 
 ```
 
-# Send cdc data to Kafka
+# Send CDC data to Kafka
 ## Start task
 ```
 cat <<EOL > /tmp/ape_dts/task_config.ini

@@ -1,4 +1,4 @@
-# MySQL/Postgres -> Kafka templates
+# MySQL/Postgres -> ape_dts(HTTP Server) templates
 
 Refer to [config details](/docs/en/config.md) for explanations of common fields.
 
@@ -17,22 +17,19 @@ ignore_tbs=
 do_events=insert
 
 [sinker]
-db_type=kafka
-sink_type=write
-batch_size=200
-url=127.0.0.1:9093
-with_field_defs=true
-
-[router]
-topic_map=*.*:default_topic,test_db_2.*:topic2,test_db_2.tb_1:topic3
+sink_type=dummy
 
 [parallelizer]
-parallel_type=snapshot
-parallel_size=8
+parallel_type=serial
+parallel_size=1
 
 [pipeline]
 buffer_size=16000
 checkpoint_interval_secs=10
+pipeline_type=http_server
+http_host=0.0.0.0
+http_port=10231
+with_field_defs=true
 
 [runtime]
 log_dir=./logs
@@ -40,14 +37,13 @@ log_level=info
 log4rs_file=./log4rs.yaml
 ```
 
-- refer to [config details](/docs/en/config.md) for [router] topic_map
-
-- [sinker]
+- [pipeline]
 
 | Config | Description | Example | Default |
 | :-------- | :-------- | :-------- | :-------- |
-| url | url of Kafka servers | 127.0.0.1:9093 | - |
-| with_field_defs | when sending data to Kafka in avro format, include the definitions of data fields or not | true | true |
+| http_host | the host to bind when starting http server | 127.0.0.1 | 0.0.0.0 |
+| http_port | the port to bind when starting http server | 10231 | 10231 |
+| with_field_defs | when sending data to clients in avro format, include the definitions of data fields or not | true | true |
 
 # MySQL CDC
 ```
@@ -68,14 +64,7 @@ do_events=insert,update,delete
 do_ddls=*
 
 [sinker]
-db_type=kafka
-sink_type=write
-batch_size=200
-url=127.0.0.1:9093
-with_field_defs=true
-
-[router]
-topic_map=*.*:test
+sink_type=dummy
 
 [parallelizer]
 parallel_type=serial
@@ -84,6 +73,10 @@ parallel_size=1
 [pipeline]
 buffer_size=16000
 checkpoint_interval_secs=10
+pipeline_type=http_server
+http_host=0.0.0.0
+http_port=10231
+with_field_defs=true
 
 [runtime]
 log_dir=./logs

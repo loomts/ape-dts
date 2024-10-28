@@ -27,7 +27,8 @@
 - [redis -> redis](./docs/en/tutorial/redis_to_redis.md)
 - [mysql -> kafka -> consumer](./docs/en/tutorial/mysql_to_kafka_consumer.md)
 - [pg -> kafka -> consumer](./docs/en/tutorial/pg_to_kafka_consumer.md)
-- [mysql/pg -> ape_dts(HTTP server) -> consumer](./docs/en/tutorial/mysql_to_http_server_consumer.md)
+- [mysql -> ape_dts(HTTP server) -> consumer](./docs/en/tutorial/mysql_to_http_server_consumer.md)
+- [pg -> ape_dts(HTTP server) -> consumer](./docs/en/tutorial/pg_to_http_server_consumer.md)
 - [snapshot + cdc without data loss](./docs/en/tutorial/snapshot_and_cdc_without_data_loss.md)
 - [modify data by lua](./docs/en/tutorial/etl_by_lua.md)
 
@@ -68,6 +69,7 @@ Refer to [test docs](./dt-tests/README.md) for details.
     - [mongo -> mongo](./docs/templates/mongo_to_mongo.md)
     - [redis -> redis](./docs/templates/redis_to_redis.md)
     - [mysql/pg -> kafka](./docs/templates/rdb_to_kafka.md)
+    - [mysql/pg -> ape_dts(HTTP server)](./docs/templates/rdb_to_http_server.md)
 
 # Benchmark
 - MySQL -> MySQL, Snapshot

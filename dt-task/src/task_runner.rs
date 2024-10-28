@@ -420,7 +420,8 @@ impl TaskRunner {
 
             PipelineType::HttpServer => {
                 let meta_manager = ExtractorUtil::get_extractor_meta_manager(&self.config).await?;
-                let avro_converter = AvroConverter::new(meta_manager, true);
+                let avro_converter =
+                    AvroConverter::new(meta_manager, self.config.pipeline.with_field_defs);
                 let pipeline = HttpServerPipeline::new(
                     buffer,
                     syncer,
@@ -428,6 +429,7 @@ impl TaskRunner {
                     avro_converter,
                     self.config.pipeline.checkpoint_interval_secs,
                     self.config.pipeline.batch_sink_interval_secs,
+                    &self.config.pipeline.http_host,
                     self.config.pipeline.http_port,
                 );
                 Ok(Box::new(pipeline))
