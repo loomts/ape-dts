@@ -47,8 +47,12 @@ url={mysql_sinker_url}
 
 # Postgres 环境搭建
 
-## 源
 [创建 Postgres](/docs/en/tutorial/pg_to_pg.md)
+
+## 如要执行 [双向同步](/docs/zh/cdc/two_way.md) 相关测试
+- pg_to_pg::cdc_tests::test::cycle_
+
+- 总共需要创建 3 个 Postgres 示例，并按照 [创建 Postgres](/docs/en/tutorial/pg_to_pg.md) 为每个实例都设置 wal_level = logical。
 
 ## 如要执行 [charset 相关测试](../dt-tests/tests/pg_to_pg/snapshot/charset_euc_cn_test)
 - 在源和目标分别预建数据库 postgres_euc_cn。
@@ -63,6 +67,11 @@ CREATE DATABASE postgres_euc_cn
 
 # MySQL 环境搭建
 [创建 MySQL](/docs/en/tutorial/mysql_to_mysql.md)
+
+## 如要执行 [双向同步](/docs/zh/cdc/two_way.md) 相关测试
+- mysql_to_mysql::cdc_tests::test::cycle_
+
+- 总共需要创建 3 个 MySQL 示例
 
 # Mongo
 [创建 Mongo](/docs/en/tutorial/mongo_to_mongo.md)

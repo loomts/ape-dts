@@ -48,6 +48,12 @@ url={mysql_sinker_url}
 # Postgres
 [Prepare Postgres instances](/docs/en/tutorial/pg_to_pg.md)
 
+## To run [Two-way data sync](/docs/en/cdc/two_way.md) tests
+- pg_to_pg::cdc_tests::test::cycle_
+
+- You need to create 3 Postgres instances, and set wal_level = logical for each one.
+
+
 ## To run [charset tests](../dt-tests/tests/pg_to_pg/snapshot/charset_euc_cn_test)
 - Create database "postgres_euc_cn" in both source and target.
 
@@ -61,6 +67,11 @@ CREATE DATABASE postgres_euc_cn
 
 # MySQL
 [Prepare MySQL instances](/docs/en/tutorial/mysql_to_mysql.md)
+
+## To run [Two-way data sync](/docs/en/cdc/two_way.md) tests
+- mysql_to_mysql::cdc_tests::test::cycle_
+
+- You need to create 3 Postgres instances
 
 # Mongo
 [Prepare Mongo instances](/docs/en/tutorial/mongo_to_mongo.md)

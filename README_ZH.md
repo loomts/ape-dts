@@ -30,6 +30,8 @@
 - [redis -> redis](./docs/en/tutorial/redis_to_redis.md)
 - [mysql -> kafka -> 消费者](./docs/en/tutorial/mysql_to_kafka_consumer.md)
 - [pg -> kafka -> 消费者](./docs/en/tutorial/pg_to_kafka_consumer.md)
+- [mysql -> ape_dts(HTTP server) -> 消费者](./docs/en/tutorial/mysql_to_http_server_consumer.md)
+- [pg -> ape_dts(HTTP server) -> 消费者](./docs/en/tutorial/pg_to_http_server_consumer.md)
 - [全量 + 增量且不丢失数据](./docs/en/tutorial/snapshot_and_cdc_without_data_loss.md)
 - [使用 Lua 加工数据](./docs/en/tutorial/etl_by_lua.md)
 
@@ -55,18 +57,21 @@
     - [双向同步](./docs/zh/cdc/two_way.md)
     - [增量数据转 sql](./docs/zh/cdc/to_sql.md)
     - [断点续传](./docs/zh/cdc/resume.md)
+- 自主消费任务
+    - [mysql/pg -> kafka -> 消费者](./docs/zh/consumer/kafka_consumer.md)
+    - [mysql/pg -> ape_dts(HTTP server) -> 消费者](./docs/zh/consumer/http_consumer.md)
 - 数据加工
     - [使用 Lua 加工数据](./docs/zh/etl/lua.md)
 - 监控
-    - [监控信息](./docs/zh/monitor.md)
-    - [位点信息](./docs/zh/position.md)
+    - [监控信息](./docs/zh/monitor/monitor.md)
+    - [位点信息](./docs/zh/monitor/position.md)
 - 任务模版
     - [mysql -> mysql](./docs/templates/mysql_to_mysql.md)
     - [pg -> pg](./docs/templates/pg_to_pg.md)
     - [mongo -> mongo](./docs/templates/mongo_to_mongo.md)
     - [redis -> redis](./docs/templates/redis_to_redis.md)
-    - [mysql -> kafka](./docs/templates/mysql_to_kafka.md)
-    - [pg -> kafka](./docs/templates/pg_to_kafka.md)
+    - [mysql/pg -> kafka](./docs/templates/rdb_to_kafka.md)
+    - [mysql/pg -> ape_dts(HTTP server)](./docs/templates/rdb_to_http_server.md)
 
 # Benchmark
 - MySQL -> MySQL，全量
@@ -86,6 +91,12 @@
 | ape_dts | 2c4g | 24692 | 18.1% / 5.2% | 687% / 6.5% | 
 | ape_dts | 4c8g | 26287 | 18.2% / 5.2% | 685% / 6.5% |
 | debezium | 4c8g | 2951 | 20.4% / 5.2% | 98% / 6.5% |
+
+- 镜像对比
+
+| ape_dts:2.0.1	| debezium/connect:2.7 |
+| :-------- | :-------- |
+| 86.4 MB |	1.38 GB |
 
 - 更多 benchmark [细节](./docs/zh/benchmark.md)
 

@@ -13,12 +13,15 @@ use std::{
 use anyhow::{bail, Context};
 use dt_common::{
     config::{
-        config_enums::DbType, config_token_parser::ConfigTokenParser,
-        extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
+        config_enums::{DbType, PipelineType},
+        config_token_parser::ConfigTokenParser,
+        extractor_config::ExtractorConfig,
+        sinker_config::SinkerConfig,
+        task_config::TaskConfig,
     },
     error::Error,
     log_finished, log_info,
-    meta::dt_queue::DtQueue,
+    meta::{avro::avro_converter::AvroConverter, dt_queue::DtQueue},
     monitor::monitor::Monitor,
     rdb_filter::RdbFilter,
     utils::{sql_util::SqlUtil, time_util::TimeUtil},
@@ -33,7 +36,10 @@ use dt_connector::{
     rdb_router::RdbRouter,
     Sinker,
 };
-use dt_pipeline::{base_pipeline::BasePipeline, lua_processor::LuaProcessor, Pipeline};
+use dt_pipeline::{
+    base_pipeline::BasePipeline, http_server_pipeline::HttpServerPipeline,
+    lua_processor::LuaProcessor, Pipeline,
+};
 
 use log4rs::config::RawConfig;
 use ratelimit::Ratelimiter;
@@ -297,6 +303,7 @@ impl TaskRunner {
             monitor_max_sub_count,
             monitor_count_window,
         )));
+
         let mut pipeline = self
             .create_pipeline(
                 buffer,
@@ -367,44 +374,67 @@ impl TaskRunner {
         monitor: Arc<Mutex<Monitor>>,
         data_marker: Option<Arc<RwLock<DataMarker>>>,
     ) -> anyhow::Result<Box<dyn Pipeline + Send>> {
-        let rps_limiter = if self.config.pipeline.max_rps > 0 {
-            Some(
-                Ratelimiter::builder(self.config.pipeline.max_rps, Duration::from_secs(1))
-                    .max_tokens(self.config.pipeline.max_rps)
-                    .initial_available(self.config.pipeline.max_rps)
-                    .build()?,
-            )
-        } else {
-            None
-        };
+        match self.config.pipeline.pipeline_type {
+            PipelineType::Basic => {
+                let rps_limiter = if self.config.pipeline.max_rps > 0 {
+                    Some(
+                        Ratelimiter::builder(self.config.pipeline.max_rps, Duration::from_secs(1))
+                            .max_tokens(self.config.pipeline.max_rps)
+                            .initial_available(self.config.pipeline.max_rps)
+                            .build()?,
+                    )
+                } else {
+                    None
+                };
 
-        let lua_processor = self
-            .config
-            .processor
-            .as_ref()
-            .map(|processor_config| LuaProcessor {
-                lua_code: processor_config.lua_code.clone(),
-            });
+                let lua_processor =
+                    self.config
+                        .processor
+                        .as_ref()
+                        .map(|processor_config| LuaProcessor {
+                            lua_code: processor_config.lua_code.clone(),
+                        });
 
-        let parallelizer =
-            ParallelizerUtil::create_parallelizer(&self.config, monitor.clone(), rps_limiter)
+                let parallelizer = ParallelizerUtil::create_parallelizer(
+                    &self.config,
+                    monitor.clone(),
+                    rps_limiter,
+                )
                 .await?;
 
-        let pipeline = BasePipeline {
-            buffer,
-            parallelizer,
-            sinker_config: self.config.sinker.clone(),
-            sinkers,
-            shut_down,
-            checkpoint_interval_secs: self.config.pipeline.checkpoint_interval_secs,
-            batch_sink_interval_secs: self.config.pipeline.batch_sink_interval_secs,
-            syncer,
-            monitor,
-            data_marker,
-            lua_processor,
-        };
+                let pipeline = BasePipeline {
+                    buffer,
+                    parallelizer,
+                    sinker_config: self.config.sinker.clone(),
+                    sinkers,
+                    shut_down,
+                    checkpoint_interval_secs: self.config.pipeline.checkpoint_interval_secs,
+                    batch_sink_interval_secs: self.config.pipeline.batch_sink_interval_secs,
+                    syncer,
+                    monitor,
+                    data_marker,
+                    lua_processor,
+                };
+                Ok(Box::new(pipeline))
+            }
 
-        Ok(Box::new(pipeline))
+            PipelineType::HttpServer => {
+                let meta_manager = ExtractorUtil::get_extractor_meta_manager(&self.config).await?;
+                let avro_converter =
+                    AvroConverter::new(meta_manager, self.config.pipeline.with_field_defs);
+                let pipeline = HttpServerPipeline::new(
+                    buffer,
+                    syncer,
+                    monitor,
+                    avro_converter,
+                    self.config.pipeline.checkpoint_interval_secs,
+                    self.config.pipeline.batch_sink_interval_secs,
+                    &self.config.pipeline.http_host,
+                    self.config.pipeline.http_port,
+                );
+                Ok(Box::new(pipeline))
+            }
+        }
     }
 
     fn init_log4rs(&self) -> anyhow::Result<()> {

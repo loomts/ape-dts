@@ -4,7 +4,7 @@
 
 使用 [sysbench](https://github.com/akopytov/sysbench) 生成全量和增量数据。
 
-分别使用 ape_dts 和 [debezium](https://github.com/debezium/debezium) 执行迁移任务，并对比结果。
+分别使用 [ape_dts](/docs/en/tutorial/mysql_to_mysql.md) 和 [debezium](https://github.com/debezium/debezium) 执行迁移任务，并对比结果。
 
 ## 测试环境
 源库，目标库，数据迁移任务分别位于同一网络的 3 台百度 BCC 机器，规格 8c16g。

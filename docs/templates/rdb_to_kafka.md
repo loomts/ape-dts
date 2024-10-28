@@ -1,8 +1,8 @@
-# MySQL -> Kafka templates
+# MySQL/Postgres -> Kafka templates
 
 Refer to [config details](/docs/en/config.md) for explanations of common fields.
 
-# Snapshot
+# MySQL Snapshot
 ```
 [extractor]
 db_type=mysql
@@ -42,7 +42,14 @@ log4rs_file=./log4rs.yaml
 
 - refer to [config details](/docs/en/config.md) for [router] topic_map
 
-# CDC
+- [sinker]
+
+| Config | Description | Example | Default |
+| :-------- | :-------- | :-------- | :-------- |
+| url | url of Kafka servers | 127.0.0.1:9093 | - |
+| with_field_defs | when sending data to Kafka in avro format, include the definitions of data fields or not | true | true |
+
+# MySQL CDC
 ```
 [extractor]
 db_type=mysql
@@ -82,4 +89,29 @@ checkpoint_interval_secs=10
 log_dir=./logs
 log_level=info
 log4rs_file=./log4rs.yaml
+```
+
+# Posgres Snapshot
+
+The only difference with MySQL is [extractor]
+
+```
+[extractor]
+db_type=pg
+extract_type=snapshot
+url=postgres://postgres:postgres@127.0.0.1:5433/postgres?options[statement_timeout]=10s
+batch_size=10000
+```
+
+# Postgres CDC
+
+The only difference with MySQL is [extractor]
+
+```
+[extractor]
+db_type=pg
+extract_type=cdc
+url=postgres://postgres:postgres@127.0.0.1:5433/postgres?options[statement_timeout]=10s
+start_lsn=0/406DE430
+slot_name=ape_test
 ```
