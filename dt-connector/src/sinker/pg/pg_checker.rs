@@ -78,13 +78,13 @@ impl PgChecker {
         let mut miss = Vec::new();
         let mut diff = Vec::new();
         for src_row_data in data.iter() {
-            let query_builder = RdbQueryBuilder::new_for_pg(tb_meta);
+            let query_builder = RdbQueryBuilder::new_for_pg(tb_meta, None);
             let query_info = query_builder.get_select_query(src_row_data)?;
             let query = query_builder.create_pg_query(&query_info);
 
             let mut rows = query.fetch(&self.conn_pool);
             if let Some(row) = rows.try_next().await.unwrap() {
-                let dst_row_data = RowData::from_pg_row(&row, tb_meta);
+                let dst_row_data = RowData::from_pg_row(&row, tb_meta, &None);
                 let diff_col_values = BaseChecker::compare_row_data(src_row_data, &dst_row_data);
                 if !diff_col_values.is_empty() {
                     let diff_log = BaseChecker::build_diff_log(
@@ -120,7 +120,7 @@ impl PgChecker {
         let start_time = Instant::now();
 
         let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&data[0]).await?;
-        let query_builder = RdbQueryBuilder::new_for_pg(tb_meta);
+        let query_builder = RdbQueryBuilder::new_for_pg(tb_meta, None);
 
         // build fetch dst sql
         let query_info = query_builder.get_batch_select_query(data, start_index, batch_size)?;
@@ -130,7 +130,7 @@ impl PgChecker {
         let mut dst_row_data_map = HashMap::new();
         let mut rows = query.fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
-            let row_data = RowData::from_pg_row(&row, tb_meta);
+            let row_data = RowData::from_pg_row(&row, tb_meta, &None);
             let hash_code = row_data.get_hash_code(&tb_meta.basic);
             dst_row_data_map.insert(hash_code, row_data);
         }

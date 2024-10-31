@@ -10,3 +10,6 @@ CREATE TABLE default_table(pk serial, val numeric(20,8), created_at timestamp, c
 
 DROP TABLE IF EXISTS col_has_special_character_table;
 CREATE TABLE col_has_special_character_table ("p,k,1" text, "p\k&2" text, "col`1" text, "col:2" text, "col\3" text, PRIMARY KEY("p,k,1", "p\k&2"));
+
+DROP TABLE IF EXISTS ignore_cols_1;
+CREATE TABLE ignore_cols_1 ( f_0 smallint, f_1 smallint DEFAULT NULL, f_2 smallint DEFAULT NULL, f_3 smallint DEFAULT NULL, PRIMARY KEY (f_0) );

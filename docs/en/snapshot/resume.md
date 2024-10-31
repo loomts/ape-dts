@@ -54,7 +54,7 @@ resume_config_file=./resume.config
 {"type":"RdbSnapshotFinished","db_type":"mysql","schema":"test_db","tb":"d"}
 ```
 
-- if a tables exists in both position.log and resume.config, position.log will be used.
+- if a table exists in both position.log and resume.config, position.log will be used.
 
 # Example
 - task_config.ini

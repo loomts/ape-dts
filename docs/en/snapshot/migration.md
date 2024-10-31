@@ -10,7 +10,7 @@ If the table does not have a sorting column, the extractor will pull all data in
 
 Refer to [task templates](../../templates/mysql_to_mysql.md) and [tutorial](../tutorial/mysql_to_mysql.md)
 
-# Parallel computing
+# Parallelizer
 
 - Redis_to_Redis: parallel_type=redis
 - Others: parallel_type=snapshot

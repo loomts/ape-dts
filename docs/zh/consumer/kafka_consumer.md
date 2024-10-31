@@ -4,7 +4,7 @@
 
 # 发送数据到 Kafka
 
-参考 MySQL -> Kafka [教程](/docs/en/tutorial/mysql_to_kafka_consumer.md)，[模版](/docs/templates/mysql_to_kafka.md) and Postgres -> Kafka [教程](/docs/en/tutorial/pg_to_kafka_consumer.md)，[模版](/docs/templates/pg_to_kafka.md)
+参考 MySQL -> Kafka [教程](/docs/en/tutorial/mysql_to_kafka_consumer.md)，[模版](/docs/templates/rdb_to_kafka.md) and Postgres -> Kafka [教程](/docs/en/tutorial/pg_to_kafka_consumer.md)，[模版](/docs/templates/rdb_to_kafka.md)
 
 # 自主消费数据
 

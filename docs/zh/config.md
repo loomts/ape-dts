@@ -32,6 +32,7 @@
 | ignore_dbs | 需过滤的库 | db_1,db_2*,\`db*&#\` | - |
 | do_tbs | 需同步的表 | db_1.tb_1,db_2*.tb_2*,\`db*&#\`.\`tb*&#\` | - |
 | ignore_tbs | 需过滤的表 | db_1.tb_1,db_2*.tb_2*,\`db*&#\`.\`tb*&#\` | - |
+| ignore_cols | 某些表需过滤的列 | json:[{"db":"db_1","tb":"tb_1","ignore_cols":["f_2","f_3"]},{"db":"db_2","tb":"tb_2","ignore_cols":["f_3"]}] | - |
 | do_events | 需同步的事件 | insert、update、delete | - |
 | do_ddls | 需同步的 ddl，适用于 mysql cdc 任务 | create_database,drop_database,alter_database,create_table,drop_table,truncate_table,rename_table,alter_table,create_index,drop_index | - |
 | do_structures | 需同步的结构，适用于 mysql/pg 结构迁移任务 | database,table,constraint,sequence,comment,index | * |
@@ -43,6 +44,7 @@
 - 所有配置项均支持多条配置，如 do_dbs 可包含多个库，以 , 分隔。
 - 如某配置项需匹配所有条目，则设置成 *，如 do_dbs=\*。
 - 如某配置项不匹配任何条目，则设置成空，如 ignore_dbs=。
+- ignore_cols 是 JSON 格式，应包含 "json:" 前缀。
 - do_events 取值：insert、update、delete 中的一个或多个。
 
 ## 优先级
@@ -78,19 +80,20 @@
 | :-------- | :-------- | :-------- | :-------- |
 | db_map | 库级映射 | db_1:dst_db_1,db_2:dst_db_2 | - |
 | tb_map | 表级映射 | db_1.tb_1:dst_db_1.dst_tb_1,db_1.tb_2:dst_db_1.dst_tb_2 | - |
-| col_map | 列级映射 | db_1.tb_1.f_1:dst_db_1.dst_tb_1.dst_f_1,db_1.tb_1.f_2:dst_db_1.dst_tb_1.dst_f_2 | - |
+| col_map | 列级映射 | json:[{"db":"db_1","tb":"tb_1","col_map":{"f_0":"dst_f_0","f_1":"dst_f_1"}}] | - |
 | topic_map | 表名 -> kafka topic 映射，适用于 mysql/pg -> kafka 任务 | \*.\*:default_topic,test_db_2.\*:topic2,test_db_2.tb_1:topic3 | \* |
 
 ## 取值范围
 
 - 一个映射规则包括源和目标， 以 : 分隔。
 - 所有配置项均支持配置多条，如 db_map 可包含多个库映射，以 , 分隔。
+- col_map 是 JSON 格式，应包含 "json:" 前缀。
 - 如果不配置，则默认 **源库/表/列** 与 **目标库/表/列** 一致，这也是大多数情况。
 
 ## 优先级
 
 - tb_map > db_map。
-- col_map 只专注于 **列** 映射，而不做 **库/表** 映射。也就是说，如果某张表需要 **库 + 表 + 列** 映射，需先配置好 tb_map 和 db_map，且 col_map 中的 **库/表** 映射规则需和 tb_map/db_map 的映射规则保持一致。
+- col_map 只专注于 **列** 映射，而不做 **库/表** 映射。也就是说，如果某张表需要 **库 + 表 + 列** 映射，需先配置好 tb_map 或 db_map。
 - topic_map，test_db_2.tb_1:topic3 > test_db_2.\*:topic2 > \*.\*:default_topic。
 
 ## 通配符

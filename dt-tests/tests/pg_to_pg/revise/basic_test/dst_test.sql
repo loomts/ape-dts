@@ -11,3 +11,5 @@ INSERT INTO default_table(pk, val, created_at, created_at_tz, ctime, ctime_tz, c
 INSERT INTO col_has_special_character_table VALUES('pk1,value,1', 'pk2,value,1', 'col:1:value', 'col&2:value', 'col\3:value');
 INSERT INTO col_has_special_character_table VALUES('pk1,value,2', 'pk2,value,2', 'col:3:value', 'col&2:value', 'col\1:value');
 INSERT INTO col_has_special_character_table VALUES('pk1,value,4', 'pk2,value,4', 'col:1:value', NULL, NULL);
+
+INSERT INTO ignore_cols_1 VALUES(1, 1, NULL, NULL),(2, 1, 2, 2);

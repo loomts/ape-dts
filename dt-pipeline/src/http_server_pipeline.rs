@@ -77,6 +77,7 @@ struct InfoResp {
 }
 
 impl HttpServerPipeline {
+    #![allow(clippy::too_many_arguments)]
     pub fn new(
         buffer: Arc<DtQueue>,
         syncer: Arc<Mutex<Syncer>>,
@@ -231,10 +232,10 @@ async fn fetch_old(
     }
 
     if let Some(response) = pipeline.pending_ack_data.lock().await.get(&old_batch_id) {
-        return send_response(response);
+        send_response(response)
     } else {
         // should never happen
-        return send_response(&FetchResp::default());
+        send_response(&FetchResp::default())
     }
 }
 

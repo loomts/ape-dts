@@ -303,10 +303,10 @@ impl MysqlCdcExtractor {
             return Ok(HashMap::new());
         }
 
-        let tb_meta = self
-            .meta_manager
-            .get_tb_meta(&table_map_event.database_name, &table_map_event.table_name)
-            .await?;
+        let db = &table_map_event.database_name;
+        let tb = &table_map_event.table_name;
+        let tb_meta = self.meta_manager.get_tb_meta(db, tb).await?;
+        let ignore_cols = self.filter.get_ignore_cols(db, tb);
 
         if included_columns.len() != event.column_values.len() {
             bail! {Error::ExtractorError(
@@ -316,16 +316,20 @@ impl MysqlCdcExtractor {
 
         let mut data = HashMap::new();
         for i in (0..tb_meta.basic.cols.len()).rev() {
-            let key = tb_meta.basic.cols.get(i).unwrap();
-            if let Some(false) = included_columns.get(i) {
-                data.insert(key.clone(), ColValue::None);
+            let col = tb_meta.basic.cols.get(i).unwrap();
+            if ignore_cols.map_or(false, |cols| cols.contains(col)) {
                 continue;
             }
 
-            let col_type = tb_meta.get_col_type(key)?;
+            if let Some(false) = included_columns.get(i) {
+                data.insert(col.clone(), ColValue::None);
+                continue;
+            }
+
+            let col_type = tb_meta.get_col_type(col)?;
             let raw_value = event.column_values.remove(i);
             let value = MysqlColValueConvertor::from_binlog(col_type, raw_value)?;
-            data.insert(key.clone(), value);
+            data.insert(col.clone(), value);
         }
         Ok(data)
     }

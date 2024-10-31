@@ -1,3 +1,4 @@
+use anyhow::Ok;
 use dt_common::{
     config::{
         config_enums::DbType, config_token_parser::ConfigTokenParser, router_config::RouterConfig,
@@ -13,17 +14,20 @@ use std::collections::HashMap;
 use dt_common::meta::{col_value::ColValue, row_data::RowData};
 use serde::{Deserialize, Serialize};
 
+type SchemaMap = HashMap<String, String>;
 type TbMap = HashMap<(String, String), (String, String)>;
 type TbColMap = HashMap<(String, String), HashMap<String, String>>;
+
+const JSON_PREFIX: &str = "json:";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RdbRouter {
     // HashMap<src_schema, dst_schema>
-    pub schema_map: HashMap<String, String>,
+    pub schema_map: SchemaMap,
     // HashMap<(src_schema, src_tb), (dst_schema, dst_tb)>
     pub tb_map: TbMap,
     // HashMap<(src_schema, src_tb), HashMap<src_col, dst_col>>
-    pub tb_col_map: TbColMap,
+    pub col_map: TbColMap,
     // HashMap<(src_schema, src_tb), String>
     pub topic_map: HashMap<(String, String), String>,
 }
@@ -38,16 +42,13 @@ impl RdbRouter {
                 topic_map,
             } => {
                 let schema_map = Self::parse_schema_map(schema_map, db_type)?;
-                let mut tb_map = Self::parse_tb_map(tb_map, db_type)?;
-                let (tb_map_2, tb_col_map) = Self::parse_tb_col_map(col_map, db_type)?;
-                for (k, v) in tb_map_2 {
-                    tb_map.insert(k, v);
-                }
+                let tb_map = Self::parse_tb_map(tb_map, db_type)?;
+                let col_map = Self::parse_col_map(col_map)?;
                 let topic_map = Self::parse_topic_map(topic_map, db_type)?;
                 Ok(Self {
                     schema_map,
                     tb_map,
-                    tb_col_map,
+                    col_map,
                     topic_map,
                 })
             }
@@ -72,7 +73,7 @@ impl RdbRouter {
     }
 
     pub fn get_col_map(&self, schema: &str, tb: &str) -> Option<&HashMap<String, String>> {
-        self.tb_col_map.get(&(schema.into(), tb.into()))
+        self.col_map.get(&(schema.into(), tb.into()))
     }
 
     pub fn get_topic<'a>(&'a self, schema: &str, tb: &str) -> &'a str {
@@ -92,7 +93,7 @@ impl RdbRouter {
         let mut reverse_tb_map = HashMap::new();
         let mut reverse_tb_col_map = HashMap::new();
 
-        for (src_schema_tb, col_map) in self.tb_col_map.iter() {
+        for (src_schema_tb, col_map) in self.col_map.iter() {
             let mut reverse_col_map = HashMap::new();
             for (src_col, dst_col) in col_map.iter() {
                 reverse_col_map.insert(dst_col.into(), src_col.into());
@@ -112,7 +113,7 @@ impl RdbRouter {
         Self {
             schema_map: reverse_schema_map,
             tb_map: reverse_tb_map,
-            tb_col_map: reverse_tb_col_map,
+            col_map: reverse_tb_col_map,
             // topic_map should not be reversed
             topic_map: self.topic_map.clone(),
         }
@@ -216,10 +217,7 @@ impl RdbRouter {
         struct_data
     }
 
-    fn parse_schema_map(
-        config_str: &str,
-        db_type: &DbType,
-    ) -> anyhow::Result<HashMap<String, String>> {
+    fn parse_schema_map(config_str: &str, db_type: &DbType) -> anyhow::Result<SchemaMap> {
         // db_map=src_db_1:dst_db_1,src_db_2:dst_db_2
         let mut schema_map = HashMap::new();
         let tokens = Self::parse_config(config_str, db_type)?;
@@ -231,11 +229,7 @@ impl RdbRouter {
         Ok(schema_map)
     }
 
-    #[allow(clippy::type_complexity)]
-    fn parse_tb_map(
-        config_str: &str,
-        db_type: &DbType,
-    ) -> anyhow::Result<HashMap<(String, String), (String, String)>> {
+    fn parse_tb_map(config_str: &str, db_type: &DbType) -> anyhow::Result<TbMap> {
         // tb_map=src_db_1.src_tb_1:dst_db_1.dst_tb_1,src_db_2.src_tb_2:dst_db_2.dst_tb_2
         let mut tb_map = HashMap::new();
         let tokens = Self::parse_config(config_str, db_type)?;
@@ -248,33 +242,6 @@ impl RdbRouter {
             i += 4;
         }
         Ok(tb_map)
-    }
-
-    fn parse_tb_col_map(config_str: &str, db_type: &DbType) -> anyhow::Result<(TbMap, TbColMap)> {
-        // col_map=src_db_1.src_tb_1.col_1:dst_db_1.dst_tb_1.dst_col_1,src_db_2.src_tb_2.dst_col_2:dst_db_2.dst_tb_2.dst_col_2
-        let mut tb_map = TbMap::new();
-        let mut tb_col_map = TbColMap::new();
-
-        let tokens = Self::parse_config(config_str, db_type)?;
-        let mut i = 0;
-        while i < tokens.len() {
-            let src_schema_tb = (tokens[i].to_string(), tokens[i + 1].to_string());
-            let dst_schema_tb = (tokens[i + 3].to_string(), tokens[i + 4].to_string());
-            let src_col = tokens[i + 2].to_string();
-            let dst_col = tokens[i + 5].to_string();
-
-            tb_map.insert(src_schema_tb.clone(), dst_schema_tb);
-            if let Some(col_map) = tb_col_map.get_mut(&src_schema_tb) {
-                col_map.insert(src_col, dst_col);
-            } else {
-                let mut col_map = HashMap::new();
-                col_map.insert(src_col, dst_col);
-                tb_col_map.insert(src_schema_tb, col_map);
-            }
-            i += 6;
-        }
-
-        Ok((tb_map, tb_col_map))
     }
 
     fn parse_topic_map(
@@ -293,6 +260,27 @@ impl RdbRouter {
             i += 3;
         }
         Ok(topic_map)
+    }
+
+    fn parse_col_map(config_str: &str) -> anyhow::Result<TbColMap> {
+        let mut results = TbColMap::new();
+        if config_str.trim().is_empty() {
+            return Ok(results);
+        }
+
+        #[derive(Serialize, Deserialize)]
+        struct TbColMapType {
+            db: String,
+            tb: String,
+            col_map: HashMap<String, String>,
+        }
+        // col_map=json:[{"db":"test_db","tb":"tb_1","col_map":{"f_0":"dst_f_0","f_1":"dst_f_1"}}]
+        let config: Vec<TbColMapType> =
+            serde_json::from_str(config_str.trim_start_matches(JSON_PREFIX))?;
+        for i in config {
+            results.insert((i.db, i.tb), i.col_map);
+        }
+        Ok(results)
     }
 
     fn parse_config(config_str: &str, db_type: &DbType) -> anyhow::Result<Vec<String>> {
@@ -318,6 +306,19 @@ mod tests {
     use dt_common::config::{config_enums::DbType, router_config::RouterConfig};
 
     use super::{RdbRouter, TbColMap, TbMap};
+
+    #[test]
+    fn test_parse_ignore_cols() {
+        let config_str =
+            r#"json:[{"db":"db_1","tb":"tb_1","col_map":{"f_0":"dst_f_0","f_1":"dst_f_1"}}]"#;
+        let col_map = RdbRouter::parse_col_map(config_str).unwrap();
+        let tb_1 = col_map
+            .get(&("db_1".to_string(), "tb_1".to_string()))
+            .unwrap();
+        assert_eq!(tb_1.len(), 2);
+        assert_eq!(*tb_1.get("f_0").unwrap(), "dst_f_0".to_string());
+        assert_eq!(*tb_1.get("f_1").unwrap(), "dst_f_1".to_string());
+    }
 
     #[test]
     fn test_parse_schema_map() {
@@ -372,15 +373,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_col_map() {
-        let assert_tb_map =
-            |tb_map: &TbMap, src_db: &str, src_tb: &str, dst_db: &str, dst_tb: &str| {
-                assert_eq!(
-                    tb_map.get(&(src_db.into(), src_tb.into())).unwrap(),
-                    &(dst_db.into(), dst_tb.into())
-                )
-            };
-
+    fn test_parse_tb_col_map() {
         let assert_col_map =
             |tb_map: &TbColMap, src_db: &str, src_tb: &str, col_map: &HashMap<String, String>| {
                 assert_eq!(
@@ -389,12 +382,7 @@ mod tests {
                 )
             };
 
-        let check_results = |tb_map: &TbMap, tb_col_map: &TbColMap| {
-            assert_tb_map(&tb_map, "src_db_1", "src_tb_1", "dst_db_1", "dst_tb_1");
-            assert_tb_map(&tb_map, "src_db,2'", "src_tb,2'", "dst_db_2", "dst_tb_2");
-            assert_tb_map(&tb_map, "src_db:3,", "src_tb:3,", "dst_db:3,", "dst_tb:3,");
-            assert_eq!(tb_map.get(&("src_db_4".into(), "src_tb_4".into())), None);
-
+        let check_results = |tb_col_map: &TbColMap| {
             let mut col_map = HashMap::new();
             col_map.insert("src_col_1".to_string(), "dst_col_1".to_string());
             col_map.insert("src_col_2".to_string(), "dst_col_2".to_string());
@@ -417,41 +405,24 @@ mod tests {
         };
 
         // mysql
-        let config_str = "src_db_1.src_tb_1.src_col_1:dst_db_1.dst_tb_1.dst_col_1,".to_string()
-            + "src_db_1.src_tb_1.src_col_2:dst_db_1.dst_tb_1.dst_col_2,"
-            + "`src_db,2'`.`src_tb,2'`.`src_col,1'`:dst_db_2.dst_tb_2.dst_col_1,"
-            + "`src_db,2'`.`src_tb,2'`.`src_col,2'`:dst_db_2.dst_tb_2.dst_col_2,"
-            + "`src_db:3,`.`src_tb:3,`.`src_col:1,`:`dst_db:3,`.`dst_tb:3,`.`dst_col:1,`,"
-            + "`src_db:3,`.`src_tb:3,`.`src_col:2,`:`dst_db:3,`.`dst_tb:3,`.`dst_col:2,`";
-        let (tb_map, tb_col_map) =
-            RdbRouter::parse_tb_col_map(&config_str, &DbType::Mysql).unwrap();
-        check_results(&tb_map, &tb_col_map);
-
-        // pg
-        let config_str = r#"src_db_1.src_tb_1.src_col_1:dst_db_1.dst_tb_1.dst_col_1,"#.to_string()
-            + r#"src_db_1.src_tb_1.src_col_2:dst_db_1.dst_tb_1.dst_col_2,"#
-            + r#""src_db,2'"."src_tb,2'"."src_col,1'":dst_db_2.dst_tb_2.dst_col_1,"#
-            + r#""src_db,2'"."src_tb,2'"."src_col,2'":dst_db_2.dst_tb_2.dst_col_2,"#
-            + r#""src_db:3,"."src_tb:3,"."src_col:1,":"dst_db:3,"."dst_tb:3,"."dst_col:1,","#
-            + r#""src_db:3,"."src_tb:3,"."src_col:2,":"dst_db:3,"."dst_tb:3,"."dst_col:2,""#;
-        let (tb_map, tb_col_map) = RdbRouter::parse_tb_col_map(&config_str, &DbType::Pg).unwrap();
-        check_results(&tb_map, &tb_col_map);
+        let config_str = r#"[{"db":"src_db_1","tb":"src_tb_1","col_map":{"src_col_1":"dst_col_1","src_col_2":"dst_col_2"}},"#.to_string()
+            + r#"{"db":"src_db,2'","tb":"src_tb,2'","col_map":{"src_col,1'":"dst_col_1","src_col,2'":"dst_col_2"}},"#
+            + r#"{"db":"src_db:3,","tb":"src_tb:3,","col_map":{"src_col:1,":"dst_col:1,","src_col:2,":"dst_col:2,"}}]"#;
+        let tb_col_map = RdbRouter::parse_col_map(&config_str).unwrap();
+        check_results(&tb_col_map);
     }
 
     #[test]
     fn test_parse_config() {
         let db_map_str = "src_1:dst_1";
-        let tb_map_str = "`src_db,2'`.`src_tb,2'`:dst_db_2.dst_tb_2";
-        let field_map_str =
-            "`src_db:3,`.`src_tb:3,`.`src_col:1,`:`dst_db:3,`.`dst_tb:3,`.`dst_col:1,`,"
-                .to_string()
-                + "`src_db:3,`.`src_tb:3,`.`src_col:2,`:`dst_db:3,`.`dst_tb:3,`.`dst_col:2,`";
+        let tb_map_str = "`src_db,2'`.`src_tb,2'`:dst_db_2.dst_tb_2,`src_db:3,`.`src_tb:3,`:`dst_db:3,`.`dst_tb:3,`";
+        let col_map_str = r#"[{"db":"src_db:3,","tb":"src_tb:3,","col_map":{"src_col:1,":"dst_col:1,","src_col:2,":"dst_col:2,"}}]"#;
         let topic_map = "*.*:test,`db:1`.*:test2,`db:1`.`tb:1`:test3";
 
         let config = RouterConfig::Rdb {
             schema_map: db_map_str.into(),
             tb_map: tb_map_str.into(),
-            col_map: field_map_str.into(),
+            col_map: col_map_str.into(),
             topic_map: topic_map.into(),
         };
         let router = RdbRouter::from_config(&config, &DbType::Mysql).unwrap();

@@ -94,4 +94,6 @@ end
 # Supported scenarios
 - Only for snapshot / cdc tasks whose source is mysql / postgres.
 - For cdc tasks, only supports processing on dml data.
-- For binary columns, eg: mysql tinyblob, mediumblob, longblob, blob, varbinary, binary, currently, filtering them is supported, but you can not change their values.
+- For binary columns, eg: mysql tinyblob, mediumblob, longblob, blob, varbinary, binary, currently:
+    - Dropping these columns is supported.
+    - Modifying them is NOT supported.

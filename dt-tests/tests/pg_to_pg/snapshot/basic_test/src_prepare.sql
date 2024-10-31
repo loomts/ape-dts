@@ -79,3 +79,6 @@ CREATE TABLE timezone_table (pk SERIAL, t1 time, t2 timetz, t3 timestamp, t4 tim
 
 DROP TABLE IF EXISTS col_has_special_character_table;
 CREATE TABLE col_has_special_character_table ("p:k" SERIAL, "col`1" text, "col,2" text, "col\3" text, PRIMARY KEY("p:k"));
+
+DROP TABLE IF EXISTS ignore_cols_1;
+CREATE TABLE ignore_cols_1 ( f_0 smallint, f_1 smallint DEFAULT NULL, f_2 smallint DEFAULT NULL, f_3 smallint DEFAULT NULL, PRIMARY KEY (f_0) );

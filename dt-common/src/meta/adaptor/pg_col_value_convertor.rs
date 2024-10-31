@@ -126,84 +126,80 @@ impl PgColValueConvertor {
         Self::from_str(col_type, value_str, meta_manager)
     }
 
-    pub fn from_query(
-        row: &PgRow,
-        col_name: &str,
-        col_type: &PgColType,
-    ) -> anyhow::Result<ColValue> {
-        let value: Option<Vec<u8>> = row.get_unchecked(col_name);
+    pub fn from_query(row: &PgRow, col: &str, col_type: &PgColType) -> anyhow::Result<ColValue> {
+        let value: Option<Vec<u8>> = row.get_unchecked(col);
         if value.is_none() {
             return Ok(ColValue::None);
         }
 
         if col_type.is_array() {
-            let value: String = row.try_get(col_name)?;
+            let value: String = row.try_get(col)?;
             return Ok(ColValue::String(value));
         }
 
         let col_value = match col_type.short_name.as_str() {
             "bool" => {
-                let value: bool = row.try_get(col_name)?;
+                let value: bool = row.try_get(col)?;
                 ColValue::Bool(value)
             }
 
             "integer" | "int" | "int4" | "serial" | "serial2" | "serial4" => {
-                let value: i32 = row.try_get(col_name)?;
+                let value: i32 = row.try_get(col)?;
                 ColValue::Long(value)
             }
 
             "int2" | "smallserial" | "smallint" => {
-                let value: i16 = row.try_get(col_name)?;
+                let value: i16 = row.try_get(col)?;
                 ColValue::Short(value)
             }
 
             "bigint" | "bigserial" | "int8" | "oid" => {
-                let value: i64 = row.try_get(col_name)?;
+                let value: i64 = row.try_get(col)?;
                 ColValue::LongLong(value)
             }
 
             "real" | "float4" => {
-                let value: f32 = row.try_get(col_name)?;
+                let value: f32 = row.try_get(col)?;
                 ColValue::Float(value)
             }
 
             "float8" => {
-                let value: f64 = row.try_get(col_name)?;
+                let value: f64 = row.try_get(col)?;
                 ColValue::Double(value)
             }
 
             "bytea" => {
-                let value: Vec<u8> = row.try_get(col_name)?;
+                let value: Vec<u8> = row.try_get(col)?;
                 ColValue::Blob(value)
             }
 
             "numeric" | "decimal" => {
-                let value: String = row.try_get(col_name)?;
+                let value: String = row.try_get(col)?;
                 ColValue::Decimal(value)
             }
 
             "timestamptz" => {
-                let value: String = row.try_get(col_name)?;
+                let value: String = row.try_get(col)?;
                 ColValue::Timestamp(value)
             }
 
             "timestamp" => {
-                let value: String = row.try_get(col_name)?;
+                let value: String = row.try_get(col)?;
                 ColValue::DateTime(value)
             }
 
             "time" => {
-                let value: String = row.try_get(col_name)?;
+                let value: String = row.try_get(col)?;
                 ColValue::Time(value)
             }
 
             "timetz" => {
-                let value: String = row.try_get(col_name)?;
+                let value: String = row.try_get(col)?;
                 ColValue::String(value)
             }
 
             "date" => {
-                let value: String = row.try_get(col_name)?;
+                let value: String = row.try_get(col)?;
                 ColValue::String(value)
             }
 
@@ -213,12 +209,12 @@ impl PgColValueConvertor {
             | "inet" | "cidr" | "macaddr" | "macaddr8" | "int4range" | "numrange" | "int8range"
             | "box" | "circle" | "interval" | "line" | "lseg" | "money" | "path" | "point"
             | "polygon" | "pg_lsn" | "tsquery" | "tsvector" | "txid_snapshot" => {
-                let value: String = row.try_get(col_name)?;
+                let value: String = row.try_get(col)?;
                 ColValue::String(value)
             }
 
             _ => {
-                let value: String = row.try_get(col_name)?;
+                let value: String = row.try_get(col)?;
                 ColValue::String(value)
             }
         };

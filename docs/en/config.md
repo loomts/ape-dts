@@ -32,6 +32,7 @@ Since different tasks may require extra configs, please refer to examples in dt-
 | ignore_dbs | databases to be filtered | db_1,db_2*,\`db*&#\` | - |
 | do_tbs | tables to be synced | db_1.tb_1,db_2*.tb_2*,\`db*&#\`.\`tb*&#\` | - |
 | ignore_tbs | tables to be filtered | db_1.tb_1,db_2*.tb_2*,\`db*&#\`.\`tb*&#\` | - |
+| ignore_cols | table columns to be filtered | json:[{"db":"db_1","tb":"tb_1","ignore_cols":["f_2","f_3"]},{"db":"db_2","tb":"tb_2","ignore_cols":["f_3"]}] | - |
 | do_events | events to be synced | insert,update,delete | - |
 | do_ddls | ddls to be synced, for mysql cdc tasks | create_database,drop_database,alter_database,create_table,drop_table,truncate_table,rename_table,alter_table,create_index,drop_index | - |
 | do_structures | structures to be migrated, for mysql/pg structure migration tasks | database,table,constraint,sequence,comment,index | * |
@@ -43,7 +44,8 @@ Since different tasks may require extra configs, please refer to examples in dt-
 - All configurations support multiple items, which are separated by ",". Example: do_dbs=db_1,db_2.
 - Set to * to match all. Example: do_dbs=\*.
 - Keep empty to match nothing. Example: ignore_dbs=.
-- do_events take one or more values from **insert**, **update**, and **delete**.
+- ignore_cols is in JSON format, it should starts with "json:".
+- do_events takes one or more values from **insert**, **update**, and **delete**.
 
 ## Priority
 
@@ -77,20 +79,21 @@ Used in: do_dbs, ignore_dbs, do_tbs and ignore_tbs.
 | :-------- | :-------- | :-------- | :-------- |
 | db_map | database mapping | db_1:dst_db_1,db_2:dst_db_2 | - |
 | tb_map | table mapping | db_1.tb_1:dst_db_1.dst_tb_1,db_1.tb_2:dst_db_1.dst_tb_2 | - |
-| col_map | column mapping | db_1.tb_1.f_1:dst_db_1.dst_tb_1.dst_f_1,db_1.tb_1.f_2:dst_db_1.dst_tb_1.dst_f_2 | - |
-| topic_map | table -> kafka topic mapping, for mysql/pg -> kafka tasks. required | \*.\*:default_topic,test_db_2.\*:topic2,test_db_2.tb_1:topic3 | \* |
+| col_map | column mapping | json:[{"db":"db_1","tb":"tb_1","col_map":{"f_0":"dst_f_0","f_1":"dst_f_1"}}] | - |
+| topic_map | table -> kafka topic mapping, for mysql/pg -> kafka tasks. required | \*.\*:default_topic,test_db_2.\*:topic2,test_db_2.tb_1:topic3 | - |
 
 ## Values
 
 - A mapping rule consists of the source and target, which are separated by ":".
 - All configurations support multiple items, which are separated by ",". Example: db_map=db_1:dst_db_1,db_2:dst_db_2.
+- col_map value is in JSON format, it should starts with "json:".
 - If not set, data will be routed to the same databases/tables/columns with the source database.
 
 ## Priority
 
 - tb_map > db_map.
-- col_map only works for column mapping. If a table needs database + table + column mapping, tb_map and db_map must be set, and the database/table mapping rules in col_map must be consistent with those of tb_map/db_map.
-- topic_map, test_db_2.tb_1:topic3 > test_db_2.\*:topic2 > \*.\*:default_topic.
+- col_map only works for column mapping. If a table needs database + table + column mapping, tb_map/db_map must be set.
+- topic_map: test_db_2.tb_1:topic3 > test_db_2.\*:topic2 > \*.\*:default_topic.
 
 ## Wildcard
 
@@ -124,7 +127,7 @@ Same with [filter].
 | rdb_merge | Merge CDC records(insert, update, delete) in cache into insert + delete records，and then divide them into [parallel_size] partitions, each partition synced in batches in a separate thread. | CDC tasks for mysql/pg | fast | eventual consistency |
 | mongo | Mongo version of rdb_merge. | CDC tasks for mongo |
 | rdb_check | Similar to snapshot. But if the source table does not have primary/unique keys, records will be synced in serial. | check tasks for mysql/pg/mongo |
-| redis | Single thread, batch/serial writing(determined by sinker’s batch_size) | snapshot/CDC tasks for redis |
+| redis | Single thread, batch/serial writing(determined by [sinker] batch_size) | snapshot/CDC tasks for redis |
 
 
 # [runtime]

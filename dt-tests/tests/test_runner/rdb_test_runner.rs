@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    str::FromStr,
-};
+use std::{collections::HashSet, str::FromStr};
 
 use chrono::{Duration, Utc};
 use dt_common::{
@@ -11,6 +8,7 @@ use dt_common::{
         sinker_config::SinkerConfig, task_config::TaskConfig,
     },
     meta::{ddl_meta::ddl_type::DdlType, time::dt_utc_time::DtNaiveTime},
+    rdb_filter::RdbFilter,
     utils::{sql_util::SqlUtil, time_util::TimeUtil},
 };
 
@@ -38,6 +36,7 @@ pub struct RdbTestRunner {
     pub dst_conn_pool_pg: Option<Pool<Postgres>>,
     pub meta_center_pool_mysql: Option<Pool<MySql>>,
     pub router: RdbRouter,
+    pub filter: RdbFilter,
 }
 
 pub const SRC: &str = "src";
@@ -79,6 +78,7 @@ impl RdbTestRunner {
 
         let config = TaskConfig::new(&base.task_config_file).unwrap();
         let router = RdbRouter::from_config(&config.router, &dst_db_type).unwrap();
+        let filter = RdbFilter::from_config(&config.filter, &dst_db_type).unwrap();
         let meta_center_pool_mysql = match &config.meta_center {
             Some(MetaCenterConfig::MySqlDbEngine { url, .. }) => Some(
                 TaskUtil::create_mysql_conn_pool(url, 1, false)
@@ -95,6 +95,7 @@ impl RdbTestRunner {
             dst_conn_pool_pg,
             meta_center_pool_mysql,
             router,
+            filter,
             base,
         })
     }
@@ -483,8 +484,7 @@ impl RdbTestRunner {
             dst_data.len(),
         );
 
-        let col_map = self.router.get_col_map(&src_db_tb.0, &src_db_tb.1);
-        if !self.compare_row_data(&src_data, &dst_data, col_map) {
+        if !self.compare_row_data(&src_data, &dst_data, src_db_tb) {
             println!(
                 "compare tb data failed, src_tb: {:?}, dst_tb: {:?}",
                 src_db_tb, dst_db_tb,
@@ -498,11 +498,16 @@ impl RdbTestRunner {
         &self,
         src_data: &Vec<RowData>,
         dst_data: &Vec<RowData>,
-        col_map: Option<&HashMap<String, String>>,
+        src_db_tb: &(String, String),
     ) -> bool {
         assert_eq!(src_data.len(), dst_data.len());
         let src_db_type = self.get_db_type(SRC);
         let dst_db_type = self.get_db_type(DST);
+
+        // router: col_map
+        let col_map = self.router.get_col_map(&src_db_tb.0, &src_db_tb.1);
+        // filter: ignore_cols
+        let ignore_cols = self.filter.get_ignore_cols(&src_db_tb.0, &src_db_tb.1);
 
         for i in 0..src_data.len() {
             let src_col_values = src_data[i].after.as_ref().unwrap();
@@ -516,6 +521,12 @@ impl RdbTestRunner {
                 };
 
                 let dst_col_value = dst_col_values.get(dst_col).unwrap();
+
+                // ignored cols were NOT synced to target
+                if ignore_cols.map_or(false, |cols| cols.contains(src_col)) {
+                    assert_eq!(*dst_col_value, ColValue::None);
+                    continue;
+                }
 
                 // TODO
                 // issue: https://github.com/apecloud/foxlake/issues/2108
@@ -592,9 +603,9 @@ impl RdbTestRunner {
         let (conn_pool_mysql, conn_pool_pg) = self.get_conn_pool(from);
         let data = if let Some(pool) = conn_pool_mysql {
             let db_type = self.get_db_type(from);
-            RdbUtil::fetch_data_mysql_compatible(pool, db_tb, &db_type).await?
+            RdbUtil::fetch_data_mysql_compatible(pool, None, db_tb, &db_type).await?
         } else if let Some(pool) = conn_pool_pg {
-            RdbUtil::fetch_data_pg(pool, db_tb).await?
+            RdbUtil::fetch_data_pg(pool, None, db_tb).await?
         } else {
             Vec::new()
         };

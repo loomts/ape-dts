@@ -43,3 +43,5 @@ INSERT INTO test_db_1.col_has_special_character_table VALUES('pk1,value,2', 'pk2
 INSERT INTO test_db_1.col_has_special_character_table VALUES('pk1,value,3', 'pk2,value,3', 'col:1:value', 'col&2:value', 'col\3:value');
 INSERT INTO test_db_1.col_has_special_character_table VALUES('pk1,value,4', 'pk2,value,4', NULL, NULL, NULL);
 INSERT INTO test_db_1.col_has_special_character_table VALUES('pk1,value,5', 'pk2,value,5', NULL, NULL, NULL);
+
+INSERT INTO test_db_1.ignore_cols_1 VALUES(1, 1, 1, 1),(2, 2, 2, 2);

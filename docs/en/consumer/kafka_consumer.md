@@ -4,7 +4,7 @@ The Snapshot/CDC data will be sent to Kafka in Avro.
 
 # Send data to Kafka
 
-Refer to MySQL -> Kafka [tutorial](/docs/en/tutorial/mysql_to_kafka_consumer.md), [templates](/docs/templates/mysql_to_kafka.md) and Postgres -> Kafka [tutorial](/docs/en/tutorial/pg_to_kafka_consumer.md), [templates](/docs/templates/pg_to_kafka.md)
+Refer to MySQL -> Kafka [tutorial](/docs/en/tutorial/mysql_to_kafka_consumer.md), [templates](/docs/templates/rdb_to_kafka.md) and Postgres -> Kafka [tutorial](/docs/en/tutorial/pg_to_kafka_consumer.md), [templates](/docs/templates/rdb_to_kafka.md)
 
 # Consumer
 

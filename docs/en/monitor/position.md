@@ -39,11 +39,12 @@ Use lsn as position.
 Only current_position for Mongo, depends on source types:
 
 - Use operation_time as position ([extractor] source=op_log).
-- Use resume_token as position ([extractor] source=change_stream).
 
 ```
 2024-10-18 05:19:25.877182 | current_position | {"type":"MongoCdc","resume_token":"","operation_time":1729228763,"timestamp":"2024-10-18 05:19:23.000"}
 ```
+
+- Use resume_token as position ([extractor] source=change_stream).
 
 ```
 2024-10-18 05:20:33.977700 | current_position | {"type":"MongoCdc","resume_token":"{\"_data\":\"826711F020000000042B022C0100296E5A10040E19213A975845EBAD0B8384EAE1DA1C46645F696400646711F01A88DC948E321DEC2A0004\"}","operation_time":1729228832,"timestamp":"2024-10-18 05:20:32.000"}

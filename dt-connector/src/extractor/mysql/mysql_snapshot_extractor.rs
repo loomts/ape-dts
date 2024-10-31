@@ -7,17 +7,20 @@ use std::{
 };
 
 use async_trait::async_trait;
-use dt_common::meta::{
-    adaptor::{mysql_col_value_convertor::MysqlColValueConvertor, sqlx_ext::SqlxMysqlExt},
-    col_value::ColValue,
-    dt_data::{DtData, DtItem},
-    dt_queue::DtQueue,
-    mysql::{
-        mysql_col_type::MysqlColType, mysql_meta_manager::MysqlMetaManager,
-        mysql_tb_meta::MysqlTbMeta,
+use dt_common::{
+    meta::{
+        adaptor::{mysql_col_value_convertor::MysqlColValueConvertor, sqlx_ext::SqlxMysqlExt},
+        col_value::ColValue,
+        dt_data::{DtData, DtItem},
+        dt_queue::DtQueue,
+        mysql::{
+            mysql_col_type::MysqlColType, mysql_meta_manager::MysqlMetaManager,
+            mysql_tb_meta::MysqlTbMeta,
+        },
+        position::Position,
+        row_data::RowData,
     },
-    position::Position,
-    row_data::RowData,
+    rdb_filter::RdbFilter,
 };
 use futures::TryStreamExt;
 
@@ -29,6 +32,7 @@ use tokio::task::JoinHandle;
 use crate::{
     close_conn_pool,
     extractor::{base_extractor::BaseExtractor, resumer::snapshot_resumer::SnapshotResumer},
+    rdb_query_builder::RdbQueryBuilder,
     rdb_router::RdbRouter,
     Extractor,
 };
@@ -37,6 +41,7 @@ pub struct MysqlSnapshotExtractor {
     pub base_extractor: BaseExtractor,
     pub conn_pool: Pool<MySql>,
     pub meta_manager: MysqlMetaManager,
+    pub filter: RdbFilter,
     pub resumer: SnapshotResumer,
     pub batch_size: usize,
     pub parallel_size: usize,
@@ -136,10 +141,13 @@ impl MysqlSnapshotExtractor {
             self.tb
         );
 
-        let sql = format!("SELECT * FROM `{}`.`{}`", self.db, self.tb);
+        let ignore_cols = self.filter.get_ignore_cols(&self.db, &self.tb);
+        let cols_str = self.build_extract_cols_str(tb_meta)?;
+        let sql = format!("SELECT {} FROM `{}`.`{}`", cols_str, self.db, self.tb);
+
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
-            let row_data = RowData::from_mysql_row(&row, tb_meta);
+            let row_data = RowData::from_mysql_row(&row, tb_meta, &ignore_cols);
             self.base_extractor
                 .push_row(row_data, Position::None)
                 .await?;
@@ -156,13 +164,16 @@ impl MysqlSnapshotExtractor {
     ) -> anyhow::Result<usize> {
         let mut extracted_count = 0;
         let mut start_value = resume_value;
+        let ignore_cols = self.filter.get_ignore_cols(&self.db, &self.tb);
+        let cols_str = self.build_extract_cols_str(tb_meta)?;
+
         let sql1 = format!(
-            "SELECT * FROM `{}`.`{}` ORDER BY `{}` ASC LIMIT {}",
-            self.db, self.tb, order_col, self.batch_size
+            "SELECT {} FROM `{}`.`{}` ORDER BY `{}` ASC LIMIT {}",
+            cols_str, self.db, self.tb, order_col, self.batch_size
         );
         let sql2 = format!(
-            "SELECT * FROM `{}`.`{}` WHERE `{}` > ? ORDER BY `{}` ASC LIMIT {}",
-            self.db, self.tb, order_col, order_col, self.batch_size
+            "SELECT {} FROM `{}`.`{}` WHERE `{}` > ? ORDER BY `{}` ASC LIMIT {}",
+            cols_str, self.db, self.tb, order_col, order_col, self.batch_size
         );
 
         loop {
@@ -185,7 +196,7 @@ impl MysqlSnapshotExtractor {
                     continue;
                 }
 
-                let row_data = RowData::from_mysql_row(&row, tb_meta);
+                let row_data = RowData::from_mysql_row(&row, tb_meta, &ignore_cols);
                 let position = if let Some(value) = start_value.to_option_string() {
                     Position::RdbSnapshot {
                         db_type: DbType::Mysql.to_string(),
@@ -221,19 +232,22 @@ impl MysqlSnapshotExtractor {
         let parallel_size = self.parallel_size;
         let batch_size = cmp::max(self.batch_size / parallel_size, 1);
         let router = Arc::new(self.base_extractor.router.clone());
+        let ignore_cols = self.filter.get_ignore_cols(&self.db, &self.tb).cloned();
 
         let mut start_value = resume_value;
+        let cols_str = self.build_extract_cols_str(tb_meta)?;
+
         let sql1 = format!(
-            "SELECT * FROM `{}`.`{}` ORDER BY `{}` ASC LIMIT {}",
-            self.db, self.tb, order_col, batch_size
+            "SELECT {} FROM `{}`.`{}` ORDER BY `{}` ASC LIMIT {}",
+            cols_str, self.db, self.tb, order_col, batch_size
         );
         let sql2 = format!(
-            "SELECT * FROM `{}`.`{}` WHERE `{}` > ? AND `{}` <= ? ORDER BY `{}` ASC LIMIT {}",
-            self.db, self.tb, order_col, order_col, order_col, batch_size
+            "SELECT {} FROM `{}`.`{}` WHERE `{}` > ? AND `{}` <= ? ORDER BY `{}` ASC LIMIT {}",
+            cols_str, self.db, self.tb, order_col, order_col, order_col, batch_size
         );
         let sql3 = format!(
-            "SELECT * FROM `{}`.`{}` WHERE `{}` > ? ORDER BY `{}` ASC LIMIT {}",
-            self.db, self.tb, order_col, order_col, batch_size
+            "SELECT {} FROM `{}`.`{}` WHERE `{}` > ? ORDER BY `{}` ASC LIMIT {}",
+            cols_str, self.db, self.tb, order_col, order_col, batch_size
         );
 
         loop {
@@ -253,7 +267,7 @@ impl MysqlSnapshotExtractor {
                 while let Some(row) = rows.try_next().await.unwrap() {
                     start_value =
                         MysqlColValueConvertor::from_query(&row, order_col, order_col_type)?;
-                    let row_data = RowData::from_mysql_row(&row, tb_meta);
+                    let row_data = RowData::from_mysql_row(&row, tb_meta, &ignore_cols.as_ref());
                     let position =
                         Self::build_position(&self.db, &self.tb, order_col, &start_value);
                     Self::push_row(&self.base_extractor.buffer, &router, row_data, position)
@@ -274,6 +288,7 @@ impl MysqlSnapshotExtractor {
                     let tb_meta = tb_meta.clone();
                     let order_col = order_col.to_string();
                     let order_col_type = order_col_type.clone();
+                    let ignore_cols = ignore_cols.clone();
 
                     let all_extracted_count = all_extracted_count.clone();
                     let all_finished = all_finished.clone();
@@ -305,7 +320,8 @@ impl MysqlSnapshotExtractor {
                                 &order_col_type,
                             )?;
 
-                            let row_data = RowData::from_mysql_row(&row, &tb_meta);
+                            let row_data =
+                                RowData::from_mysql_row(&row, &tb_meta, &ignore_cols.as_ref());
                             let position =
                                 Self::build_position(&db, &tb, &order_col, &order_col_value);
                             Self::push_row(&buffer, &router, row_data, position).await?;
@@ -415,5 +431,11 @@ impl MysqlSnapshotExtractor {
         let position = Self::build_position(&self.db, &self.tb, order_col, order_col_value);
         let commit = DtData::Commit { xid: String::new() };
         self.base_extractor.push_dt_data(commit, position).await
+    }
+
+    fn build_extract_cols_str(&self, tb_meta: &MysqlTbMeta) -> anyhow::Result<String> {
+        let ignore_cols = self.filter.get_ignore_cols(&self.db, &self.tb);
+        let query_builder = RdbQueryBuilder::new_for_mysql(tb_meta, ignore_cols);
+        query_builder.build_extract_cols_str()
     }
 }
