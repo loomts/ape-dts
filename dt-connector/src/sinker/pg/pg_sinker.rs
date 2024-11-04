@@ -120,7 +120,7 @@ impl PgSinker {
             data_size += row_data.data_size;
 
             let tb_meta = self.meta_manager.get_tb_meta_by_row_data(row_data).await?;
-            let query_builder = RdbQueryBuilder::new_for_pg(tb_meta);
+            let query_builder = RdbQueryBuilder::new_for_pg(tb_meta, None);
 
             let query_info = query_builder.get_query_info(row_data, true)?;
             let query = query_builder.create_pg_query(&query_info);
@@ -144,7 +144,7 @@ impl PgSinker {
         let start_time = Instant::now();
 
         let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&data[0]).await?;
-        let query_builder = RdbQueryBuilder::new_for_pg(tb_meta);
+        let query_builder = RdbQueryBuilder::new_for_pg(tb_meta, None);
 
         let (query_info, data_size) =
             query_builder.get_batch_delete_query(data, start_index, batch_size)?;
@@ -175,7 +175,7 @@ impl PgSinker {
             .get_tb_meta_by_row_data(&data[0])
             .await?
             .to_owned();
-        let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
+        let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta, None);
 
         let (query_info, data_size) =
             query_builder.get_batch_insert_query(data, start_index, batch_size)?;

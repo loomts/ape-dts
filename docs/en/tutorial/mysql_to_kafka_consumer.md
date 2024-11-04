@@ -1,11 +1,13 @@
 # Send MySQL data to Kafka
 
+Refer to [Send data to Kafka for consumers](/docs/en/consumer/kafka_consumer.md)
+
 # Prerequisites
 - [prerequisites](./prerequisites.md)
 - python3
 
 # Prepare MySQL instance
-refer to [mysql to mysql](./mysql_to_mysql.md)
+Refer to [mysql to mysql](./mysql_to_mysql.md)
 
 # Prepare Kafka instance
 - start zookeeper

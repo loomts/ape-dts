@@ -61,4 +61,4 @@ Note:
 - The names of databases and tables should be the same with those of heartbeat_tb in task_config.ini.
 - No need to create heartbeat tables for Mongo and Redis.
 - Keep heartbeat_tb empty if not needed.
-- If heartbeat_tb is configured without a table created, CDC tasks will try to create a table. So, the extractor account needs to have corresponding permissions.
+- If heartbeat_tb is configured but the table is NOT created, CDC task will try to create the table automatically. So, the extractor account needs to have corresponding permissions.

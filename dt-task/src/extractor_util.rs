@@ -115,6 +115,7 @@ impl ExtractorUtil {
                     sample_interval,
                     parallel_size,
                     base_extractor,
+                    filter,
                 };
                 Box::new(extractor)
             }
@@ -138,6 +139,7 @@ impl ExtractorUtil {
                     check_log_dir,
                     batch_size,
                     base_extractor,
+                    filter,
                 };
                 Box::new(extractor)
             }
@@ -200,6 +202,7 @@ impl ExtractorUtil {
                     schema,
                     tb,
                     base_extractor,
+                    filter,
                 };
                 Box::new(extractor)
             }
@@ -217,6 +220,7 @@ impl ExtractorUtil {
                     check_log_dir,
                     batch_size,
                     base_extractor,
+                    filter,
                 };
                 Box::new(extractor)
             }

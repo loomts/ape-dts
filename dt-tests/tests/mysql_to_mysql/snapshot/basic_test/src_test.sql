@@ -70,3 +70,7 @@ INSERT INTO test_db_1.date_time_table VALUES(3, '9999-12-31 23:59:59', '9999-12-
 INSERT INTO test_db_1.date_time_table VALUES(4, '1000-01-01 00:00:00', '1000-01-01 00:00:00.000000', '00:00:00', '00:00:00.000000', '1970-01-01 00:00:01', '1970-01-01 00:00:01.000000', '1000-01-01', 1901);
 
 INSERT INTO test_db_1.set_table VALUES(1, ''), (2, 'a'), (3, 'a,b'), (4, 'a,b,c,d,e'), (5, NULL);
+
+-- ignore cols
+INSERT INTO test_db_1.ignore_cols_1 VALUES(1, 1, 1, 1),(2, 2, 2, 2);
+INSERT INTO test_db_1.ignore_cols_2 VALUES(1, 1, 1, 1),(2, 2, 2, 2);

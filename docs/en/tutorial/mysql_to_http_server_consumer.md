@@ -1,11 +1,13 @@
 # Start as HTTP server and extract MySQL data
 
+Refer to [Start ape_dts as an HTTP server to provide data to consumers](/docs/en/consumer/http_consumer.md) for details.
+
 # Prerequisites
 - [prerequisites](./prerequisites.md)
 - python3
 
 # Prepare MySQL instance
-refer to [mysql to mysql](./mysql_to_mysql.md)
+Refer to [mysql to mysql](./mysql_to_mysql.md)
 
 # Snapshot task
 ## Prepare data
@@ -131,4 +133,5 @@ DELETE FROM test_db_2.tb_2;
 ```
 
 # Start consumer
-- Refer to [python demo](https://github.com/apecloud/cubetran_udf_python) and [golang demo](https://github.com/apecloud/cubetran_udf_golang) for how to parse and consume the data.
+- [python demo](https://github.com/apecloud/cubetran_udf_python)
+- [golang demo](https://github.com/apecloud/cubetran_udf_golang)

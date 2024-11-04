@@ -8,6 +8,7 @@ use dt_common::meta::{
     row_data::RowData,
     row_type::RowType,
 };
+use dt_common::rdb_filter::RdbFilter;
 use futures::TryStreamExt;
 use sqlx::{MySql, Pool};
 use std::collections::HashMap;
@@ -24,6 +25,7 @@ pub struct MysqlCheckExtractor {
     pub base_extractor: BaseExtractor,
     pub conn_pool: Pool<MySql>,
     pub meta_manager: MysqlMetaManager,
+    pub filter: RdbFilter,
     pub check_log_dir: String,
     pub batch_size: usize,
 }
@@ -48,14 +50,14 @@ impl Extractor for MysqlCheckExtractor {
 #[async_trait]
 impl BatchCheckExtractor for MysqlCheckExtractor {
     async fn batch_extract(&mut self, check_logs: &[CheckLog]) -> anyhow::Result<()> {
+        let db = &check_logs[0].schema;
+        let tb = &check_logs[0].tb;
         let log_type = &check_logs[0].log_type;
-        let tb_meta = self
-            .meta_manager
-            .get_tb_meta(&check_logs[0].schema, &check_logs[0].tb)
-            .await?;
+        let tb_meta = self.meta_manager.get_tb_meta(db, tb).await?;
         let check_row_datas = Self::build_check_row_datas(check_logs, tb_meta)?;
 
-        let query_builder = RdbQueryBuilder::new_for_mysql(tb_meta);
+        let ignore_cols = self.filter.get_ignore_cols(db, tb);
+        let query_builder = RdbQueryBuilder::new_for_mysql(tb_meta, ignore_cols);
         let query_info = if check_logs.len() == 1 {
             query_builder.get_select_query(&check_row_datas[0])?
         } else {
@@ -65,7 +67,7 @@ impl BatchCheckExtractor for MysqlCheckExtractor {
 
         let mut rows = query.fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
-            let mut row_data = RowData::from_mysql_row(&row, tb_meta);
+            let mut row_data = RowData::from_mysql_row(&row, tb_meta, &ignore_cols);
 
             if log_type == &LogType::Diff {
                 row_data.row_type = RowType::Update;

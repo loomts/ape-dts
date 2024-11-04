@@ -1,11 +1,13 @@
 # Start as HTTP server and extract Postgres data
 
+Refer to [Start ape_dts as an HTTP server to provide data to consumers](/docs/en/consumer/http_consumer.md) for details.
+
 # Prerequisites
 - [prerequisites](./prerequisites.md)
 - python3
 
 # Prepare Postgres instances
-refer to [pg to pg](./pg_to_pg.md)
+Refer to [pg to pg](./pg_to_pg.md)
 
 # Snapshot task
 ## Prepare data

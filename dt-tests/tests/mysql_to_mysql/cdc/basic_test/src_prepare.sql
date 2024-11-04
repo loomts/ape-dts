@@ -30,3 +30,6 @@ CREATE TABLE test_db_1.date_time_table( f_0 tinyint,
 CREATE TABLE test_db_1.set_table( f_0 tinyint,
     f_1 SET('a','b','c','d','e'),
     PRIMARY KEY(f_0));
+
+CREATE TABLE test_db_1.ignore_cols_1 ( f_0 tinyint, f_1 smallint DEFAULT NULL, f_2 smallint DEFAULT NULL, f_3 smallint DEFAULT NULL, PRIMARY KEY (f_0) ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4; 
+CREATE TABLE test_db_1.ignore_cols_2 ( f_0 tinyint, f_1 smallint DEFAULT NULL, f_2 smallint DEFAULT NULL, f_3 smallint DEFAULT NULL, PRIMARY KEY (f_0) ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4; 

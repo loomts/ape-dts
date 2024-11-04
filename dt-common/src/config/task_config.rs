@@ -525,6 +525,7 @@ impl TaskConfig {
             ignore_schemas: loader.get_optional(FILTER, "ignore_dbs"),
             do_tbs: loader.get_optional(FILTER, "do_tbs"),
             ignore_tbs: loader.get_optional(FILTER, "ignore_tbs"),
+            ignore_cols: loader.get_optional(FILTER, "ignore_cols"),
             do_events: loader.get_optional(FILTER, "do_events"),
             do_ddls: loader.get_optional(FILTER, "do_ddls"),
             do_structures: loader.get_with_default(FILTER, "do_structures", ASTRISK.to_string()),

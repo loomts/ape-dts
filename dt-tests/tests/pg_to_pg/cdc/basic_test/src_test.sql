@@ -155,3 +155,7 @@ INSERT INTO col_has_special_character_table VALUES(2, NULL, NULL, NULL);
 UPDATE col_has_special_character_table SET "col`1"=NULL, "col,2"=NULL, "col\3"=NULL WHERE "p:k"=1;
 UPDATE col_has_special_character_table SET "col`1"='col:1:value', "col,2"='col&2:value', "col\3"='col\3:value' WHERE "p:k"=2;
 DELETE FROM col_has_special_character_table;
+
+INSERT INTO ignore_cols_1 VALUES(1, 1, 1, 1),(2, 2, 2, 2);
+UPDATE ignore_cols_1 SET f_1=5, f_2=5, f_3=5 WHERE f_0 > 0;
+DELETE FROM ignore_cols_1;

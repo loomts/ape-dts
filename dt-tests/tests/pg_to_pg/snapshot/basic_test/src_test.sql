@@ -76,3 +76,5 @@ INSERT INTO timezone_table VALUES(2, NULL, NULL, NULL, NULL);
 
 INSERT INTO col_has_special_character_table VALUES(1, 'col:1:value', 'col&2:value', 'col\3:value');
 INSERT INTO col_has_special_character_table VALUES(2, NULL, NULL, NULL);
+
+INSERT INTO ignore_cols_1 VALUES(1, 1, 1, 1),(2, 2, 2, 2);

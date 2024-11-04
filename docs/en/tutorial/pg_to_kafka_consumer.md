@@ -1,14 +1,16 @@
 # Send Postgres data to Kafka
 
+Refer to [Send data to Kafka for consumers](/docs/en/consumer/kafka_consumer.md)
+
 # Prerequisites
 - [prerequisites](./prerequisites.md)
 - python3
 
 # Prepare Postgres instance
-refer to [pg to pg](./pg_to_pg.md)
+Refer to [pg to pg](./pg_to_pg.md)
 
 # Prepare Kafka instance
-refer to [mysql to kafka](./mysql_to_kafka_consumer.md)
+Refer to [mysql to kafka](./mysql_to_kafka_consumer.md)
 
 # Send Snapshot data to Kafka
 ## Prepare data

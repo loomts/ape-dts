@@ -446,12 +446,18 @@ impl PgCdcExtractor {
         tb_meta: &PgTbMeta,
         tuple_data: &[TupleData],
     ) -> anyhow::Result<HashMap<String, ColValue>> {
+        let ignore_cols = self
+            .filter
+            .get_ignore_cols(&tb_meta.basic.schema, &tb_meta.basic.tb);
         let mut col_values: HashMap<String, ColValue> = HashMap::new();
         for i in 0..tuple_data.len() {
             let tuple_data = &tuple_data[i];
             let col = &tb_meta.basic.cols[i];
-            let col_type = tb_meta.get_col_type(col)?;
+            if ignore_cols.map_or(false, |cols| cols.contains(col)) {
+                continue;
+            }
 
+            let col_type = tb_meta.get_col_type(col)?;
             match tuple_data {
                 TupleData::Null => {
                     col_values.insert(col.to_string(), ColValue::None);

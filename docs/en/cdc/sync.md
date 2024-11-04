@@ -6,13 +6,13 @@ Prerequisites
 - MySQL: Enables binlog in the source database;
 - PG: Sets `wal_level = logical` in the source database;
 - Mongo: The source instance must be ReplicaSet;
-- For more informaiton, refer to [init test env](../../../dt-tests/README.md).
+- For more information, refer to [init test env](../../../dt-tests/README.md).
 
 # Example: MySQL -> MySQL
 
 Refer to [task templates](../../templates/mysql_to_mysql.md) and [tutorial](../tutorial/mysql_to_mysql.md)
 
-# Parallel computing
+# Parallelizer
 
 - MySQL/PG: parallel_type=rdb_merge
 - Mongo: parallel_type=mongo
