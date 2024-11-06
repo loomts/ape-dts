@@ -67,7 +67,7 @@ docker run --rm --network host \
 "$APE_DTS_IMAGE" /task_config.ini 
 ```
 
-# Check results
+## Check results
 ```
 mysql -P 9030 -h 127.0.0.1 -u root --prompt="StarRocks > "
 
@@ -148,3 +148,55 @@ SELECT * FROM test_db.tb_1;
 |  5 |       5 |
 +----+---------+
 ```
+
+# How it works
+
+We use [Stream Load](https://docs.starrocks.io/docs/loading/Stream_Load_transaction_interface/) to import data from MySQL. You need to configure url (query metadata) and stream_load_url (specify Stream Load port and user info).
+
+When importing data into StarRocks by Stream Load, you need to avoid frequent small-batch imports, as this may cause throttle errors in StarRocks. This can be resolved by configuring batch_sink_interval_secs, refer to [task templates](/docs/templates/mysql_to_starrocks.md). Usually, only CDC tasks need to configure batch_sink_interval_secs.
+
+Stream Load allows importing up to 10GB of data in a single load. You can change the following configurations to adjust the batch data size.
+
+```
+[pipeline]
+buffer_size=100000
+buffer_memory_mb=200
+
+[sinker]
+batch_size=5000
+```
+
+Refer to [config](/docs/en/config.md) for other common configurations
+
+# Suggested column type mapping
+
+| MySQL | StarRocks |
+| :-------- | :-------- |
+| tinyint | TINYINT |
+| smallint | SMALLINT |
+| mediumint | INT |
+| int | INT |
+| bigint | BIGINT |
+| decimal | DECIMAL |
+| float | FLOAT |
+| double | DOUBLE |
+| datetime | DATETIME |
+| time | VARCHAR |
+| date | DATE |
+| year | INT |
+| timestamp | VARCHAR |
+| char | CHAR |
+| varchar | VARCHAR |
+| binary | BINARY |
+| varbinary | VARBINARY |
+| tinytext | CHAR/VARCHAR/STRING/TEXT |
+| text | CHAR/VARCHAR/STRING/TEXT |
+| mediumtext | CHAR/VARCHAR/STRING/TEXT |
+| longtext | CHAR/VARCHAR/STRING/TEXT |
+| tinyblob | VARBINARY |
+| blob | VARBINARY |
+| mediumblob | VARBINARY |
+| longblob | VARBINARY |
+| enum | VARCHAR |
+| set | VARCHAR |
+| json | JSON/STRING |

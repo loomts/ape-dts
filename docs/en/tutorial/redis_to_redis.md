@@ -76,7 +76,7 @@ docker run --rm --network host \
 "$APE_DTS_IMAGE" /task_config.ini 
 ```
 
-# Check results
+## Check results
 ```
 telnet 127.0.0.1 6390
 auth 123456

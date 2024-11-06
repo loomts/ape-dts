@@ -143,7 +143,7 @@ docker run --rm --network host \
 "$APE_DTS_IMAGE" /task_config.ini 
 ```
 
-# Check results
+## Check results
 ```
 mysql -h127.0.0.1 -uroot -p123456 -uroot -P3308
 

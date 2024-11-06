@@ -13,8 +13,8 @@ batch_size=10000
 [sinker]
 db_type=starrocks
 sink_type=write
-url=mysql://root:@127.0.0.1:9030
-stream_load_url=mysql://root:@127.0.0.1:8040
+url=mysql://root:123456@127.0.0.1:9030
+stream_load_url=mysql://root:123456@127.0.0.1:8040
 batch_size=5000
 
 [filter]
@@ -37,12 +37,21 @@ parallel_size=8
 buffer_size=100000
 buffer_memory_mb=200
 checkpoint_interval_secs=10
+batch_sink_interval_secs=0
 
 [runtime]
 log_level=info
 log4rs_file=./log4rs.yaml
 log_dir=./logs
 ```
+
+- [sinker]
+
+| Config | Description | Example | Default |
+| :-------- | :-------- | :-------- | :-------- |
+| url | the url of StarRocks FE, used for metadata query | - | - |
+| stream_load_url | the url for Stream Load | - | - |
+| batch_size | the max record count in one Stream Load | - | - |
 
 # CDC
 ```
@@ -64,8 +73,8 @@ do_events=insert,update,delete
 [sinker]
 db_type=starrocks
 sink_type=write
-url=mysql://root:@127.0.0.1:9030
-stream_load_url=mysql://root:@127.0.0.1:8040
+url=mysql://root:123456@127.0.0.1:9030
+stream_load_url=mysql://root:123456@127.0.0.1:8040
 batch_size=5000
 
 [router]
@@ -88,3 +97,9 @@ log_dir=./logs
 log_level=info
 log4rs_file=./log4rs.yaml
 ```
+
+- [pipeline]
+
+| Config | Description | Example | Default |
+| :-------- | :-------- | :-------- | :-------- |
+| batch_sink_interval_secs | when importing data into StarRocks by Stream Load, avoid frequent small-batch imports, as this may cause throttle errors in StarRocks. If the batch_sink_interval_secs is set, Stream Load will be triggered when either of the following conditions is met: 1) the pipeline's buffer is full, or 2) it has been more than batch_sink_interval_secs seconds since the last Stream Load. | 15 | 0 |

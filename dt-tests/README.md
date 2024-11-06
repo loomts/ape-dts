@@ -79,6 +79,9 @@ CREATE DATABASE postgres_euc_cn
 # Kafka
 [Prepare Kafka instances](/docs/en/tutorial/mysql_to_kafka_consumer.md)
 
+# StarRocks
+[Prepare StarRocks instances](/docs/en/tutorial/mysql_to_starrocks.md)
+
 # Redis
 [Prepare Redis instances](/docs/en/tutorial/redis_to_redis.md)
 
@@ -170,11 +173,4 @@ docker run --name dst-redis-4-0 \
     --requirepass 123456 \
     --save 60 1 \
     --loglevel warning
-```
-
-# starrocks
-## target
-```
-docker run -p 9030:9030 -p 8030:8030 -p 8040:8040 -itd \
-  --name quickstart starrocks/allin1-ubuntu:3.2.11
 ```
