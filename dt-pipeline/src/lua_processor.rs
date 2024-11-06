@@ -145,9 +145,11 @@ impl LuaProcessor {
 
             ColValue::RawString(_) => col_value.to_string().into_lua(lua)?,
 
-            ColValue::Blob(_) | ColValue::Json(_) | ColValue::MongoDoc(_) | ColValue::None => {
-                mlua::Value::NULL
-            }
+            ColValue::Json3(_)
+            | ColValue::Blob(_)
+            | ColValue::Json(_)
+            | ColValue::MongoDoc(_)
+            | ColValue::None => mlua::Value::NULL,
         };
         Ok(lua_value)
     }

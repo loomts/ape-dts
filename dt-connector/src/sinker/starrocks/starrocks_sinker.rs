@@ -1,4 +1,6 @@
 use std::{
+    collections::HashMap,
+    str::FromStr,
     sync::{Arc, Mutex},
     time::Instant,
 };
@@ -6,8 +8,19 @@ use std::{
 use crate::{call_batch_fn, sinker::base_sinker::BaseSinker, Sinker};
 use anyhow::bail;
 use async_trait::async_trait;
-use dt_common::meta::{row_data::RowData, row_type::RowType};
-use dt_common::{error::Error, log_error, monitor::monitor::Monitor};
+use dt_common::{
+    error::Error,
+    log_error,
+    meta::mysql::{
+        mysql_col_type::MysqlColType, mysql_meta_manager::MysqlMetaManager,
+        mysql_tb_meta::MysqlTbMeta,
+    },
+    monitor::monitor::Monitor,
+};
+use dt_common::{
+    meta::{col_value::ColValue, row_data::RowData, row_type::RowType},
+    utils::sql_util::SqlUtil,
+};
 use reqwest::{header, Client, Method, Response, StatusCode};
 use serde_json::{json, Value};
 
@@ -19,6 +32,7 @@ pub struct StarRocksSinker {
     pub port: String,
     pub username: String,
     pub password: String,
+    pub meta_manager: MysqlMetaManager,
     pub monitor: Arc<Mutex<Monitor>>,
 }
 
@@ -72,28 +86,32 @@ impl StarRocksSinker {
     }
 
     async fn send_data(
-        &self,
+        &mut self,
         data: &mut [RowData],
         start_index: usize,
         batch_size: usize,
     ) -> anyhow::Result<usize> {
+        let db = data[start_index].schema.clone();
+        let tb = data[start_index].tb.clone();
+        let row_type = data[start_index].row_type.clone();
+        let tb_meta = self.meta_manager.get_tb_meta(&db, &tb).await?;
+
         let mut data_size = 0;
         // build stream load data
         let mut load_data = Vec::new();
-        let row_type = data[start_index].row_type.clone();
-        for rd in data.iter_mut().skip(start_index).take(batch_size) {
-            data_size += rd.data_size;
-            rd.convert_raw_string();
+        for row_data in data.iter_mut().skip(start_index).take(batch_size) {
+            data_size += row_data.data_size;
+
+            Self::convert_row_data(row_data, tb_meta)?;
+
             if row_type == RowType::Delete {
-                load_data.push(rd.before.as_ref().unwrap());
+                load_data.push(row_data.before.as_ref().unwrap());
             } else {
-                load_data.push(rd.after.as_ref().unwrap());
+                load_data.push(row_data.after.as_ref().unwrap());
             }
         }
 
         let body = json!(load_data).to_string();
-        let db = &data[start_index].schema;
-        let tb = &data[start_index].tb;
         let op = if row_type == RowType::Delete {
             "delete"
         } else {
@@ -110,6 +128,52 @@ impl StarRocksSinker {
         Self::check_response(response).await?;
 
         Ok(data_size)
+    }
+
+    fn convert_row_data(row_data: &mut RowData, tb_meta: &MysqlTbMeta) -> anyhow::Result<()> {
+        if let Some(before) = &mut row_data.before {
+            Self::convert_col_values(before, tb_meta)?;
+        }
+        if let Some(after) = &mut row_data.after {
+            Self::convert_col_values(after, tb_meta)?;
+        }
+        Ok(())
+    }
+
+    fn convert_col_values(
+        col_values: &mut HashMap<String, ColValue>,
+        tb_meta: &MysqlTbMeta,
+    ) -> anyhow::Result<()> {
+        let mut new_col_values: HashMap<String, ColValue> = HashMap::new();
+        for (col, col_value) in col_values.iter() {
+            if let MysqlColType::Json = tb_meta.get_col_type(col)? {
+                // ColValue::Json2 will be serialized to:
+                // {"id": 1, "json_field": "{\"name\": \"Alice\", \"age\": 30}"}
+                // ColValue::Json3 will be serialized to:
+                // {"id": 5, "json_field": {"name": "Alice", "age": 30}}
+                if let ColValue::Json2(v) = col_value {
+                    if let Ok(json_v) = serde_json::Value::from_str(v) {
+                        new_col_values.insert(col.to_owned(), ColValue::Json3(json_v));
+                    }
+                }
+            }
+
+            match col_value {
+                ColValue::Blob(v) | ColValue::RawString(v) => {
+                    new_col_values.insert(
+                        col.to_owned(),
+                        ColValue::String(SqlUtil::binary_to_str(v).0),
+                    );
+                }
+
+                _ => {}
+            }
+        }
+
+        for (col, col_value) in new_col_values {
+            col_values.insert(col, col_value);
+        }
+        Ok(())
     }
 
     fn build_request(&self, url: &str, op: &str, body: &str) -> anyhow::Result<reqwest::Request> {

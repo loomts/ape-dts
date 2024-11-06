@@ -372,9 +372,9 @@ impl SinkerUtil {
             }
 
             SinkerConfig::Starrocks {
+                url,
                 batch_size,
                 stream_load_url,
-                ..
             } => {
                 for _ in 0..parallel_size {
                     let url_info = UrlUtil::parse(&stream_load_url)?;
@@ -382,13 +382,17 @@ impl SinkerUtil {
                     let port = format!("{}", url_info.port().unwrap());
                     let username = url_info.username().to_string();
                     let password = url_info.password().unwrap_or("").to_string();
-
                     let custom = Policy::custom(|attempt| attempt.follow());
                     let client = reqwest::Client::builder()
                         .http1_title_case_headers()
                         .redirect(custom)
                         .build()?;
-
+                    let conn_pool =
+                        TaskUtil::create_mysql_conn_pool(&url, parallel_size * 2, enable_sqlx_log)
+                            .await?;
+                    let meta_manager =
+                        MysqlMetaManager::new_mysql_compatible(conn_pool.clone(), DbType::Foxlake)
+                            .await?;
                     let sinker = StarRocksSinker {
                         client,
                         host,
@@ -396,6 +400,7 @@ impl SinkerUtil {
                         username,
                         password,
                         batch_size,
+                        meta_manager,
                         monitor: monitor.clone(),
                     };
                     sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
