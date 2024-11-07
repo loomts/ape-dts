@@ -34,10 +34,10 @@ impl Sinker for SqlSinker {
             let query_builder =
                 if let Some(meta_manager) = self.meta_manager.mysql_meta_manager.as_mut() {
                     let tb_meta = meta_manager.get_tb_meta_by_row_data(&row_data).await?;
-                    RdbQueryBuilder::new_for_mysql(tb_meta)
+                    RdbQueryBuilder::new_for_mysql(tb_meta, None)
                 } else if let Some(meta_manager) = self.meta_manager.pg_meta_manager.as_mut() {
                     let tb_meta = meta_manager.get_tb_meta_by_row_data(&row_data).await?;
-                    RdbQueryBuilder::new_for_pg(tb_meta)
+                    RdbQueryBuilder::new_for_pg(tb_meta, None)
                 } else {
                     continue;
                 };

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::config::config_enums::DbType;
 use anyhow::Context;
@@ -81,17 +81,25 @@ impl RowData {
         (delete, insert)
     }
 
-    pub fn from_mysql_row(row: &MySqlRow, tb_meta: &MysqlTbMeta) -> Self {
-        Self::from_mysql_compatible_row(row, tb_meta, &DbType::Mysql)
+    pub fn from_mysql_row(
+        row: &MySqlRow,
+        tb_meta: &MysqlTbMeta,
+        ignore_cols: &Option<&HashSet<String>>,
+    ) -> Self {
+        Self::from_mysql_compatible_row(row, tb_meta, ignore_cols, &DbType::Mysql)
     }
 
     pub fn from_mysql_compatible_row(
         row: &MySqlRow,
         tb_meta: &MysqlTbMeta,
+        ignore_cols: &Option<&HashSet<String>>,
         db_type: &DbType,
     ) -> Self {
         let mut after = HashMap::new();
         for (col, col_type) in &tb_meta.col_type_map {
+            if ignore_cols.as_ref().is_some_and(|cols| cols.contains(col)) {
+                continue;
+            }
             let col_val =
                 MysqlColValueConvertor::from_query_mysql_compatible(row, col, col_type, db_type)
                     .with_context(|| {
@@ -106,9 +114,17 @@ impl RowData {
         Self::build_insert_row_data(after, &tb_meta.basic)
     }
 
-    pub fn from_pg_row(row: &PgRow, tb_meta: &PgTbMeta) -> Self {
+    pub fn from_pg_row(
+        row: &PgRow,
+        tb_meta: &PgTbMeta,
+        ignore_cols: &Option<&HashSet<String>>,
+    ) -> Self {
         let mut after = HashMap::new();
         for (col, col_type) in &tb_meta.col_type_map {
+            if ignore_cols.as_ref().is_some_and(|cols| cols.contains(col)) {
+                continue;
+            }
+
             let col_value = PgColValueConvertor::from_query(row, col, col_type)
                 .with_context(|| {
                     format!(
@@ -130,6 +146,32 @@ impl RowData {
             None,
             Some(after),
         )
+    }
+
+    pub fn convert_raw_string(&mut self) {
+        if let Some(before) = &mut self.before {
+            Self::convert_raw_string_col_values(before);
+        }
+        if let Some(after) = &mut self.after {
+            Self::convert_raw_string_col_values(after);
+        }
+    }
+
+    fn convert_raw_string_col_values(col_values: &mut HashMap<String, ColValue>) {
+        let mut str_col_values: HashMap<String, ColValue> = HashMap::new();
+        for (col, col_value) in col_values.iter() {
+            if let ColValue::RawString(_) = col_value {
+                if let Some(str) = col_value.to_option_string() {
+                    str_col_values.insert(col.into(), ColValue::String(str));
+                } else {
+                    str_col_values.insert(col.to_owned(), ColValue::None);
+                }
+            }
+        }
+
+        for (col, col_value) in str_col_values {
+            col_values.insert(col, col_value);
+        }
     }
 
     pub fn get_hash_code(&self, tb_meta: &RdbTbMeta) -> u128 {

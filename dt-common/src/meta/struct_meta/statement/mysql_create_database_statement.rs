@@ -14,7 +14,7 @@ impl MysqlCreateDatabaseStatement {
 
     pub fn to_sqls(&self, filter: &RdbFilter) -> anyhow::Result<Vec<(String, String)>> {
         let mut sqls = Vec::new();
-        if filter.filter_structure(StructureType::Database.into()) {
+        if filter.filter_structure(&StructureType::Database) {
             return Ok(sqls);
         }
 

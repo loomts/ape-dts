@@ -118,7 +118,7 @@ impl MysqlSinker {
         for row_data in data.iter() {
             data_size += row_data.data_size;
             let tb_meta = self.meta_manager.get_tb_meta_by_row_data(row_data).await?;
-            let query_builder = RdbQueryBuilder::new_for_mysql(tb_meta);
+            let query_builder = RdbQueryBuilder::new_for_mysql(tb_meta, None);
 
             let query_info = query_builder.get_query_info(row_data, true)?;
             let query = query_builder.create_mysql_query(&query_info);
@@ -146,7 +146,7 @@ impl MysqlSinker {
             .get_tb_meta_by_row_data(&data[0])
             .await?
             .to_owned();
-        let query_builder = RdbQueryBuilder::new_for_mysql(&tb_meta);
+        let query_builder = RdbQueryBuilder::new_for_mysql(&tb_meta, None);
         let (query_info, data_size) =
             query_builder.get_batch_delete_query(data, start_index, batch_size)?;
         let query = query_builder.create_mysql_query(&query_info);
@@ -176,7 +176,7 @@ impl MysqlSinker {
             .get_tb_meta_by_row_data(&data[0])
             .await?
             .to_owned();
-        let query_builder = RdbQueryBuilder::new_for_mysql(&tb_meta);
+        let query_builder = RdbQueryBuilder::new_for_mysql(&tb_meta, None);
 
         let (query_info, data_size) =
             query_builder.get_batch_insert_query(data, start_index, batch_size)?;

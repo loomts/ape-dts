@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::bail;
 use dt_common::meta::{
@@ -27,26 +27,35 @@ pub struct RdbQueryBuilder<'a> {
     db_type: DbType,
     pg_tb_meta: Option<&'a PgTbMeta>,
     mysql_tb_meta: Option<&'a MysqlTbMeta>,
+    ignore_cols: Option<&'a HashSet<String>>,
 }
 
 impl RdbQueryBuilder<'_> {
     #[inline(always)]
-    pub fn new_for_mysql(tb_meta: &MysqlTbMeta) -> RdbQueryBuilder {
+    pub fn new_for_mysql<'a>(
+        tb_meta: &'a MysqlTbMeta,
+        ignore_cols: Option<&'a HashSet<String>>,
+    ) -> RdbQueryBuilder<'a> {
         RdbQueryBuilder {
             rdb_tb_meta: &tb_meta.basic,
             pg_tb_meta: Option::None,
             mysql_tb_meta: Some(tb_meta),
             db_type: DbType::Mysql,
+            ignore_cols,
         }
     }
 
     #[inline(always)]
-    pub fn new_for_pg(tb_meta: &PgTbMeta) -> RdbQueryBuilder {
+    pub fn new_for_pg<'a>(
+        tb_meta: &'a PgTbMeta,
+        ignore_cols: Option<&'a HashSet<String>>,
+    ) -> RdbQueryBuilder<'a> {
         RdbQueryBuilder {
             rdb_tb_meta: &tb_meta.basic,
             pg_tb_meta: Some(tb_meta),
             mysql_tb_meta: None,
             db_type: DbType::Pg,
+            ignore_cols,
         }
     }
 
@@ -396,9 +405,13 @@ impl RdbQueryBuilder<'_> {
     }
 
     pub fn build_extract_cols_str(&self) -> anyhow::Result<String> {
-        if let Some(tb_meta) = self.pg_tb_meta {
-            let mut extract_cols = Vec::new();
-            for col in self.rdb_tb_meta.cols.iter() {
+        let mut extract_cols = Vec::new();
+        for col in self.rdb_tb_meta.cols.iter() {
+            if self.ignore_cols.map_or(false, |cols| cols.contains(col)) {
+                continue;
+            }
+
+            if let Some(tb_meta) = self.pg_tb_meta {
                 let col_type = tb_meta.get_col_type(col)?;
                 let extract_type = PgColValueConvertor::get_extract_type(col_type);
                 let extract_col = if extract_type.is_empty() {
@@ -407,10 +420,11 @@ impl RdbQueryBuilder<'_> {
                     format!("{}::{}", self.escape(col), extract_type)
                 };
                 extract_cols.push(extract_col);
+            } else {
+                extract_cols.push(self.escape(col));
             }
-            return Ok(extract_cols.join(","));
         }
-        Ok("*".to_string())
+        Ok(extract_cols.join(","))
     }
 
     fn get_where_info(
@@ -499,14 +513,27 @@ impl RdbQueryBuilder<'_> {
     }
 
     fn get_mysql_sql_value(&self, col: &str, col_value: &ColValue) -> anyhow::Result<String> {
-        let col_type = self.mysql_tb_meta.unwrap().get_col_type(col)?;
-        let (str, is_hex_str) = col_value.to_mysql_string();
-        if str.is_none() {
-            return Ok("NULL".to_string());
+        let (value, is_hex_str) = match col_value {
+            // varchar, char, tinytext, mediumtext, longtext, text
+            ColValue::RawString(v) => SqlUtil::binary_to_str(v),
+
+            // tinyblob, mediumblob, longblob, blob, varbinary, binary
+            ColValue::Blob(v) => (hex::encode(v), true),
+
+            _ => {
+                if let Some(v) = col_value.to_option_string() {
+                    (v, false)
+                } else {
+                    return Ok("NULL".to_string());
+                }
+            }
+        };
+
+        if is_hex_str {
+            return Ok(format!("x'{}'", value));
         }
 
-        let value = str.unwrap();
-        let is_str = match *col_type {
+        let is_str = match self.mysql_tb_meta.unwrap().get_col_type(col)? {
             MysqlColType::DateTime
             | MysqlColType::Time
             | MysqlColType::Date
@@ -520,11 +547,12 @@ impl RdbQueryBuilder<'_> {
             _ => false,
         };
 
-        if !is_hex_str && is_str {
+        if is_str {
             // INSERT INTO tb1 VALUES(1, 'abc''');
-            return Ok(format!(r#"'{}'"#, value.replace('\'', "\'\'")));
+            Ok(format!(r#"'{}'"#, value.replace('\'', "\'\'")))
+        } else {
+            Ok(value)
         }
-        Ok(value)
     }
 
     fn get_placeholder(&self, index: usize, col: &str) -> anyhow::Result<String> {

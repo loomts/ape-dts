@@ -4,12 +4,20 @@ use crate::{
     config::{
         config_enums::DbType, config_token_parser::ConfigTokenParser, filter_config::FilterConfig,
     },
-    meta::{ddl_meta::ddl_type::DdlType, row_type::RowType},
+    meta::{
+        ddl_meta::ddl_type::DdlType, row_type::RowType,
+        struct_meta::structure::structure_type::StructureType,
+    },
     utils::sql_util::SqlUtil,
 };
 
 use anyhow::Context;
 use regex::Regex;
+use serde::{Deserialize, Serialize};
+
+type IgnoreCols = HashMap<(String, String), HashSet<String>>;
+
+const JSON_PREFIX: &str = "json:";
 
 #[derive(Debug, Clone)]
 pub struct RdbFilter {
@@ -18,6 +26,7 @@ pub struct RdbFilter {
     pub ignore_schemas: HashSet<String>,
     pub do_tbs: HashSet<(String, String)>,
     pub ignore_tbs: HashSet<(String, String)>,
+    pub ignore_cols: IgnoreCols,
     pub do_events: HashSet<String>,
     pub do_structures: HashSet<String>,
     pub do_ddls: HashSet<String>,
@@ -33,6 +42,7 @@ impl RdbFilter {
             ignore_schemas: Self::parse_single_tokens(&config.ignore_schemas, db_type)?,
             do_tbs: Self::parse_pair_tokens(&config.do_tbs, db_type)?,
             ignore_tbs: Self::parse_pair_tokens(&config.ignore_tbs, db_type)?,
+            ignore_cols: Self::parse_ignore_cols(&config.ignore_cols)?,
             do_events: Self::parse_single_tokens(&config.do_events, db_type)?,
             do_structures: Self::parse_single_tokens(&config.do_structures, db_type)?,
             do_ddls: Self::parse_single_tokens(&config.do_ddls, db_type)?,
@@ -98,12 +108,17 @@ impl RdbFilter {
         }
     }
 
-    pub fn filter_structure(&self, structure_type: &str) -> bool {
-        !Self::match_all(&self.do_structures) && !self.do_structures.contains(structure_type)
+    pub fn filter_structure(&self, structure_type: &StructureType) -> bool {
+        !Self::match_all(&self.do_structures)
+            && !self.do_structures.contains(&structure_type.to_string())
     }
 
     pub fn filter_cmd(&self, cmd: &str) -> bool {
         self.ignore_cmds.contains(cmd)
+    }
+
+    pub fn get_ignore_cols(&self, schema: &str, tb: &str) -> Option<&HashSet<String>> {
+        self.ignore_cols.get(&(schema.to_string(), tb.to_string()))
     }
 
     pub fn add_ignore_tb(&mut self, schema: &str, tb: &str) {
@@ -186,12 +201,50 @@ impl RdbFilter {
         let delimiters = vec![',', '.'];
         ConfigTokenParser::parse_config(config_str, db_type, &delimiters)
     }
+
+    fn parse_ignore_cols(config_str: &str) -> anyhow::Result<IgnoreCols> {
+        let mut results = IgnoreCols::new();
+        if config_str.trim().is_empty() {
+            return Ok(results);
+        }
+        // ignore_cols=json:[{"db":"test_db","tb":"tb_1","ignore_cols":{"f_0","f_1"}}]
+        #[derive(Serialize, Deserialize)]
+        struct IgnoreColsType {
+            db: String,
+            tb: String,
+            ignore_cols: HashSet<String>,
+        }
+        let config: Vec<IgnoreColsType> =
+            serde_json::from_str(config_str.trim_start_matches(JSON_PREFIX))?;
+        for i in config {
+            results.insert((i.db, i.tb), i.ignore_cols);
+        }
+        Ok(results)
+    }
 }
 
 #[cfg(test)]
 mod tests {
 
     use super::*;
+
+    #[test]
+    fn test_parse_ignore_cols() {
+        let config_str = r#"json:[{"db":"db_1","tb":"tb_1","ignore_cols":["f_2","f_3"]},{"db":"db_2","tb":"tb_2","ignore_cols":["f_3"]}]"#;
+        let ignore_cols = RdbFilter::parse_ignore_cols(config_str).unwrap();
+        let tb_1 = ignore_cols
+            .get(&("db_1".to_string(), "tb_1".to_string()))
+            .unwrap();
+        let tb_2 = ignore_cols
+            .get(&("db_2".to_string(), "tb_2".to_string()))
+            .unwrap();
+        assert_eq!(tb_1.len(), 2);
+        assert!(tb_1.contains(&"f_2".to_string()));
+        assert!(tb_1.contains(&"f_3".to_string()));
+
+        assert_eq!(tb_2.len(), 1);
+        assert!(tb_2.contains(&"f_3".to_string()));
+    }
 
     #[test]
     fn test_match_token_without_escape() {

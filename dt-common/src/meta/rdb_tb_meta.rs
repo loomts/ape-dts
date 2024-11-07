@@ -9,6 +9,7 @@ pub struct RdbTbMeta {
     pub schema: String,
     pub tb: String,
     pub cols: Vec<String>,
+    pub col_origin_type_map: HashMap<String, String>,
     pub key_map: HashMap<String, Vec<String>>,
     pub order_col: Option<String>,
     pub partition_col: String,

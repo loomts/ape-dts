@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use dt_common::rdb_filter::RdbFilter;
 use futures::TryStreamExt;
 
 use sqlx::{Pool, Postgres};
@@ -24,6 +25,7 @@ pub struct PgSnapshotExtractor {
     pub base_extractor: BaseExtractor,
     pub conn_pool: Pool<Postgres>,
     pub meta_manager: PgMetaManager,
+    pub filter: RdbFilter,
     pub resumer: SnapshotResumer,
     pub batch_size: usize,
     pub sample_interval: usize,
@@ -85,9 +87,10 @@ impl PgSnapshotExtractor {
         );
 
         let sql = self.build_extract_sql(tb_meta, false)?;
+        let ignore_cols = self.filter.get_ignore_cols(&self.schema, &self.tb);
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
-            let row_data = RowData::from_pg_row(&row, tb_meta);
+            let row_data = RowData::from_pg_row(&row, tb_meta, &ignore_cols);
             self.base_extractor
                 .push_row(row_data, Position::None)
                 .await?;
@@ -121,6 +124,7 @@ impl PgSnapshotExtractor {
         let mut start_value = resume_value;
         let sql1 = self.build_extract_sql(tb_meta, false)?;
         let sql2 = self.build_extract_sql(tb_meta, true)?;
+        let ignore_cols = self.filter.get_ignore_cols(&self.schema, &self.tb);
         loop {
             let start_value_for_bind = start_value.clone();
             let query = if let ColValue::None = start_value {
@@ -140,7 +144,7 @@ impl PgSnapshotExtractor {
                     continue;
                 }
 
-                let row_data = RowData::from_pg_row(&row, tb_meta);
+                let row_data = RowData::from_pg_row(&row, tb_meta, &ignore_cols);
                 let position = if let Some(value) = start_value.to_option_string() {
                     Position::RdbSnapshot {
                         db_type: DbType::Pg.to_string(),
@@ -176,7 +180,8 @@ impl PgSnapshotExtractor {
         tb_meta: &PgTbMeta,
         has_start_value: bool,
     ) -> anyhow::Result<String> {
-        let query_builder = RdbQueryBuilder::new_for_pg(tb_meta);
+        let ignore_cols = self.filter.get_ignore_cols(&self.schema, &self.tb);
+        let query_builder = RdbQueryBuilder::new_for_pg(tb_meta, ignore_cols);
         let cols_str = query_builder.build_extract_cols_str()?;
 
         // SELECT col_1, col_2::text FROM tb_1 WHERE col_1 > $1 ORDER BY col_1;

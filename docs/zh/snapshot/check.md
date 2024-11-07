@@ -1,49 +1,12 @@
-# 简介
+# 数据校验
 
 数据迁移完成后，需要对源数据和目标数据进行逐行逐列比对。如果数据量过大，可以进行抽样校验。请确保需要校验的表具有主键/唯一键。
 
 支持对 MySQL/PG/Mongo 进行比对。
 
-# 示例: MySQL_to_MySQL
+# 示例: MySQL -> MySQL
 
-## 全量校验
-```
-[extractor]
-db_type=mysql
-extract_type=snapshot
-url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
-
-[sinker]
-db_type=mysql
-sink_type=check
-url=mysql://root:123456@127.0.0.1:3308?ssl-mode=disabled
-batch_size=200
-
-[filter]
-do_dbs=
-ignore_dbs=
-do_tbs=test_db_1.*
-ignore_tbs=
-do_events=insert
-
-[router]
-db_map=
-tb_map=
-col_map=
-
-[parallelizer]
-parallel_type=rdb_check
-parallel_size=8
-
-[pipeline]
-buffer_size=16000
-checkpoint_interval_secs=10
-
-[runtime]
-log_level=info
-log4rs_file=./log4rs.yaml
-log_dir=./logs
-```
+参考 [任务模版](../../templates/mysql_to_mysql.md) 和 [教程](../../en/tutorial/mysql_to_mysql.md)
 
 ## 抽样校验
 

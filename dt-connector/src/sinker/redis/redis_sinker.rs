@@ -87,9 +87,10 @@ impl RedisSinker {
             data_size += dt_item.dt_data.get_data_size();
             cmds.extend_from_slice(&self.rewrite_entry(&mut dt_item.dt_data)?);
         }
-        self.batch_sink(cmds, batch_size).await?;
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
+        self.batch_sink(&cmds).await?;
+
+        BaseSinker::update_batch_monitor(&mut self.monitor, cmds.len(), data_size, start_time).await
     }
 
     async fn serial_sink_raw(&mut self, data: &mut [DtItem]) -> anyhow::Result<()> {
@@ -170,9 +171,9 @@ impl RedisSinker {
                 cmds.push(cmd);
             }
         }
-        self.batch_sink(cmds, batch_size).await?;
+        self.batch_sink(&cmds).await?;
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
+        BaseSinker::update_batch_monitor(&mut self.monitor, cmds.len(), data_size, start_time).await
     }
 
     async fn serial_sink_dml(&mut self, data: &mut [RowData]) -> anyhow::Result<()> {
@@ -250,7 +251,7 @@ impl RedisSinker {
 }
 
 impl RedisSinker {
-    async fn batch_sink(&mut self, cmds: Vec<RedisCmd>, batch_size: usize) -> anyhow::Result<()> {
+    async fn batch_sink(&mut self, cmds: &[RedisCmd]) -> anyhow::Result<()> {
         if cmds.is_empty() {
             return Ok(());
         }
@@ -262,8 +263,8 @@ impl RedisSinker {
             packed_cmds.extend_from_slice(&CmdEncoder::encode(&data_marker_cmd));
         }
 
-        for cmd in cmds {
-            packed_cmds.extend_from_slice(&CmdEncoder::encode(&cmd));
+        for cmd in cmds.iter() {
+            packed_cmds.extend_from_slice(&CmdEncoder::encode(cmd));
         }
 
         if self.data_marker.is_some() {
@@ -271,7 +272,7 @@ impl RedisSinker {
             packed_cmds.extend_from_slice(&CmdEncoder::encode(&exec_cmd));
         }
 
-        let result = self.conn.req_packed_commands(&packed_cmds, 0, batch_size);
+        let result = self.conn.req_packed_commands(&packed_cmds, 0, cmds.len());
         if let Err(error) = result {
             bail! {Error::SinkerError(format!(
                 "batch sink failed, error: {:?}",

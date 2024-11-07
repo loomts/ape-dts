@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    str::FromStr,
-};
+use std::{collections::HashSet, str::FromStr};
 
 use chrono::{Duration, Utc};
 use dt_common::{
@@ -11,6 +8,7 @@ use dt_common::{
         sinker_config::SinkerConfig, task_config::TaskConfig,
     },
     meta::{ddl_meta::ddl_type::DdlType, time::dt_utc_time::DtNaiveTime},
+    rdb_filter::RdbFilter,
     utils::{sql_util::SqlUtil, time_util::TimeUtil},
 };
 
@@ -38,6 +36,7 @@ pub struct RdbTestRunner {
     pub dst_conn_pool_pg: Option<Pool<Postgres>>,
     pub meta_center_pool_mysql: Option<Pool<MySql>>,
     pub router: RdbRouter,
+    pub filter: RdbFilter,
 }
 
 pub const SRC: &str = "src";
@@ -48,12 +47,8 @@ const UTC_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 
 #[allow(dead_code)]
 impl RdbTestRunner {
-    pub async fn new_default(relative_test_dir: &str) -> anyhow::Result<Self> {
-        Self::new(relative_test_dir, true).await
-    }
-
-    pub async fn new(relative_test_dir: &str, recreate_pub_and_slot: bool) -> anyhow::Result<Self> {
-        let mut base = BaseTestRunner::new(relative_test_dir).await.unwrap();
+    pub async fn new(relative_test_dir: &str) -> anyhow::Result<Self> {
+        let base = BaseTestRunner::new(relative_test_dir).await.unwrap();
 
         // prepare conn pools
         let mut src_conn_pool_mysql = None;
@@ -83,6 +78,7 @@ impl RdbTestRunner {
 
         let config = TaskConfig::new(&base.task_config_file).unwrap();
         let router = RdbRouter::from_config(&config.router, &dst_db_type).unwrap();
+        let filter = RdbFilter::from_config(&config.filter, &dst_db_type).unwrap();
         let meta_center_pool_mysql = match &config.meta_center {
             Some(MetaCenterConfig::MySqlDbEngine { url, .. }) => Some(
                 TaskUtil::create_mysql_conn_pool(url, 1, false)
@@ -92,26 +88,6 @@ impl RdbTestRunner {
             _ => None,
         };
 
-        // for pg cdc, recreate publication & slot before each test
-        if let ExtractorConfig::PgCdc {
-            slot_name,
-            pub_name,
-            ..
-        } = config.extractor
-        {
-            if recreate_pub_and_slot {
-                let pub_name = if pub_name.is_empty() {
-                    format!("{}_publication_for_all_tables", slot_name)
-                } else {
-                    pub_name.clone()
-                };
-                let drop_pub_sql = format!("DROP PUBLICATION IF EXISTS {}", pub_name);
-                let drop_slot_sql= format!("SELECT pg_drop_replication_slot(slot_name) FROM pg_replication_slots WHERE slot_name = '{}'", slot_name);
-                base.src_prepare_sqls.push(drop_pub_sql);
-                base.src_prepare_sqls.push(drop_slot_sql);
-            }
-        }
-
         Ok(Self {
             src_conn_pool_mysql,
             dst_conn_pool_mysql,
@@ -119,6 +95,7 @@ impl RdbTestRunner {
             dst_conn_pool_pg,
             meta_center_pool_mysql,
             router,
+            filter,
             base,
         })
     }
@@ -507,8 +484,7 @@ impl RdbTestRunner {
             dst_data.len(),
         );
 
-        let col_map = self.router.get_col_map(&src_db_tb.0, &src_db_tb.1);
-        if !self.compare_row_data(&src_data, &dst_data, col_map) {
+        if !self.compare_row_data(&src_data, &dst_data, src_db_tb) {
             println!(
                 "compare tb data failed, src_tb: {:?}, dst_tb: {:?}",
                 src_db_tb, dst_db_tb,
@@ -522,11 +498,16 @@ impl RdbTestRunner {
         &self,
         src_data: &Vec<RowData>,
         dst_data: &Vec<RowData>,
-        col_map: Option<&HashMap<String, String>>,
+        src_db_tb: &(String, String),
     ) -> bool {
         assert_eq!(src_data.len(), dst_data.len());
         let src_db_type = self.get_db_type(SRC);
         let dst_db_type = self.get_db_type(DST);
+
+        // router: col_map
+        let col_map = self.router.get_col_map(&src_db_tb.0, &src_db_tb.1);
+        // filter: ignore_cols
+        let ignore_cols = self.filter.get_ignore_cols(&src_db_tb.0, &src_db_tb.1);
 
         for i in 0..src_data.len() {
             let src_col_values = src_data[i].after.as_ref().unwrap();
@@ -541,6 +522,12 @@ impl RdbTestRunner {
 
                 let dst_col_value = dst_col_values.get(dst_col).unwrap();
 
+                // ignored cols were NOT synced to target
+                if ignore_cols.map_or(false, |cols| cols.contains(src_col)) {
+                    assert_eq!(*dst_col_value, ColValue::None);
+                    continue;
+                }
+
                 // TODO
                 // issue: https://github.com/apecloud/foxlake/issues/2108
                 // sqlx will execute: "SET time_zone='+00:00',NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;"
@@ -552,14 +539,15 @@ impl RdbTestRunner {
                     continue;
                 }
 
-                if Self::compare_col_value(src_col_value, dst_col_value, &src_db_type, &dst_db_type)
-                {
-                    continue;
-                }
                 println!(
                     "row index: {}, col: {}, src_col_value: {:?}, dst_col_value: {:?}",
                     i, src_col, src_col_value, dst_col_value
                 );
+
+                if Self::compare_col_value(src_col_value, dst_col_value, &src_db_type, &dst_db_type)
+                {
+                    continue;
+                }
                 return false;
             }
         }
@@ -572,40 +560,67 @@ impl RdbTestRunner {
         src_db_type: &DbType,
         dst_db_type: &DbType,
     ) -> bool {
-        if src_col_value != dst_col_value {
-            if src_col_value.is_nan() && dst_col_value.is_nan() {
-                return true;
-            }
-
-            if src_db_type == dst_db_type {
-                return false;
-            }
-
-            // different databases support different column types,
-            // for example: we use Year in mysql, but INT in StarRocks,
-            // so try to compare after both converted to string.
-            return match src_col_value {
-                // mysql 00:00:00 == foxlake 00:00:00.000000
-                ColValue::Time(_) => {
-                    DtNaiveTime::from_str(&src_col_value.to_string()).unwrap()
-                        == DtNaiveTime::from_str(&dst_col_value.to_string()).unwrap()
-                }
-                ColValue::Date(_) => {
-                    TimeUtil::date_from_str(&src_col_value.to_string()).unwrap()
-                        == TimeUtil::date_from_str(&dst_col_value.to_string()).unwrap()
-                }
-                ColValue::DateTime(_) => {
-                    TimeUtil::datetime_from_utc_str(&src_col_value.to_string()).unwrap()
-                        == TimeUtil::datetime_from_utc_str(&dst_col_value.to_string()).unwrap()
-                }
-                ColValue::Timestamp(_) => {
-                    TimeUtil::datetime_from_utc_str(&src_col_value.to_string()).unwrap()
-                        == TimeUtil::datetime_from_utc_str(&dst_col_value.to_string()).unwrap()
-                }
-                _ => src_col_value.to_option_string() == dst_col_value.to_option_string(),
-            };
+        if src_col_value == dst_col_value {
+            return true;
         }
-        true
+
+        if src_col_value.is_nan() && dst_col_value.is_nan() {
+            return true;
+        }
+
+        if src_db_type == dst_db_type {
+            return false;
+        }
+
+        // different databases support different column types,
+        // for example: we use Year in mysql, but INT in StarRocks,
+        // so try to compare after both converted to string.
+        return match src_col_value {
+            // mysql 00:00:00 == foxlake 00:00:00.000000
+            ColValue::Time(_) => {
+                DtNaiveTime::from_str(&src_col_value.to_string()).unwrap()
+                    == DtNaiveTime::from_str(&dst_col_value.to_string()).unwrap()
+            }
+            ColValue::Date(_) => {
+                TimeUtil::date_from_str(&src_col_value.to_string()).unwrap()
+                    == TimeUtil::date_from_str(&dst_col_value.to_string()).unwrap()
+            }
+            ColValue::DateTime(_) => {
+                TimeUtil::datetime_from_utc_str(&src_col_value.to_string()).unwrap()
+                    == TimeUtil::datetime_from_utc_str(&dst_col_value.to_string()).unwrap()
+            }
+            ColValue::Timestamp(_) => {
+                TimeUtil::datetime_from_utc_str(&src_col_value.to_string()).unwrap()
+                    == TimeUtil::datetime_from_utc_str(&dst_col_value.to_string()).unwrap()
+            }
+            ColValue::Json2(src_v) => match dst_col_value {
+                // for snapshot/cdc task: mysql -> starrocks
+                // in src mysql, json_test.f_1 type == JSON -> ColValue::Json2
+                // in dst starrocks, json_test.f_1 type == STRING/VARCHAR/CHAR -> ColValue::String
+                ColValue::Json2(dst_v) | ColValue::String(dst_v) => {
+                    serde_json::Value::from_str(src_v).unwrap()
+                        == serde_json::Value::from_str(dst_v).unwrap()
+                }
+                // for snapshot task: mysql -> starrocks
+                // in src mysql, json_test.f_1 type == JSON
+                // INSERT INTO json_test VALUES (11, NULL),(12, 'NULL');
+                // +-----+------+
+                // | f_0 | f_1  |
+                // +-----+------+
+                // |  11 | NULL |  ->  ColValue::None  ->  serde_json::Value::Null
+                // |  12 | null |  ->  ColValue::Json2("null")  ->  serde_json::Value::Null
+                // +-----+------+
+                // in dst starrocks, json_test.f_1 type == JSON,
+                // +-----+------+
+                // | f_0 | f_1  |
+                // +-----+------+
+                // |  11 | NULL |  ->  ColValue::None  ->  serde_json::Value::Null
+                // |  12 | NULL |  ->  ColValue::None  ->  serde_json::Value::Null
+                ColValue::None => serde_json::Value::from_str(src_v).unwrap().is_null(),
+                _ => false,
+            },
+            _ => src_col_value.to_option_string() == dst_col_value.to_option_string(),
+        };
     }
 
     pub async fn fetch_data(
@@ -616,9 +631,9 @@ impl RdbTestRunner {
         let (conn_pool_mysql, conn_pool_pg) = self.get_conn_pool(from);
         let data = if let Some(pool) = conn_pool_mysql {
             let db_type = self.get_db_type(from);
-            RdbUtil::fetch_data_mysql_compatible(pool, db_tb, &db_type).await?
+            RdbUtil::fetch_data_mysql_compatible(pool, None, db_tb, &db_type).await?
         } else if let Some(pool) = conn_pool_pg {
-            RdbUtil::fetch_data_pg(pool, db_tb).await?
+            RdbUtil::fetch_data_pg(pool, None, db_tb).await?
         } else {
             Vec::new()
         };

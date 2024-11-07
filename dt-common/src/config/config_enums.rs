@@ -1,9 +1,5 @@
-use std::str::FromStr;
-
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumString, IntoStaticStr};
-
-use crate::error::Error;
 
 #[derive(
     Clone, Display, EnumString, IntoStaticStr, Debug, PartialEq, Eq, Default, Serialize, Deserialize,
@@ -88,23 +84,21 @@ pub enum ParallelType {
     Foxlake,
 }
 
-#[derive(Clone, Debug, IntoStaticStr, PartialEq, Default)]
+#[derive(EnumString, IntoStaticStr, Clone, Display)]
+pub enum PipelineType {
+    #[strum(serialize = "basic")]
+    Basic,
+    #[strum(serialize = "http_server")]
+    HttpServer,
+}
+
+#[derive(Clone, Debug, EnumString, IntoStaticStr, PartialEq, Default)]
 pub enum ConflictPolicyEnum {
     #[strum(serialize = "ignore")]
     Ignore,
     #[default]
     #[strum(serialize = "interrupt")]
     Interrupt,
-}
-
-impl FromStr for ConflictPolicyEnum {
-    type Err = Error;
-    fn from_str(str: &str) -> Result<Self, Self::Err> {
-        match str {
-            "ignore" => Ok(Self::Ignore),
-            _ => Ok(Self::Interrupt),
-        }
-    }
 }
 
 #[derive(Display, EnumString, IntoStaticStr, PartialEq)]

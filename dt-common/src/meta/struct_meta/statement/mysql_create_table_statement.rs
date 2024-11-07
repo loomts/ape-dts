@@ -34,7 +34,7 @@ impl MysqlCreateTableStatement {
     pub fn to_sqls(&mut self, filter: &RdbFilter) -> anyhow::Result<Vec<(String, String)>> {
         let mut sqls = Vec::new();
 
-        if !filter.filter_structure(StructureType::Table.into()) {
+        if !filter.filter_structure(&StructureType::Table) {
             let key = format!(
                 "table.{}.{}",
                 self.table.database_name, self.table.table_name
@@ -45,12 +45,12 @@ impl MysqlCreateTableStatement {
         for i in self.indexes.iter_mut() {
             match i.index_kind {
                 IndexKind::Unique => {
-                    if filter.filter_structure(StructureType::Table.into()) {
+                    if filter.filter_structure(&StructureType::Table) {
                         continue;
                     }
                 }
                 _ => {
-                    if filter.filter_structure(StructureType::Index.into()) {
+                    if filter.filter_structure(&StructureType::Index) {
                         continue;
                     }
                 }
@@ -63,7 +63,7 @@ impl MysqlCreateTableStatement {
             sqls.push((key, Self::index_to_sql(i)));
         }
 
-        if !filter.filter_structure(StructureType::Constraint.into()) {
+        if !filter.filter_structure(&StructureType::Constraint) {
             for i in self.constraints.iter() {
                 let key = format!(
                     "constraint.{}.{}.{}",

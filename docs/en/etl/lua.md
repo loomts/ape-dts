@@ -1,4 +1,5 @@
-# Introduction
+# Modify data by Lua
+
 During data sync, a user may need to modify the data manually.
 
 In ape-dts tasks, the user can provide a Lua script to process each row data, such as:
@@ -25,7 +26,7 @@ Processed data will continue subsequent processes of the task.
 
 - Global variables passed into Lua:
 
-| Variable | Data Type | Meaning |
+| Variable | Data Type | Description |
 | :-------- | :-------- | :-------- |
 | schema | string | database name(mysql) / schema name(postgres) |
 | tb | string | table name |
@@ -93,4 +94,6 @@ end
 # Supported scenarios
 - Only for snapshot / cdc tasks whose source is mysql / postgres.
 - For cdc tasks, only supports processing on dml data.
-- For binary columns, eg: mysql tinyblob, mediumblob, longblob, blob, varbinary, binary, currently, filtering them is supported, but you can not change their values.
+- For binary columns, eg: mysql tinyblob, mediumblob, longblob, blob, varbinary, binary, currently:
+    - Dropping these columns is supported.
+    - Modifying them is NOT supported.

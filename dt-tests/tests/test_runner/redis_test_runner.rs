@@ -339,7 +339,7 @@ impl RedisTestRunner {
         if self.filter.filter_schema(db) {
             println!("filtered, db: {}, key: {}", db, key);
             match dst_result {
-                Value::Bulk(v) => assert_eq!(v, vec![]),
+                Value::Array(v) | Value::Set(v) => assert_eq!(v, vec![]),
                 _ => assert_eq!(dst_result, Value::Nil),
             }
         } else {

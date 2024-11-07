@@ -1,4 +1,4 @@
-use anyhow::bail;
+use anyhow::{bail, Ok};
 use dt_common::error::Error;
 use dt_common::utils::url_util::UrlUtil;
 use dt_common::{log_info, log_warn};
@@ -12,6 +12,7 @@ pub struct PgCdcClient {
     pub slot_name: String,
     pub pub_name: String,
     pub start_lsn: String,
+    pub recreate_slot_if_exists: bool,
 }
 
 impl PgCdcClient {
@@ -37,15 +38,8 @@ impl PgCdcClient {
         self.start_replication(&client).await
     }
 
-    async fn start_replication(
-        &mut self,
-        client: &Client,
-    ) -> anyhow::Result<(LogicalReplicationStream, String)> {
+    async fn prepare_slot(&self, client: &Client) -> anyhow::Result<(String, String)> {
         let mut start_lsn = self.start_lsn.clone();
-
-        // set extra_float_digits to max so no precision will lose
-        let query = "SET extra_float_digits=3";
-        client.simple_query(query).await?;
 
         // create publication for all tables if not exists
         let pub_name = if self.pub_name.is_empty() {
@@ -68,23 +62,10 @@ impl PgCdcClient {
         }
 
         // check slot exists
-        let query = format!(
-            "SELECT * FROM {} WHERE slot_name = '{}'",
-            "pg_catalog.pg_replication_slots", self.slot_name
-        );
-        let res = client.simple_query(&query).await?;
-        let slot_exists = res.len() > 1;
+        let (slot_exists, confirmed_flush_lsn) = self.check_slot_status(client).await?;
         let mut create_slot = !slot_exists;
-        log_info!("slot: {} exists: {}", self.slot_name, slot_exists);
 
         if slot_exists {
-            let confirmed_flush_lsn = if let Row(row) = &res[0] {
-                row.get("confirmed_flush_lsn").unwrap().to_string()
-            } else {
-                String::new()
-            };
-            log_info!("slot confirmed_flush_lsn: {}", confirmed_flush_lsn);
-
             if confirmed_flush_lsn.is_empty() {
                 // should never happen
                 create_slot = true;
@@ -104,7 +85,7 @@ impl PgCdcClient {
         }
 
         // create replication slot
-        if create_slot {
+        if create_slot || self.recreate_slot_if_exists {
             // should never happen
             if slot_exists {
                 let query = format!(
@@ -137,6 +118,39 @@ impl PgCdcClient {
                 start_lsn.to_string()
             );
         }
+
+        Ok((pub_name, start_lsn))
+    }
+
+    async fn check_slot_status(&self, client: &Client) -> anyhow::Result<(bool, String)> {
+        // check slot exists
+        let query = format!(
+            "SELECT * FROM {} WHERE slot_name = '{}'",
+            "pg_catalog.pg_replication_slots", self.slot_name
+        );
+        let res = client.simple_query(&query).await?;
+        let slot_exists = res.len() > 1;
+        log_info!("slot: {} exists: {}", self.slot_name, slot_exists);
+
+        let mut confirmed_flush_lsn = String::new();
+        if slot_exists {
+            if let Row(row) = &res[0] {
+                confirmed_flush_lsn = row.get("confirmed_flush_lsn").unwrap().to_string()
+            }
+            log_info!("slot confirmed_flush_lsn: {}", confirmed_flush_lsn);
+        }
+        Ok((slot_exists, confirmed_flush_lsn))
+    }
+
+    async fn start_replication(
+        &mut self,
+        client: &Client,
+    ) -> anyhow::Result<(LogicalReplicationStream, String)> {
+        let (pub_name, start_lsn) = self.prepare_slot(client).await?;
+
+        // set extra_float_digits to max so no precision will lose
+        let query = "SET extra_float_digits=3";
+        client.simple_query(query).await?;
 
         // start replication slot
         let options = format!(

@@ -9,6 +9,10 @@ async fn cdc_basic_test() {
 }
 ```
 
+```
+cargo test --package dt-tests --test integration_test -- mysql_to_mysql::cdc_tests::test::cdc_basic_test --nocapture 
+```
+
 - A test contains: 
   - task_config.ini
   - src_prepare.sql
@@ -16,18 +20,18 @@ async fn cdc_basic_test() {
   - src_test.sql
   - dst_test.sql
 
-- Typical steps for running a test: 
+- Steps for running a test: 
   - 1, execute src_prepare.sql in source database.
   - 2, execute dst_prepare.sql in target database.
   - 3, start data sync task.
-  - 4, sleep some milliseconds for task initialization.
+  - 4, sleep some milliseconds for task initialization (start_millis, you may change it based on source/target performance).
   - 5, execute src_test.sql in source database.
-  - 6, execute dst_test.sql in target database.
-  - 7, sleep some milliseconds for data sync.
+  - 6, execute dst_test.sql (if exists) in target database.
+  - 7, sleep some milliseconds for data sync (parse_millis, change it if needed).
   - 8, compare data of source and target.
 
 # Config
-- All database urls are configured in .env file and referenced in task_config.ini of tests.
+- All database urls are configured in ./tests/.env file and referenced in task_config.ini of tests.
 
 ```
 [extractor]
@@ -39,38 +43,16 @@ url={mysql_sinker_url}
 
 # Init test env
 
-- Examples work in docker, mac.
+- Examples work in docker. [prerequisites](/docs/en/tutorial/prerequisites.md)
 
 # Postgres
+[Prepare Postgres instances](/docs/en/tutorial/pg_to_pg.md)
 
-## Source
-```
-docker run --name some-postgres-1 \
--p 5433:5432 \
--e POSTGRES_PASSWORD=postgres \
--e TZ=Etc/GMT-8 \
--d postgis/postgis:latest
-```
+## To run [Two-way data sync](/docs/en/cdc/two_way.md) tests
+- pg_to_pg::cdc_tests::test::cycle_
 
-- To run cdc test, set wal_level.
+- You need to create 3 Postgres instances, and set wal_level = logical for each one.
 
-```
-docker exec -it some-postgres-1 bash
-
-psql -h 127.0.0.1 -U postgres -d postgres -p 5432 -W
-
-ALTER SYSTEM SET wal_level = logical;
-```
-
-## Target
-
-```
-docker run --name some-postgres-2 \
--p 5434:5432 \
--e POSTGRES_PASSWORD=postgres \
--e TZ=Etc/GMT-7 \
--d postgis/postgis:latest
-```
 
 ## To run [charset tests](../dt-tests/tests/pg_to_pg/snapshot/charset_euc_cn_test)
 - Create database "postgres_euc_cn" in both source and target.
@@ -84,110 +66,36 @@ CREATE DATABASE postgres_euc_cn
 ```
 
 # MySQL
+[Prepare MySQL instances](/docs/en/tutorial/mysql_to_mysql.md)
 
-## Source
+## To run [Two-way data sync](/docs/en/cdc/two_way.md) tests
+- mysql_to_mysql::cdc_tests::test::cycle_
 
-```
-docker run -d --name some-mysql-1 \
---platform linux/x86_64 \
--it \
--p 3307:3306 -e MYSQL_ROOT_PASSWORD="123456" \
- mysql:5.7.40 --lower_case_table_names=1 --character-set-server=utf8 --collation-server=utf8_general_ci \
- --datadir=/var/lib/mysql \
- --user=mysql \
- --server_id=1 \
- --log_bin=/var/lib/mysql/mysql-bin.log \
- --max_binlog_size=100M \
- --gtid_mode=ON \
- --enforce_gtid_consistency=ON \
- --binlog_format=ROW \
- --default_time_zone=+08:00
-```
-
-## Target
-
-```
-docker run -d --name some-mysql-2 \
---platform linux/x86_64 \
--it \
--p 3308:3306 -e MYSQL_ROOT_PASSWORD="123456" \
- mysql:5.7.40 --lower_case_table_names=1 --character-set-server=utf8 --collation-server=utf8_general_ci \
- --datadir=/var/lib/mysql \
- --user=mysql \
- --server_id=1 \
- --log_bin=/var/lib/mysql/mysql-bin.log \
- --max_binlog_size=100M \
- --gtid_mode=ON \
- --enforce_gtid_consistency=ON \
- --binlog_format=ROW \
- --default_time_zone=+07:00
-```
+- You need to create 3 Postgres instances
 
 # Mongo
+[Prepare Mongo instances](/docs/en/tutorial/mongo_to_mongo.md)
 
-## Source
-- Mongo source needs to be ReplicaSet which supports cdc.
+# Kafka
+[Prepare Kafka instances](/docs/en/tutorial/mysql_to_kafka_consumer.md)
 
-- 1, Create docker network.
+# StarRocks
+[Prepare StarRocks instances](/docs/en/tutorial/mysql_to_starrocks.md)
 
-```
-docker network create mongo-network
-```
-
-- 2, Create mongo ReplicaSet containers.
+For old version: 2.5.4
 
 ```
-docker run -d --name mongo1 --network mongo-network -p 9042:9042 mongo:6.0 --replSet rs0  --port 9042
-docker run -d --name mongo2 --network mongo-network -p 9142:9142 mongo:6.0 --replSet rs0  --port 9142
-docker run -d --name mongo3 --network mongo-network -p 9242:9242 mongo:6.0 --replSet rs0  --port 9242
-```
-
-- 3, Setup ReplicaSet.
-
-```
-- enter any container
-docker exec -it mongo1 bash
-
-- login mongo
-mongosh --host localhost --port 9042
-
-- execute sql
-> config = {"_id" : "rs0", "members" : [{"_id" : 0,"host" : "mongo1:9042"},{"_id" : 1,"host" : "mongo2:9142"},{"_id" : 2,"host" : "mongo3:9242"}]}
-> rs.initiate(config)
-> rs.status()
-```
-
-- 4, Create user.
-
-```
-> use admin
-> db.createUser({user: "ape_dts", pwd: "123456", roles: ["root"]})
-```
-
-- 5, Update /etc/hosts on mac.
-
-```
-127.0.0.1 mongo1 mongo2 mongo3
-```
-
-- 6, Test connecting.
-
-```
-mongo "mongodb://ape_dts:123456@mongo1:9042/?replicaSet=rs0"
-```
-
-## Target
-
-```
-docker run -d --name dst-mongo \
-	-e MONGO_INITDB_ROOT_USERNAME=ape_dts \
-	-e MONGO_INITDB_ROOT_PASSWORD=123456 \
-    -p 27018:27017 \
-	mongo:6.0
+docker run -itd --name some-starrocks-2.5.4 \
+-p 9031:9030 \
+-p 8031:8030 \
+-p 8041:8040 \
+starrocks/allin1-ubuntu:2.5.4
 ```
 
 # Redis
-## Images
+[Prepare Redis instances](/docs/en/tutorial/redis_to_redis.md)
+
+## More versions
 - Data format varies in different redis versions, we support 2.8 - 7.*, rebloom, rejson.
 - redis:7.0
 - redis:6.0
@@ -199,7 +107,7 @@ docker run -d --name dst-mongo \
 - redislabs/rejson:2.6.4
 - Can not deploy 2.8,rebloom,rejson on mac, you may deploy them in EKS(amazon)/AKS(azure)/ACK(alibaba), refer to: dt-tests/k8s/redis.
 
-## Source
+### Source
 
 ```
 docker run --name src-redis-7-0 \
@@ -238,7 +146,7 @@ docker run --name src-redis-4-0 \
     --loglevel warning
 ```
 
-## Target
+### Target
 
 ```
 docker run --name dst-redis-7-0 \

@@ -63,6 +63,16 @@ impl SqlUtil {
         }
     }
 
+    /// return: (str, is_hex_str)
+    pub fn binary_to_str(v: &[u8]) -> (String, bool) {
+        if let Ok(str) = String::from_utf8(v.to_owned()) {
+            (str, false)
+        } else {
+            // charsets like: gbk, big5, ujis, euckr
+            (hex::encode(v), true)
+        }
+    }
+
     pub fn is_valid_token(token: &str, db_type: &DbType, escape_pairs: &[(char, char)]) -> bool {
         let max_token_len = match db_type {
             DbType::Mysql | DbType::Pg => 64,

@@ -1,0 +1,55 @@
+name: Build and push images
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        required: true
+        type: string
+        default: main
+      docker_repository:
+        required: true
+        type: string
+        default: apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com
+      image_tag: 
+        required: true
+        type: string
+        default: apecloud/ape-dts:latest
+
+jobs:
+  build:
+    name: Cross build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+
+      - name: Set up rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Install cross
+        run: cargo install cross
+
+      - name: Build for x86_64
+        run: cross build --target x86_64-unknown-linux-gnu --release
+
+      - name: Build for aarch64
+        run: cross build --target aarch64-unknown-linux-gnu --release
+
+      - name: Rename artifact
+        run: |
+          cp target/x86_64-unknown-linux-gnu/release/dt-main amd64-unknown-linux-gnu-dt-main
+          cp target/aarch64-unknown-linux-gnu/release/dt-main arm64-unknown-linux-gnu-dt-main
+      
+      - name: Set up docker buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build and push docker image
+        run: |
+          docker login --username ${{ secrets.DOCKER_USER }} --password ${{ secrets.DOCKER_PASSWORD }} ${{ inputs.docker_repository }}
+          docker buildx build -f Dockerfile.github.workflow --platform linux/arm64,linux/amd64 --tag ${{ inputs.docker_repository }}/${{ inputs.image_tag }} --push .

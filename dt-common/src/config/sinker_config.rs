@@ -57,6 +57,7 @@ pub enum SinkerConfig {
         batch_size: usize,
         ack_timeout_secs: u64,
         required_acks: String,
+        with_field_defs: bool,
     },
 
     Redis {
@@ -111,7 +112,7 @@ pub enum SinkerConfig {
     },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct BasicSinkerConfig {
     pub db_type: DbType,
     pub url: String,

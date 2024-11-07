@@ -1,0 +1,18 @@
+# refer to: https://github.com/cross-rs/cross/blob/main/docs/config_file.md
+[build]
+default-target = "x86_64-unknown-linux-gnu"   # use this target if none is explicitly provided
+pre-build = [                                  # additional commands to run prior to building the package
+    "dpkg --add-architecture $CROSS_DEB_ARCH", 
+    "apt-get update && apt-get -y install pkg-config libssl-dev:$CROSS_DEB_ARCH cmake libclang-dev",
+]
+
+[target.x86_64-unknown-linux-gnu]
+linker = "x86_64-linux-gnu-gcc"
+# disable target-feature=+crt-static since it causes failures in domain resolution
+# https://github.com/rust-lang/rust/issues/100711
+# https://stackoverflow.com/questions/73402445/rust-x86-64-unknown-linux-gnu-using-target-feature-crt-static-exits-with-seg
+# rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-unknown-linux-gnu]
+linker = "aarch64-linux-gnu-gcc"
+# rustflags = ["-C", "target-feature=+crt-static"]

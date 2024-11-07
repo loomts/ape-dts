@@ -143,7 +143,7 @@ impl RdbRedisTestRunner {
             }
             let key_col = tb_meta.basic.order_col.as_ref().unwrap();
 
-            let results = RdbUtil::fetch_data_mysql(conn_pool, db_tb).await?;
+            let results = RdbUtil::fetch_data_mysql(conn_pool, None, db_tb).await?;
             for row_data in results {
                 let key = row_data
                     .after
@@ -164,7 +164,7 @@ impl RdbRedisTestRunner {
                     // check redis key exists
                     assert!(redis_kvs.contains_key(&col));
                     // check redis value = db value
-                    if let Value::Data(v) = redis_kvs.get(&col).unwrap() {
+                    if let Value::BulkString(v) = redis_kvs.get(&col).unwrap() {
                         let redis_v_str = String::from_utf8(v.clone()).unwrap();
                         if let Some(db_v_str) = db_v.to_option_string() {
                             if redis_v_str != db_v_str {

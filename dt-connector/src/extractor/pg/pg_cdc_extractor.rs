@@ -60,6 +60,7 @@ pub struct PgCdcExtractor {
     pub slot_name: String,
     pub pub_name: String,
     pub start_lsn: String,
+    pub recreate_slot_if_exists: bool,
     pub keepalive_interval_secs: u64,
     pub heartbeat_interval_secs: u64,
     pub heartbeat_tb: String,
@@ -103,6 +104,7 @@ impl PgCdcExtractor {
             pub_name: self.pub_name.clone(),
             slot_name: self.slot_name.clone(),
             start_lsn: self.start_lsn.clone(),
+            recreate_slot_if_exists: self.recreate_slot_if_exists,
         };
         let (stream, actual_start_lsn) = cdc_client.connect().await?;
         tokio::pin!(stream);
@@ -444,12 +446,18 @@ impl PgCdcExtractor {
         tb_meta: &PgTbMeta,
         tuple_data: &[TupleData],
     ) -> anyhow::Result<HashMap<String, ColValue>> {
+        let ignore_cols = self
+            .filter
+            .get_ignore_cols(&tb_meta.basic.schema, &tb_meta.basic.tb);
         let mut col_values: HashMap<String, ColValue> = HashMap::new();
         for i in 0..tuple_data.len() {
             let tuple_data = &tuple_data[i];
             let col = &tb_meta.basic.cols[i];
-            let col_type = tb_meta.get_col_type(col)?;
+            if ignore_cols.map_or(false, |cols| cols.contains(col)) {
+                continue;
+            }
 
+            let col_type = tb_meta.get_col_type(col)?;
             match tuple_data {
                 TupleData::Null => {
                     col_values.insert(col.to_string(), ColValue::None);

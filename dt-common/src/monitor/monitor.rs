@@ -7,7 +7,7 @@ use super::counter::Counter;
 use super::counter_type::{CounterType, WindowType};
 use super::time_window_counter::TimeWindowCounter;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Monitor {
     pub name: String,
     pub no_window_counters: HashMap<CounterType, Counter>,

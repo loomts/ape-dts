@@ -16,6 +16,7 @@ use dt_common::{
         row_data::RowData,
         row_type::RowType,
     },
+    rdb_filter::RdbFilter,
 };
 
 use crate::close_conn_pool;
@@ -30,6 +31,7 @@ pub struct PgCheckExtractor {
     pub base_extractor: BaseExtractor,
     pub conn_pool: Pool<Postgres>,
     pub meta_manager: PgMetaManager,
+    pub filter: RdbFilter,
     pub check_log_dir: String,
     pub batch_size: usize,
 }
@@ -54,15 +56,14 @@ impl Extractor for PgCheckExtractor {
 #[async_trait]
 impl BatchCheckExtractor for PgCheckExtractor {
     async fn batch_extract(&mut self, check_logs: &[CheckLog]) -> anyhow::Result<()> {
+        let schema = &check_logs[0].schema;
+        let tb = &check_logs[0].tb;
         let log_type = &check_logs[0].log_type;
-        let tb_meta = self
-            .meta_manager
-            .get_tb_meta(&check_logs[0].schema, &check_logs[0].tb)
-            .await?
-            .to_owned();
+        let tb_meta = self.meta_manager.get_tb_meta(schema, tb).await?.to_owned();
         let check_row_datas = self.build_check_row_datas(check_logs, &tb_meta)?;
 
-        let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta);
+        let ignore_cols = self.filter.get_ignore_cols(schema, tb);
+        let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta, ignore_cols);
         let query_info = if check_logs.len() == 1 {
             query_builder.get_select_query(&check_row_datas[0])?
         } else {
@@ -72,7 +73,7 @@ impl BatchCheckExtractor for PgCheckExtractor {
 
         let mut rows = query.fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
-            let mut row_data = RowData::from_pg_row(&row, &tb_meta);
+            let mut row_data = RowData::from_pg_row(&row, &tb_meta, &ignore_cols);
 
             if log_type == &LogType::Diff {
                 row_data.row_type = RowType::Update;

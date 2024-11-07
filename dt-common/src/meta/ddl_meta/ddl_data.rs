@@ -5,7 +5,7 @@ use crate::config::config_enums::DbType;
 
 use super::{ddl_statement::DdlStatement, ddl_type::DdlType};
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct DdlData {
     pub default_schema: String,
     pub query: String,

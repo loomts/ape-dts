@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{config::config_enums::DbType, utils::sql_util::SqlUtil};
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub enum DdlStatement {
     CreateDatabase(CreateDatabaseStatement),
     DropDatabase(DropDatabaseStatement),
@@ -271,47 +271,47 @@ impl DdlStatement {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct CreateDatabaseStatement {
     pub db: String,
     pub if_not_exists: bool,
     pub unparsed: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct DropDatabaseStatement {
     pub db: String,
     pub if_exists: bool,
     pub unparsed: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct AlterDatabaseStatement {
     pub db: String,
     pub unparsed: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct CreateSchemaStatement {
     pub schema: String,
     pub if_not_exists: bool,
     pub unparsed: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct DropSchemaStatement {
     pub schema: String,
     pub if_exists: bool,
     pub unparsed: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct AlterSchemaStatement {
     pub schema: String,
     pub unparsed: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct MysqlCreateTableStatement {
     pub db: String,
     pub tb: String,
@@ -319,7 +319,7 @@ pub struct MysqlCreateTableStatement {
     pub unparsed: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct PgCreateTableStatement {
     pub schema: String,
     pub tb: String,
@@ -329,14 +329,14 @@ pub struct PgCreateTableStatement {
     pub unparsed: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct DropMultiTableStatement {
     pub schema_tbs: Vec<(String, String)>,
     pub if_exists: bool,
     pub unparsed: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct DropTableStatement {
     pub schema: String,
     pub tb: String,
@@ -344,14 +344,14 @@ pub struct DropTableStatement {
     pub unparsed: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct MysqlAlterTableStatement {
     pub db: String,
     pub tb: String,
     pub unparsed: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct MysqlAlterRenameTableStatement {
     pub db: String,
     pub tb: String,
@@ -360,7 +360,7 @@ pub struct MysqlAlterRenameTableStatement {
     pub unparsed: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct PgAlterTableStatement {
     pub schema: String,
     pub tb: String,
@@ -369,7 +369,7 @@ pub struct PgAlterTableStatement {
     pub unparsed: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct PgAlterRenameTableStatement {
     pub schema: String,
     pub tb: String,
@@ -380,14 +380,14 @@ pub struct PgAlterRenameTableStatement {
     pub unparsed: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct MysqlTruncateTableStatement {
     pub db: String,
     pub tb: String,
     pub unparsed: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct PgTruncateTableStatement {
     pub schema: String,
     pub tb: String,
@@ -395,14 +395,14 @@ pub struct PgTruncateTableStatement {
     pub unparsed: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct RenameMultiTableStatement {
     pub schema_tbs: Vec<(String, String)>,
     pub new_schema_tbs: Vec<(String, String)>,
     pub unparsed: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct RenameTableStatement {
     pub schema: String,
     pub tb: String,
@@ -411,7 +411,7 @@ pub struct RenameTableStatement {
     pub unparsed: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct MysqlCreateIndexStatement {
     pub db: String,
     pub tb: String,
@@ -421,7 +421,7 @@ pub struct MysqlCreateIndexStatement {
     pub unparsed: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct PgCreateIndexStatement {
     pub schema: String,
     pub tb: String,
@@ -433,7 +433,7 @@ pub struct PgCreateIndexStatement {
     pub unparsed: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct MysqlDropIndexStatement {
     pub db: String,
     pub tb: String,
@@ -441,7 +441,7 @@ pub struct MysqlDropIndexStatement {
     pub unparsed: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct PgDropMultiIndexStatement {
     pub index_names: Vec<String>,
     pub if_exists: bool,
@@ -449,7 +449,7 @@ pub struct PgDropMultiIndexStatement {
     pub unparsed: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct PgDropIndexStatement {
     pub index_name: String,
     pub if_exists: bool,

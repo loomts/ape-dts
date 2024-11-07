@@ -1,10 +1,12 @@
 name: CI # Continuous Integration
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
+  workflow_call:
+    inputs:
+      branch:
+        required: false
+        type: string
+        default: main
 
 env:
   GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
