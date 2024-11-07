@@ -135,7 +135,7 @@ docker run --rm --network host \
 "$APE_DTS_IMAGE" /task_config.ini 
 ```
 
-# Check results
+## Check results
 ```
 psql -h 127.0.0.1 -U postgres -d postgres -p 5434 -W
 

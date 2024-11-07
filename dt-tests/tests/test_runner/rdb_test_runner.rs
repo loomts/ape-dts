@@ -539,14 +539,15 @@ impl RdbTestRunner {
                     continue;
                 }
 
-                if Self::compare_col_value(src_col_value, dst_col_value, &src_db_type, &dst_db_type)
-                {
-                    continue;
-                }
                 println!(
                     "row index: {}, col: {}, src_col_value: {:?}, dst_col_value: {:?}",
                     i, src_col, src_col_value, dst_col_value
                 );
+
+                if Self::compare_col_value(src_col_value, dst_col_value, &src_db_type, &dst_db_type)
+                {
+                    continue;
+                }
                 return false;
             }
         }
@@ -559,40 +560,67 @@ impl RdbTestRunner {
         src_db_type: &DbType,
         dst_db_type: &DbType,
     ) -> bool {
-        if src_col_value != dst_col_value {
-            if src_col_value.is_nan() && dst_col_value.is_nan() {
-                return true;
-            }
-
-            if src_db_type == dst_db_type {
-                return false;
-            }
-
-            // different databases support different column types,
-            // for example: we use Year in mysql, but INT in StarRocks,
-            // so try to compare after both converted to string.
-            return match src_col_value {
-                // mysql 00:00:00 == foxlake 00:00:00.000000
-                ColValue::Time(_) => {
-                    DtNaiveTime::from_str(&src_col_value.to_string()).unwrap()
-                        == DtNaiveTime::from_str(&dst_col_value.to_string()).unwrap()
-                }
-                ColValue::Date(_) => {
-                    TimeUtil::date_from_str(&src_col_value.to_string()).unwrap()
-                        == TimeUtil::date_from_str(&dst_col_value.to_string()).unwrap()
-                }
-                ColValue::DateTime(_) => {
-                    TimeUtil::datetime_from_utc_str(&src_col_value.to_string()).unwrap()
-                        == TimeUtil::datetime_from_utc_str(&dst_col_value.to_string()).unwrap()
-                }
-                ColValue::Timestamp(_) => {
-                    TimeUtil::datetime_from_utc_str(&src_col_value.to_string()).unwrap()
-                        == TimeUtil::datetime_from_utc_str(&dst_col_value.to_string()).unwrap()
-                }
-                _ => src_col_value.to_option_string() == dst_col_value.to_option_string(),
-            };
+        if src_col_value == dst_col_value {
+            return true;
         }
-        true
+
+        if src_col_value.is_nan() && dst_col_value.is_nan() {
+            return true;
+        }
+
+        if src_db_type == dst_db_type {
+            return false;
+        }
+
+        // different databases support different column types,
+        // for example: we use Year in mysql, but INT in StarRocks,
+        // so try to compare after both converted to string.
+        return match src_col_value {
+            // mysql 00:00:00 == foxlake 00:00:00.000000
+            ColValue::Time(_) => {
+                DtNaiveTime::from_str(&src_col_value.to_string()).unwrap()
+                    == DtNaiveTime::from_str(&dst_col_value.to_string()).unwrap()
+            }
+            ColValue::Date(_) => {
+                TimeUtil::date_from_str(&src_col_value.to_string()).unwrap()
+                    == TimeUtil::date_from_str(&dst_col_value.to_string()).unwrap()
+            }
+            ColValue::DateTime(_) => {
+                TimeUtil::datetime_from_utc_str(&src_col_value.to_string()).unwrap()
+                    == TimeUtil::datetime_from_utc_str(&dst_col_value.to_string()).unwrap()
+            }
+            ColValue::Timestamp(_) => {
+                TimeUtil::datetime_from_utc_str(&src_col_value.to_string()).unwrap()
+                    == TimeUtil::datetime_from_utc_str(&dst_col_value.to_string()).unwrap()
+            }
+            ColValue::Json2(src_v) => match dst_col_value {
+                // for snapshot/cdc task: mysql -> starrocks
+                // in src mysql, json_test.f_1 type == JSON -> ColValue::Json2
+                // in dst starrocks, json_test.f_1 type == STRING/VARCHAR/CHAR -> ColValue::String
+                ColValue::Json2(dst_v) | ColValue::String(dst_v) => {
+                    serde_json::Value::from_str(src_v).unwrap()
+                        == serde_json::Value::from_str(dst_v).unwrap()
+                }
+                // for snapshot task: mysql -> starrocks
+                // in src mysql, json_test.f_1 type == JSON
+                // INSERT INTO json_test VALUES (11, NULL),(12, 'NULL');
+                // +-----+------+
+                // | f_0 | f_1  |
+                // +-----+------+
+                // |  11 | NULL |  ->  ColValue::None  ->  serde_json::Value::Null
+                // |  12 | null |  ->  ColValue::Json2("null")  ->  serde_json::Value::Null
+                // +-----+------+
+                // in dst starrocks, json_test.f_1 type == JSON,
+                // +-----+------+
+                // | f_0 | f_1  |
+                // +-----+------+
+                // |  11 | NULL |  ->  ColValue::None  ->  serde_json::Value::Null
+                // |  12 | NULL |  ->  ColValue::None  ->  serde_json::Value::Null
+                ColValue::None => serde_json::Value::from_str(src_v).unwrap().is_null(),
+                _ => false,
+            },
+            _ => src_col_value.to_option_string() == dst_col_value.to_option_string(),
+        };
     }
 
     pub async fn fetch_data(

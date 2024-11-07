@@ -6,6 +6,8 @@ use std::{
 use mongodb::bson::Document;
 use serde::{Deserialize, Serialize, Serializer};
 
+use crate::utils::sql_util::SqlUtil;
+
 // #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 // #[serde(tag = "type", content = "value")]
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -39,6 +41,7 @@ pub enum ColValue {
     Enum2(String),
     Json(Vec<u8>),
     Json2(String),
+    Json3(serde_json::Value),
     MongoDoc(Document),
 }
 
@@ -64,22 +67,6 @@ impl ColValue {
         }
     }
 
-    /// return: (str, is_hex_str)
-    pub fn to_mysql_string(&self) -> (Option<String>, bool) {
-        match self {
-            // varchar, char, tinytext, mediumtext, longtext, text
-            ColValue::RawString(v) => {
-                let (str, is_hex_str) = Self::binary_to_str(v);
-                (Some(str), is_hex_str)
-            }
-
-            // tinyblob, mediumblob, longblob, blob, varbinary, binary
-            ColValue::Blob(v) => (Some(Self::binary_to_hex_str(v)), true),
-
-            _ => (self.to_option_string(), false),
-        }
-    }
-
     pub fn to_option_string(&self) -> Option<String> {
         match self {
             ColValue::Tiny(v) => Some(v.to_string()),
@@ -99,7 +86,7 @@ impl ColValue {
             ColValue::Timestamp(v) => Some(v.to_string()),
             ColValue::Year(v) => Some(v.to_string()),
             ColValue::String(v) => Some(v.to_string()),
-            ColValue::RawString(v) => Some(Self::binary_to_str(v).0),
+            ColValue::RawString(v) => Some(SqlUtil::binary_to_str(v).0),
             ColValue::Bit(v) => Some(v.to_string()),
             ColValue::Set(v) => Some(v.to_string()),
             ColValue::Set2(v) => Some(v.to_string()),
@@ -107,28 +94,12 @@ impl ColValue {
             ColValue::Enum2(v) => Some(v.to_string()),
             ColValue::Json(v) => Some(format!("{:?}", v)),
             ColValue::Json2(v) => Some(v.to_string()),
-            ColValue::Blob(v) => Some(Self::binary_to_str(v).0),
+            ColValue::Json3(v) => Some(v.to_string()),
+            ColValue::Blob(v) => Some(SqlUtil::binary_to_str(v).0),
             ColValue::MongoDoc(v) => Some(v.to_string()),
             ColValue::Bool(v) => Some(v.to_string()),
             ColValue::None => Option::None,
         }
-    }
-
-    /// return: (str, is_hex_str)
-    fn binary_to_str(v: &[u8]) -> (String, bool) {
-        if let Ok(str) = String::from_utf8(v.to_owned()) {
-            (str, false)
-        } else {
-            // charsets like: gbk, big5, ujis, euckr
-            (Self::binary_to_hex_str(v), true)
-        }
-    }
-
-    fn binary_to_hex_str(v: &[u8]) -> String {
-        let hex_str = v
-            .iter()
-            .fold(String::new(), |hex_str, &x| format!("{hex_str}{:02X}", x));
-        format!("x'{}'", hex_str)
     }
 
     pub fn is_nan(&self) -> bool {
@@ -162,6 +133,7 @@ impl ColValue {
             | ColValue::Enum2(v)
             | ColValue::Json2(v) => v.len(),
             ColValue::Json(v) | ColValue::Blob(v) | ColValue::RawString(v) => v.len(),
+            ColValue::Json3(v) => v.to_string().len(),
             ColValue::MongoDoc(v) => v.to_string().len(),
             ColValue::None => 0,
         }
@@ -209,6 +181,7 @@ impl Serialize for ColValue {
             ColValue::Enum2(v) => serializer.serialize_str(v),
             ColValue::Json(v) => serializer.serialize_bytes(v),
             ColValue::Json2(v) => serializer.serialize_str(v),
+            ColValue::Json3(v) => v.serialize(serializer),
             // not supported
             ColValue::MongoDoc(_) => serializer.serialize_none(),
             ColValue::None => serializer.serialize_none(),

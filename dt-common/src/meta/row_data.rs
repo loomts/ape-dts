@@ -150,14 +150,14 @@ impl RowData {
 
     pub fn convert_raw_string(&mut self) {
         if let Some(before) = &mut self.before {
-            Self::conver_raw_string_col_values(before);
+            Self::convert_raw_string_col_values(before);
         }
         if let Some(after) = &mut self.after {
-            Self::conver_raw_string_col_values(after);
+            Self::convert_raw_string_col_values(after);
         }
     }
 
-    fn conver_raw_string_col_values(col_values: &mut HashMap<String, ColValue>) {
+    fn convert_raw_string_col_values(col_values: &mut HashMap<String, ColValue>) {
         let mut str_col_values: HashMap<String, ColValue> = HashMap::new();
         for (col, col_value) in col_values.iter() {
             if let ColValue::RawString(_) = col_value {

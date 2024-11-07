@@ -39,3 +39,4 @@ concurrent-queue = { workspace = true }
 # refer: https://github.com/cross-rs/cross/blob/main/docs/recipes.md#openssl
 openssl = { workspace = true }
 openssl-sys = { workspace = true }
+hex = { workspace = true }

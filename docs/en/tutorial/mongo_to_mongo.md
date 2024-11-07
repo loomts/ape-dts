@@ -85,7 +85,7 @@ docker run --rm --network host \
 "$APE_DTS_IMAGE" /task_config.ini 
 ```
 
-# Check results
+## Check results
 ```
 docker exec -it dst-mongo mongosh \
 --host localhost --port 27017 --authenticationDatabase admin -u ape_dts -p 123456 \

@@ -513,14 +513,27 @@ impl RdbQueryBuilder<'_> {
     }
 
     fn get_mysql_sql_value(&self, col: &str, col_value: &ColValue) -> anyhow::Result<String> {
-        let col_type = self.mysql_tb_meta.unwrap().get_col_type(col)?;
-        let (str, is_hex_str) = col_value.to_mysql_string();
-        if str.is_none() {
-            return Ok("NULL".to_string());
+        let (value, is_hex_str) = match col_value {
+            // varchar, char, tinytext, mediumtext, longtext, text
+            ColValue::RawString(v) => SqlUtil::binary_to_str(v),
+
+            // tinyblob, mediumblob, longblob, blob, varbinary, binary
+            ColValue::Blob(v) => (hex::encode(v), true),
+
+            _ => {
+                if let Some(v) = col_value.to_option_string() {
+                    (v, false)
+                } else {
+                    return Ok("NULL".to_string());
+                }
+            }
+        };
+
+        if is_hex_str {
+            return Ok(format!("x'{}'", value));
         }
 
-        let value = str.unwrap();
-        let is_str = match *col_type {
+        let is_str = match self.mysql_tb_meta.unwrap().get_col_type(col)? {
             MysqlColType::DateTime
             | MysqlColType::Time
             | MysqlColType::Date
@@ -534,11 +547,12 @@ impl RdbQueryBuilder<'_> {
             _ => false,
         };
 
-        if !is_hex_str && is_str {
+        if is_str {
             // INSERT INTO tb1 VALUES(1, 'abc''');
-            return Ok(format!(r#"'{}'"#, value.replace('\'', "\'\'")));
+            Ok(format!(r#"'{}'"#, value.replace('\'', "\'\'")))
+        } else {
+            Ok(value)
         }
-        Ok(value)
     }
 
     fn get_placeholder(&self, index: usize, col: &str) -> anyhow::Result<String> {

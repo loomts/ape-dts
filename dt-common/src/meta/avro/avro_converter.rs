@@ -322,6 +322,9 @@ impl AvroConverter {
             | ColValue::Set2(v)
             | ColValue::Enum2(v)
             | ColValue::Json2(v) => Value::String(v.clone()),
+
+            ColValue::Json3(v) => Value::String(v.to_string()),
+
             ColValue::MongoDoc(v) => Value::String(v.to_string()),
 
             ColValue::Bool(v) => Value::Boolean(*v),
