@@ -82,6 +82,16 @@ CREATE DATABASE postgres_euc_cn
 # StarRocks
 [Prepare StarRocks instances](/docs/en/tutorial/mysql_to_starrocks.md)
 
+For old version: 2.5.4
+
+```
+docker run -itd --name some-starrocks-2.5.4 \
+-p 9031:9030 \
+-p 8031:8030 \
+-p 8041:8040 \
+starrocks/allin1-ubuntu:2.5.4
+```
+
 # Redis
 [Prepare Redis instances](/docs/en/tutorial/redis_to_redis.md)
 

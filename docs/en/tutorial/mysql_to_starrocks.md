@@ -7,6 +7,8 @@
 Refer to [mysql to mysql](./mysql_to_mysql.md)
 
 # Prepare StarRocks instance
+- tested versions: 2.5.4 to 3.2.11
+
 ```
 docker run -itd --name some-starrocks \
 -p 9030:9030 \
@@ -200,3 +202,9 @@ Refer to [config](/docs/en/config.md) for other common configurations
 | enum | VARCHAR |
 | set | VARCHAR |
 | json | JSON/STRING |
+
+# Supported versions
+
+We've tested on StarRocks 2.5.4 and 3.2.11, refer to [tests](/dt-tests/tests/mysql_to_starrocks/)
+
+For 2.5.4, the stream_load_url should use be_http_port instead of fe_http_port.

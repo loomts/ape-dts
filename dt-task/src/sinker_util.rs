@@ -390,9 +390,11 @@ impl SinkerUtil {
                     let conn_pool =
                         TaskUtil::create_mysql_conn_pool(&url, parallel_size * 2, enable_sqlx_log)
                             .await?;
-                    let meta_manager =
-                        MysqlMetaManager::new_mysql_compatible(conn_pool.clone(), DbType::Foxlake)
-                            .await?;
+                    let meta_manager = MysqlMetaManager::new_mysql_compatible(
+                        conn_pool.clone(),
+                        DbType::StarRocks,
+                    )
+                    .await?;
                     let sinker = StarRocksSinker {
                         client,
                         host,

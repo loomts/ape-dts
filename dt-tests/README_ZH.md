@@ -82,6 +82,16 @@ CREATE DATABASE postgres_euc_cn
 # StarRocks
 [创建 StarRocks](/docs/en/tutorial/mysql_to_starrocks.md)
 
+创建老版本 StarRocks: 2.5.4
+
+```
+docker run -itd --name some-starrocks-2.5.4 \
+-p 9031:9030 \
+-p 8031:8030 \
+-p 8041:8040 \
+starrocks/allin1-ubuntu:2.5.4
+```
+
 # Redis
 [创建 Redis](/docs/en/tutorial/redis_to_redis.md)
 
