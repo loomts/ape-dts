@@ -64,7 +64,7 @@ Refer to [test docs](./dt-tests/README.md) for details.
 - Monitor
     - [monitor info](./docs/en/monitor/monitor.md)
     - [position info](./docs/en/monitor/position.md)
-- Task Templates
+- Task templates
     - [mysql -> mysql](./docs/templates/mysql_to_mysql.md)
     - [pg -> pg](./docs/templates/pg_to_pg.md)
     - [mongo -> mongo](./docs/templates/mongo_to_mongo.md)
@@ -94,7 +94,7 @@ Refer to [test docs](./dt-tests/README.md) for details.
 
 - Image size
 
-| ape_dts:2.0.1	| debezium/connect:2.7 |
+| ape_dts:2.0.2	| debezium/connect:2.7 |
 | :-------- | :-------- |
 | 86.4 MB |	1.38 GB |
 
@@ -110,20 +110,10 @@ Refer to [test docs](./dt-tests/README.md) for details.
 - dt-main: program entry
 - dt-connector: extractors + sinkers for databases
 - dt-pipeline: pipeline to connect extractors and sinkers
-- dt-parallelizer: various parallel algorithms
+- dt-parallelizer: parallel algorithms
 - dt-task: create extractors + sinkers + pipelines + parallelizers according to configurations
 - dt-common: common utils, basic data structures, metadata management
 - dt-tests: integration tests
-
-## Coding
-
-Build
-```
-cargo build
-cargo clippy --workspace
-```
-
-Make sure all related tests passed.
 
 ## Build images
 [build images](./docs/en/build_images.md)

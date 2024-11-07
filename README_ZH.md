@@ -95,7 +95,7 @@
 
 - 镜像对比
 
-| ape_dts:2.0.1	| debezium/connect:2.7 |
+| ape_dts:2.0.2	| debezium/connect:2.7 |
 | :-------- | :-------- |
 | 86.4 MB |	1.38 GB |
 
@@ -113,16 +113,6 @@
 - dt-task：根据配置创建 extractor，sinker，pipeline，parallelizer 以组装任务
 - dt-common：通用基础模块，基础数据结构，元数据管理
 - dt-tests：集成测试
-
-## 写代码
-
-编译及检查
-```
-cargo build
-cargo clippy --workspace
-```
-
-确保相关测试通过
 
 ## 生成镜像
 [生成镜像](./docs/en/build_images.md)
