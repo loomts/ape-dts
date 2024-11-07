@@ -133,5 +133,5 @@ DELETE FROM test_db_2.tb_2;
 ```
 
 # Start consumer
-- [python demo](https://github.com/apecloud/cubetran_udf_python)
-- [golang demo](https://github.com/apecloud/cubetran_udf_golang)
+
+[python / golang consumer demo](https://github.com/apecloud/ape_dts_consumer_demo)
