@@ -1,1 +1,4 @@
 test_db_1.drop_tb_1
+test_db_1.rename_tb_1
+test_db_1.rename_tb_2
+public.ape_dts_ddl_command

@@ -199,7 +199,7 @@ impl TaskConfig {
                     keepalive_interval_secs,
                     heartbeat_interval_secs,
                     heartbeat_tb,
-                    ddl_command_tb: loader.get_optional(EXTRACTOR, "ddl_command_tb"),
+                    ddl_meta_tb: loader.get_optional(EXTRACTOR, "ddl_meta_tb"),
                     start_time_utc: loader.get_optional(EXTRACTOR, "start_time_utc"),
                     end_time_utc: loader.get_optional(EXTRACTOR, "end_time_utc"),
                 },

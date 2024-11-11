@@ -60,7 +60,7 @@ pub enum ExtractorConfig {
         keepalive_interval_secs: u64,
         heartbeat_interval_secs: u64,
         heartbeat_tb: String,
-        ddl_command_tb: String,
+        ddl_meta_tb: String,
         start_time_utc: String,
         end_time_utc: String,
     },

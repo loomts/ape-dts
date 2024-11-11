@@ -17,16 +17,21 @@ TRUNCATE test_db_1.truncate_tb_1;
 TRUNCATE TABLE test_db_1.truncate_tb_2;
 
 -- rename table
--- ALTER TABLE test_db_1.tb_1 RENAME test_db_1.tb_2;
--- RENAME TABLE test_db_1.tb_2 TO test_db_1.tb_3;
+ALTER TABLE test_db_1.rename_tb_1 RENAME TO dst_rename_tb_1;
+
+INSERT INTO test_db_1.dst_rename_tb_1 VALUES(1, 1);
+
+ALTER TABLE test_db_1.rename_tb_2 SET SCHEMA test_db_2;
+
+INSERT INTO test_db_2.rename_tb_2 VALUES(1, 1);
 
 -- drop table
 DROP TABLE test_db_1.drop_tb_1;
 
--- drop database 
+-- drop schema 
 DROP SCHEMA test_db_3 CASCADE;
 
--- create database
+-- create schema
 CREATE SCHEMA test_db_4;
 
 -- create table
@@ -37,12 +42,9 @@ INSERT INTO test_db_2.tb_1 VALUES (1,1,1);
 -- add index
 ALTER TABLE test_db_2.tb_1 ADD CONSTRAINT idx_f_1 UNIQUE (f_1);
 
--- NOT supported ddl
 CREATE INDEX idx_f_2 ON test_db_2.tb_1 (f_2);
 
--- RENAME TABLE products TO products_old, products_new TO products;
-
--- create database with special character
+-- create schema with special character
 CREATE SCHEMA "中文database!@$%^&*()_+";
 
 -- create table with chinese character

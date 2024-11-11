@@ -8,6 +8,7 @@ CREATE TABLE test_db_1.numeric_table ( f_0 tinyint, f_1 tinyint unsigned, f_2 sm
 
 CREATE TABLE test_db_1.big_decimal_table ( f_0 tinyint, f_1 decimal(47,25) DEFAULT NULL, PRIMARY KEY(f_0));
 
+```
 CREATE TABLE test_db_1.date_time_table( f_0 tinyint, 
     f_1 datetime DEFAULT NULL, 
     f_2 datetime(6) DEFAULT NULL, 
@@ -18,3 +19,4 @@ CREATE TABLE test_db_1.date_time_table( f_0 tinyint,
     f_7 date DEFAULT NULL, 
     f_8 year DEFAULT NULL,
     PRIMARY KEY(f_0));
+```

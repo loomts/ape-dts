@@ -2,6 +2,7 @@ DROP DATABASE IF EXISTS test_db_1;
 
 CREATE DATABASE test_db_1;
 
+```
 CREATE TABLE test_db_1.one_pk_no_uk ( 
     f_0 TINYINT,
     f_1 SMALLINT DEFAULT NULL,
@@ -31,3 +32,4 @@ CREATE TABLE test_db_1.one_pk_no_uk (
     f_26 VARCHAR(100),
     f_27 VARCHAR(100),
     f_28 JSON) ENGINE=OLAP PRIMARY KEY(f_0) DISTRIBUTED BY HASH(f_0);
+```
