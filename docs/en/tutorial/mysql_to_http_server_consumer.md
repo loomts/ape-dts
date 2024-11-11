@@ -1,10 +1,11 @@
 # Start as HTTP server and extract MySQL data
 
-Refer to [Start ape_dts as an HTTP server to provide data to consumers](/docs/en/consumer/http_consumer.md) for details.
+Refer to [Start ape_dts as HTTP server](/docs/en/consumer/http_consumer.md) to provide data to consumers for details.
 
 # Prerequisites
 - [prerequisites](./prerequisites.md)
-- python3
+
+- This article is for quick start, refer to [templates](/docs/templates/rdb_to_http_server.md) and [common configs](/docs/en/config.md) for more details.
 
 # Prepare MySQL instance
 Refer to [mysql to mysql](./mysql_to_mysql.md)

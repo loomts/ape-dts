@@ -3,6 +3,8 @@
 # Prerequisites
 - [prerequisites](./prerequisites.md)
 
+- This article is for quick start, refer to [templates](/docs/templates/redis_to_redis.md) and [common configs](/docs/en/config.md) for more details.
+
 # Prepare Redis instances
 
 ## Source

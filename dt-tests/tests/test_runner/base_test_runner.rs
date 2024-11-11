@@ -1,7 +1,4 @@
-use dt_common::{
-    config::{config_enums::DbType, task_config::TaskConfig},
-    utils::time_util::TimeUtil,
-};
+use dt_common::{config::task_config::TaskConfig, utils::time_util::TimeUtil};
 use dt_connector::data_marker::DataMarker;
 use dt_task::task_runner::TaskRunner;
 use std::{
@@ -45,8 +42,6 @@ impl BaseTestRunner {
         // update extractor / sinker urls from .env
         TestConfigUtil::update_task_config_from_env(&dst_task_config_file, &dst_task_config_file);
 
-        let config = TaskConfig::new(&dst_task_config_file).unwrap();
-
         let (
             src_test_sqls,
             dst_test_sqls,
@@ -55,11 +50,7 @@ impl BaseTestRunner {
             src_clean_sqls,
             dst_clean_sqls,
             meta_center_prepare_sqls,
-        ) = Self::load_sqls(
-            &test_dir,
-            &config.extractor_basic.db_type,
-            &config.sinker_basic.db_type,
-        );
+        ) = Self::load_sqls(&test_dir);
 
         Ok(Self {
             task_config_file: dst_task_config_file,
@@ -141,8 +132,6 @@ impl BaseTestRunner {
 
     fn load_sqls(
         test_dir: &str,
-        src_db_type: &DbType,
-        dst_db_type: &DbType,
     ) -> (
         Vec<String>,
         Vec<String>,
@@ -152,74 +141,70 @@ impl BaseTestRunner {
         Vec<String>,
         Vec<String>,
     ) {
-        let load = |sql_file: &str, db_type: &DbType| -> Vec<String> {
+        let load = |sql_file: &str| -> Vec<String> {
             let full_sql_path = format!("{}/{}", test_dir, sql_file);
             if !Self::check_path_exists(&full_sql_path) {
                 return Vec::new();
             }
-
-            match db_type {
-                DbType::Mysql | DbType::Pg | DbType::Foxlake | DbType::StarRocks => {
-                    Self::load_rdb_sqls(&full_sql_path)
-                }
-                _ => Self::load_non_rdb_sqls(&full_sql_path),
-            }
+            Self::load_sql_file(&full_sql_path)
         };
 
         (
-            load("src_test.sql", src_db_type),
-            load("dst_test.sql", dst_db_type),
-            load("src_prepare.sql", src_db_type),
-            load("dst_prepare.sql", dst_db_type),
-            load("src_clean.sql", src_db_type),
-            load("dst_clean.sql", dst_db_type),
-            load("meta_center_prepare.sql", src_db_type),
+            load("src_test.sql"),
+            load("dst_test.sql"),
+            load("src_prepare.sql"),
+            load("dst_prepare.sql"),
+            load("src_clean.sql"),
+            load("dst_clean.sql"),
+            load("meta_center_prepare.sql"),
         )
     }
 
-    fn load_non_rdb_sqls(sql_file: &str) -> Vec<String> {
+    fn load_sql_file(sql_file: &str) -> Vec<String> {
+        /* sqls content E.g. :
+        -- this is comment
+
+        select * from db_1.tb_1;  -- a sql in single line
+
+        ```
+        -- a sql in multiple lines
+        select *
+        from
+        db_1.tb_1;
+        ```
+        */
         let mut sqls = Vec::new();
-        let mut lines = Self::load_file(&sql_file);
-        for line in lines.drain(..) {
+        let mut in_block = false;
+        let mut multi_line_sql = String::new();
+
+        for line in Self::load_file(&sql_file).iter() {
             let line = line.trim();
             if line.is_empty() || line.starts_with("--") {
                 continue;
             }
-            sqls.push(line.to_string());
-        }
-        sqls
-    }
 
-    fn load_rdb_sqls(sql_file: &str) -> Vec<String> {
-        let mut sqls = Vec::new();
-        let sql_start_keywords = vec![
-            "create ",
-            "drop ",
-            "alter ",
-            "insert ",
-            "update ",
-            "delete ",
-            "comment ",
-            "truncate ",
-            "select ",
-        ];
-        let mut lines = Self::load_file(&sql_file);
-        for line in lines.drain(..) {
-            let check_line = line.trim().to_lowercase();
-            if check_line.is_empty() || check_line.starts_with("--") {
+            if line.starts_with("```") {
+                if in_block {
+                    // block end
+                    in_block = false;
+                    if !multi_line_sql.is_empty() {
+                        // pop the last '\n'
+                        multi_line_sql.pop();
+                        sqls.push(multi_line_sql.clone());
+                    }
+                } else {
+                    // block start
+                    in_block = true;
+                    multi_line_sql.clear();
+                }
                 continue;
             }
 
-            if sql_start_keywords
-                .iter()
-                .any(|keyword| -> bool { check_line.starts_with(keyword) })
-            {
-                sqls.push(line);
+            if in_block {
+                multi_line_sql.push_str(&line);
+                multi_line_sql.push('\n');
             } else {
-                if let Some(last_sql) = sqls.last_mut() {
-                    last_sql.push_str("\n");
-                    last_sql.push_str(&line);
-                }
+                sqls.push(line.into());
             }
         }
         sqls

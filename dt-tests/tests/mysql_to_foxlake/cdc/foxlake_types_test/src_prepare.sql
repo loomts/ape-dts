@@ -2,6 +2,7 @@ DROP DATABASE IF EXISTS sync_db_test_types;
 
 CREATE DATABASE sync_db_test_types;
 
+```
 CREATE TABLE sync_db_test_types.`test_types` (
   `c_pk` bigint unsigned NOT NULL AUTO_INCREMENT,
   `c_type` varchar(255) DEFAULT NULL,
@@ -47,3 +48,4 @@ CREATE TABLE sync_db_test_types.`test_types` (
   `c_json` json DEFAULT NULL,
   PRIMARY KEY (`c_pk`)
 ) ENGINE=InnoDB AUTO_INCREMENT=394 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+```

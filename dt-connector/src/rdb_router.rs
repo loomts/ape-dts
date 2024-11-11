@@ -159,8 +159,8 @@ impl RdbRouter {
 
     pub fn route_ddl(&self, mut ddl_data: DdlData) -> DdlData {
         match &mut ddl_data.statement {
-            DdlStatement::MysqlAlterRenameTable(_)
-            | DdlStatement::PgAlterRenameTable(_)
+            DdlStatement::MysqlAlterTableRename(_)
+            | DdlStatement::PgAlterTableRename(_)
             | DdlStatement::RenameTable(_) => {
                 let (src_schema, src_tb) = ddl_data.get_schema_tb();
                 let (src_new_schema, src_new_tb) = ddl_data.get_rename_to_schema_tb();
