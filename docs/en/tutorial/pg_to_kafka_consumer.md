@@ -1,10 +1,11 @@
 # Send Postgres data to Kafka
 
-Refer to [Send data to Kafka for consumers](/docs/en/consumer/kafka_consumer.md)
+Refer to [Send data to Kafka](/docs/en/consumer/kafka_consumer.md) for consumers.
 
 # Prerequisites
 - [prerequisites](./prerequisites.md)
-- python3
+
+- This article is for quick start, refer to [templates](/docs/templates/rdb_to_kafka.md) and [common configs](/docs/en/config.md) for more details.
 
 # Prepare Postgres instance
 Refer to [pg to pg](./pg_to_pg.md)

@@ -131,6 +131,32 @@ log4rs_file=./log4rs.yaml
 
 - refer to [create slot and get starting lsn](/docs/en/tutorial/snapshot_and_cdc_without_data_loss.md)
 
+# CDC with ddl capture
+
+- Refer to [tutorial](/docs/en/tutorial/pg_to_pg.md) for how to enable ddl capture in source Postgres.
+
+- The differences with CDC task config:
+
+```
+[extractor]
+ddl_meta_tb=public.ape_dts_ddl_command
+
+[filter]
+do_ddls=create_schema,drop_schema,alter_schema,create_table,alter_table,drop_table,create_index,drop_index,truncate_table,rename_table
+```
+
+- [extractor]
+
+| Config | Description | Example | Default |
+| :-------- | :-------- | :-------- | :-------- |
+| ddl_meta_tb | the meta table you created to store the captured ddl info | - | - |
+
+- [filter]
+
+| Config | Description | Example | Default |
+| :-------- | :-------- | :-------- | :-------- |
+| do_ddls | the ddl types to capture and sync to target, it shoud be one or more among "create_schema, drop_schema, alter_schema, create_table, alter_table, drop_table, create_index, drop_index, truncate_table, rename_table" | create_table,alter_table,drop_table | empty, which means ignore all ddls |
+
 # Struct check
 ```
 [extractor]

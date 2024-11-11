@@ -192,6 +192,21 @@ log4rs_file=./log4rs.yaml
 | gtid_enabled | use Gtid_Set to pull binlog | true | false |
 | gtid_set | the starting Gtid_Set to pull binlog from | 6d3960f6-4b36-11ef-8614-0242ac110002:1-10 | empty, which means from the latest Executed_Gtid_Set |
 
+# CDC with ddl capture
+
+- The differences with CDC task config:
+
+```
+[filter]
+do_ddls=create_database,drop_database,alter_database,create_table,alter_table,drop_table,create_index,drop_index,truncate_table,rename_table
+```
+
+- [filter]
+
+| Config | Description | Example | Default |
+| :-------- | :-------- | :-------- | :-------- |
+| do_ddls | the ddl types to capture and sync to target, it shoud be one or more among "create_database, drop_database, alter_database, create_table, alter_table, drop_table, create_index, drop_index, truncate_table, rename_table" | create_table,alter_table,drop_table | empty, which means ignore all ddls |
+
 # Struct check
 ```
 [extractor]
