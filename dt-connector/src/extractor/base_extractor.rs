@@ -153,7 +153,11 @@ impl BaseExtractor {
         );
 
         if heartbeat_interval_secs == 0 || heartbeat_tb.is_empty() {
-            log_warn!("heartbeat disabled, heartbeat_tb is empty");
+            log_warn!(
+                "heartbeat disabled, heartbeat_tb: {}, heartbeat_interval_secs: {}",
+                heartbeat_tb,
+                heartbeat_interval_secs
+            );
             return vec![];
         }
 

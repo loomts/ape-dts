@@ -27,7 +27,10 @@ use sqlx::{postgres::PgArguments, query::Query, Pool, Postgres};
 use tokio_postgres::replication::LogicalReplicationStream;
 
 use dt_common::{
-    config::config_enums::DbType, error::Error, log_error, log_info, rdb_filter::RdbFilter,
+    config::{config_enums::DbType, config_token_parser::ConfigTokenParser},
+    error::Error,
+    log_error, log_info,
+    rdb_filter::RdbFilter,
     utils::time_util::TimeUtil,
 };
 
@@ -64,7 +67,7 @@ pub struct PgCdcExtractor {
     pub keepalive_interval_secs: u64,
     pub heartbeat_interval_secs: u64,
     pub heartbeat_tb: String,
-    pub ddl_command_tb: String,
+    pub ddl_meta_tb: String,
     pub syncer: Arc<Mutex<Syncer>>,
     pub resumer: CdcResumer,
 }
@@ -80,12 +83,13 @@ impl Extractor for PgCdcExtractor {
         };
 
         log_info!(
-            "PgCdcExtractor starts, slot_name: {}, start_lsn: {}, keepalive_interval_secs: {}, heartbeat_interval_secs: {}, heartbeat_tb: {}",
+            "PgCdcExtractor starts, slot_name: {}, start_lsn: {}, keepalive_interval_secs: {}, heartbeat_interval_secs: {}, heartbeat_tb: {}, ddl_meta_tb: {}",
             self.slot_name,
             self.start_lsn,
             self.keepalive_interval_secs,
             self.heartbeat_interval_secs,
-            self.heartbeat_tb
+            self.heartbeat_tb,
+            self.ddl_meta_tb,
         );
         self.extract_internal().await?;
         self.base_extractor.wait_task_finish().await
@@ -108,6 +112,12 @@ impl PgCdcExtractor {
         };
         let (stream, actual_start_lsn) = cdc_client.connect().await?;
         tokio::pin!(stream);
+
+        // setup ddl capture
+        let ddl_meta = ConfigTokenParser::parse_config(&self.ddl_meta_tb, &DbType::Pg, &['.'])?;
+        if ddl_meta.len() == 2 {
+            self.filter.add_do_tb(&ddl_meta[0], &ddl_meta[1]);
+        }
 
         // start heartbeat
         self.start_heartbeat(self.base_extractor.shut_down.clone())?;
@@ -176,7 +186,7 @@ impl PgCdcExtractor {
 
                         Insert(insert) => {
                             if self.base_extractor.time_filter.started {
-                                self.decode_insert(&insert, &position).await?;
+                                self.decode_insert(&insert, &position, &ddl_meta).await?;
                             }
                         }
 
@@ -294,6 +304,7 @@ impl PgCdcExtractor {
         &mut self,
         event: &InsertBody,
         position: &Position,
+        ddl_meta: &[String],
     ) -> anyhow::Result<()> {
         let tb_meta = self
             .meta_manager
@@ -311,7 +322,7 @@ impl PgCdcExtractor {
             Some(col_values),
         );
 
-        if row_data.tb == self.ddl_command_tb {
+        if ddl_meta.len() == 2 && row_data.schema == ddl_meta[0] && row_data.tb == ddl_meta[1] {
             return self.decode_ddl(&row_data, position).await;
         }
 

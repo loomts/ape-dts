@@ -3,7 +3,7 @@ drop database if exists struct_it_mysql2mysql_1;
 create database if not exists struct_it_mysql2mysql_1;
 
 -- full column type
-
+```
 CREATE TABLE struct_it_mysql2mysql_1.full_column_type (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     varchar_col VARCHAR(255) NOT NULL COMMENT 'varchar_col_comment',
     char_col CHAR(10) COMMENT 'char_col_comment',
@@ -38,9 +38,10 @@ CREATE TABLE struct_it_mysql2mysql_1.full_column_type (id INT UNSIGNED AUTO_INCR
     set_col SET('option1', 'option2', 'option3') COMMENT 'set_col_comment',
     json_col JSON DEFAULT NULL COMMENT 'json_col_comment'
 ); 
+```
 
 -- full index type
-
+```
 CREATE TABLE struct_it_mysql2mysql_1.full_index_type(
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, 
     f_1 int, 
@@ -53,6 +54,7 @@ CREATE TABLE struct_it_mysql2mysql_1.full_index_type(
     f_8 TEXT, 
     f_9 POINT NOT NULL
 );
+```
 
 -- unique key with multiple columns
 CREATE UNIQUE INDEX idx_unique_1 ON struct_it_mysql2mysql_1.full_index_type(f_1, f_2, f_3);
@@ -74,6 +76,7 @@ CREATE FULLTEXT INDEX idx_full_text_2 ON struct_it_mysql2mysql_1.full_index_type
 CREATE SPATIAL INDEX idx_spatial_1 ON struct_it_mysql2mysql_1.full_index_type(f_9);
 
 -- full constraint
+```
 CREATE TABLE struct_it_mysql2mysql_1.constraint_table (
   id INT PRIMARY KEY AUTO_INCREMENT, 
   username VARCHAR(50) NOT NULL UNIQUE, 
@@ -86,3 +89,4 @@ CREATE TABLE struct_it_mysql2mysql_1.constraint_table (
   CONSTRAINT chk_age CHECK (age >= 18), 
   CONSTRAINT chk_email CHECK (email LIKE '%@%.%')
 );
+```

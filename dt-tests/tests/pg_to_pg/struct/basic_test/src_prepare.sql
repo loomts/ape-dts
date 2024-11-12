@@ -3,6 +3,7 @@ drop schema if exists struct_it_pg2pg_1 CASCADE;
 create schema struct_it_pg2pg_1;
 
 -- all basic column types:
+```
 CREATE TABLE struct_it_pg2pg_1.full_column_type (
   id SERIAL PRIMARY KEY, 
   varchar_col VARCHAR(255) NOT NULL, 

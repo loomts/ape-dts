@@ -14,14 +14,15 @@ pub enum DdlStatement {
 
     MysqlCreateTable(MysqlCreateTableStatement),
     MysqlAlterTable(MysqlAlterTableStatement),
-    MysqlAlterRenameTable(MysqlAlterRenameTableStatement),
+    MysqlAlterTableRename(MysqlAlterTableRenameStatement),
     MysqlTruncateTable(MysqlTruncateTableStatement),
     MysqlCreateIndex(MysqlCreateIndexStatement),
     MysqlDropIndex(MysqlDropIndexStatement),
 
     PgCreateTable(PgCreateTableStatement),
     PgAlterTable(PgAlterTableStatement),
-    PgAlterRenameTable(PgAlterRenameTableStatement),
+    PgAlterTableRename(PgAlterTableRenameStatement),
+    PgAlterTableSetSchema(PgAlterTableSetSchemaStatement),
     PgTruncateTable(PgTruncateTableStatement),
     PgCreateIndex(PgCreateIndexStatement),
 
@@ -108,8 +109,9 @@ impl DdlStatement {
             DdlStatement::DropTable(s) => (s.schema.clone(), s.tb.clone()),
 
             DdlStatement::RenameTable(s) => (s.schema.clone(), s.tb.clone()),
-            DdlStatement::MysqlAlterRenameTable(s) => (s.db.clone(), s.tb.clone()),
-            DdlStatement::PgAlterRenameTable(s) => (s.schema.clone(), s.tb.clone()),
+            DdlStatement::MysqlAlterTableRename(s) => (s.db.clone(), s.tb.clone()),
+            DdlStatement::PgAlterTableRename(s) => (s.schema.clone(), s.tb.clone()),
+            DdlStatement::PgAlterTableSetSchema(s) => (s.schema.clone(), s.tb.clone()),
 
             DdlStatement::PgDropIndex(_)
             | DdlStatement::PgDropMultiIndex(_)
@@ -122,8 +124,8 @@ impl DdlStatement {
     pub fn get_rename_to_schema_tb(&self) -> (String, String) {
         match self {
             DdlStatement::RenameTable(s) => (s.new_schema.clone(), s.new_tb.clone()),
-            DdlStatement::MysqlAlterRenameTable(s) => (s.new_db.clone(), s.new_tb.clone()),
-            DdlStatement::PgAlterRenameTable(s) => (s.new_schema.clone(), s.new_tb.clone()),
+            DdlStatement::MysqlAlterTableRename(s) => (s.new_db.clone(), s.new_tb.clone()),
+            DdlStatement::PgAlterTableRename(s) => (s.new_schema.clone(), s.new_tb.clone()),
             _ => (String::new(), String::new()),
         }
     }
@@ -136,7 +138,7 @@ impl DdlStatement {
         dst_new_tb: String,
     ) {
         match self {
-            DdlStatement::MysqlAlterRenameTable(s) => {
+            DdlStatement::MysqlAlterTableRename(s) => {
                 if !s.db.is_empty() {
                     s.db = dst_schema;
                 }
@@ -147,7 +149,7 @@ impl DdlStatement {
                 s.new_tb = dst_new_tb;
             }
 
-            DdlStatement::PgAlterRenameTable(s) => {
+            DdlStatement::PgAlterTableRename(s) => {
                 if !s.schema.is_empty() {
                     s.schema = dst_schema;
                 }
@@ -260,8 +262,9 @@ impl DdlStatement {
 
             // not supported
             DdlStatement::RenameTable(_)
-            | DdlStatement::MysqlAlterRenameTable(_)
-            | DdlStatement::PgAlterRenameTable(_)
+            | DdlStatement::MysqlAlterTableRename(_)
+            | DdlStatement::PgAlterTableRename(_)
+            | DdlStatement::PgAlterTableSetSchema(_)
             | DdlStatement::PgDropIndex(_)
             | DdlStatement::PgDropMultiIndex(_)
             | DdlStatement::DropMultiTable(_)
@@ -352,7 +355,7 @@ pub struct MysqlAlterTableStatement {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
-pub struct MysqlAlterRenameTableStatement {
+pub struct MysqlAlterTableRenameStatement {
     pub db: String,
     pub tb: String,
     pub new_db: String,
@@ -370,7 +373,18 @@ pub struct PgAlterTableStatement {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
-pub struct PgAlterRenameTableStatement {
+pub struct PgAlterTableRenameStatement {
+    pub schema: String,
+    pub tb: String,
+    pub new_schema: String,
+    pub new_tb: String,
+    pub if_exists: bool,
+    pub is_only: bool,
+    pub unparsed: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct PgAlterTableSetSchemaStatement {
     pub schema: String,
     pub tb: String,
     pub new_schema: String,
@@ -561,7 +575,7 @@ impl DdlStatement {
                 append_unparsed(sql, &s.unparsed)
             }
 
-            DdlStatement::MysqlAlterRenameTable(s) => {
+            DdlStatement::MysqlAlterTableRename(s) => {
                 let mut sql = "ALTER TABLE".to_string();
                 sql = append_tb(&sql, &s.db, &s.tb, db_type);
                 sql = format!("{} RENAME TO", sql);
@@ -581,7 +595,7 @@ impl DdlStatement {
                 append_unparsed(sql, &s.unparsed)
             }
 
-            DdlStatement::PgAlterRenameTable(s) => {
+            DdlStatement::PgAlterTableRename(s) => {
                 let mut sql = "ALTER TABLE".to_string();
                 if s.if_exists {
                     sql = format!("{} IF EXISTS", sql);
@@ -592,6 +606,20 @@ impl DdlStatement {
                 sql = append_tb(&sql, &s.schema, &s.tb, db_type);
                 sql = format!("{} RENAME TO", sql);
                 sql = append_tb(&sql, &s.new_schema, &s.new_tb, db_type);
+                append_unparsed(sql, &s.unparsed)
+            }
+
+            DdlStatement::PgAlterTableSetSchema(s) => {
+                let mut sql = "ALTER TABLE".to_string();
+                if s.if_exists {
+                    sql = format!("{} IF EXISTS", sql);
+                }
+                if s.is_only {
+                    sql = format!("{} ONLY", sql);
+                }
+                sql = append_tb(&sql, &s.schema, &s.tb, db_type);
+                sql = format!("{} SET SCHEMA", sql);
+                sql = append_identifier(&sql, &s.new_schema, true, db_type);
                 append_unparsed(sql, &s.unparsed)
             }
 

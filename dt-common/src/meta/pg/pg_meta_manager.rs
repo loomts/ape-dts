@@ -43,8 +43,7 @@ impl PgMetaManager {
             .type_registry
             .oid_to_type
             .get(&oid)
-            .with_context(|| format!("no type found for oid: [{}]", oid))
-            .unwrap()
+            .with_context(|| format!("no type found for oid: [{}]", oid))?
             .clone())
     }
 
@@ -59,8 +58,7 @@ impl PgMetaManager {
         Ok(self
             .oid_to_tb_meta
             .get(&oid)
-            .with_context(|| format!("no tb_meta found for oid: [{}]", oid))
-            .unwrap()
+            .with_context(|| format!("no tb_meta found for oid: [{}]", oid))?
             .clone())
     }
 
@@ -147,7 +145,7 @@ impl PgMetaManager {
             schema, tb
         );
         let mut rows = sqlx::query(&sql).fetch(conn_pool);
-        while let Some(row) = rows.try_next().await.unwrap() {
+        while let Some(row) = rows.try_next().await? {
             let col: String = row.try_get("column_name")?;
             cols.push(col);
         }
@@ -163,7 +161,7 @@ impl PgMetaManager {
         );
 
         let mut rows = sqlx::query(&sql).fetch(conn_pool);
-        while let Some(row) = rows.try_next().await.unwrap() {
+        while let Some(row) = rows.try_next().await? {
             let col: String = row.try_get("col_name")?;
             if !cols.contains(&col) {
                 continue;
@@ -208,7 +206,7 @@ impl PgMetaManager {
 
         let mut key_map: HashMap<String, Vec<String>> = HashMap::new();
         let mut rows = sqlx::query(&sql).fetch(conn_pool);
-        while let Some(row) = rows.try_next().await.unwrap() {
+        while let Some(row) = rows.try_next().await? {
             let mut col_name: String = row.try_get("col_name")?;
             col_name = col_name.to_lowercase();
 
@@ -233,7 +231,7 @@ impl PgMetaManager {
     async fn get_oid(conn_pool: &Pool<Postgres>, schema: &str, tb: &str) -> anyhow::Result<i32> {
         let sql = format!(r#"SELECT '"{}"."{}"'::regclass::oid;"#, schema, tb);
         let mut rows = sqlx::query(&sql).fetch(conn_pool);
-        if let Some(row) = rows.try_next().await.unwrap() {
+        if let Some(row) = rows.try_next().await? {
             let oid: i32 = row.try_get_unchecked("oid")?;
             return Ok(oid);
         }
@@ -279,7 +277,7 @@ impl PgMetaManager {
         );
 
         let mut rows = sqlx::query(&sql).fetch(conn_pool);
-        while let Some(row) = rows.try_next().await.unwrap() {
+        while let Some(row) = rows.try_next().await? {
             let my_schema: String = row.try_get("schema_name")?;
             let my_tb: String = row.try_get("table_name")?;
             let my_col: String = row.try_get("column_name")?;

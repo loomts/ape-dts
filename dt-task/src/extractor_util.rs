@@ -234,7 +234,7 @@ impl ExtractorUtil {
                 keepalive_interval_secs,
                 heartbeat_interval_secs,
                 heartbeat_tb,
-                ddl_command_tb,
+                ddl_meta_tb,
                 start_time_utc,
                 end_time_utc,
             } => {
@@ -254,7 +254,7 @@ impl ExtractorUtil {
                     keepalive_interval_secs,
                     heartbeat_interval_secs,
                     heartbeat_tb,
-                    ddl_command_tb,
+                    ddl_meta_tb,
                     resumer: cdc_resumer,
                     base_extractor,
                 };

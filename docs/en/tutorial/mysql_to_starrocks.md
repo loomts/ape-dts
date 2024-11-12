@@ -3,6 +3,8 @@
 # Prerequisites
 - [prerequisites](./prerequisites.md)
 
+- This article is for quick start, refer to [templates](/docs/templates/mysql_to_starrocks.md) and [common configs](/docs/en/config.md) for more details.
+
 # Prepare MySQL instance
 Refer to [mysql to mysql](./mysql_to_mysql.md)
 

@@ -125,6 +125,10 @@ impl RdbFilter {
         self.ignore_tbs.insert((schema.into(), tb.into()));
     }
 
+    pub fn add_do_tb(&mut self, schema: &str, tb: &str) {
+        self.do_tbs.insert((schema.into(), tb.into()));
+    }
+
     fn match_all(set: &HashSet<String>) -> bool {
         set.len() == 1 && set.contains("*")
     }

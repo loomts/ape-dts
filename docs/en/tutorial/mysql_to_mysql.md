@@ -3,6 +3,8 @@
 # Prerequisites
 - [prerequisites](./prerequisites.md)
 
+- This article is for quick start, refer to [templates](/docs/templates/mysql_to_mysql.md) and [common configs](/docs/en/config.md) for more details.
+
 # Prepare MySQL instances
 
 ## Source
@@ -440,4 +442,65 @@ SELECT * FROM test_db.tb_1;
 |  5 |       5 |
 |  6 |       6 |
 +----+---------+
+```
+
+# CDC task with ddl capture
+
+## Start task
+```
+cat <<EOL > /tmp/ape_dts/task_config.ini
+[extractor]
+db_type=mysql
+extract_type=cdc
+server_id=2000
+url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
+
+[filter]
+do_dbs=test_db
+do_events=insert,update,delete
+do_ddls=create_database,drop_database,alter_database,create_table,alter_table,drop_table,create_index,drop_index,truncate_table,rename_table
+
+[sinker]
+db_type=mysql
+sink_type=write
+batch_size=200
+url=mysql://root:123456@127.0.0.1:3308?ssl-mode=disabled
+
+[parallelizer]
+parallel_type=rdb_merge
+parallel_size=8
+
+[pipeline]
+buffer_size=16000
+checkpoint_interval_secs=1
+EOL
+```
+
+```
+docker run --rm --network host \
+-v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
+"$APE_DTS_IMAGE" /task_config.ini 
+```
+
+## Do ddls in source
+```
+mysql -h127.0.0.1 -uroot -p123456 -uroot -P3307
+
+CREATE TABLE test_db.tb_2(id int, value int, primary key(id));
+INSERT INTO test_db.tb_2 VALUES(1,1);
+```
+
+## Check results
+```
+mysql -h127.0.0.1 -uroot -p123456 -uroot -P3308
+
+SELECT * FROM test_db.tb_2;
+```
+
+```
++----+-------+
+| id | value |
++----+-------+
+|  1 |     1 |
++----+-------+
 ```
