@@ -381,7 +381,7 @@ impl SinkerUtil {
                 url,
                 batch_size,
                 stream_load_url,
-                logical_delete,
+                hard_delete,
             } => {
                 for _ in 0..parallel_size {
                     let url_info = UrlUtil::parse(&stream_load_url)?;
@@ -412,7 +412,7 @@ impl SinkerUtil {
                         meta_manager,
                         monitor: monitor.clone(),
                         sync_version: Utc::now().timestamp_millis(),
-                        logical_delete,
+                        hard_delete,
                     };
                     sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
                 }

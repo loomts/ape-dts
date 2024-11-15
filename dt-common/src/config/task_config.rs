@@ -424,7 +424,7 @@ impl TaskConfig {
                     url,
                     batch_size,
                     stream_load_url: loader.get_optional(SINKER, "stream_load_url"),
-                    logical_delete: loader.get_with_default(SINKER, "logical_delete", true),
+                    hard_delete: loader.get_optional(SINKER, "hard_delete"),
                 },
 
                 SinkType::Struct => SinkerConfig::StarrocksStruct {

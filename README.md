@@ -9,12 +9,12 @@
 
 
 ## Supported task types
-|  | mysql -> mysql | pg -> pg | mongo -> mongo | redis -> redis | mysql -> kafka | pg -> kafka| mysql -> starrocks |
-| :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- |
-| Snapshot | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
-| CDC | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
-| Data check/revise/review | &#10004; | &#10004; | &#10004; | | | | |
-| Structure migration/check | &#10004; | &#10004; | | | | |
+|  | mysql -> mysql | pg -> pg | mongo -> mongo | redis -> redis | mysql -> kafka | pg -> kafka| mysql -> starrocks | mysql -> clickhouse |
+| :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- |
+| Snapshot | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
+| CDC | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
+| Data check/revise/review | &#10004; | &#10004; | &#10004; | | | | | |
+| Structure migration | &#10004; | &#10004; | | | | | &#10004; | &#10004; |
 
 
 # Quick starts
@@ -45,10 +45,10 @@ Refer to [test docs](./dt-tests/README.md) for details.
     - [check](./docs/en/structure/check.md)
     - [check by Liquibase](./docs/en/structure/check_by_liquibase.md)
 - Snapshot tasks
-    - [migration](./docs/en/snapshot/migration.md)
-    - [check](./docs/en/snapshot/check.md)
-    - [revise](./docs/en/snapshot/revise.md)
-    - [review](./docs/en/snapshot/review.md)
+    - [data migration](./docs/en/snapshot/migration.md)
+    - [data check](./docs/en/snapshot/check.md)
+    - [data revise](./docs/en/snapshot/revise.md)
+    - [data review](./docs/en/snapshot/review.md)
     - [resume at breakpoint](./docs/en/snapshot/resume.md)
 - CDC tasks
     - [data sync](./docs/en/cdc/sync.md)

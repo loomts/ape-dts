@@ -10,5 +10,6 @@ export REDIS_IMAGE="redis:7.0"
 export MONGO_IMAGE="mongo:6.0"
 export ZOOKEEPER_IMAGE="docker.io/bitnami/zookeeper:3.8"
 export KAFKA_IMAGE="docker.io/bitnami/kafka:3.3"
-export STARROCKS_IMAGES="starrocks/allin1-ubuntu:3.2.11"
+export STARROCKS_IMAGE="starrocks/allin1-ubuntu:3.2.11"
+export CLICKHOUSE_IMAGE="clickhouse/clickhouse-server:latest"
 ```

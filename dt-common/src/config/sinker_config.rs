@@ -78,7 +78,7 @@ pub enum SinkerConfig {
         url: String,
         batch_size: usize,
         stream_load_url: String,
-        logical_delete: bool,
+        hard_delete: bool,
     },
 
     StarrocksStruct {

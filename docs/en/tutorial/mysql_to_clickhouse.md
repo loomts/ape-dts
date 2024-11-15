@@ -1,4 +1,4 @@
-# Migrate data from MySQL to StarRocks
+# Migrate data from MySQL to Clickhouse
 
 # Prerequisites
 - [prerequisites](./prerequisites.md)
@@ -12,11 +12,12 @@ Refer to [mysql to mysql](./mysql_to_mysql.md)
 - tested versions: 2.5.4 to 3.2.11
 
 ```
-docker run -itd --name some-starrocks \
--p 9030:9030 \
--p 8030:8030 \
--p 8040:8040 \
-"$STARROCKS_IMAGE"
+docker run -d --name some-clickhouse-server \
+--ulimit nofile=262144:262144 \
+-p 9100:9000 \
+-p 8123:8123 \
+-e CLICKHOUSE_USER=admin -e CLICKHOUSE_PASSWORD=123456 \
+"$CLICKHOUSE_IMAGE"
 ```
 
 # Migrate structures
@@ -35,9 +36,9 @@ db_type=mysql
 url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
 
 [sinker]
-url=mysql://root:@127.0.0.1:9030
 sink_type=struct
-db_type=starrocks
+db_type=clickhouse
+url=http://admin:123456@127.0.0.1:8123
 
 [filter]
 do_dbs=test_db
@@ -61,25 +62,11 @@ docker run --rm --network host \
 ```
 mysql -P 9030 -h 127.0.0.1 -u root --prompt="StarRocks > "
 
-SHOW CREATE TABLE test_db.tb_1;
+SELECT * FROM test_db.tb_1;
 ```
 
 ```
-CREATE TABLE `tb_1` (
-  `id` int(11) NOT NULL COMMENT "",
-  `value` int(11) NULL COMMENT "",
-  `_ape_dts_is_deleted` smallint(6) NULL COMMENT "",
-  `_ape_dts_version` bigint(20) NULL COMMENT ""
-) ENGINE=OLAP 
-PRIMARY KEY(`id`)
-DISTRIBUTED BY HASH(`id`)
-PROPERTIES (
-"replication_num" = "1",
-"in_memory" = "false",
-"enable_persistent_index" = "true",
-"replicated_storage" = "true",
-"compression" = "LZ4"
-);
+
 ```
 
 # Migrate snapshot data
@@ -88,6 +75,14 @@ PROPERTIES (
 mysql -h127.0.0.1 -uroot -p123456 -P3307
 
 INSERT INTO test_db.tb_1 VALUES(1,1),(2,2),(3,3),(4,4);
+```
+
+## Prepare target tables
+```
+mysql -P 9030 -h 127.0.0.1 -u root --prompt="StarRocks > "
+
+CREATE DATABASE test_db;
+CREATE TABLE test_db.tb_1(id INT, value INT) ENGINE=OLAP PRIMARY KEY(id) DISTRIBUTED BY HASH(id);
 ```
 
 ## Start task
@@ -132,17 +127,17 @@ SELECT * FROM test_db.tb_1;
 ```
 
 ```
-+------+-------+---------------------+------------------+
-| id   | value | _ape_dts_is_deleted | _ape_dts_version |
-+------+-------+---------------------+------------------+
-|    1 |     1 |                NULL |    1731665154965 |
-|    2 |     2 |                NULL |    1731665159858 |
-|    3 |     3 |                NULL |    1731665159880 |
-|    4 |     4 |                NULL |    1731665159880 |
-+------+-------+---------------------+------------------+
++----+-------+
+| id | value |
++----+-------+
+|  1 |     1 |
+|  2 |     2 |
+|  3 |     3 |
+|  4 |     4 |
++----+-------+
 ```
 
-# Cdc task with hard delete (NOT recommended)
+# Cdc task
 
 ## Start task
 ```
@@ -162,7 +157,6 @@ db_type=starrocks
 sink_type=write
 url=mysql://root:@127.0.0.1:9030
 stream_load_url=mysql://root:@127.0.0.1:8040
-hard_delete=true
 
 [parallelizer]
 parallel_type=rdb_merge
@@ -197,75 +191,14 @@ SELECT * FROM test_db.tb_1;
 ```
 
 ```
-+------+---------+---------------------+------------------+
-| id   | value   | _ape_dts_is_deleted | _ape_dts_version |
-+------+---------+---------------------+------------------+
-|    2 | 2000000 |                NULL |    1731665679461 |
-|    3 |       3 |                NULL |    1731665609225 |
-|    4 |       4 |                NULL |    1731665609236 |
-|    5 |       5 |                NULL |    1731665679572 |
-+------+---------+---------------------+------------------+
-```
-
-# Cdc task with soft delete (recommended)
-## Start task
-```
-cat <<EOL > /tmp/ape_dts/task_config.ini
-[extractor]
-db_type=mysql
-extract_type=cdc
-server_id=2000
-url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
-
-[filter]
-do_dbs=test_db
-do_events=insert,update,delete
-
-[sinker]
-db_type=starrocks
-sink_type=write
-url=mysql://root:@127.0.0.1:9030
-stream_load_url=mysql://root:@127.0.0.1:8040
-
-[parallelizer]
-parallel_type=table
-parallel_size=8
-
-[pipeline]
-buffer_size=16000
-checkpoint_interval_secs=1
-EOL
-```
-
-```
-docker run --rm --network host \
--v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
-"$APE_DTS_IMAGE" /task_config.ini 
-```
-
-## Change source data
-```
-mysql -h127.0.0.1 -uroot -p123456 -uroot -P3307
-
-DELETE FROM test_db.tb_1 WHERE id=3;
-```
-
-## Check results
-```
-mysql -P 9030 -h 127.0.0.1 -u root --prompt="StarRocks > "
-
-SELECT * FROM test_db.tb_1;
-```
-
-```
-+------+---------+---------------------+------------------+
-| id   | value   | _ape_dts_is_deleted | _ape_dts_version |
-+------+---------+---------------------+------------------+
-|    2 | 2000000 |                NULL |    1731665679461 |
-|    3 |       3 |                   1 |    1731665747381 |
-|    4 |       4 |                NULL |    1731665609236 |
-|    5 |       5 |                NULL |    1731665679572 |
-+------+---------+---------------------+------------------+
++----+---------+
+| id | value   |
++----+---------+
+|  2 | 2000000 |
+|  3 |       3 |
+|  4 |       4 |
+|  5 |       5 |
++----+---------+
 ```
 
 # How it works
@@ -318,13 +251,14 @@ Refer to [config](/docs/en/config.md) for other common configurations
 | longblob | VARBINARY |
 | enum | VARCHAR |
 | set | VARCHAR |
+| bit | VARCHAR |
 | json | JSON/STRING |
 
 ## Example
-- Create a table in MySQL
+- Create a table with all supported types in MySQL
 
 ```
-CREATE TABLE test_db.one_pk_no_uk ( 
+CREATE TABLE test_db_1.one_pk_no_uk ( 
     f_0 tinyint, 
     f_1 smallint DEFAULT NULL, 
     f_2 mediumint DEFAULT NULL, 
@@ -333,6 +267,7 @@ CREATE TABLE test_db.one_pk_no_uk (
     f_5 decimal(10,4) DEFAULT NULL, 
     f_6 float(6,2) DEFAULT NULL, 
     f_7 double(8,3) DEFAULT NULL, 
+    f_8 bit(64) DEFAULT NULL,
     f_9 datetime(6) DEFAULT NULL, 
     f_10 time(6) DEFAULT NULL, 
     f_11 date DEFAULT NULL, 
@@ -356,46 +291,10 @@ CREATE TABLE test_db.one_pk_no_uk (
     PRIMARY KEY (f_0) );
 ```
 
-- The sql to be executed in StarRocks by ape_dts
+- The table created in Starrocks by ape_dts
 ```
-CREATE TABLE IF NOT EXISTS `test_db_1`.`one_pk_no_uk` (
-    `f_0` TINYINT, 
-    `f_1` SMALLINT, 
-    `f_2` INT, 
-    `f_3` INT, 
-    `f_4` BIGINT, 
-    `f_5` DECIMAL(10, 4), 
-    `f_6` FLOAT, 
-    `f_7` DOUBLE, 
-    `f_9` DATETIME, 
-    `f_10` VARCHAR, 
-    `f_11` DATE, 
-    `f_12` INT, 
-    `f_13` VARCHAR, 
-    `f_14` CHAR(255), 
-    `f_15` VARCHAR(255), 
-    `f_16` BINARY, 
-    `f_17` BINARY, 
-    `f_18` String, 
-    `f_19` String, 
-    `f_20` String, 
-    `f_21` String, 
-    `f_22` BINARY, 
-    `f_23` BINARY, 
-    `f_24` BINARY, 
-    `f_25` BINARY, 
-    `f_26` VARCHAR, 
-    `f_27` VARCHAR, 
-    `f_28` JSON, 
-    `_ape_dts_is_deleted` SMALLINT, 
-    `_ape_dts_version` BIGINT
-) PRIMARY KEY (`f_0`) DISTRIBUTED BY HASH(`f_0`);
+    
 ```
-
-# Soft delete or Hard delete 
-Due to the poor performance of StarRocks in handling delete operations, hard delete is always NOT recommended.
-
-Target table must have a `_ape_dts_is_deleted` column for soft delete.
 
 # Supported versions
 

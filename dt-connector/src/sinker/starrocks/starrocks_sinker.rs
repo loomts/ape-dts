@@ -40,7 +40,7 @@ pub struct StarRocksSinker {
     pub meta_manager: MysqlMetaManager,
     pub monitor: Arc<Mutex<Monitor>>,
     pub sync_version: i64,
-    pub logical_delete: bool,
+    pub hard_delete: bool,
 }
 
 #[async_trait]
@@ -131,14 +131,14 @@ impl StarRocksSinker {
             load_data.push(col_values);
         }
 
-        let logical_delete = self.logical_delete
-            && tb_meta
+        let hard_delete = self.hard_delete
+            || !tb_meta
                 .basic
                 .col_origin_type_map
                 .contains_key(SIGN_COL_NAME);
 
         let mut op = "";
-        if row_type == RowType::Delete && !logical_delete {
+        if row_type == RowType::Delete && hard_delete {
             op = "delete";
         }
 
