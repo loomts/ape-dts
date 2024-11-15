@@ -84,9 +84,9 @@ impl RdbPartitioner {
     async fn get_partition_index(
         &mut self,
         row_data: &RowData,
-        slice_count: usize,
+        partition_count: usize,
     ) -> anyhow::Result<usize> {
-        if slice_count <= 1 {
+        if partition_count <= 1 {
             return Ok(0);
         }
 
@@ -100,7 +100,7 @@ impl RdbPartitioner {
             .get_tb_meta(&row_data.schema, &row_data.tb)
             .await?;
         if let Some(partition_col_value) = col_values.get(&tb_meta.partition_col) {
-            Ok(partition_col_value.hash_code() as usize % slice_count)
+            Ok(partition_col_value.hash_code() as usize % partition_count)
         } else {
             Ok(0)
         }

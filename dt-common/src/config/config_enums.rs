@@ -16,6 +16,8 @@ pub enum DbType {
     Mongo,
     #[strum(serialize = "redis")]
     Redis,
+    #[strum(serialize = "clickhouse")]
+    ClickHouse,
     #[strum(serialize = "starrocks")]
     StarRocks,
     #[strum(serialize = "foxlake")]

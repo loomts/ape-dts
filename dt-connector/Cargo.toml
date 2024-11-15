@@ -47,3 +47,4 @@ anyhow = { workspace = true }
 orc-format = { workspace = true }
 rust_decimal = { workspace = true }
 hex = { workspace = true }
+clickhouse = { workspace = true }

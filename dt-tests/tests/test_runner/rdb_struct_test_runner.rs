@@ -1,5 +1,5 @@
 use dt_common::{
-    config::config_enums::DbType,
+    config::{config_enums::DbType, task_config::TaskConfig},
     meta::ddl_meta::{ddl_parser::DdlParser, ddl_statement::DdlStatement},
 };
 use dt_connector::meta_fetcher::{
@@ -198,17 +198,22 @@ impl RdbStructTestRunner {
     }
 
     async fn load_expect_ddl_sqls(&self) -> HashMap<String, String> {
-        let mut ddl_sqls = HashMap::new();
-
-        let version = self.base.get_dst_mysql_version().await;
-        let ddl_file = if version.starts_with("5.") {
-            format!("{}/expect_ddl_5.7.sql", self.base.base.test_dir)
-        } else {
-            format!("{}/expect_ddl_8.0.sql", self.base.base.test_dir)
+        let config = TaskConfig::new(&self.base.base.task_config_file).unwrap();
+        let ddl_file = match config.sinker_basic.db_type {
+            DbType::Mysql => {
+                let version = self.base.get_dst_mysql_version().await;
+                if version.starts_with("5.") {
+                    format!("{}/expect_ddl_5.7.sql", self.base.base.test_dir)
+                } else {
+                    format!("{}/expect_ddl_8.0.sql", self.base.base.test_dir)
+                }
+            }
+            _ => format!("{}/expect_ddl.sql", self.base.base.test_dir),
         };
+
+        let mut ddl_sqls = HashMap::new();
         let lines = BaseTestRunner::load_file(&ddl_file);
         let mut lines = lines.iter().peekable();
-
         while let Some(line) = lines.next() {
             if line.trim().is_empty() {
                 continue;

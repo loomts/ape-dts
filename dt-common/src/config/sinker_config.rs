@@ -78,6 +78,23 @@ pub enum SinkerConfig {
         url: String,
         batch_size: usize,
         stream_load_url: String,
+        logical_delete: bool,
+    },
+
+    StarrocksStruct {
+        url: String,
+        conflict_policy: ConflictPolicyEnum,
+    },
+
+    ClickHouse {
+        url: String,
+        batch_size: usize,
+    },
+
+    ClickhouseStruct {
+        url: String,
+        conflict_policy: ConflictPolicyEnum,
+        engine: String,
     },
 
     Foxlake {

@@ -27,4 +27,15 @@ mod test {
         )
         .await;
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn cdc_soft_delete_test() {
+        TestBase::run_rdb_starrocks_cdc_test(
+            "mysql_to_starrocks/cdc/3_2_11/soft_delete_test",
+            3000,
+            3000,
+        )
+        .await;
+    }
 }
