@@ -6,16 +6,11 @@ use strum::Display;
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Display)]
 pub enum MysqlColType {
     Unkown,
-    Tiny,
-    UnsignedTiny,
-    Short,
-    UnsignedShort,
-    Medium,
-    UnsignedMedium,
-    Long,
-    UnsignedLong,
-    LongLong,
-    UnsignedLongLong,
+    TinyInt { unsigned: bool },
+    SmallInt { unsigned: bool },
+    MediumInt { unsigned: bool },
+    Int { unsigned: bool },
+    BigInt { unsigned: bool },
     Float,
     Double,
     Decimal { precision: u32, scale: u32 },
@@ -29,12 +24,34 @@ pub enum MysqlColType {
     // for char(length), the maximum length is 255,
     // for varchar(length), the maximum length is 65535
     // refer: https://dev.mysql.com/doc/refman/5.7/en/storage-requirements.html
-    String { length: u64, charset: String },
+    Char { length: u64, charset: String },
+    Varchar { length: u64, charset: String },
+    TinyText { length: u64, charset: String },
+    MediumText { length: u64, charset: String },
+    Text { length: u64, charset: String },
+    LongText { length: u64, charset: String },
     Binary { length: u8 },
     VarBinary { length: u16 },
+    TinyBlob,
+    MediumBlob,
+    LongBlob,
     Blob,
     Bit,
     Set { items: HashMap<u64, String> },
     Enum { items: HashMap<u32, String> },
     Json,
+}
+
+impl MysqlColType {
+    pub fn is_string(&self) -> bool {
+        matches!(
+            self,
+            Self::Char { .. }
+                | Self::Varchar { .. }
+                | Self::TinyText { .. }
+                | Self::MediumText { .. }
+                | Self::Text { .. }
+                | Self::LongText { .. }
+        )
+    }
 }

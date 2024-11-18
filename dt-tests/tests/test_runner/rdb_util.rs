@@ -17,8 +17,10 @@ impl RdbUtil {
         conn_pool: &Pool<MySql>,
         ignore_cols: Option<&HashSet<String>>,
         db_tb: &(String, String),
+        condition: &str,
     ) -> anyhow::Result<Vec<RowData>> {
-        Self::fetch_data_mysql_compatible(conn_pool, ignore_cols, db_tb, &DbType::Mysql).await
+        Self::fetch_data_mysql_compatible(conn_pool, ignore_cols, db_tb, &DbType::Mysql, condition)
+            .await
     }
 
     pub async fn fetch_data_mysql_compatible(
@@ -26,13 +28,14 @@ impl RdbUtil {
         ignore_cols: Option<&HashSet<String>>,
         db_tb: &(String, String),
         db_type: &DbType,
+        condition: &str,
     ) -> anyhow::Result<Vec<RowData>> {
         let tb_meta = Self::get_tb_meta_mysql_compatible(conn_pool, db_tb, db_type).await?;
         let query_builder = RdbQueryBuilder::new_for_mysql(&tb_meta, ignore_cols);
         let cols_str = query_builder.build_extract_cols_str().unwrap();
         let sql = format!(
-            "SELECT {} FROM `{}`.`{}` ORDER BY `{}` ASC",
-            cols_str, &db_tb.0, &db_tb.1, &tb_meta.basic.cols[0],
+            "SELECT {} FROM `{}`.`{}` {} ORDER BY `{}` ASC",
+            cols_str, &db_tb.0, &db_tb.1, condition, &tb_meta.basic.cols[0],
         );
 
         let mut query = sqlx::query(&sql);

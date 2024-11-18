@@ -11,8 +11,9 @@ use super::{
     precheck_test_runner::PrecheckTestRunner, rdb_check_test_runner::RdbCheckTestRunner,
     rdb_kafka_rdb_test_runner::RdbKafkaRdbTestRunner, rdb_lua_test_runner::RdbLuaTestRunner,
     rdb_redis_test_runner::RdbRedisTestRunner, rdb_sql_test_runner::RdbSqlTestRunner,
-    rdb_struct_test_runner::RdbStructTestRunner, rdb_test_runner::RdbTestRunner,
-    redis_statistic_runner::RedisStatisticTestRunner, redis_test_runner::RedisTestRunner,
+    rdb_starrocks_test_runner::RdbStarrocksTestRunner, rdb_struct_test_runner::RdbStructTestRunner,
+    rdb_test_runner::RdbTestRunner, redis_statistic_runner::RedisStatisticTestRunner,
+    redis_test_runner::RedisTestRunner,
 };
 
 pub struct TestBase {}
@@ -306,6 +307,15 @@ impl TestBase {
     pub async fn run_rdb_redis_snapshot_test(test_dir: &str) {
         let mut runner = RdbRedisTestRunner::new(test_dir).await.unwrap();
         runner.run_snapshot_test().await.unwrap();
+        runner.close().await.unwrap();
+    }
+
+    pub async fn run_rdb_starrocks_cdc_test(test_dir: &str, start_millis: u64, parse_millis: u64) {
+        let runner = RdbStarrocksTestRunner::new(test_dir).await.unwrap();
+        runner
+            .run_cdc_soft_delete_test(start_millis, parse_millis)
+            .await
+            .unwrap();
         runner.close().await.unwrap();
     }
 }

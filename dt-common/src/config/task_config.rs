@@ -419,10 +419,36 @@ impl TaskConfig {
                 _ => bail! { not_supported_err },
             },
 
-            DbType::StarRocks => SinkerConfig::Starrocks {
-                url,
-                batch_size,
-                stream_load_url: loader.get_optional(SINKER, "stream_load_url"),
+            DbType::StarRocks => match sink_type {
+                SinkType::Write => SinkerConfig::Starrocks {
+                    url,
+                    batch_size,
+                    stream_load_url: loader.get_optional(SINKER, "stream_load_url"),
+                    hard_delete: loader.get_optional(SINKER, "hard_delete"),
+                },
+
+                SinkType::Struct => SinkerConfig::StarrocksStruct {
+                    url,
+                    conflict_policy,
+                },
+
+                _ => bail! { not_supported_err },
+            },
+
+            DbType::ClickHouse => match sink_type {
+                SinkType::Write => SinkerConfig::ClickHouse { url, batch_size },
+
+                SinkType::Struct => SinkerConfig::ClickhouseStruct {
+                    url,
+                    conflict_policy,
+                    engine: loader.get_with_default(
+                        SINKER,
+                        "engine",
+                        "ReplacingMergeTree".to_string(),
+                    ),
+                },
+
+                _ => bail! { not_supported_err },
             },
 
             DbType::Foxlake => {

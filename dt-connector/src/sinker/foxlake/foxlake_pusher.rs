@@ -421,16 +421,11 @@ impl FoxlakePusher {
 
     fn get_col_orc_schema(&self, col_type: &MysqlColType) -> Schema {
         match *col_type {
-            MysqlColType::Tiny
-            | MysqlColType::UnsignedTiny
-            | MysqlColType::Short
-            | MysqlColType::UnsignedShort
-            | MysqlColType::Medium
-            | MysqlColType::UnsignedMedium
-            | MysqlColType::Long
-            | MysqlColType::UnsignedLong
-            | MysqlColType::LongLong
-            | MysqlColType::UnsignedLongLong => Schema::Long,
+            MysqlColType::TinyInt { unsigned: _ }
+            | MysqlColType::SmallInt { unsigned: _ }
+            | MysqlColType::MediumInt { unsigned: _ }
+            | MysqlColType::Int { unsigned: _ }
+            | MysqlColType::BigInt { unsigned: _ } => Schema::Long,
 
             MysqlColType::Float => Schema::Float,
             MysqlColType::Double => Schema::Double,
@@ -450,12 +445,20 @@ impl FoxlakePusher {
             | MysqlColType::Timestamp { .. } => Schema::Long,
 
             MysqlColType::Binary { .. }
-            | MysqlColType::Bit
-            | MysqlColType::Blob
             | MysqlColType::VarBinary { .. }
+            | MysqlColType::Bit
+            | MysqlColType::TinyBlob
+            | MysqlColType::MediumBlob
+            | MysqlColType::LongBlob
+            | MysqlColType::Blob
             | MysqlColType::Unkown => Schema::Binary,
 
-            MysqlColType::String { .. } => match self.extract_type {
+            MysqlColType::Char { .. }
+            | MysqlColType::Varchar { .. }
+            | MysqlColType::TinyText { .. }
+            | MysqlColType::MediumText { .. }
+            | MysqlColType::Text { .. }
+            | MysqlColType::LongText { .. } => match self.extract_type {
                 ExtractType::Cdc => Schema::Binary,
                 _ => Schema::String,
             },

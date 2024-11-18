@@ -12,12 +12,12 @@
 
 <br/>
 
-|  | mysql -> mysql | pg -> pg | mongo -> mongo | redis -> redis | mysql -> kafka | pg -> kafka| mysql -> starrocks |
-| :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- |
-| 全量迁移 | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
-| 增量同步 | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
-| 数据校验/订正/复查 | &#10004; | &#10004; | &#10004; | | | | |
-| 结构迁移/校验 | &#10004; | &#10004; | | | | |
+|  | mysql -> mysql | pg -> pg | mongo -> mongo | redis -> redis | mysql -> kafka | pg -> kafka| mysql -> starrocks | mysql -> clickhouse |
+| :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- |
+| 全量迁移 | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
+| 增量同步 | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
+| 数据校验/订正/复查 | &#10004; | &#10004; | &#10004; | | | | | |
+| 库表结构迁移 | &#10004; | &#10004; | | | | | &#10004; | &#10004; |
 
 # 快速上手
 
@@ -28,6 +28,7 @@
 - [mongo -> mongo](./docs/en/tutorial/mongo_to_mongo.md)
 - [redis -> redis](./docs/en/tutorial/redis_to_redis.md)
 - [mysql -> starrocks](./docs/en/tutorial/mysql_to_starrocks.md)
+- [mysql -> clickhouse](./docs/en/tutorial/mysql_to_clickhouse.md)
 - [mysql -> kafka -> 消费者](./docs/en/tutorial/mysql_to_kafka_consumer.md)
 - [pg -> kafka -> 消费者](./docs/en/tutorial/pg_to_kafka_consumer.md)
 - [mysql -> ape_dts(HTTP server) -> 消费者](./docs/en/tutorial/mysql_to_http_server_consumer.md)
@@ -73,6 +74,7 @@
     - [mysql/pg -> kafka](./docs/templates/rdb_to_kafka.md)
     - [mysql/pg -> ape_dts(HTTP server)](./docs/templates/rdb_to_http_server.md)
     - [mysql -> starrocks](./docs/templates/mysql_to_starrocks.md)
+    - [mysql -> clickhouse](./docs/templates/mysql_to_clickhouse.md)
 
 # Benchmark
 - MySQL -> MySQL，全量

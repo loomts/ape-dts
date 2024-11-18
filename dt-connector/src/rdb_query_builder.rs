@@ -533,18 +533,18 @@ impl RdbQueryBuilder<'_> {
             return Ok(format!("x'{}'", value));
         }
 
-        let is_str = match self.mysql_tb_meta.unwrap().get_col_type(col)? {
+        let col_type = self.mysql_tb_meta.unwrap().get_col_type(col)?;
+        let is_str = match col_type {
             MysqlColType::DateTime
             | MysqlColType::Time
             | MysqlColType::Date
             | MysqlColType::Timestamp { .. }
-            | MysqlColType::String { .. }
             | MysqlColType::Binary { .. }
             | MysqlColType::VarBinary { .. }
             | MysqlColType::Json => true,
             MysqlColType::Enum { .. } => !matches!(col_value, ColValue::Enum(_)),
             MysqlColType::Set { .. } => !matches!(col_value, ColValue::Set(_)),
-            _ => false,
+            _ => col_type.is_string(),
         };
 
         if is_str {
