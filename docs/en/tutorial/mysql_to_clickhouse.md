@@ -3,13 +3,12 @@
 # Prerequisites
 - [prerequisites](./prerequisites.md)
 
-- This article is for quick start, refer to [templates](/docs/templates/mysql_to_starrocks.md) and [common configs](/docs/en/config.md) for more details.
+- This article is for quick start, refer to [templates](/docs/templates/mysql_to_clickhouse.md) and [common configs](/docs/en/config.md) for more details.
 
 # Prepare MySQL instance
 Refer to [mysql to mysql](./mysql_to_mysql.md)
 
-# Prepare StarRocks instance
-- tested versions: 2.5.4 to 3.2.11
+# Prepare ClickHouse instance
 
 ```
 docker run -d --name some-clickhouse-server \
@@ -60,13 +59,24 @@ docker run --rm --network host \
 
 ## Check results
 ```
-mysql -P 9030 -h 127.0.0.1 -u root --prompt="StarRocks > "
+docker exec -it some-clickhouse-server clickhouse \
+    client --user admin --password 123456
 
-SELECT * FROM test_db.tb_1;
+SHOW CREATE TABLE test_db.tb_1;
 ```
 
 ```
-
+CREATE TABLE test_db.tb_1
+(
+    `id` Int32,
+    `value` Nullable(Int32),
+    `_ape_dts_is_deleted` Int8,
+    `_ape_dts_version` Int64
+)
+ENGINE = ReplacingMergeTree(_ape_dts_version)
+PRIMARY KEY id
+ORDER BY id
+SETTINGS index_granularity = 8192
 ```
 
 # Migrate snapshot data
@@ -75,14 +85,6 @@ SELECT * FROM test_db.tb_1;
 mysql -h127.0.0.1 -uroot -p123456 -P3307
 
 INSERT INTO test_db.tb_1 VALUES(1,1),(2,2),(3,3),(4,4);
-```
-
-## Prepare target tables
-```
-mysql -P 9030 -h 127.0.0.1 -u root --prompt="StarRocks > "
-
-CREATE DATABASE test_db;
-CREATE TABLE test_db.tb_1(id INT, value INT) ENGINE=OLAP PRIMARY KEY(id) DISTRIBUTED BY HASH(id);
 ```
 
 ## Start task
@@ -94,10 +96,10 @@ extract_type=snapshot
 url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
 
 [sinker]
-db_type=starrocks
+db_type=clickhouse
 sink_type=write
-url=mysql://root:@127.0.0.1:9030
-stream_load_url=mysql://root:@127.0.0.1:8040
+url=http://admin:123456@127.0.0.1:8123
+batch_size=5000
 
 [filter]
 do_dbs=test_db
@@ -121,20 +123,19 @@ docker run --rm --network host \
 
 ## Check results
 ```
-mysql -P 9030 -h 127.0.0.1 -u root --prompt="StarRocks > "
+docker exec -it some-clickhouse-server clickhouse \
+    client --user admin --password 123456
 
-SELECT * FROM test_db.tb_1;
+SELECT * FROM test_db.tb_1 ORDER BY id;
 ```
 
 ```
-+----+-------+
-| id | value |
-+----+-------+
-|  1 |     1 |
-|  2 |     2 |
-|  3 |     3 |
-|  4 |     4 |
-+----+-------+
+   ┌─id─┬─value─┬─_ape_dts_is_deleted─┬─_ape_dts_version─┐
+1. │  1 │     1 │                   0 │    1731897789627 │
+2. │  2 │     2 │                   0 │    1731897789627 │
+3. │  3 │     3 │                   0 │    1731897789627 │
+4. │  4 │     4 │                   0 │    1731897789627 │
+   └────┴───────┴─────────────────────┴──────────────────┘
 ```
 
 # Cdc task
@@ -153,13 +154,13 @@ do_dbs=test_db
 do_events=insert,update,delete
 
 [sinker]
-db_type=starrocks
+db_type=clickhouse
 sink_type=write
-url=mysql://root:@127.0.0.1:9030
-stream_load_url=mysql://root:@127.0.0.1:8040
+url=http://admin:123456@127.0.0.1:8123
+batch_size=5000
 
 [parallelizer]
-parallel_type=rdb_merge
+parallel_type=table
 parallel_size=8
 
 [pipeline]
@@ -185,29 +186,30 @@ INSERT INTO test_db.tb_1 VALUES(5,5);
 
 ## Check results
 ```
-mysql -P 9030 -h 127.0.0.1 -u root --prompt="StarRocks > "
+docker exec -it some-clickhouse-server clickhouse \
+    client --user admin --password 123456
 
+OPTIMIZE TABLE test_db.tb_1 FINAL;
 SELECT * FROM test_db.tb_1;
 ```
 
 ```
-+----+---------+
-| id | value   |
-+----+---------+
-|  2 | 2000000 |
-|  3 |       3 |
-|  4 |       4 |
-|  5 |       5 |
-+----+---------+
+   ┌─id─┬───value─┬─_ape_dts_is_deleted─┬─_ape_dts_version─┐
+1. │  1 │       1 │                   1 │    1731900431736 │
+2. │  2 │ 2000000 │                   0 │    1731900431736 │
+3. │  3 │       3 │                   0 │    1731900332526 │
+4. │  4 │       4 │                   0 │    1731900332526 │
+5. │  5 │       5 │                   0 │    1731900431736 │
+   └────┴─────────┴─────────────────────┴──────────────────┘
 ```
 
 # How it works
 
-We use [Stream Load](https://docs.starrocks.io/docs/loading/Stream_Load_transaction_interface/) to import data from MySQL. You need to configure url (query metadata) and stream_load_url (specify Stream Load port and user info).
+We convert source data into json and call http api to batch insert into ClickHouse, it is like:
 
-When importing data into StarRocks by Stream Load, you need to avoid frequent small-batch imports, as this may cause throttle errors in StarRocks. This can be resolved by configuring batch_sink_interval_secs, refer to [task templates](/docs/templates/mysql_to_starrocks.md). Usually, only CDC tasks need to configure batch_sink_interval_secs.
+curl -X POST -d @json_data 'http://localhost:8123/?query=INSERT%20INTO%test_db.tb_1%20FORMAT%20JSON' --user admin:123456
 
-Stream Load allows importing up to 10GB of data in a single load. You can change the following configurations to adjust the batch data size.
+You can change the following configurations to adjust the batch data size.
 
 ```
 [pipeline]
@@ -220,84 +222,119 @@ batch_size=5000
 
 Refer to [config](/docs/en/config.md) for other common configurations
 
-# Suggested column type mapping
+# Column type mapping
 
-| MySQL | StarRocks |
+| MySQL | ClickHouse |
 | :-------- | :-------- |
-| tinyint | TINYINT |
-| smallint | SMALLINT |
-| mediumint | INT |
-| int | INT |
-| bigint | BIGINT |
-| decimal | DECIMAL |
-| float | FLOAT |
-| double | DOUBLE |
-| datetime | DATETIME |
-| time | VARCHAR |
-| date | DATE |
-| year | INT |
-| timestamp | VARCHAR |
-| char | CHAR |
-| varchar | VARCHAR |
-| binary | BINARY |
-| varbinary | VARBINARY |
-| tinytext | CHAR/VARCHAR/STRING/TEXT |
-| text | CHAR/VARCHAR/STRING/TEXT |
-| mediumtext | CHAR/VARCHAR/STRING/TEXT |
-| longtext | CHAR/VARCHAR/STRING/TEXT |
-| tinyblob | VARBINARY |
-| blob | VARBINARY |
-| mediumblob | VARBINARY |
-| longblob | VARBINARY |
-| enum | VARCHAR |
-| set | VARCHAR |
-| bit | VARCHAR |
-| json | JSON/STRING |
+| tinyint | Int8/UInt8 |
+| smallint | Int16/UInt16 |
+| mediumint | Int32/UInt32 |
+| int | Int32/UInt32 |
+| bigint | Int64/UInt64 |
+| decimal | Decimal(P,S) |
+| float | Float32 |
+| double | Float64 |
+| datetime | DateTime64(6) |
+| time | String |
+| date | Date32 |
+| year | Int32 |
+| timestamp | DateTime64(6) |
+| char | String |
+| varchar | String |
+| binary | String |
+| varbinary | String |
+| tinytext | String |
+| text | String |
+| mediumtext | String |
+| longtext | String |
+| tinyblob | String |
+| blob | String |
+| mediumblob | String |
+| longblob | String |
+| enum | String |
+| set | String |
+| bit | String |
+| json |String |
 
 ## Example
 - Create a table with all supported types in MySQL
 
 ```
-CREATE TABLE test_db_1.one_pk_no_uk ( 
-    f_0 tinyint, 
-    f_1 smallint DEFAULT NULL, 
-    f_2 mediumint DEFAULT NULL, 
-    f_3 int DEFAULT NULL, 
-    f_4 bigint DEFAULT NULL, 
-    f_5 decimal(10,4) DEFAULT NULL, 
-    f_6 float(6,2) DEFAULT NULL, 
-    f_7 double(8,3) DEFAULT NULL, 
-    f_8 bit(64) DEFAULT NULL,
-    f_9 datetime(6) DEFAULT NULL, 
-    f_10 time(6) DEFAULT NULL, 
-    f_11 date DEFAULT NULL, 
-    f_12 year DEFAULT NULL, 
-    f_13 timestamp(6) NULL DEFAULT NULL, 
-    f_14 char(255) DEFAULT NULL, 
-    f_15 varchar(255) DEFAULT NULL, 
-    f_16 binary(255) DEFAULT NULL, 
-    f_17 varbinary(255) DEFAULT NULL, 
-    f_18 tinytext, 
-    f_19 text, 
-    f_20 mediumtext, 
-    f_21 longtext, 
-    f_22 tinyblob, 
-    f_23 blob, 
-    f_24 mediumblob, 
-    f_25 longblob, 
-    f_26 enum('x-small','small','medium','large','x-large') DEFAULT NULL, 
-    f_27 set('a','b','c','d','e') DEFAULT NULL, 
-    f_28 json DEFAULT NULL,
-    PRIMARY KEY (f_0) );
+CREATE TABLE test_db.one_pk_no_uk ( 
+   f_0 tinyint, 
+   f_0_1 tinyint unsigned, 
+   f_1 smallint, 
+   f_1_1 smallint unsigned, 
+   f_2 mediumint,
+   f_2_1 mediumint unsigned, 
+   f_3 int, 
+   f_3_1 int unsigned, 
+   f_4 bigint, 
+   f_4_1 bigint unsigned, 
+   f_5 decimal(10,4), 
+   f_6 float(6,2), 
+   f_7 double(8,3), 
+   f_9 datetime(6), 
+   f_10 time(6), 
+   f_11 date, 
+   f_12 year, 
+   f_13 timestamp(6) NULL, 
+   f_14 char(255), 
+   f_15 varchar(255), 
+   f_16 binary(255), 
+   f_17 varbinary(255), 
+   f_18 tinytext, 
+   f_19 text, 
+   f_20 mediumtext, 
+   f_21 longtext, 
+   f_22 tinyblob, 
+   f_23 blob, 
+   f_24 mediumblob, 
+   f_25 longblob, 
+   f_26 enum('x-small','small','medium','large','x-large'), 
+   f_27 set('a','b','c','d','e'), 
+   f_28 json,
+   PRIMARY KEY (f_0) );
 ```
 
-- The table created in Starrocks by ape_dts
+- The generated sql to be executed in ClickHouse when migrate structures by ape_dts:
 ```
-    
+CREATE TABLE IF NOT EXISTS `test_db`.`one_pk_no_uk` (
+   `f_0` Int8, 
+   `f_0_1` Nullable(UInt8), 
+   `f_1` Nullable(Int16), 
+   `f_1_1` Nullable(UInt16), 
+   `f_2` Nullable(Int32), 
+   `f_2_1` Nullable(UInt32), 
+   `f_3` Nullable(Int32), 
+   `f_3_1` Nullable(UInt32), 
+   `f_4` Nullable(Int64), 
+   `f_4_1` Nullable(UInt64), 
+   `f_5` Nullable(Decimal(10, 4)), 
+   `f_6` Nullable(Float32), 
+   `f_7` Nullable(Float64), 
+   `f_9` Nullable(DateTime64(6)), 
+   `f_10` Nullable(String), 
+   `f_11` Nullable(Date32), 
+   `f_12` Nullable(Int32), 
+   `f_13` Nullable(DateTime64(6)), 
+   `f_14` Nullable(String), 
+   `f_15` Nullable(String), 
+   `f_16` Nullable(String), 
+   `f_17` Nullable(String), 
+   `f_18` Nullable(String), 
+   `f_19` Nullable(String), 
+   `f_20` Nullable(String), 
+   `f_21` Nullable(String), 
+   `f_22` Nullable(String), 
+   `f_23` Nullable(String), 
+   `f_24` Nullable(String), 
+   `f_25` Nullable(String), 
+   `f_26` Nullable(String), 
+   `f_27` Nullable(String), 
+   `f_28` Nullable(String), 
+   `_ape_dts_is_deleted` Int8, 
+   `_ape_dts_version` Int64
+   ) ENGINE = ReplacingMergeTree(`_ape_dts_version`) PRIMARY KEY (`f_0`) 
+   ORDER BY (`f_0`)
 ```
-
-# Supported versions
-
-We've tested on StarRocks 2.5.4 and 3.2.11, refer to [tests](/dt-tests/tests/mysql_to_starrocks/)
-
-For 2.5.4, the stream_load_url should use be_http_port instead of fe_http_port.

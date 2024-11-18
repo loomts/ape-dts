@@ -103,6 +103,7 @@ db_type=starrocks
 sink_type=write
 url=mysql://root:@127.0.0.1:9030
 stream_load_url=mysql://root:@127.0.0.1:8040
+batch_size=5000
 
 [filter]
 do_dbs=test_db
@@ -163,6 +164,7 @@ sink_type=write
 url=mysql://root:@127.0.0.1:9030
 stream_load_url=mysql://root:@127.0.0.1:8040
 hard_delete=true
+batch_size=5000
 
 [parallelizer]
 parallel_type=rdb_merge
@@ -226,6 +228,7 @@ db_type=starrocks
 sink_type=write
 url=mysql://root:@127.0.0.1:9030
 stream_load_url=mysql://root:@127.0.0.1:8040
+batch_size=5000
 
 [parallelizer]
 parallel_type=table
@@ -292,10 +295,15 @@ Refer to [config](/docs/en/config.md) for other common configurations
 | MySQL | StarRocks |
 | :-------- | :-------- |
 | tinyint | TINYINT |
+| tinyint unsigned | SMALLINT |
 | smallint | SMALLINT |
+| smallint unsigned | INT |
 | mediumint | INT |
+| mediumint unsigned | BIGINT |
 | int | INT |
+| int unsigned | BIGINT |
 | bigint | BIGINT |
+| bigint unsigned | LARGEINT |
 | decimal | DECIMAL |
 | float | FLOAT |
 | double | DOUBLE |
@@ -326,22 +334,27 @@ Refer to [config](/docs/en/config.md) for other common configurations
 ```
 CREATE TABLE test_db.one_pk_no_uk ( 
     f_0 tinyint, 
-    f_1 smallint DEFAULT NULL, 
-    f_2 mediumint DEFAULT NULL, 
-    f_3 int DEFAULT NULL, 
-    f_4 bigint DEFAULT NULL, 
-    f_5 decimal(10,4) DEFAULT NULL, 
-    f_6 float(6,2) DEFAULT NULL, 
-    f_7 double(8,3) DEFAULT NULL, 
-    f_9 datetime(6) DEFAULT NULL, 
-    f_10 time(6) DEFAULT NULL, 
-    f_11 date DEFAULT NULL, 
-    f_12 year DEFAULT NULL, 
-    f_13 timestamp(6) NULL DEFAULT NULL, 
-    f_14 char(255) DEFAULT NULL, 
-    f_15 varchar(255) DEFAULT NULL, 
-    f_16 binary(255) DEFAULT NULL, 
-    f_17 varbinary(255) DEFAULT NULL, 
+    f_0_1 tinyint unsigned, 
+    f_1 smallint, 
+    f_1_1 smallint unsigned, 
+    f_2 mediumint,
+    f_2_1 mediumint unsigned, 
+    f_3 int, 
+    f_3_1 int unsigned, 
+    f_4 bigint, 
+    f_4_1 bigint unsigned, 
+    f_5 decimal(10,4), 
+    f_6 float(6,2), 
+    f_7 double(8,3), 
+    f_9 datetime(6), 
+    f_10 time(6), 
+    f_11 date, 
+    f_12 year, 
+    f_13 timestamp(6) NULL, 
+    f_14 char(255), 
+    f_15 varchar(255), 
+    f_16 binary(255), 
+    f_17 varbinary(255), 
     f_18 tinytext, 
     f_19 text, 
     f_20 mediumtext, 
@@ -350,20 +363,25 @@ CREATE TABLE test_db.one_pk_no_uk (
     f_23 blob, 
     f_24 mediumblob, 
     f_25 longblob, 
-    f_26 enum('x-small','small','medium','large','x-large') DEFAULT NULL, 
-    f_27 set('a','b','c','d','e') DEFAULT NULL, 
-    f_28 json DEFAULT NULL,
+    f_26 enum('x-small','small','medium','large','x-large'), 
+    f_27 set('a','b','c','d','e'), 
+    f_28 json,
     PRIMARY KEY (f_0) );
 ```
 
-- The sql to be executed in StarRocks by ape_dts
+- The generated sql to be executed in StarRocks when migrate structures by ape_dts:
 ```
-CREATE TABLE IF NOT EXISTS `test_db_1`.`one_pk_no_uk` (
+CREATE TABLE IF NOT EXISTS `test_db`.`one_pk_no_uk` (
     `f_0` TINYINT, 
+    `f_0_1` SMALLINT, 
     `f_1` SMALLINT, 
+    `f_1_1` INT, 
     `f_2` INT, 
+    `f_2_1` BIGINT, 
     `f_3` INT, 
+    `f_3_1` BIGINT, 
     `f_4` BIGINT, 
+    `f_4_1` LARGEINT, 
     `f_5` DECIMAL(10, 4), 
     `f_6` FLOAT, 
     `f_7` DOUBLE, 
@@ -395,7 +413,11 @@ CREATE TABLE IF NOT EXISTS `test_db_1`.`one_pk_no_uk` (
 # Soft delete or Hard delete 
 Due to the poor performance of StarRocks in handling delete operations, hard delete is always NOT recommended.
 
-Target table must have a `_ape_dts_is_deleted` column for soft delete.
+Soft delete prerequisites: 
+- target table must have a `_ape_dts_is_deleted` column.
+
+Hard delete prerequisites: 
+- `[parallelizer] parallel_type` must be `rdb_merge`.
 
 # Supported versions
 

@@ -87,15 +87,15 @@ impl StarrocksStructSinker {
             let mysql_col_type = tb_meta.get_col_type(col)?;
             let ck_col_type = match mysql_col_type {
                 MysqlColType::TinyInt { unsigned: false } => "TINYINT",
-                MysqlColType::TinyInt { unsigned: true } => "TINYINT unsigned",
+                MysqlColType::TinyInt { unsigned: true } => "SMALLINT",
                 MysqlColType::SmallInt { unsigned: false } => "SMALLINT",
-                MysqlColType::SmallInt { unsigned: true } => "SMALLINT unsigned",
+                MysqlColType::SmallInt { unsigned: true } => "INT",
                 MysqlColType::MediumInt { unsigned: false } => "INT",
-                MysqlColType::MediumInt { unsigned: true } => "INT unsigned",
+                MysqlColType::MediumInt { unsigned: true } => "BIGINT",
                 MysqlColType::Int { unsigned: false } => "INT",
-                MysqlColType::Int { unsigned: true } => "INT unsigned",
+                MysqlColType::Int { unsigned: true } => "BIGINT",
                 MysqlColType::BigInt { unsigned: false } => "BIGINT",
-                MysqlColType::BigInt { unsigned: true } => "BIGINT unsigned",
+                MysqlColType::BigInt { unsigned: true } => "LARGEINT",
 
                 MysqlColType::Float => "FLOAT",
                 MysqlColType::Double => "DOUBLE",

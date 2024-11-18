@@ -53,12 +53,7 @@ impl Sinker for StarRocksSinker {
         if !batch {
             self.serial_sink(data).await?;
         } else {
-            match data[0].row_type {
-                RowType::Insert | RowType::Delete => {
-                    call_batch_fn!(self, data, Self::batch_sink);
-                }
-                _ => self.serial_sink(data).await?,
-            }
+            call_batch_fn!(self, data, Self::batch_sink);
         }
         Ok(())
     }
@@ -100,7 +95,7 @@ impl StarRocksSinker {
     ) -> anyhow::Result<usize> {
         let db = data[start_index].schema.clone();
         let tb = data[start_index].tb.clone();
-        let row_type = data[start_index].row_type.clone();
+        let first_row_type = data[start_index].row_type.clone();
         let tb_meta = self.meta_manager.get_tb_meta(&db, &tb).await?;
 
         // use timestamp_millis as VERSION_COL value
@@ -114,7 +109,7 @@ impl StarRocksSinker {
 
             Self::convert_row_data(row_data, tb_meta)?;
 
-            let col_values = if row_type == RowType::Delete {
+            let col_values = if row_data.row_type == RowType::Delete {
                 let before = row_data.before.as_mut().unwrap();
                 // SIGN_COL value
                 before.insert(SIGN_COL_NAME.into(), ColValue::Long(1));
@@ -138,7 +133,7 @@ impl StarRocksSinker {
                 .contains_key(SIGN_COL_NAME);
 
         let mut op = "";
-        if row_type == RowType::Delete && hard_delete {
+        if first_row_type == RowType::Delete && hard_delete {
             op = "delete";
         }
 

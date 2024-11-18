@@ -69,7 +69,6 @@ impl ClickhouseSinker {
     ) -> anyhow::Result<usize> {
         let db = SqlUtil::escape_by_db_type(&data[start_index].schema, &DbType::ClickHouse);
         let tb = SqlUtil::escape_by_db_type(&data[start_index].tb, &DbType::ClickHouse);
-        let row_type = data[start_index].row_type.clone();
 
         // use timestamp_millis as VERSION_COL value
         self.sync_version = cmp::max(Utc::now().timestamp_millis(), self.sync_version + 1);
@@ -82,7 +81,7 @@ impl ClickhouseSinker {
 
             Self::convert_row_data(row_data)?;
 
-            let col_values = if row_type == RowType::Delete {
+            let col_values = if row_data.row_type == RowType::Delete {
                 let before = row_data.before.as_mut().unwrap();
                 // SIGN_COL value
                 before.insert(SIGN_COL_NAME.into(), ColValue::Long(1));
@@ -99,7 +98,7 @@ impl ClickhouseSinker {
             load_data.push(col_values);
         }
 
-        // curl -X POST -d @data.json 'http://localhost:8123/?query=INSERT%20INTO%20aaa.shicai%20FORMAT%20JSON' --user admin:123456
+        // curl -X POST -d @data.json 'http://localhost:8123/?query=INSERT%20INTO%test_db.tb_1%20FORMAT%20JSON' --user admin:123456
         let body = json!(load_data).to_string();
         let url = format!(
             "http://{}:{}/?query=INSERT INTO {}.{} FORMAT JSON",
