@@ -56,23 +56,34 @@ impl RdbTestRunner {
         let mut src_conn_pool_pg = None;
         let mut dst_conn_pool_pg = None;
 
-        let (src_db_type, src_url, dst_db_type, dst_url) = Self::parse_conn_info(&base);
-        if src_db_type == DbType::Mysql {
-            src_conn_pool_mysql = Some(TaskUtil::create_mysql_conn_pool(&src_url, 1, false).await?);
-        } else {
-            src_conn_pool_pg = Some(TaskUtil::create_pg_conn_pool(&src_url, 1, false).await?);
+        let config = TaskConfig::new(&base.task_config_file).unwrap();
+        let src_db_type = &config.extractor_basic.db_type;
+        let dst_db_type = &config.sinker_basic.db_type;
+        let src_url = &config.extractor_basic.url;
+        let dst_url = &config.sinker_basic.url;
+
+        match src_db_type {
+            DbType::Mysql => {
+                src_conn_pool_mysql =
+                    Some(TaskUtil::create_mysql_conn_pool(src_url, 1, false).await?);
+            }
+            DbType::Pg => {
+                src_conn_pool_pg = Some(TaskUtil::create_pg_conn_pool(src_url, 1, false).await?);
+            }
+            _ => {}
         }
 
         if !dst_url.is_empty() {
             match dst_db_type {
-                DbType::Mysql | DbType::Foxlake => {
+                DbType::Mysql | DbType::Foxlake | DbType::StarRocks => {
                     dst_conn_pool_mysql =
-                        Some(TaskUtil::create_mysql_conn_pool(&dst_url, 1, false).await?);
+                        Some(TaskUtil::create_mysql_conn_pool(dst_url, 1, false).await?);
                 }
-                _ => {
+                DbType::Pg => {
                     dst_conn_pool_pg =
-                        Some(TaskUtil::create_pg_conn_pool(&dst_url, 1, false).await?);
+                        Some(TaskUtil::create_pg_conn_pool(dst_url, 1, false).await?);
                 }
+                _ => {}
             }
         }
 
@@ -122,55 +133,6 @@ impl RdbTestRunner {
             return meta_manager.meta_fetcher.version;
         }
         String::new()
-    }
-
-    fn parse_conn_info(base: &BaseTestRunner) -> (DbType, String, DbType, String) {
-        let mut src_db_type = DbType::Mysql;
-        let mut src_url = String::new();
-        let mut dst_db_type = DbType::Mysql;
-        let mut dst_url = String::new();
-
-        let config = TaskConfig::new(&base.task_config_file).unwrap();
-        match config.extractor {
-            ExtractorConfig::MysqlCdc { url, .. }
-            | ExtractorConfig::MysqlSnapshot { url, .. }
-            | ExtractorConfig::MysqlCheck { url, .. }
-            | ExtractorConfig::MysqlStruct { url, .. } => {
-                src_url = url.clone();
-            }
-
-            ExtractorConfig::PgCdc { url, .. }
-            | ExtractorConfig::PgSnapshot { url, .. }
-            | ExtractorConfig::PgCheck { url, .. }
-            | ExtractorConfig::PgStruct { url, .. } => {
-                src_db_type = DbType::Pg;
-                src_url = url.clone();
-            }
-
-            _ => {}
-        }
-
-        match config.sinker {
-            SinkerConfig::Mysql { url, .. }
-            | SinkerConfig::MysqlCheck { url, .. }
-            | SinkerConfig::MysqlStruct { url, .. }
-            | SinkerConfig::Starrocks { url, .. }
-            | SinkerConfig::Foxlake { url, .. }
-            | SinkerConfig::FoxlakeStruct { url, .. } => {
-                dst_url = url.clone();
-            }
-
-            SinkerConfig::Pg { url, .. }
-            | SinkerConfig::PgCheck { url, .. }
-            | SinkerConfig::PgStruct { url, .. } => {
-                dst_db_type = DbType::Pg;
-                dst_url = url.clone();
-            }
-
-            _ => {}
-        }
-
-        (src_db_type, src_url, dst_db_type, dst_url)
     }
 
     pub async fn run_snapshot_test(&self, compare_data: bool) -> anyhow::Result<()> {
@@ -628,10 +590,19 @@ impl RdbTestRunner {
         db_tb: &(String, String),
         from: &str,
     ) -> anyhow::Result<Vec<RowData>> {
+        self.fetch_data_with_condition(db_tb, from, "").await
+    }
+
+    pub async fn fetch_data_with_condition(
+        &self,
+        db_tb: &(String, String),
+        from: &str,
+        condition: &str,
+    ) -> anyhow::Result<Vec<RowData>> {
         let (conn_pool_mysql, conn_pool_pg) = self.get_conn_pool(from);
         let data = if let Some(pool) = conn_pool_mysql {
             let db_type = self.get_db_type(from);
-            RdbUtil::fetch_data_mysql_compatible(pool, None, db_tb, &db_type).await?
+            RdbUtil::fetch_data_mysql_compatible(pool, None, db_tb, &db_type, condition).await?
         } else if let Some(pool) = conn_pool_pg {
             RdbUtil::fetch_data_pg(pool, None, db_tb).await?
         } else {

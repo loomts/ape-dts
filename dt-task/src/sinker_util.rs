@@ -26,6 +26,9 @@ use dt_connector::{
     data_marker::DataMarker,
     rdb_router::RdbRouter,
     sinker::{
+        clickhouse::{
+            clickhouse_sinker::ClickhouseSinker, clickhouse_struct_sinker::ClickhouseStructSinker,
+        },
         dummy_sinker::DummySinker,
         foxlake::{
             foxlake_merger::FoxlakeMerger, foxlake_pusher::FoxlakePusher,
@@ -41,13 +44,16 @@ use dt_connector::{
         pg::{pg_checker::PgChecker, pg_sinker::PgSinker, pg_struct_sinker::PgStructSinker},
         redis::{redis_sinker::RedisSinker, redis_statistic_sinker::RedisStatisticSinker},
         sql_sinker::SqlSinker,
-        starrocks::starrocks_sinker::StarRocksSinker,
+        starrocks::{
+            starrocks_sinker::StarRocksSinker, starrocks_struct_sinker::StarrocksStructSinker,
+        },
     },
     Sinker,
 };
 use kafka::producer::{Producer, RequiredAcks};
 use reqwest::{redirect::Policy, Url};
 use rusoto_s3::S3Client;
+use sqlx::types::chrono::Utc;
 
 use crate::extractor_util::ExtractorUtil;
 
@@ -375,6 +381,7 @@ impl SinkerUtil {
                 url,
                 batch_size,
                 stream_load_url,
+                hard_delete,
             } => {
                 for _ in 0..parallel_size {
                     let url_info = UrlUtil::parse(&stream_load_url)?;
@@ -383,7 +390,7 @@ impl SinkerUtil {
                     let username = url_info.username().to_string();
                     let password = url_info.password().unwrap_or("").to_string();
                     let custom = Policy::custom(|attempt| attempt.follow());
-                    let client = reqwest::Client::builder()
+                    let http_client = reqwest::Client::builder()
                         .http1_title_case_headers()
                         .redirect(custom)
                         .build()?;
@@ -396,7 +403,7 @@ impl SinkerUtil {
                     )
                     .await?;
                     let sinker = StarRocksSinker {
-                        client,
+                        http_client,
                         host,
                         port,
                         username,
@@ -404,9 +411,86 @@ impl SinkerUtil {
                         batch_size,
                         meta_manager,
                         monitor: monitor.clone(),
+                        sync_version: Utc::now().timestamp_millis(),
+                        hard_delete,
                     };
                     sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
                 }
+            }
+
+            SinkerConfig::StarrocksStruct {
+                url,
+                conflict_policy,
+            } => {
+                let conn_pool = TaskUtil::create_mysql_conn_pool(&url, 2, enable_sqlx_log).await?;
+                let filter = RdbFilter::from_config(&task_config.filter, &DbType::Mysql)?;
+                let router = RdbRouter::from_config(&task_config.router, &DbType::Mysql)?;
+                let extractor_meta_manager = ExtractorUtil::get_extractor_meta_manager(task_config)
+                    .await?
+                    .unwrap();
+                let sinker = StarrocksStructSinker {
+                    conn_pool,
+                    conflict_policy,
+                    filter,
+                    router,
+                    extractor_meta_manager,
+                    backend_count: 0,
+                };
+                sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
+            }
+
+            SinkerConfig::ClickHouse { url, batch_size } => {
+                for _ in 0..parallel_size {
+                    let url_info = UrlUtil::parse(&url)?;
+                    let host = url_info.host_str().unwrap().to_string();
+                    let port = format!("{}", url_info.port().unwrap());
+                    let username = url_info.username().to_string();
+                    let password = url_info.password().unwrap_or("").to_string();
+                    let custom = Policy::custom(|attempt| attempt.follow());
+                    let http_client = reqwest::Client::builder()
+                        .http1_title_case_headers()
+                        .redirect(custom)
+                        .build()?;
+                    let sinker = ClickhouseSinker {
+                        http_client,
+                        host,
+                        port,
+                        username,
+                        password,
+                        batch_size,
+                        monitor: monitor.clone(),
+                        sync_version: Utc::now().timestamp_millis(),
+                    };
+                    sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
+                }
+            }
+
+            SinkerConfig::ClickhouseStruct {
+                url,
+                conflict_policy,
+                engine,
+            } => {
+                let url_info = UrlUtil::parse(&url)?;
+                let host = url_info.host_str().unwrap().to_string();
+                let port = format!("{}", url_info.port().unwrap());
+                let client = clickhouse::Client::default()
+                    .with_url(format!("http://{}:{}", host, port))
+                    .with_user(url_info.username())
+                    .with_password(url_info.password().unwrap_or(""));
+                let filter = RdbFilter::from_config(&task_config.filter, &DbType::Mysql)?;
+                let router = RdbRouter::from_config(&task_config.router, &DbType::Mysql)?;
+                let extractor_meta_manager = ExtractorUtil::get_extractor_meta_manager(task_config)
+                    .await?
+                    .unwrap();
+                let sinker = ClickhouseStructSinker {
+                    client,
+                    conflict_policy,
+                    engine,
+                    filter,
+                    router,
+                    extractor_meta_manager,
+                };
+                sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
             }
 
             SinkerConfig::Sql { reverse } => {

@@ -1,4 +1,5 @@
 use std::{
+    cmp,
     collections::HashMap,
     str::FromStr,
     sync::{Arc, Mutex},
@@ -8,6 +9,7 @@ use std::{
 use crate::{call_batch_fn, sinker::base_sinker::BaseSinker, Sinker};
 use anyhow::bail;
 use async_trait::async_trait;
+use chrono::Utc;
 use dt_common::{
     error::Error,
     log_error,
@@ -24,16 +26,21 @@ use dt_common::{
 use reqwest::{header, Client, Method, Response, StatusCode};
 use serde_json::{json, Value};
 
+const SIGN_COL_NAME: &str = "_ape_dts_is_deleted";
+const VERSION_COL_NAME: &str = "_ape_dts_version";
+
 #[derive(Clone)]
 pub struct StarRocksSinker {
     pub batch_size: usize,
-    pub client: Client,
+    pub http_client: Client,
     pub host: String,
     pub port: String,
     pub username: String,
     pub password: String,
     pub meta_manager: MysqlMetaManager,
     pub monitor: Arc<Mutex<Monitor>>,
+    pub sync_version: i64,
+    pub hard_delete: bool,
 }
 
 #[async_trait]
@@ -46,12 +53,7 @@ impl Sinker for StarRocksSinker {
         if !batch {
             self.serial_sink(data).await?;
         } else {
-            match data[0].row_type {
-                RowType::Insert | RowType::Delete => {
-                    call_batch_fn!(self, data, Self::batch_sink);
-                }
-                _ => self.serial_sink(data).await?,
-            }
+            call_batch_fn!(self, data, Self::batch_sink);
         }
         Ok(())
     }
@@ -93,8 +95,11 @@ impl StarRocksSinker {
     ) -> anyhow::Result<usize> {
         let db = data[start_index].schema.clone();
         let tb = data[start_index].tb.clone();
-        let row_type = data[start_index].row_type.clone();
+        let first_row_type = data[start_index].row_type.clone();
         let tb_meta = self.meta_manager.get_tb_meta(&db, &tb).await?;
+
+        // use timestamp_millis as VERSION_COL value
+        self.sync_version = cmp::max(Utc::now().timestamp_millis(), self.sync_version + 1);
 
         let mut data_size = 0;
         // build stream load data
@@ -104,27 +109,42 @@ impl StarRocksSinker {
 
             Self::convert_row_data(row_data, tb_meta)?;
 
-            if row_type == RowType::Delete {
-                load_data.push(row_data.before.as_ref().unwrap());
+            let col_values = if row_data.row_type == RowType::Delete {
+                let before = row_data.before.as_mut().unwrap();
+                // SIGN_COL value
+                before.insert(SIGN_COL_NAME.into(), ColValue::Long(1));
+                before
             } else {
-                load_data.push(row_data.after.as_ref().unwrap());
-            }
+                row_data.after.as_mut().unwrap()
+            };
+
+            // VERSION_COL value
+            col_values.insert(
+                VERSION_COL_NAME.into(),
+                ColValue::LongLong(self.sync_version),
+            );
+            load_data.push(col_values);
+        }
+
+        let hard_delete = self.hard_delete
+            || !tb_meta
+                .basic
+                .col_origin_type_map
+                .contains_key(SIGN_COL_NAME);
+
+        let mut op = "";
+        if first_row_type == RowType::Delete && hard_delete {
+            op = "delete";
         }
 
         let body = json!(load_data).to_string();
-        let op = if row_type == RowType::Delete {
-            "delete"
-        } else {
-            ""
-        };
-
         // do stream load
         let url = format!(
             "http://{}:{}/api/{}/{}/_stream_load",
             self.host, self.port, db, tb
         );
         let request = self.build_request(&url, op, &body)?;
-        let response = self.client.execute(request).await?;
+        let response = self.http_client.execute(request).await?;
         Self::check_response(response).await?;
 
         Ok(data_size)
@@ -185,7 +205,7 @@ impl StarRocksSinker {
 
         // https://docs.starrocks.io/en-us/2.5/loading/Load_to_Primary_Key_tables
         let mut put = self
-            .client
+            .http_client
             .request(Method::PUT, url)
             .basic_auth(&self.username, password)
             .header(header::EXPECT, "100-continue")
@@ -202,10 +222,11 @@ impl StarRocksSinker {
 
     async fn check_response(response: Response) -> anyhow::Result<()> {
         let status_code = response.status();
+        let response_text = &response.text().await?;
         if status_code != StatusCode::OK {
             bail! {Error::HttpError(format!(
-                "stream load request failed, status_code: {}",
-                status_code
+                "data load request failed, status_code: {}, response_text: {:?}",
+                status_code, response_text
             ))}
         }
 
@@ -227,12 +248,11 @@ impl StarRocksSinker {
         //     "WriteDataTimeMs": 107,
         //     "CommitAndPublishTimeMs": 36
         // }
-        let load_result = &response.text().await?;
-        let json_value: Value = serde_json::from_str(load_result)?;
+        let json_value: Value = serde_json::from_str(response_text)?;
         if json_value["Status"] != "Success" {
             let err = format!(
                 "stream load request failed, status_code: {}, load_result: {}",
-                status_code, load_result,
+                status_code, response_text,
             );
             log_error!("{}", err);
             bail! {Error::HttpError(err)}

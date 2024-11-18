@@ -56,7 +56,9 @@ impl SqlUtil {
 
     pub fn get_escape_pairs(db_type: &DbType) -> Vec<(char, char)> {
         match db_type {
-            DbType::Mysql => vec![(MYSQL_ESCAPE, MYSQL_ESCAPE)],
+            DbType::Mysql | DbType::ClickHouse | DbType::Foxlake | DbType::StarRocks => {
+                vec![(MYSQL_ESCAPE, MYSQL_ESCAPE)]
+            }
             DbType::Pg => vec![(PG_ESCAPE, PG_ESCAPE)],
             DbType::Redis => vec![(REDIS_ESCAPE, REDIS_ESCAPE)],
             _ => vec![],

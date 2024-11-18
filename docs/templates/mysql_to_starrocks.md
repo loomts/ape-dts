@@ -1,6 +1,45 @@
-# MySQL -> Starrocks templates
+# MySQL -> StarRocks templates
 
 Refer to [config details](/docs/en/config.md) for explanations of common fields.
+
+# Struct
+```
+[extractor]
+extract_type=struct
+db_type=mysql
+url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
+
+[sinker]
+url=mysql://root:@127.0.0.1:9030
+sink_type=struct
+db_type=starrocks
+conflict_policy=interrupt
+
+[filter]
+do_dbs=test_db
+ignore_dbs=
+do_tbs=
+ignore_tbs=
+do_events=
+do_structures=
+
+[router]
+db_map=
+tb_map=
+col_map=
+
+[runtime]
+log_level=info
+log4rs_file=./log4rs.yaml
+log_dir=./logs
+
+[parallelizer]
+parallel_type=serial
+
+[pipeline]
+checkpoint_interval_secs=10
+buffer_size=100
+```
 
 # Snapshot
 ```
@@ -54,6 +93,8 @@ log_dir=./logs
 | batch_size | the max record count in one Stream Load | - | - |
 
 # CDC
+
+## Soft delete
 ```
 [extractor]
 db_type=mysql
@@ -83,7 +124,7 @@ col_map=
 db_map=
 
 [parallelizer]
-parallel_type=rdb_merge
+parallel_type=table
 parallel_size=8
 
 [pipeline]
@@ -103,3 +144,16 @@ log4rs_file=./log4rs.yaml
 | Config | Description | Example | Default |
 | :-------- | :-------- | :-------- | :-------- |
 | batch_sink_interval_secs | when importing data into StarRocks by Stream Load, avoid frequent small-batch imports, as this may cause throttle errors in StarRocks. If the batch_sink_interval_secs is set, Stream Load will be triggered when either of the following conditions is met: 1) the pipeline's buffer is full, or 2) it has been more than batch_sink_interval_secs seconds since the last Stream Load. | 15 | 0 |
+
+## Hard delete
+Refer to [tutorial](/docs/en/tutorial/mysql_to_starrocks.md) for the differences between hard delete and soft delete.
+
+The differences with soft delete: 
+
+```
+[parallelizer]
+parallel_type=rdb_merge
+
+[sinker]
+hard_delete=true
+```

@@ -105,7 +105,7 @@ impl MysqlColValueConvertor {
     pub fn from_binlog(col_type: &MysqlColType, value: ColumnValue) -> anyhow::Result<ColValue> {
         let col_value = match value {
             ColumnValue::Tiny(v) => {
-                if *col_type == MysqlColType::UnsignedTiny {
+                if matches!(*col_type, MysqlColType::TinyInt { unsigned: true }) {
                     ColValue::UnsignedTiny(v as u8)
                 } else {
                     ColValue::Tiny(v)
@@ -113,7 +113,7 @@ impl MysqlColValueConvertor {
             }
 
             ColumnValue::Short(v) => {
-                if *col_type == MysqlColType::UnsignedShort {
+                if matches!(*col_type, MysqlColType::SmallInt { unsigned: true }) {
                     ColValue::UnsignedShort(v as u16)
                 } else {
                     ColValue::Short(v)
@@ -121,9 +121,9 @@ impl MysqlColValueConvertor {
             }
 
             ColumnValue::Long(v) => {
-                if *col_type == MysqlColType::UnsignedMedium {
+                if matches!(*col_type, MysqlColType::MediumInt { unsigned: true }) {
                     ColValue::UnsignedLong((v as u32) << 8 >> 8)
-                } else if *col_type == MysqlColType::UnsignedLong {
+                } else if matches!(*col_type, MysqlColType::Int { unsigned: true }) {
                     ColValue::UnsignedLong(v as u32)
                 } else {
                     ColValue::Long(v)
@@ -131,7 +131,7 @@ impl MysqlColValueConvertor {
             }
 
             ColumnValue::LongLong(v) => {
-                if *col_type == MysqlColType::UnsignedLongLong {
+                if matches!(*col_type, MysqlColType::BigInt { unsigned: true }) {
                     ColValue::UnsignedLongLong(v as u64)
                 } else {
                     ColValue::LongLong(v)
@@ -183,15 +183,15 @@ impl MysqlColValueConvertor {
             }
 
             // tinyblob, mediumblob, longblob, blob, tinytext, mediumtext, longtext, text
-            ColumnValue::Blob(v) => match col_type {
-                // tinytext, mediumtext, longtext, text
-                MysqlColType::String {
-                    length: _,
-                    charset: _,
-                } => ColValue::RawString(v),
-                // tinyblob, mediumblob, longblob, blob
-                _ => ColValue::Blob(v),
-            },
+            ColumnValue::Blob(v) => {
+                if col_type.is_string() {
+                    // tinytext, mediumtext, longtext, text
+                    ColValue::RawString(v)
+                } else {
+                    // tinyblob, mediumblob, longblob, blob
+                    ColValue::Blob(v)
+                }
+            }
 
             ColumnValue::Bit(v) => ColValue::Bit(v),
 
@@ -237,7 +237,12 @@ impl MysqlColValueConvertor {
                 ColValue::Json2(v)
             }
 
-            _ => ColValue::None,
+            // should never happen
+            ColumnValue::UnsignedTiny(..)
+            | ColumnValue::UnsignedShort(..)
+            | ColumnValue::UnsignedLong(..)
+            | ColumnValue::UnsignedLongLong(..)
+            | ColumnValue::None => ColValue::None,
         };
 
         Ok(col_value)
@@ -245,84 +250,93 @@ impl MysqlColValueConvertor {
 
     pub fn from_str(col_type: &MysqlColType, value_str: &str) -> anyhow::Result<ColValue> {
         let value_str = value_str.to_string();
-        let col_value = match *col_type {
-            MysqlColType::Tiny => match value_str.parse::<i8>() {
-                Ok(value) => ColValue::Tiny(value),
-                Err(_) => ColValue::None,
-            },
-            MysqlColType::UnsignedTiny => match value_str.parse::<u8>() {
-                Ok(value) => ColValue::UnsignedTiny(value),
-                Err(_) => ColValue::None,
-            },
-            MysqlColType::Short => match value_str.parse::<i16>() {
-                Ok(value) => ColValue::Short(value),
-                Err(_) => ColValue::None,
-            },
-            MysqlColType::UnsignedShort => match value_str.parse::<u16>() {
-                Ok(value) => ColValue::UnsignedShort(value),
-                Err(_) => ColValue::None,
-            },
-            MysqlColType::Medium | MysqlColType::Long => match value_str.parse::<i32>() {
-                Ok(value) => ColValue::Long(value),
-                Err(_) => ColValue::None,
-            },
-            MysqlColType::UnsignedMedium | MysqlColType::UnsignedLong => {
-                match value_str.parse::<u32>() {
+        let col_value =
+            match *col_type {
+                MysqlColType::TinyInt { unsigned: false } => match value_str.parse::<i8>() {
+                    Ok(value) => ColValue::Tiny(value),
+                    Err(_) => ColValue::None,
+                },
+                MysqlColType::TinyInt { unsigned: true } => match value_str.parse::<u8>() {
+                    Ok(value) => ColValue::UnsignedTiny(value),
+                    Err(_) => ColValue::None,
+                },
+                MysqlColType::SmallInt { unsigned: false } => match value_str.parse::<i16>() {
+                    Ok(value) => ColValue::Short(value),
+                    Err(_) => ColValue::None,
+                },
+                MysqlColType::SmallInt { unsigned: true } => match value_str.parse::<u16>() {
+                    Ok(value) => ColValue::UnsignedShort(value),
+                    Err(_) => ColValue::None,
+                },
+                MysqlColType::MediumInt { unsigned: false }
+                | MysqlColType::Int { unsigned: false } => match value_str.parse::<i32>() {
+                    Ok(value) => ColValue::Long(value),
+                    Err(_) => ColValue::None,
+                },
+                MysqlColType::MediumInt { unsigned: true }
+                | MysqlColType::Int { unsigned: true } => match value_str.parse::<u32>() {
                     Ok(value) => ColValue::UnsignedLong(value),
                     Err(_) => ColValue::None,
+                },
+                MysqlColType::BigInt { unsigned: false } => match value_str.parse::<i64>() {
+                    Ok(value) => ColValue::LongLong(value),
+                    Err(_) => ColValue::None,
+                },
+                MysqlColType::BigInt { unsigned: true } => match value_str.parse::<u64>() {
+                    Ok(value) => ColValue::UnsignedLongLong(value),
+                    Err(_) => ColValue::None,
+                },
+                MysqlColType::Float => match value_str.parse::<f32>() {
+                    Ok(value) => ColValue::Float(value),
+                    Err(_) => ColValue::None,
+                },
+                MysqlColType::Double => match value_str.parse::<f64>() {
+                    Ok(value) => ColValue::Double(value),
+                    Err(_) => ColValue::None,
+                },
+
+                MysqlColType::Char { .. }
+                | MysqlColType::Varchar { .. }
+                | MysqlColType::TinyText { .. }
+                | MysqlColType::MediumText { .. }
+                | MysqlColType::Text { .. }
+                | MysqlColType::LongText { .. } => ColValue::String(value_str),
+
+                MysqlColType::Decimal { .. } => ColValue::Decimal(value_str),
+                MysqlColType::Time => ColValue::Time(value_str),
+                MysqlColType::Date => ColValue::Date(value_str),
+                MysqlColType::DateTime => ColValue::DateTime(value_str),
+
+                MysqlColType::Timestamp { timezone_offset: _ } => ColValue::Timestamp(value_str),
+
+                MysqlColType::Year => match value_str.parse::<u16>() {
+                    Ok(value) => ColValue::Year(value),
+                    Err(_) => ColValue::None,
+                },
+
+                MysqlColType::Bit => match value_str.parse::<u64>() {
+                    Ok(value) => ColValue::Bit(value),
+                    Err(_) => ColValue::None,
+                },
+
+                MysqlColType::Set { .. } => ColValue::String(value_str),
+                MysqlColType::Enum { .. } => ColValue::String(value_str),
+
+                MysqlColType::Json => ColValue::Json2(value_str),
+
+                MysqlColType::Binary { .. }
+                | MysqlColType::VarBinary { .. }
+                | MysqlColType::TinyBlob
+                | MysqlColType::MediumBlob
+                | MysqlColType::Blob
+                | MysqlColType::LongBlob
+                | MysqlColType::Unkown => {
+                    bail! {Error::Unexpected(format!(
+                        "unsupported column type: {:?}",
+                        col_type
+                    )) }
                 }
-            }
-            MysqlColType::LongLong => match value_str.parse::<i64>() {
-                Ok(value) => ColValue::LongLong(value),
-                Err(_) => ColValue::None,
-            },
-            MysqlColType::UnsignedLongLong => match value_str.parse::<u64>() {
-                Ok(value) => ColValue::UnsignedLongLong(value),
-                Err(_) => ColValue::None,
-            },
-            MysqlColType::Float => match value_str.parse::<f32>() {
-                Ok(value) => ColValue::Float(value),
-                Err(_) => ColValue::None,
-            },
-            MysqlColType::Double => match value_str.parse::<f64>() {
-                Ok(value) => ColValue::Double(value),
-                Err(_) => ColValue::None,
-            },
-
-            MysqlColType::Decimal { .. } => ColValue::Decimal(value_str),
-            MysqlColType::Time => ColValue::Time(value_str),
-            MysqlColType::Date => ColValue::Date(value_str),
-            MysqlColType::DateTime => ColValue::DateTime(value_str),
-
-            MysqlColType::Timestamp { timezone_offset: _ } => ColValue::Timestamp(value_str),
-
-            MysqlColType::Year => match value_str.parse::<u16>() {
-                Ok(value) => ColValue::Year(value),
-                Err(_) => ColValue::None,
-            },
-
-            MysqlColType::String {
-                length: _,
-                charset: _,
-            } => ColValue::String(value_str),
-
-            MysqlColType::Bit => match value_str.parse::<u64>() {
-                Ok(value) => ColValue::Bit(value),
-                Err(_) => ColValue::None,
-            },
-
-            MysqlColType::Set { .. } => ColValue::String(value_str),
-            MysqlColType::Enum { .. } => ColValue::String(value_str),
-
-            MysqlColType::Json => ColValue::Json2(value_str),
-
-            _ => {
-                bail! {Error::Unexpected(format!(
-                    "unsupported column type: {:?}",
-                    col_type
-                )) }
-            }
-        };
+            };
 
         Ok(col_value)
     }
@@ -347,135 +361,136 @@ impl MysqlColValueConvertor {
         }
 
         match col_type {
-            MysqlColType::Tiny => {
+            MysqlColType::TinyInt { unsigned: false } => {
                 let value: i8 = row.try_get(col)?;
-                return Ok(ColValue::Tiny(value));
+                Ok(ColValue::Tiny(value))
             }
-            MysqlColType::UnsignedTiny => {
+            MysqlColType::TinyInt { unsigned: true } => {
                 let value: u8 = row.try_get(col)?;
-                return Ok(ColValue::UnsignedTiny(value));
+                Ok(ColValue::UnsignedTiny(value))
             }
-            MysqlColType::Short => {
+            MysqlColType::SmallInt { unsigned: false } => {
                 let value: i16 = row.try_get(col)?;
-                return Ok(ColValue::Short(value));
+                Ok(ColValue::Short(value))
             }
-            MysqlColType::UnsignedShort => {
+            MysqlColType::SmallInt { unsigned: true } => {
                 let value: u16 = row.try_get(col)?;
-                return Ok(ColValue::UnsignedShort(value));
+                Ok(ColValue::UnsignedShort(value))
             }
-            MysqlColType::Medium | MysqlColType::Long => {
+            MysqlColType::MediumInt { unsigned: false } | MysqlColType::Int { unsigned: false } => {
                 let value: i32 = row.try_get(col)?;
-                return Ok(ColValue::Long(value));
+                Ok(ColValue::Long(value))
             }
-            MysqlColType::UnsignedMedium | MysqlColType::UnsignedLong => {
+            MysqlColType::MediumInt { unsigned: true } | MysqlColType::Int { unsigned: true } => {
                 let value: u32 = row.try_get(col)?;
-                return Ok(ColValue::UnsignedLong(value));
+                Ok(ColValue::UnsignedLong(value))
             }
-            MysqlColType::LongLong => {
+            MysqlColType::BigInt { unsigned: false } => {
                 let value: i64 = row.try_get(col)?;
-                return Ok(ColValue::LongLong(value));
+                Ok(ColValue::LongLong(value))
             }
-            MysqlColType::UnsignedLongLong => {
+            MysqlColType::BigInt { unsigned: true } => {
                 let value: u64 = row.try_get(col)?;
-                return Ok(ColValue::UnsignedLongLong(value));
+                Ok(ColValue::UnsignedLongLong(value))
             }
             MysqlColType::Float => {
                 let value: f32 = row.try_get(col)?;
-                return Ok(ColValue::Float(value));
+                Ok(ColValue::Float(value))
             }
             MysqlColType::Double => {
                 let value: f64 = row.try_get(col)?;
-                return Ok(ColValue::Double(value));
+                Ok(ColValue::Double(value))
             }
             MysqlColType::Decimal { .. } => {
                 let value: BigDecimal = row.get_unchecked(col);
-                return Ok(ColValue::Decimal(value.to_string()));
+                Ok(ColValue::Decimal(value.to_string()))
             }
             MysqlColType::Time => match db_type {
                 DbType::Foxlake => {
                     let value: Vec<u8> = row.get_unchecked(col);
                     let str: String = String::from_utf8_lossy(&value).to_string();
-                    return Ok(ColValue::Time(str));
+                    Ok(ColValue::Time(str))
                 }
                 _ => {
                     // do not use chrono::NaiveTime since it ignores year
                     // let value: chrono::NaiveTime = row.try_get(col)?;
                     let buf: Vec<u8> = row.get_unchecked(col);
-                    return Self::parse_time(buf);
+                    Self::parse_time(buf)
                 }
             },
             MysqlColType::Date => match db_type {
                 DbType::StarRocks | DbType::Foxlake => {
                     let value: Vec<u8> = row.get_unchecked(col);
                     let str: String = String::from_utf8_lossy(&value).to_string();
-                    return Ok(ColValue::Date(str));
+                    Ok(ColValue::Date(str))
                 }
                 _ => {
                     let value: chrono::NaiveDate = row.try_get(col)?;
-                    return Ok(ColValue::Date(value.format("%Y-%m-%d").to_string()));
+                    Ok(ColValue::Date(value.format("%Y-%m-%d").to_string()))
                 }
             },
             MysqlColType::DateTime => match db_type {
                 DbType::StarRocks | DbType::Foxlake => {
                     let value: Vec<u8> = row.get_unchecked(col);
                     let str: String = String::from_utf8_lossy(&value).to_string();
-                    return Ok(ColValue::DateTime(str));
+                    Ok(ColValue::DateTime(str))
                 }
                 _ => {
                     let value: chrono::NaiveDateTime = row.try_get(col)?;
-                    return Ok(ColValue::DateTime(
+                    Ok(ColValue::DateTime(
                         value.format("%Y-%m-%d %H:%M:%S%.f").to_string(),
-                    ));
+                    ))
                 }
             },
             MysqlColType::Timestamp { timezone_offset: _ } => match db_type {
                 DbType::Foxlake => {
                     let value: Vec<u8> = row.get_unchecked(col);
                     let str: String = String::from_utf8_lossy(&value).to_string();
-                    return Ok(ColValue::Timestamp(str));
+                    Ok(ColValue::Timestamp(str))
                 }
                 _ => {
                     // we always set session.time_zone='+00:00' for connection
                     let value: chrono::DateTime<Utc> = row.try_get(col)?;
-                    return Ok(ColValue::Timestamp(
+                    Ok(ColValue::Timestamp(
                         value.format("%Y-%m-%d %H:%M:%S%.f").to_string(),
-                    ));
+                    ))
                 }
             },
             MysqlColType::Year => {
                 let value: u16 = row.get_unchecked(col);
-                return Ok(ColValue::Year(value));
+                Ok(ColValue::Year(value))
             }
-            MysqlColType::String {
-                length: _,
-                charset: _,
-            } => {
+            MysqlColType::Char { .. }
+            | MysqlColType::Varchar { .. }
+            | MysqlColType::TinyText { .. }
+            | MysqlColType::MediumText { .. }
+            | MysqlColType::Text { .. }
+            | MysqlColType::LongText { .. } => {
                 let value: String = row.try_get(col)?;
-                return Ok(ColValue::String(value));
+                Ok(ColValue::String(value))
             }
-            MysqlColType::Binary { length: _ } => {
+
+            MysqlColType::Binary { .. }
+            | MysqlColType::VarBinary { .. }
+            | MysqlColType::TinyBlob
+            | MysqlColType::MediumBlob
+            | MysqlColType::Blob
+            | MysqlColType::LongBlob => {
                 let value: Vec<u8> = row.try_get(col)?;
-                return Ok(ColValue::Blob(value));
+                Ok(ColValue::Blob(value))
             }
-            MysqlColType::VarBinary { length: _ } => {
-                let value: Vec<u8> = row.try_get(col)?;
-                return Ok(ColValue::Blob(value));
-            }
-            MysqlColType::Blob => {
-                let value: Vec<u8> = row.try_get(col)?;
-                return Ok(ColValue::Blob(value));
-            }
+
             MysqlColType::Bit => {
                 let value: u64 = row.try_get(col)?;
-                return Ok(ColValue::Bit(value));
+                Ok(ColValue::Bit(value))
             }
             MysqlColType::Set { .. } => {
                 let value: String = row.try_get(col)?;
-                return Ok(ColValue::Set2(value));
+                Ok(ColValue::Set2(value))
             }
             MysqlColType::Enum { .. } => {
                 let value: String = row.try_get(col)?;
-                return Ok(ColValue::Enum2(value));
+                Ok(ColValue::Enum2(value))
             }
             MysqlColType::Json => {
                 let value: serde_json::Value = row.try_get(col)?;
@@ -484,10 +499,9 @@ impl MysqlColValueConvertor {
                 // +-----+--------------------------+
                 // | id | json_col                  |
                 // |  1 | 212765.7                  |
-                return Ok(ColValue::Json2(value.to_string()));
+                Ok(ColValue::Json2(value.to_string()))
             }
-            _ => {}
+            MysqlColType::Unkown => Ok(ColValue::None),
         }
-        Ok(ColValue::None)
     }
 }

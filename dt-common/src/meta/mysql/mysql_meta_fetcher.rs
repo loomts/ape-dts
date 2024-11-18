@@ -127,7 +127,7 @@ impl MysqlMetaFetcher {
 
         let sql = format!("DESC `{}`.`{}`", schema, tb);
         let mut rows = sqlx::query(&sql).disable_arguments().fetch(conn_pool);
-        while let Some(row) = rows.try_next().await.unwrap() {
+        while let Some(row) = rows.try_next().await? {
             let col_name: String = row.try_get("Field")?;
             cols.push(col_name);
         }
@@ -148,7 +148,7 @@ impl MysqlMetaFetcher {
             sqlx::query(&sql).disable_arguments().fetch(conn_pool)
         };
 
-        while let Some(row) = rows.try_next().await.unwrap() {
+        while let Some(row) = rows.try_next().await? {
             let col: String = row.try_get(COLUMN_NAME)?;
             let (origin_type, col_type) = Self::get_col_type(&row).await?;
             col_origin_type_map.insert(col.clone(), origin_type);
@@ -170,50 +170,15 @@ impl MysqlMetaFetcher {
 
         let unsigned = column_type.to_lowercase().contains("unsigned");
         let col_type = match data_type.as_str() {
-            "tinyint" => {
-                if unsigned {
-                    MysqlColType::UnsignedTiny
-                } else {
-                    MysqlColType::Tiny
-                }
-            }
-
-            "smallint" => {
-                if unsigned {
-                    MysqlColType::UnsignedShort
-                } else {
-                    MysqlColType::Short
-                }
-            }
-
-            "bigint" => {
-                if unsigned {
-                    MysqlColType::UnsignedLongLong
-                } else {
-                    MysqlColType::LongLong
-                }
-            }
-
-            "mediumint" => {
-                if unsigned {
-                    MysqlColType::UnsignedMedium
-                } else {
-                    MysqlColType::Medium
-                }
-            }
-
-            "int" => {
-                if unsigned {
-                    MysqlColType::UnsignedLong
-                } else {
-                    MysqlColType::Long
-                }
-            }
+            "tinyint" => MysqlColType::TinyInt { unsigned },
+            "smallint" => MysqlColType::SmallInt { unsigned },
+            "bigint" => MysqlColType::BigInt { unsigned },
+            "mediumint" => MysqlColType::MediumInt { unsigned },
+            "int" => MysqlColType::Int { unsigned },
 
             "varbinary" => MysqlColType::VarBinary {
                 length: Self::get_u64_col(row, CHARACTER_MAXIMUM_LENGTH) as u16,
             },
-
             "binary" => MysqlColType::Binary {
                 length: Self::get_u64_col(row, CHARACTER_MAXIMUM_LENGTH) as u8,
             },
@@ -225,7 +190,15 @@ impl MysqlMetaFetcher {
                 if unchecked.is_some() {
                     charset = row.try_get(CHARACTER_SET_NAME)?;
                 }
-                MysqlColType::String { length, charset }
+                match data_type.as_str() {
+                    "char" => MysqlColType::Char { length, charset },
+                    "varchar" => MysqlColType::Varchar { length, charset },
+                    "tinytext" => MysqlColType::TinyText { length, charset },
+                    "mediumtext" => MysqlColType::MediumText { length, charset },
+                    "longtext" => MysqlColType::LongText { length, charset },
+                    "text" => MysqlColType::Text { length, charset },
+                    _ => MysqlColType::Unkown,
+                }
             }
 
             // as a client of mysql, sqlx's client timezone is UTC by default,
@@ -235,7 +208,11 @@ impl MysqlMetaFetcher {
             // and then dst server will convert the received UTC timestamp into its own timezone.
             "timestamp" => MysqlColType::Timestamp { timezone_offset: 0 },
 
-            "tinyblob" | "mediumblob" | "longblob" | "blob" => MysqlColType::Blob,
+            "tinyblob" => MysqlColType::TinyBlob,
+            "mediumblob" => MysqlColType::MediumBlob,
+            "longblob" => MysqlColType::LongBlob,
+            "blob" => MysqlColType::Blob,
+
             "float" => MysqlColType::Float,
             "double" => MysqlColType::Double,
 
@@ -321,7 +298,7 @@ impl MysqlMetaFetcher {
         let mut key_map: HashMap<String, Vec<String>> = HashMap::new();
         let sql = format!("SHOW INDEXES FROM `{}`.`{}`", schema, tb);
         let mut rows = sqlx::query(&sql).disable_arguments().fetch(conn_pool);
-        while let Some(row) = rows.try_next().await.unwrap() {
+        while let Some(row) = rows.try_next().await? {
             let non_unique: i8 = row.try_get("Non_unique")?;
             if non_unique == 1 {
                 continue;
@@ -376,7 +353,7 @@ impl MysqlMetaFetcher {
         );
 
         let mut rows = sqlx::query(&sql).fetch(conn_pool);
-        while let Some(row) = rows.try_next().await.unwrap() {
+        while let Some(row) = rows.try_next().await? {
             let my_schema: String = row.try_get("CONSTRAINT_SCHEMA")?;
             let my_tb: String = row.try_get("TABLE_NAME")?;
             let my_col: String = row.try_get("COLUMN_NAME")?;
@@ -405,7 +382,7 @@ impl MysqlMetaFetcher {
     async fn init_version(&mut self) -> anyhow::Result<()> {
         let sql = "SELECT VERSION()";
         let mut rows = sqlx::query(sql).disable_arguments().fetch(&self.conn_pool);
-        if let Some(row) = rows.try_next().await.unwrap() {
+        if let Some(row) = rows.try_next().await? {
             let version: String = row.get_unchecked(0);
             self.version = version.trim().into();
             return Ok(());

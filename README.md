@@ -3,18 +3,18 @@
 
 # Introduction
 
-- ape-dts is a tool aimed for any-to-any data migration.
-- It is lightweight and does not rely on third-party components or additional storage.
+- ape-dts is a data migration tool enabling any-to-any data transfers.
+- Lightweight and standalone, requiring no third-party components or extra storage.
 - In Rust.
 
 
 ## Supported task types
-|  | mysql -> mysql | pg -> pg | mongo -> mongo | redis -> redis | mysql -> kafka | pg -> kafka| mysql -> starrocks |
-| :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- |
-| Snapshot | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
-| CDC | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
-| Data check/revise/review | &#10004; | &#10004; | &#10004; | | | | |
-| Structure migration/check | &#10004; | &#10004; | | | | |
+|  | mysql -> mysql | pg -> pg | mongo -> mongo | redis -> redis | mysql -> kafka | pg -> kafka| mysql -> starrocks | mysql -> clickhouse |
+| :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- |
+| Snapshot | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
+| CDC | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
+| Data check/revise/review | &#10004; | &#10004; | &#10004; | | | | | |
+| Structure migration | &#10004; | &#10004; | | | | | &#10004; | &#10004; |
 
 
 # Quick starts
@@ -26,6 +26,7 @@
 - [mongo -> mongo](./docs/en/tutorial/mongo_to_mongo.md)
 - [redis -> redis](./docs/en/tutorial/redis_to_redis.md)
 - [mysql -> starrocks](./docs/en/tutorial/mysql_to_starrocks.md)
+- [mysql -> clickhouse](./docs/en/tutorial/mysql_to_clickhouse.md)
 - [mysql -> kafka -> consumer](./docs/en/tutorial/mysql_to_kafka_consumer.md)
 - [pg -> kafka -> consumer](./docs/en/tutorial/pg_to_kafka_consumer.md)
 - [mysql -> ape_dts(HTTP server) -> consumer](./docs/en/tutorial/mysql_to_http_server_consumer.md)
@@ -45,10 +46,10 @@ Refer to [test docs](./dt-tests/README.md) for details.
     - [check](./docs/en/structure/check.md)
     - [check by Liquibase](./docs/en/structure/check_by_liquibase.md)
 - Snapshot tasks
-    - [migration](./docs/en/snapshot/migration.md)
-    - [check](./docs/en/snapshot/check.md)
-    - [revise](./docs/en/snapshot/revise.md)
-    - [review](./docs/en/snapshot/review.md)
+    - [data migration](./docs/en/snapshot/migration.md)
+    - [data check](./docs/en/snapshot/check.md)
+    - [data revise](./docs/en/snapshot/revise.md)
+    - [data review](./docs/en/snapshot/review.md)
     - [resume at breakpoint](./docs/en/snapshot/resume.md)
 - CDC tasks
     - [data sync](./docs/en/cdc/sync.md)
@@ -72,6 +73,7 @@ Refer to [test docs](./dt-tests/README.md) for details.
     - [mysql/pg -> kafka](./docs/templates/rdb_to_kafka.md)
     - [mysql/pg -> ape_dts(HTTP server)](./docs/templates/rdb_to_http_server.md)
     - [mysql -> starrocks](./docs/templates/mysql_to_starrocks.md)
+    - [mysql -> clickhouse](./docs/templates/mysql_to_clickhouse.md)
 
 # Benchmark
 - MySQL -> MySQL, Snapshot

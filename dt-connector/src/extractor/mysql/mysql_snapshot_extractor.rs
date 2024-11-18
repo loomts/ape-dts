@@ -87,12 +87,9 @@ impl MysqlSnapshotExtractor {
             let parallel_extract = self.parallel_size > 1
                 && matches!(
                     order_col_type,
-                    MysqlColType::Long
-                        | MysqlColType::UnsignedLong
-                        | MysqlColType::LongLong
-                        | MysqlColType::UnsignedLongLong
-                        | MysqlColType::Medium
-                        | MysqlColType::UnsignedMedium
+                    MysqlColType::Int { .. }
+                        | MysqlColType::BigInt { .. }
+                        | MysqlColType::MediumInt { .. }
                 );
 
             let resume_value = if let Some(value) =

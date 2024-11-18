@@ -143,7 +143,7 @@ impl RdbRedisTestRunner {
             }
             let key_col = tb_meta.basic.order_col.as_ref().unwrap();
 
-            let results = RdbUtil::fetch_data_mysql(conn_pool, None, db_tb).await?;
+            let results = RdbUtil::fetch_data_mysql(conn_pool, None, db_tb, "").await?;
             for row_data in results {
                 let key = row_data
                     .after
