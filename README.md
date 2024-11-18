@@ -3,8 +3,8 @@
 
 # Introduction
 
-- ape-dts is a tool aimed for any-to-any data migration.
-- It is lightweight and does not rely on third-party components or additional storage.
+- ape-dts is a data migration tool enabling any-to-any data transfers.
+- Lightweight and standalone, requiring no third-party components or extra storage.
 - In Rust.
 
 
