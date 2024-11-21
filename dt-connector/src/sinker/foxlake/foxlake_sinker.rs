@@ -126,6 +126,5 @@ impl FoxlakeSinker {
             all_data_size,
             start_time,
         )
-        .await
     }
 }

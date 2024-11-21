@@ -50,6 +50,9 @@ pub enum Error {
     #[error("mongodb error: {0}")]
     MongodbError(#[from] mongodb::error::Error),
 
+    #[error("duckdb error: {0}")]
+    DuckdbError(#[from] duckdb::Error),
+
     #[error("struct error: {0}")]
     StructError(String),
 

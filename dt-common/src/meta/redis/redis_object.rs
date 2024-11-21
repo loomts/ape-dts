@@ -9,7 +9,7 @@ const TYPE_SET: &str = "set";
 const TYPE_ZSET: &str = "zset";
 const TYPE_MODULE: &str = "module";
 const TYPE_STREAM: &str = "stream";
-const TYPE_UNKOWN: &str = "unkown";
+const TYPE_UNKNOWN: &str = "unknown";
 
 #[derive(Debug, Clone)]
 pub enum RedisObject {
@@ -33,7 +33,7 @@ impl RedisObject {
             Self::Zset(_) => TYPE_ZSET,
             Self::Module(_) => TYPE_MODULE,
             Self::Stream(_) => TYPE_STREAM,
-            Self::Unknown => TYPE_UNKOWN,
+            Self::Unknown => TYPE_UNKNOWN,
         }
         .to_string()
     }

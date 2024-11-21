@@ -9,6 +9,7 @@ use dt_common::{
         config_enums::DbType, extractor_config::ExtractorConfig, sinker_config::SinkerConfig,
         task_config::TaskConfig,
     },
+    meta::duckdb::duckdb_meta_manager::DuckdbMetaManager,
     monitor::monitor::Monitor,
     rdb_filter::RdbFilter,
     utils::url_util::UrlUtil,
@@ -29,6 +30,7 @@ use dt_connector::{
         clickhouse::{
             clickhouse_sinker::ClickhouseSinker, clickhouse_struct_sinker::ClickhouseStructSinker,
         },
+        duckdb::{duckdb_sinker::DuckdbSinker, duckdb_struct_sinker::DuckdbStructSinker},
         dummy_sinker::DummySinker,
         foxlake::{
             foxlake_merger::FoxlakeMerger, foxlake_pusher::FoxlakePusher,
@@ -377,7 +379,7 @@ impl SinkerUtil {
                 }
             }
 
-            SinkerConfig::Starrocks {
+            SinkerConfig::StarRocks {
                 url,
                 batch_size,
                 stream_load_url,
@@ -418,7 +420,7 @@ impl SinkerUtil {
                 }
             }
 
-            SinkerConfig::StarrocksStruct {
+            SinkerConfig::StarRocksStruct {
                 url,
                 conflict_policy,
             } => {
@@ -486,6 +488,43 @@ impl SinkerUtil {
                     client,
                     conflict_policy,
                     engine,
+                    filter,
+                    router,
+                    extractor_meta_manager,
+                };
+                sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
+            }
+
+            SinkerConfig::Duckdb {
+                batch_size,
+                db_file,
+            } => {
+                let conn = duckdb::Connection::open(&db_file)?;
+                for _ in 0..parallel_size {
+                    let meta_manager = DuckdbMetaManager::new(conn.try_clone()?)?;
+                    let sinker = DuckdbSinker {
+                        batch_size,
+                        meta_manager,
+                        monitor: monitor.clone(),
+                        conn: Some(conn.try_clone()?),
+                    };
+                    sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
+                }
+            }
+
+            SinkerConfig::DuckdbStruct {
+                db_file,
+                conflict_policy,
+            } => {
+                let conn = duckdb::Connection::open(&db_file)?;
+                let extractor_meta_manager = ExtractorUtil::get_extractor_meta_manager(task_config)
+                    .await?
+                    .unwrap();
+                let filter = RdbFilter::from_config(&task_config.filter, &DbType::Mysql)?;
+                let router = RdbRouter::from_config(&task_config.router, &DbType::Mysql)?;
+                let sinker = DuckdbStructSinker {
+                    conn: Some(conn),
+                    conflict_policy,
                     filter,
                     router,
                     extractor_meta_manager,

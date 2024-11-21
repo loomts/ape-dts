@@ -83,7 +83,7 @@ impl TaskUtil {
                 RdbMetaManager::from_mysql(mysql_meta_manager)
             }
 
-            SinkerConfig::Starrocks { url, .. } => {
+            SinkerConfig::StarRocks { url, .. } => {
                 let mysql_meta_manager =
                     Self::create_mysql_meta_manager(url, log_level, DbType::StarRocks, None)
                         .await?;

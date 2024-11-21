@@ -117,10 +117,10 @@ impl ClickhouseStructSinker {
                 MysqlColType::Set { items: _ } => "String",
                 MysqlColType::Enum { items: _ } => "String",
                 MysqlColType::Json => "String",
-                MysqlColType::Unkown => "String",
+                MysqlColType::Unknown => "String",
             };
 
-            if column.is_nullable.to_lowercase() == "yes" {
+            if column.is_nullable {
                 ck_cols.push(format!("`{}` Nullable({})", col, ck_col_type));
             } else {
                 ck_cols.push(format!("`{}` {}", col, ck_col_type));

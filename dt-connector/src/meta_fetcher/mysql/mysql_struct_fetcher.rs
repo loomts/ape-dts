@@ -145,11 +145,12 @@ impl MysqlStructFetcher {
 
             let engine_name = Self::get_str_with_null(&row, "ENGINE")?;
             let table_comment = Self::get_str_with_null(&row, "TABLE_COMMENT")?;
+            let is_nullable = Self::get_str_with_null(&row, "IS_NULLABLE")?.to_lowercase() == "yes";
             let column = Column {
                 column_name: Self::get_str_with_null(&row, "COLUMN_NAME")?,
                 ordinal_position: row.try_get("ORDINAL_POSITION")?,
                 column_default: row.get("COLUMN_DEFAULT"),
-                is_nullable: Self::get_str_with_null(&row, "IS_NULLABLE")?,
+                is_nullable,
                 column_type: Self::get_str_with_null(&row, "COLUMN_TYPE")?,
                 column_key: Self::get_str_with_null(&row, "COLUMN_KEY")?,
                 extra: Self::get_str_with_null(&row, "EXTRA")?,

@@ -126,7 +126,7 @@ impl MongoChecker {
         }
         BaseChecker::log_dml(miss, diff);
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, 0, start_time).await
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, 0, start_time)
     }
 
     fn mock_tb_meta(schema: &str, tb: &str) -> RdbTbMeta {

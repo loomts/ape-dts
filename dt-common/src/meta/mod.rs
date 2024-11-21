@@ -6,6 +6,7 @@ pub mod col_value;
 pub mod ddl_meta;
 pub mod dt_data;
 pub mod dt_queue;
+pub mod duckdb;
 pub mod foreign_key;
 pub mod foxlake;
 pub mod kafka;

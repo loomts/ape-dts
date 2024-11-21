@@ -121,7 +121,6 @@ impl MongoSinker {
         }
 
         BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
-            .await
     }
 
     async fn batch_delete(
@@ -155,7 +154,7 @@ impl MongoSinker {
         };
         collection.delete_many(query, None).await?;
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time)
     }
 
     async fn batch_insert(
@@ -192,7 +191,7 @@ impl MongoSinker {
             self.serial_sink(sub_data.to_vec()).await?;
         }
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time)
     }
 
     async fn upsert(

@@ -152,7 +152,7 @@ impl PgCreateTableStatement {
         columns.sort_by(|a, b| a.ordinal_position.cmp(&b.ordinal_position));
         for column in columns.iter() {
             sql.push_str(format!(r#""{}" {} "#, column.column_name, column.column_type).as_str());
-            if column.is_nullable.to_lowercase() == "no" {
+            if !column.is_nullable {
                 sql.push_str("NOT NULL ");
             }
             match &column.column_default {

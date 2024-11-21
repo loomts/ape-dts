@@ -1,13 +1,12 @@
 use std::{
     env,
     fs::{self, File},
-    io::Read,
     path::{Path, PathBuf},
 };
 
-use configparser::ini::Ini;
 use dt_common::config::{
-    extractor_config::ExtractorConfig, sinker_config::SinkerConfig, task_config::TaskConfig,
+    extractor_config::ExtractorConfig, ini_loader::IniLoader, sinker_config::SinkerConfig,
+    task_config::TaskConfig,
 };
 
 pub struct TestConfigUtil {}
@@ -68,7 +67,7 @@ impl TestConfigUtil {
         dotenv::from_path(&env_file).unwrap();
 
         let mut update_configs = Vec::new();
-        let ini = Self::load_ini(src_task_config_file);
+        let ini = IniLoader::new(src_task_config_file).ini;
         for (section, kvs) in ini.get_map().unwrap() {
             for (k, v) in kvs.iter() {
                 if v.is_none() {
@@ -200,7 +199,7 @@ impl TestConfigUtil {
         dst_task_config_file: &str,
         config: &[(String, String, String)],
     ) {
-        let mut ini = Self::load_ini(src_task_config_file);
+        let mut ini = IniLoader::new(src_task_config_file).ini;
         for (section, key, value) in config.iter() {
             ini.set(section, key, Some(value.to_string()));
         }
@@ -224,16 +223,5 @@ impl TestConfigUtil {
             .map(|i| (i.0.to_string(), i.1.to_string(), i.2.to_string()))
             .collect();
         Self::update_task_config(src_task_config_file, dst_task_config_file, &config);
-    }
-
-    fn load_ini(task_config_file: &str) -> Ini {
-        let mut config_str = String::new();
-        File::open(task_config_file)
-            .unwrap()
-            .read_to_string(&mut config_str)
-            .unwrap();
-        let mut ini = Ini::new();
-        ini.read(config_str).unwrap();
-        ini
     }
 }

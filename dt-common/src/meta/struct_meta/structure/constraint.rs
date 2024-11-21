@@ -16,7 +16,7 @@ pub enum ConstraintType {
     Unique,
     Check,
     Foregin,
-    Unkown,
+    Unknown,
 }
 
 impl ConstraintType {
@@ -27,7 +27,7 @@ impl ConstraintType {
                 "UNIQUE" => Self::Unique,
                 "CHECK" => Self::Check,
                 "FOREIGN KEY" => Self::Foregin,
-                _ => Self::Unkown,
+                _ => Self::Unknown,
             },
 
             DbType::Pg => match str {
@@ -35,10 +35,10 @@ impl ConstraintType {
                 "u" | "117" => Self::Unique,
                 "c" | "99" => Self::Check,
                 "f" | "102" => Self::Foregin,
-                _ => Self::Unkown,
+                _ => Self::Unknown,
             },
 
-            _ => Self::Unkown,
+            _ => Self::Unknown,
         }
     }
 
@@ -49,7 +49,7 @@ impl ConstraintType {
                 Self::Unique => "UNIQUE",
                 Self::Foregin => "FOREIGN KEY",
                 Self::Check => "CHECK",
-                Self::Unkown => "unkown",
+                Self::Unknown => "unknown",
             },
 
             DbType::Pg => match self {
@@ -57,10 +57,10 @@ impl ConstraintType {
                 Self::Unique => "u",
                 Self::Foregin => "f",
                 Self::Check => "c",
-                Self::Unkown => "unkown",
+                Self::Unknown => "unknown",
             },
 
-            _ => "unkown",
+            _ => "unknown",
         }
     }
 }

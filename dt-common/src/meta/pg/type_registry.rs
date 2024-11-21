@@ -9,7 +9,6 @@ use super::pg_col_type::PgColType;
 pub struct TypeRegistry {
     pub conn_pool: Pool<Postgres>,
     pub oid_to_type: HashMap<i32, PgColType>,
-    pub name_to_type: HashMap<String, PgColType>,
 }
 
 impl TypeRegistry {
@@ -17,7 +16,6 @@ impl TypeRegistry {
         Self {
             conn_pool,
             oid_to_type: HashMap::new(),
-            name_to_type: HashMap::new(),
         }
     }
 
@@ -43,8 +41,6 @@ impl TypeRegistry {
         while let Some(row) = rows.try_next().await.unwrap() {
             let col_type = self.parse_col_meta(&row)?;
             self.oid_to_type.insert(col_type.oid, col_type.clone());
-            self.name_to_type
-                .insert(col_type.long_name.clone(), col_type.clone());
         }
         Ok(self)
     }
@@ -52,8 +48,8 @@ impl TypeRegistry {
     fn parse_col_meta(&mut self, row: &PgRow) -> anyhow::Result<PgColType> {
         let oid: i32 = row.get_unchecked("oid");
         // cast to short name
-        let long_name: String = row.try_get("name")?;
-        let short_name = PgColType::get_short_name(&long_name);
+        let name: String = row.try_get("name")?;
+        let alias = PgColType::get_alias(&name);
         let element_oid: i32 = row.get_unchecked("element");
         let parent_oid: i32 = row.get_unchecked("parentoid");
         let modifiers: i32 = row.get_unchecked("modifiers");
@@ -68,8 +64,8 @@ impl TypeRegistry {
 
         Ok(PgColType {
             oid,
-            long_name,
-            short_name,
+            name,
+            alias,
             element_oid,
             parent_oid,
             modifiers,

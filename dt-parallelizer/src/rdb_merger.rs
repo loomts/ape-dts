@@ -2,14 +2,17 @@ use std::collections::HashMap;
 
 use async_trait::async_trait;
 use dt_common::log_debug;
+use dt_common::meta::duckdb::duckdb_meta_manager::DuckdbMetaManager;
 use dt_common::meta::{
     rdb_meta_manager::RdbMetaManager, rdb_tb_meta::RdbTbMeta, row_data::RowData, row_type::RowType,
 };
 
 use crate::{merge_parallelizer::TbMergedData, Merger};
 
+#[derive(Default)]
 pub struct RdbMerger {
-    pub meta_manager: RdbMetaManager,
+    pub rdb_meta_manager: Option<RdbMetaManager>,
+    pub duckdb_meta_manager: Option<DuckdbMetaManager>,
 }
 
 #[async_trait]
@@ -41,7 +44,13 @@ impl Merger for RdbMerger {
     }
 
     async fn close(&mut self) -> anyhow::Result<()> {
-        self.meta_manager.close().await
+        if let Some(meta_manager) = &self.rdb_meta_manager {
+            meta_manager.close().await?;
+        }
+        if let Some(duckdb_meta_manager) = &mut self.duckdb_meta_manager {
+            duckdb_meta_manager.close()?;
+        }
+        Ok(())
     }
 }
 
@@ -58,10 +67,18 @@ impl RdbMerger {
             return Ok(());
         }
 
-        let tb_meta = self
-            .meta_manager
-            .get_tb_meta(&row_data.schema, &row_data.tb)
-            .await?;
+        let tb_meta = if let Some(meta_manager) = self.rdb_meta_manager.as_mut() {
+            meta_manager
+                .get_tb_meta(&row_data.schema, &row_data.tb)
+                .await?
+        } else if let Some(duckdb_meta_manager) = &mut self.duckdb_meta_manager {
+            &(duckdb_meta_manager
+                .get_tb_meta(&row_data.schema, &row_data.tb)?
+                .basic)
+        } else {
+            merged.unmerged_rows.push(row_data);
+            return Ok(());
+        };
 
         // case 1: table has no primary/unique key
         // case 2: any key col value is NULL

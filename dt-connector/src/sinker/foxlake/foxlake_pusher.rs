@@ -102,7 +102,6 @@ impl FoxlakePusher {
         let (_, all_data_size) = self.batch_push(items, false).await?;
 
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, all_data_size, start_time)
-            .await
     }
 
     pub async fn batch_push(
@@ -451,7 +450,7 @@ impl FoxlakePusher {
             | MysqlColType::MediumBlob
             | MysqlColType::LongBlob
             | MysqlColType::Blob
-            | MysqlColType::Unkown => Schema::Binary,
+            | MysqlColType::Unknown => Schema::Binary,
 
             MysqlColType::Char { .. }
             | MysqlColType::Varchar { .. }

@@ -10,7 +10,7 @@ pub struct PgColValueConvertor {}
 
 impl PgColValueConvertor {
     pub fn get_extract_type(col_type: &PgColType) -> String {
-        let extract_type = match col_type.short_name.as_str() {
+        let extract_type = match col_type.alias.as_str() {
             "bytea" => "bytea",
 
             "oid" => "int8",
@@ -58,25 +58,25 @@ impl PgColValueConvertor {
             return Ok(ColValue::String(value_str));
         }
 
-        let col_value = match col_type.short_name.as_str() {
+        let col_value = match col_type.alias.as_str() {
             "bool" => ColValue::Bool("t" == value_str.to_lowercase()),
 
-            "integer" | "int" | "int4" | "serial" | "serial2" | "serial4" => {
+            "int4" | "serial4" => {
                 let res: i32 = value_str.parse()?;
                 ColValue::Long(res)
             }
 
-            "int2" | "smallserial" | "smallint" => {
+            "int2" | "serial2" => {
                 let value: i16 = value_str.parse()?;
                 ColValue::Short(value)
             }
 
-            "bigint" | "bigserial" | "int8" | "oid" => {
+            "int8" | "serial8" | "oid" => {
                 let value: i64 = value_str.parse()?;
                 ColValue::LongLong(value)
             }
 
-            "real" | "float4" => {
+            "float4" => {
                 let value: f32 = value_str.parse()?;
                 ColValue::Float(value)
             }
@@ -88,7 +88,7 @@ impl PgColValueConvertor {
 
             "bytea" => ColValue::String(value_str),
 
-            "numeric" | "decimal" => ColValue::Decimal(value_str),
+            "decimal" => ColValue::Decimal(value_str),
 
             "timestamptz" => ColValue::Timestamp(value_str),
 
@@ -137,28 +137,28 @@ impl PgColValueConvertor {
             return Ok(ColValue::String(value));
         }
 
-        let col_value = match col_type.short_name.as_str() {
+        let col_value = match col_type.alias.as_str() {
             "bool" => {
                 let value: bool = row.try_get(col)?;
                 ColValue::Bool(value)
             }
 
-            "integer" | "int" | "int4" | "serial" | "serial2" | "serial4" => {
+            "int4" | "serial4" => {
                 let value: i32 = row.try_get(col)?;
                 ColValue::Long(value)
             }
 
-            "int2" | "smallserial" | "smallint" => {
+            "int2" | "serial2" => {
                 let value: i16 = row.try_get(col)?;
                 ColValue::Short(value)
             }
 
-            "bigint" | "bigserial" | "int8" | "oid" => {
+            "int8" | "serial8" | "oid" => {
                 let value: i64 = row.try_get(col)?;
                 ColValue::LongLong(value)
             }
 
-            "real" | "float4" => {
+            "float4" => {
                 let value: f32 = row.try_get(col)?;
                 ColValue::Float(value)
             }
@@ -173,7 +173,7 @@ impl PgColValueConvertor {
                 ColValue::Blob(value)
             }
 
-            "numeric" | "decimal" => {
+            "decimal" => {
                 let value: String = row.try_get(col)?;
                 ColValue::Decimal(value)
             }

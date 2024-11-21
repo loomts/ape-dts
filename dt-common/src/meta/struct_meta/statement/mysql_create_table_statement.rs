@@ -143,7 +143,7 @@ impl MysqlCreateTableStatement {
                 sql.push_str(&format!("{} ", i.extra.replace("DEFAULT_GENERATED", "")));
             }
 
-            let nullable = if i.is_nullable.to_lowercase() == "no" {
+            let nullable = if !i.is_nullable {
                 String::from("NOT NULL ")
             } else {
                 String::from("NULL ")

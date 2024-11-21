@@ -71,7 +71,6 @@ impl StarRocksSinker {
         }
 
         BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
-            .await
     }
 
     async fn batch_sink(
@@ -84,7 +83,7 @@ impl StarRocksSinker {
 
         let data_size = self.send_data(data, start_index, batch_size).await?;
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time)
     }
 
     async fn send_data(

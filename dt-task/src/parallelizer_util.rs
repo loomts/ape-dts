@@ -9,6 +9,7 @@ use dt_common::{
         sinker_config::SinkerConfig,
         task_config::TaskConfig,
     },
+    meta::duckdb::duckdb_meta_manager::DuckdbMetaManager,
     monitor::monitor::Monitor,
 };
 use dt_common::{meta::redis::command::key_parser::KeyParser, utils::redis_util::RedisUtil};
@@ -132,8 +133,23 @@ impl ParallelizerUtil {
     async fn create_rdb_merger(
         config: &TaskConfig,
     ) -> anyhow::Result<Box<dyn Merger + Send + Sync>> {
-        let meta_manager = TaskUtil::create_rdb_meta_manager(config).await?.unwrap();
-        let rdb_merger = RdbMerger { meta_manager };
+        let rdb_merger = match &config.sinker {
+            SinkerConfig::Duckdb { db_file, .. } => {
+                let conn = duckdb::Connection::open(db_file)?;
+                let duckdb_meta_manager = DuckdbMetaManager::new(conn.try_clone()?)?;
+                RdbMerger {
+                    duckdb_meta_manager: Some(duckdb_meta_manager),
+                    ..Default::default()
+                }
+            }
+            _ => {
+                let rdb_meta_manager = TaskUtil::create_rdb_meta_manager(config).await?.unwrap();
+                RdbMerger {
+                    rdb_meta_manager: Some(rdb_meta_manager),
+                    ..Default::default()
+                }
+            }
+        };
         Ok(Box::new(rdb_merger))
     }
 

@@ -200,7 +200,7 @@ impl RedisTestRunner {
                 "mbbloom--" => bf_bloom_keys.push(key),
                 "mbbloomcf" => cf_bloom_keys.push(key),
                 _ => {
-                    println!("unkown type: {} for key: {}", key_type, key);
+                    println!("unknown type: {} for key: {}", key_type, key);
                     string_keys.push(key)
                 }
             }

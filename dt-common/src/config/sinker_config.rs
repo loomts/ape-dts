@@ -74,14 +74,14 @@ pub enum SinkerConfig {
         statistic_log_dir: String,
     },
 
-    Starrocks {
+    StarRocks {
         url: String,
         batch_size: usize,
         stream_load_url: String,
         hard_delete: bool,
     },
 
-    StarrocksStruct {
+    StarRocksStruct {
         url: String,
         conflict_policy: ConflictPolicyEnum,
     },
@@ -95,6 +95,16 @@ pub enum SinkerConfig {
         url: String,
         conflict_policy: ConflictPolicyEnum,
         engine: String,
+    },
+
+    Duckdb {
+        db_file: String,
+        batch_size: usize,
+    },
+
+    DuckdbStruct {
+        db_file: String,
+        conflict_policy: ConflictPolicyEnum,
     },
 
     Foxlake {

@@ -255,8 +255,8 @@ impl PgStructCheckFetcher {
 
     fn mock_col_type(short_name: &str) -> PgColType {
         let mut col_type = PgColType {
-            long_name: String::new(),
-            short_name: "varchar".into(),
+            name: String::new(),
+            alias: "varchar".into(),
             oid: 0,
             parent_oid: 0,
             element_oid: 0,
@@ -266,7 +266,7 @@ impl PgStructCheckFetcher {
         };
 
         if !short_name.is_empty() {
-            col_type.short_name = short_name.into();
+            col_type.alias = short_name.into();
         }
         col_type
     }
