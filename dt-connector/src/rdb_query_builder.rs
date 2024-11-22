@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use anyhow::bail;
+#[cfg(feature = "duckdb_connector")]
+use dt_common::meta::duckdb::duckdb_tb_meta::DuckdbTbMeta;
 use dt_common::meta::{
     adaptor::{
         pg_col_value_convertor::PgColValueConvertor,
@@ -25,9 +27,11 @@ pub struct RdbQueryInfo<'a> {
 pub struct RdbQueryBuilder<'a> {
     rdb_tb_meta: &'a RdbTbMeta,
     db_type: DbType,
+    ignore_cols: Option<&'a HashSet<String>>,
     pg_tb_meta: Option<&'a PgTbMeta>,
     mysql_tb_meta: Option<&'a MysqlTbMeta>,
-    ignore_cols: Option<&'a HashSet<String>>,
+    #[cfg(feature = "duckdb_connector")]
+    _duckdb_tb_meta: Option<&'a DuckdbTbMeta>,
 }
 
 impl RdbQueryBuilder<'_> {
@@ -38,7 +42,9 @@ impl RdbQueryBuilder<'_> {
     ) -> RdbQueryBuilder<'a> {
         RdbQueryBuilder {
             rdb_tb_meta: &tb_meta.basic,
-            pg_tb_meta: Option::None,
+            pg_tb_meta: None,
+            #[cfg(feature = "duckdb_connector")]
+            _duckdb_tb_meta: None,
             mysql_tb_meta: Some(tb_meta),
             db_type: DbType::Mysql,
             ignore_cols,
@@ -54,7 +60,25 @@ impl RdbQueryBuilder<'_> {
             rdb_tb_meta: &tb_meta.basic,
             pg_tb_meta: Some(tb_meta),
             mysql_tb_meta: None,
+            #[cfg(feature = "duckdb_connector")]
+            _duckdb_tb_meta: None,
             db_type: DbType::Pg,
+            ignore_cols,
+        }
+    }
+
+    #[cfg(feature = "duckdb_connector")]
+    #[inline(always)]
+    pub fn new_for_duckdb<'a>(
+        tb_meta: &'a DuckdbTbMeta,
+        ignore_cols: Option<&'a HashSet<String>>,
+    ) -> RdbQueryBuilder<'a> {
+        RdbQueryBuilder {
+            rdb_tb_meta: &tb_meta.basic,
+            _duckdb_tb_meta: Some(tb_meta),
+            pg_tb_meta: None,
+            mysql_tb_meta: None,
+            db_type: DbType::Duckdb,
             ignore_cols,
         }
     }
@@ -214,11 +238,14 @@ impl RdbQueryBuilder<'_> {
         placeholder: bool,
     ) -> anyhow::Result<RdbQueryInfo<'a>> {
         let mut query_info = self.get_insert_query(row_data, placeholder)?;
-        if self.pg_tb_meta.is_some() {
+        if self.db_type == DbType::Pg || self.db_type == DbType::Duckdb {
             let mut index = query_info.cols.len() + 1;
             let after = row_data.after.as_ref().unwrap();
             let mut set_pairs = Vec::new();
             for col in self.rdb_tb_meta.cols.iter() {
+                if self.rdb_tb_meta.id_cols.contains(col) {
+                    continue;
+                }
                 let sql_value = self.get_sql_value(index, col, &after.get(col), placeholder)?;
                 let set_pair = format!(r#""{}"={}"#, col, sql_value);
                 set_pairs.push(set_pair);
@@ -559,10 +586,10 @@ impl RdbQueryBuilder<'_> {
         if let Some(tb_meta) = self.pg_tb_meta {
             let col_type = tb_meta.get_col_type(col)?;
             // TODO: workaround for types like bit(3)
-            let col_type_name = if col_type.short_name == "bit" {
+            let col_type_name = if col_type.alias == "bit" {
                 "varbit"
             } else {
-                &col_type.short_name
+                &col_type.alias
             };
             return Ok(format!("${}::{}", index, col_type_name));
         }

@@ -5,3 +5,4 @@ pub mod review_tests;
 pub mod revise_tests;
 pub mod snapshot_tests;
 pub mod struct_tests;
+pub mod tb_meta_tests;

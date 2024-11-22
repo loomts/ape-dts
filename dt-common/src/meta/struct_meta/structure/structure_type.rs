@@ -15,6 +15,6 @@ pub enum StructureType {
     Comment,
     #[strum(serialize = "index")]
     Index,
-    #[strum(serialize = "unkown")]
-    Unkown,
+    #[strum(serialize = "unknown")]
+    Unknown,
 }

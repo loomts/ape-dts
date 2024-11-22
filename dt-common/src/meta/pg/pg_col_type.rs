@@ -3,8 +3,8 @@ use serde_json::json;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PgColType {
-    pub long_name: String,
-    pub short_name: String,
+    pub name: String,
+    pub alias: String,
     pub oid: i32,
     pub parent_oid: i32,
     pub element_oid: i32,
@@ -33,23 +33,29 @@ impl PgColType {
         "U" == self.category
     }
 
-    pub fn get_short_name(long_name: &str) -> String {
-        let short_name = match long_name {
+    pub fn get_alias(name: &str) -> String {
+        // refer to: https://www.postgresql.org/docs/17/datatype.html
+        match name {
             "bigint" => "int8",
+            "bigserial" => "serial8",
+            "bit varying" => "varbit",
             "boolean" => "bool",
-            "character" => "bpchar",
+            // fixed-length, blank-padded, refer to: https://www.postgresql.org/docs/17/datatype-character.html
+            "character" | "char" => "bpchar",
             "character varying" => "varchar",
             "double precision" => "float8",
-            "integer" => "int4",
+            "int" | "integer" => "int4",
+            "numeric" => "decimal",
             "real" => "float4",
             "smallint" => "int2",
-            "bit varying" => "varbit",
+            "smallserial" => "serial2",
+            "serial" => "serial4",
             "timestamp with time zone" => "timestamptz",
             "timestamp without time zone" => "timestamp",
             "time without time zone" => "time",
             "time with time zone" => "timetz",
-            _ => long_name,
-        };
-        short_name.to_string()
+            _ => name,
+        }
+        .to_string()
     }
 }

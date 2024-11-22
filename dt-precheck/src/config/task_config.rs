@@ -1,8 +1,6 @@
-use std::{fs::File, io::Read};
-
 use anyhow::bail;
 use configparser::ini::Ini;
-use dt_common::error::Error;
+use dt_common::{config::ini_loader::IniLoader, error::Error};
 
 use super::precheck_config::PrecheckConfig;
 
@@ -14,14 +12,7 @@ pub struct PrecheckTaskConfig {
 
 impl PrecheckTaskConfig {
     pub fn new(task_config_file: &str) -> anyhow::Result<Self> {
-        let mut config_str = String::new();
-        File::open(task_config_file)
-            .unwrap()
-            .read_to_string(&mut config_str)
-            .unwrap();
-        let mut ini = Ini::new();
-        ini.read(config_str).unwrap();
-
+        let ini = IniLoader::new(task_config_file).ini;
         let precheck_config = Self::load_precheck_config(&ini)?;
         Ok(Self {
             precheck: precheck_config,

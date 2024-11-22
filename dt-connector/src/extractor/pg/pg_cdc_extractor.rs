@@ -215,7 +215,7 @@ impl PgCdcExtractor {
                 }
 
                 Some(Ok(data)) => {
-                    log_info!("received unkown replication data: {:?}", data);
+                    log_info!("received unknown replication data: {:?}", data);
                 }
 
                 Some(Err(error)) => panic!("unexpected replication stream error: {}", error),

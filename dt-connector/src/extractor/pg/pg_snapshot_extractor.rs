@@ -194,7 +194,7 @@ impl PgSnapshotExtractor {
                     self.schema,
                     self.tb,
                     order_col,
-                    order_col_type.short_name,
+                    order_col_type.alias,
                     order_col,
                     self.batch_size
                 ))

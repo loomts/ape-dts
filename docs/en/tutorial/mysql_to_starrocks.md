@@ -307,6 +307,7 @@ Refer to [config](/docs/en/config.md) for other common configurations
 | decimal | DECIMAL |
 | float | FLOAT |
 | double | DOUBLE |
+| bit | BIGINT |
 | datetime | DATETIME |
 | time | VARCHAR |
 | date | DATE |
@@ -346,6 +347,7 @@ CREATE TABLE test_db.one_pk_no_uk (
     f_5 decimal(10,4), 
     f_6 float(6,2), 
     f_7 double(8,3), 
+    f_8 bit(64),
     f_9 datetime(6), 
     f_10 time(6), 
     f_11 date, 
@@ -385,6 +387,7 @@ CREATE TABLE IF NOT EXISTS `test_db`.`one_pk_no_uk` (
     `f_5` DECIMAL(10, 4), 
     `f_6` FLOAT, 
     `f_7` DOUBLE, 
+    `f_8` BIGINT,
     `f_9` DATETIME, 
     `f_10` VARCHAR, 
     `f_11` DATE, 

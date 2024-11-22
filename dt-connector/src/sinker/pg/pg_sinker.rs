@@ -43,7 +43,7 @@ impl Sinker for PgSinker {
         }
 
         if !batch {
-            self.serial_sink(data).await?;
+            self.serial_sink(&data).await?;
         } else {
             match data[0].row_type {
                 RowType::Insert => {
@@ -52,7 +52,7 @@ impl Sinker for PgSinker {
                 RowType::Delete => {
                     call_batch_fn!(self, data, Self::batch_delete);
                 }
-                _ => self.serial_sink(data).await?,
+                _ => self.serial_sink(&data).await?,
             }
         }
         Ok(())
@@ -105,7 +105,7 @@ impl Sinker for PgSinker {
 }
 
 impl PgSinker {
-    async fn serial_sink(&mut self, data: Vec<RowData>) -> anyhow::Result<()> {
+    async fn serial_sink(&mut self, data: &[RowData]) -> anyhow::Result<()> {
         let start_time = Instant::now();
         let mut data_size = 0;
 
@@ -132,7 +132,6 @@ impl PgSinker {
         tx.commit().await?;
 
         BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
-            .await
     }
 
     async fn batch_delete(
@@ -159,7 +158,7 @@ impl PgSinker {
             query.execute(&self.conn_pool).await?;
         }
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time)
     }
 
     async fn batch_insert(
@@ -201,10 +200,10 @@ impl PgSinker {
                 error.to_string()
             );
             let sub_data = &data[start_index..start_index + batch_size];
-            self.serial_sink(sub_data.to_vec()).await?;
+            self.serial_sink(sub_data).await?;
         }
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time)
     }
 
     fn get_data_marker_sql(&self) -> Option<String> {

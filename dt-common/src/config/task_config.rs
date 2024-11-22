@@ -420,14 +420,14 @@ impl TaskConfig {
             },
 
             DbType::StarRocks => match sink_type {
-                SinkType::Write => SinkerConfig::Starrocks {
+                SinkType::Write => SinkerConfig::StarRocks {
                     url,
                     batch_size,
                     stream_load_url: loader.get_optional(SINKER, "stream_load_url"),
                     hard_delete: loader.get_optional(SINKER, "hard_delete"),
                 },
 
-                SinkType::Struct => SinkerConfig::StarrocksStruct {
+                SinkType::Struct => SinkerConfig::StarRocksStruct {
                     url,
                     conflict_policy,
                 },
@@ -446,6 +446,22 @@ impl TaskConfig {
                         "engine",
                         "ReplacingMergeTree".to_string(),
                     ),
+                },
+
+                _ => bail! { not_supported_err },
+            },
+
+            DbType::Duckdb => match sink_type {
+                #[cfg(feature = "duckdb_connector")]
+                SinkType::Write => SinkerConfig::Duckdb {
+                    batch_size,
+                    db_file: loader.get_required(SINKER, "db_file"),
+                },
+
+                #[cfg(feature = "duckdb_connector")]
+                SinkType::Struct => SinkerConfig::DuckdbStruct {
+                    conflict_policy,
+                    db_file: loader.get_required(SINKER, "db_file"),
                 },
 
                 _ => bail! { not_supported_err },

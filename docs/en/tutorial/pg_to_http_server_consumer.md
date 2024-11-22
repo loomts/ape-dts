@@ -57,6 +57,14 @@ docker run --rm \
 ```
 
 # CDC task
+
+## Drop replication slot if exists
+```
+psql -h 127.0.0.1 -U postgres -d postgres -p 5433 -W
+
+SELECT pg_drop_replication_slot('ape_test') FROM pg_replication_slots WHERE slot_name = 'ape_test';
+```
+
 ## Start task
 ```
 cat <<EOL > /tmp/ape_dts/task_config.ini

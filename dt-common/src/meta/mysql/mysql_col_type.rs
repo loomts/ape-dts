@@ -5,7 +5,7 @@ use strum::Display;
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Display)]
 pub enum MysqlColType {
-    Unkown,
+    Unknown,
     TinyInt { unsigned: bool },
     SmallInt { unsigned: bool },
     MediumInt { unsigned: bool },
@@ -38,7 +38,7 @@ pub enum MysqlColType {
     Blob,
     Bit,
     Set { items: HashMap<u64, String> },
-    Enum { items: HashMap<u32, String> },
+    Enum { items: Vec<String> },
     Json,
 }
 

@@ -85,6 +85,6 @@ impl KafkaSinker {
 
         self.producer.send_all(&messages)?;
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time)
     }
 }

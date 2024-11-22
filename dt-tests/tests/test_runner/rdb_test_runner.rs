@@ -581,6 +581,11 @@ impl RdbTestRunner {
                 ColValue::None => serde_json::Value::from_str(src_v).unwrap().is_null(),
                 _ => false,
             },
+            ColValue::Bit(src_v) => match dst_col_value {
+                // in dst starrocks, BIT is stored as BIGINT
+                ColValue::LongLong(dst_v) => *src_v == *dst_v as u64,
+                _ => false,
+            },
             _ => src_col_value.to_option_string() == dst_col_value.to_option_string(),
         };
     }

@@ -58,7 +58,7 @@ impl ClickhouseSinker {
 
         let data_size = self.send_data(data, start_index, batch_size).await?;
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time)
     }
 
     async fn send_data(

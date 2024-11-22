@@ -124,11 +124,11 @@ impl StarrocksStructSinker {
                 | MysqlColType::Blob
                 | MysqlColType::LongBlob => "BINARY",
 
-                MysqlColType::Bit => "VARCHAR",
+                MysqlColType::Bit => "BIGINT",
                 MysqlColType::Set { items: _ } => "VARCHAR",
                 MysqlColType::Enum { items: _ } => "VARCHAR",
                 MysqlColType::Json => "JSON",
-                MysqlColType::Unkown => "STRING",
+                MysqlColType::Unknown => "STRING",
             };
             ck_cols.push(format!("`{}` {}", col, ck_col_type));
         }

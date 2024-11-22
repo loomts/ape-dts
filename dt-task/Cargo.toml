@@ -3,6 +3,11 @@ name = "dt-task"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = []
+# default = ["duckdb_connector"]
+duckdb_connector = ["dep:duckdb"]
+
 [lints]
 workspace = true
 
@@ -39,3 +44,4 @@ redis = { workspace = true }
 ratelimit = { workspace = true }
 anyhow = { workspace = true }
 clickhouse = { workspace = true }
+duckdb = { workspace = true, optional = true }

@@ -72,6 +72,6 @@ impl RdkafkaSinker {
             }
         }
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time)
     }
 }
