@@ -16,9 +16,9 @@ on:
         type: string
         default: apecloud/ape-dts:latest
       features:
-        required: false
+        required: true
         type: string
-        default: 
+        default: default
       platforms:
         required: true
         type: string
