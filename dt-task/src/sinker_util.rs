@@ -4,12 +4,13 @@ use std::{
 };
 
 use anyhow::Context;
+#[cfg(feature = "duckdb_connector")]
+use dt_common::meta::duckdb::duckdb_meta_manager::DuckdbMetaManager;
 use dt_common::{
     config::{
         config_enums::DbType, extractor_config::ExtractorConfig, sinker_config::SinkerConfig,
         task_config::TaskConfig,
     },
-    meta::duckdb::duckdb_meta_manager::DuckdbMetaManager,
     monitor::monitor::Monitor,
     rdb_filter::RdbFilter,
     utils::url_util::UrlUtil,
@@ -23,6 +24,11 @@ use dt_common::{
     },
     utils::redis_util::RedisUtil,
 };
+
+#[cfg(feature = "duckdb_connector")]
+use dt_connector::sinker::duckdb::{
+    duckdb_sinker::DuckdbSinker, duckdb_struct_sinker::DuckdbStructSinker,
+};
 use dt_connector::{
     data_marker::DataMarker,
     rdb_router::RdbRouter,
@@ -30,7 +36,6 @@ use dt_connector::{
         clickhouse::{
             clickhouse_sinker::ClickhouseSinker, clickhouse_struct_sinker::ClickhouseStructSinker,
         },
-        duckdb::{duckdb_sinker::DuckdbSinker, duckdb_struct_sinker::DuckdbStructSinker},
         dummy_sinker::DummySinker,
         foxlake::{
             foxlake_merger::FoxlakeMerger, foxlake_pusher::FoxlakePusher,
@@ -495,6 +500,7 @@ impl SinkerUtil {
                 sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
             }
 
+            #[cfg(feature = "duckdb_connector")]
             SinkerConfig::Duckdb {
                 batch_size,
                 db_file,
@@ -512,6 +518,7 @@ impl SinkerUtil {
                 }
             }
 
+            #[cfg(feature = "duckdb_connector")]
             SinkerConfig::DuckdbStruct {
                 db_file,
                 conflict_policy,

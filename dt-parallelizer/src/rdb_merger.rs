@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use async_trait::async_trait;
 use dt_common::log_debug;
+#[cfg(feature = "duckdb_connector")]
 use dt_common::meta::duckdb::duckdb_meta_manager::DuckdbMetaManager;
 use dt_common::meta::{
     rdb_meta_manager::RdbMetaManager, rdb_tb_meta::RdbTbMeta, row_data::RowData, row_type::RowType,
@@ -12,6 +13,7 @@ use crate::{merge_parallelizer::TbMergedData, Merger};
 #[derive(Default)]
 pub struct RdbMerger {
     pub rdb_meta_manager: Option<RdbMetaManager>,
+    #[cfg(feature = "duckdb_connector")]
     pub duckdb_meta_manager: Option<DuckdbMetaManager>,
 }
 
@@ -47,6 +49,7 @@ impl Merger for RdbMerger {
         if let Some(meta_manager) = &self.rdb_meta_manager {
             meta_manager.close().await?;
         }
+        #[cfg(feature = "duckdb_connector")]
         if let Some(duckdb_meta_manager) = &mut self.duckdb_meta_manager {
             duckdb_meta_manager.close()?;
         }
@@ -71,13 +74,22 @@ impl RdbMerger {
             meta_manager
                 .get_tb_meta(&row_data.schema, &row_data.tb)
                 .await?
-        } else if let Some(duckdb_meta_manager) = &mut self.duckdb_meta_manager {
-            &(duckdb_meta_manager
-                .get_tb_meta(&row_data.schema, &row_data.tb)?
-                .basic)
         } else {
-            merged.unmerged_rows.push(row_data);
-            return Ok(());
+            #[cfg(feature = "duckdb_connector")]
+            if let Some(duckdb_meta_manager) = &mut self.duckdb_meta_manager {
+                &(duckdb_meta_manager
+                    .get_tb_meta(&row_data.schema, &row_data.tb)?
+                    .basic)
+            } else {
+                merged.unmerged_rows.push(row_data);
+                return Ok(());
+            }
+
+            #[cfg(not(feature = "duckdb_connector"))]
+            {
+                merged.unmerged_rows.push(row_data);
+                return Ok(());
+            }
         };
 
         // case 1: table has no primary/unique key

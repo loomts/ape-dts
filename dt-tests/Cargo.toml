@@ -34,4 +34,3 @@ rdkafka = { workspace = true }
 url = { workspace = true }
 chrono =  { workspace = true }
 anyhow = { workspace = true }
-duckdb = { workspace = true }

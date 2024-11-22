@@ -452,11 +452,13 @@ impl TaskConfig {
             },
 
             DbType::Duckdb => match sink_type {
+                #[cfg(feature = "duckdb_connector")]
                 SinkType::Write => SinkerConfig::Duckdb {
                     batch_size,
                     db_file: loader.get_required(SINKER, "db_file"),
                 },
 
+                #[cfg(feature = "duckdb_connector")]
                 SinkType::Struct => SinkerConfig::DuckdbStruct {
                     conflict_policy,
                     db_file: loader.get_required(SINKER, "db_file"),

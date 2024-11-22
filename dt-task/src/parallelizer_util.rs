@@ -1,3 +1,5 @@
+#[cfg(feature = "duckdb_connector")]
+use dt_common::meta::duckdb::duckdb_meta_manager::DuckdbMetaManager;
 use std::{
     collections::{HashMap, VecDeque},
     sync::{Arc, Mutex},
@@ -9,7 +11,6 @@ use dt_common::{
         sinker_config::SinkerConfig,
         task_config::TaskConfig,
     },
-    meta::duckdb::duckdb_meta_manager::DuckdbMetaManager,
     monitor::monitor::Monitor,
 };
 use dt_common::{meta::redis::command::key_parser::KeyParser, utils::redis_util::RedisUtil};
@@ -134,6 +135,7 @@ impl ParallelizerUtil {
         config: &TaskConfig,
     ) -> anyhow::Result<Box<dyn Merger + Send + Sync>> {
         let rdb_merger = match &config.sinker {
+            #[cfg(feature = "duckdb_connector")]
             SinkerConfig::Duckdb { db_file, .. } => {
                 let conn = duckdb::Connection::open(db_file)?;
                 let duckdb_meta_manager = DuckdbMetaManager::new(conn.try_clone()?)?;

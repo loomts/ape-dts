@@ -1,13 +1,14 @@
 use std::collections::{HashMap, HashSet};
 
 use anyhow::bail;
+#[cfg(feature = "duckdb_connector")]
+use dt_common::meta::duckdb::duckdb_tb_meta::DuckdbTbMeta;
 use dt_common::meta::{
     adaptor::{
         pg_col_value_convertor::PgColValueConvertor,
         sqlx_ext::{SqlxMysqlExt, SqlxPgExt},
     },
     col_value::ColValue,
-    duckdb::duckdb_tb_meta::DuckdbTbMeta,
     mysql::{mysql_col_type::MysqlColType, mysql_tb_meta::MysqlTbMeta},
     pg::pg_tb_meta::PgTbMeta,
     rdb_tb_meta::RdbTbMeta,
@@ -26,10 +27,11 @@ pub struct RdbQueryInfo<'a> {
 pub struct RdbQueryBuilder<'a> {
     rdb_tb_meta: &'a RdbTbMeta,
     db_type: DbType,
+    ignore_cols: Option<&'a HashSet<String>>,
     pg_tb_meta: Option<&'a PgTbMeta>,
     mysql_tb_meta: Option<&'a MysqlTbMeta>,
-    duckdb_tb_meta: Option<&'a DuckdbTbMeta>,
-    ignore_cols: Option<&'a HashSet<String>>,
+    #[cfg(feature = "duckdb_connector")]
+    _duckdb_tb_meta: Option<&'a DuckdbTbMeta>,
 }
 
 impl RdbQueryBuilder<'_> {
@@ -41,7 +43,8 @@ impl RdbQueryBuilder<'_> {
         RdbQueryBuilder {
             rdb_tb_meta: &tb_meta.basic,
             pg_tb_meta: None,
-            duckdb_tb_meta: None,
+            #[cfg(feature = "duckdb_connector")]
+            _duckdb_tb_meta: None,
             mysql_tb_meta: Some(tb_meta),
             db_type: DbType::Mysql,
             ignore_cols,
@@ -57,12 +60,14 @@ impl RdbQueryBuilder<'_> {
             rdb_tb_meta: &tb_meta.basic,
             pg_tb_meta: Some(tb_meta),
             mysql_tb_meta: None,
-            duckdb_tb_meta: None,
+            #[cfg(feature = "duckdb_connector")]
+            _duckdb_tb_meta: None,
             db_type: DbType::Pg,
             ignore_cols,
         }
     }
 
+    #[cfg(feature = "duckdb_connector")]
     #[inline(always)]
     pub fn new_for_duckdb<'a>(
         tb_meta: &'a DuckdbTbMeta,
@@ -70,7 +75,7 @@ impl RdbQueryBuilder<'_> {
     ) -> RdbQueryBuilder<'a> {
         RdbQueryBuilder {
             rdb_tb_meta: &tb_meta.basic,
-            duckdb_tb_meta: Some(tb_meta),
+            _duckdb_tb_meta: Some(tb_meta),
             pg_tb_meta: None,
             mysql_tb_meta: None,
             db_type: DbType::Duckdb,
@@ -233,7 +238,7 @@ impl RdbQueryBuilder<'_> {
         placeholder: bool,
     ) -> anyhow::Result<RdbQueryInfo<'a>> {
         let mut query_info = self.get_insert_query(row_data, placeholder)?;
-        if self.pg_tb_meta.is_some() | self.duckdb_tb_meta.is_some() {
+        if self.db_type == DbType::Pg || self.db_type == DbType::Duckdb {
             let mut index = query_info.cols.len() + 1;
             let after = row_data.after.as_ref().unwrap();
             let mut set_pairs = Vec::new();
