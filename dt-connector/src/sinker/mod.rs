@@ -2,8 +2,6 @@ pub mod base_checker;
 pub mod base_sinker;
 pub mod base_struct_sinker;
 pub mod clickhouse;
-#[cfg(feature = "duckdb_connector")]
-pub mod duckdb;
 pub mod dummy_sinker;
 pub mod foxlake;
 pub mod kafka;
