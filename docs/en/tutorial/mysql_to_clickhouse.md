@@ -234,6 +234,7 @@ Refer to [config](/docs/en/config.md) for other common configurations
 | decimal | Decimal(P,S) |
 | float | Float32 |
 | double | Float64 |
+| bit | UInt64 |
 | datetime | DateTime64(6) |
 | time | String |
 | date | Date32 |
@@ -253,7 +254,6 @@ Refer to [config](/docs/en/config.md) for other common configurations
 | longblob | String |
 | enum | String |
 | set | String |
-| bit | String |
 | json |String |
 
 ## Example
@@ -274,6 +274,7 @@ CREATE TABLE test_db.one_pk_no_uk (
    f_5 decimal(10,4), 
    f_6 float(6,2), 
    f_7 double(8,3), 
+   f_8 bit(64),
    f_9 datetime(6), 
    f_10 time(6), 
    f_11 date, 
@@ -313,6 +314,7 @@ CREATE TABLE IF NOT EXISTS `test_db`.`one_pk_no_uk` (
    `f_5` Nullable(Decimal(10, 4)), 
    `f_6` Nullable(Float32), 
    `f_7` Nullable(Float64), 
+   `f_8` Nullable(UInt64), 
    `f_9` Nullable(DateTime64(6)), 
    `f_10` Nullable(String), 
    `f_11` Nullable(Date32), 

@@ -2,9 +2,6 @@ DROP DATABASE IF EXISTS test_db_1;
 
 CREATE DATABASE test_db_1;
 
--- TODO, support columns: 
--- f_8 bit(64) DEFAULT NULL,
-
 ```
 CREATE TABLE test_db_1.one_pk_no_uk ( 
     f_0 tinyint, 
@@ -15,6 +12,7 @@ CREATE TABLE test_db_1.one_pk_no_uk (
     f_5 decimal(10,4) DEFAULT NULL, 
     f_6 float(6,2) DEFAULT NULL, 
     f_7 double(8,3) DEFAULT NULL, 
+    f_8 bit(64) DEFAULT NULL,
     f_9 datetime(6) DEFAULT NULL, 
     f_10 time(6) DEFAULT NULL, 
     f_11 date DEFAULT NULL, 

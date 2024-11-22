@@ -185,6 +185,10 @@ impl StarRocksSinker {
                     );
                 }
 
+                ColValue::Bit(v) => {
+                    new_col_values.insert(col.to_owned(), ColValue::LongLong(*v as i64));
+                }
+
                 _ => {}
             }
         }

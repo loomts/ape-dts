@@ -113,7 +113,7 @@ impl ClickhouseStructSinker {
                 | MysqlColType::Blob
                 | MysqlColType::LongBlob => "String",
 
-                MysqlColType::Bit => "String",
+                MysqlColType::Bit => "UInt64",
                 MysqlColType::Set { items: _ } => "String",
                 MysqlColType::Enum { items: _ } => "String",
                 MysqlColType::Json => "String",
