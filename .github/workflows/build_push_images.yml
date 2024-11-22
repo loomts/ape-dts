@@ -15,6 +15,10 @@ on:
         required: true
         type: string
         default: apecloud/ape-dts:latest
+      platforms:
+        required: true
+        type: string
+        default: linux/arm64,linux/amd64
 
 jobs:
   build:
@@ -36,14 +40,15 @@ jobs:
         run: cargo install cross
 
       - name: Build for x86_64
-        run: cross build --target x86_64-unknown-linux-gnu --release
+        if: contains(inputs.platforms, 'linux/amd64')
+        run: |
+          cross build --target x86_64-unknown-linux-gnu --release
+          cp target/x86_64-unknown-linux-gnu/release/dt-main amd64-unknown-linux-gnu-dt-main
 
       - name: Build for aarch64
-        run: cross build --target aarch64-unknown-linux-gnu --release
-
-      - name: Rename artifact
+        if: contains(inputs.platforms, 'linux/arm64')
         run: |
-          cp target/x86_64-unknown-linux-gnu/release/dt-main amd64-unknown-linux-gnu-dt-main
+          cross build --target aarch64-unknown-linux-gnu --release
           cp target/aarch64-unknown-linux-gnu/release/dt-main arm64-unknown-linux-gnu-dt-main
       
       - name: Set up docker buildx
@@ -52,4 +57,4 @@ jobs:
       - name: Build and push docker image
         run: |
           docker login --username ${{ secrets.DOCKER_USER }} --password ${{ secrets.DOCKER_PASSWORD }} ${{ inputs.docker_repository }}
-          docker buildx build -f Dockerfile.github.workflow --platform linux/arm64,linux/amd64 --tag ${{ inputs.docker_repository }}/${{ inputs.image_tag }} --push .
+          docker buildx build -f Dockerfile.github.workflow --platform ${{ inputs.platforms }} --tag ${{ inputs.docker_repository }}/${{ inputs.image_tag }} --push .

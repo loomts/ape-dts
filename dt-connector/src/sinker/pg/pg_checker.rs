@@ -108,7 +108,7 @@ impl PgChecker {
         }
         BaseChecker::log_dml(miss, diff);
 
-        BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), 0, start_time).await
+        BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), 0, start_time)
     }
 
     async fn batch_check(
@@ -147,7 +147,7 @@ impl PgChecker {
         .await?;
         BaseChecker::log_dml(miss, diff);
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, 0, start_time).await
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, 0, start_time)
     }
 
     async fn serial_check_struct(&mut self, mut data: Vec<StructData>) -> anyhow::Result<()> {

@@ -22,6 +22,7 @@ use dt_common::{
     },
     utils::redis_util::RedisUtil,
 };
+
 use dt_connector::{
     data_marker::DataMarker,
     rdb_router::RdbRouter,
@@ -377,7 +378,7 @@ impl SinkerUtil {
                 }
             }
 
-            SinkerConfig::Starrocks {
+            SinkerConfig::StarRocks {
                 url,
                 batch_size,
                 stream_load_url,
@@ -418,7 +419,7 @@ impl SinkerUtil {
                 }
             }
 
-            SinkerConfig::StarrocksStruct {
+            SinkerConfig::StarRocksStruct {
                 url,
                 conflict_policy,
             } => {

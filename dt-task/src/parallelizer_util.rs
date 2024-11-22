@@ -132,8 +132,9 @@ impl ParallelizerUtil {
     async fn create_rdb_merger(
         config: &TaskConfig,
     ) -> anyhow::Result<Box<dyn Merger + Send + Sync>> {
-        let meta_manager = TaskUtil::create_rdb_meta_manager(config).await?.unwrap();
-        let rdb_merger = RdbMerger { meta_manager };
+        let rdb_merger = RdbMerger {
+            rdb_meta_manager: TaskUtil::create_rdb_meta_manager(config).await?.unwrap(),
+        };
         Ok(Box::new(rdb_merger))
     }
 

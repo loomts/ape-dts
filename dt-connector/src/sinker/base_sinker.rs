@@ -8,7 +8,7 @@ use dt_common::monitor::{counter_type::CounterType, monitor::Monitor};
 pub struct BaseSinker {}
 
 impl BaseSinker {
-    pub async fn update_batch_monitor(
+    pub fn update_batch_monitor(
         monitor: &mut Arc<Mutex<Monitor>>,
         batch_size: usize,
         data_size: usize,
@@ -27,7 +27,7 @@ impl BaseSinker {
         Ok(())
     }
 
-    pub async fn update_serial_monitor(
+    pub fn update_serial_monitor(
         monitor: &mut Arc<Mutex<Monitor>>,
         record_count: usize,
         data_size: usize,
@@ -65,10 +65,29 @@ macro_rules! call_batch_fn {
                 break;
             }
 
-            $batch_fn($self, &mut $data, sinked_count, batch_size)
-                .await
-                .unwrap();
+            $batch_fn($self, &mut $data, sinked_count, batch_size).await?;
+            sinked_count += batch_size;
+        }
+    };
+}
 
+#[macro_export(local_inner_macros)]
+macro_rules! sync_call_batch_fn {
+    ($self:ident, $data:ident, $batch_fn:expr) => {
+        let all_count = $data.len();
+        let mut sinked_count = 0;
+
+        loop {
+            let mut batch_size = $self.batch_size;
+            if all_count - sinked_count < batch_size {
+                batch_size = all_count - sinked_count;
+            }
+
+            if batch_size == 0 {
+                break;
+            }
+
+            $batch_fn($self, &mut $data, sinked_count, batch_size)?;
             sinked_count += batch_size;
         }
     };

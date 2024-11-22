@@ -42,7 +42,7 @@ impl KeyParser {
             Some(cmd) => cmd,
             None => {
                 bail! {Error::RedisCmdError(format!(
-                    "unkown command: {}",
+                    "unknown command: {}",
                     cmd_name
                 ))}
             }

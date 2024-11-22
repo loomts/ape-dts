@@ -197,7 +197,7 @@ impl MysqlMetaFetcher {
                     "mediumtext" => MysqlColType::MediumText { length, charset },
                     "longtext" => MysqlColType::LongText { length, charset },
                     "text" => MysqlColType::Text { length, charset },
-                    _ => MysqlColType::Unkown,
+                    _ => MysqlColType::Unknown,
                 }
             }
 
@@ -235,20 +235,16 @@ impl MysqlMetaFetcher {
                             .to_string()
                     })
                     .collect();
-                let mut items = HashMap::new();
-                let mut key = 1;
-                for str in enum_str_items {
-                    items.insert(key, str);
-                    key += 1;
+                MysqlColType::Enum {
+                    items: enum_str_items,
                 }
-                MysqlColType::Enum { items }
             }
 
             "set" => {
                 // set('a','b','c','d','e')
                 let column_type: String = row.try_get(COLUMN_TYPE).unwrap();
-                let enum_str = column_type.trim_start_matches("set(").trim_end_matches(')');
-                let enum_str_items: Vec<String> = enum_str
+                let set_str = column_type.trim_start_matches("set(").trim_end_matches(')');
+                let set_str_items: Vec<String> = set_str
                     .split(',')
                     .map(|i| {
                         i.trim_start_matches('\'')
@@ -258,7 +254,7 @@ impl MysqlMetaFetcher {
                     .collect();
                 let mut items = HashMap::new();
                 let mut key = 1;
-                for str in enum_str_items {
+                for str in set_str_items {
                     items.insert(key, str);
                     key <<= 1;
                 }
@@ -275,7 +271,7 @@ impl MysqlMetaFetcher {
             // TODO
             // "geometry": "geometrycollection": "linestring": "multilinestring":
             // "multipoint": "multipolygon": "polygon": "point"
-            _ => MysqlColType::Unkown,
+            _ => MysqlColType::Unknown,
         };
 
         Ok((data_type.to_string(), col_type))

@@ -9,7 +9,7 @@ use dt_common::meta::{
 use crate::{merge_parallelizer::TbMergedData, Merger};
 
 pub struct RdbMerger {
-    pub meta_manager: RdbMetaManager,
+    pub rdb_meta_manager: RdbMetaManager,
 }
 
 #[async_trait]
@@ -41,7 +41,7 @@ impl Merger for RdbMerger {
     }
 
     async fn close(&mut self) -> anyhow::Result<()> {
-        self.meta_manager.close().await
+        self.rdb_meta_manager.close().await
     }
 }
 
@@ -59,7 +59,7 @@ impl RdbMerger {
         }
 
         let tb_meta = self
-            .meta_manager
+            .rdb_meta_manager
             .get_tb_meta(&row_data.schema, &row_data.tb)
             .await?;
 

@@ -11,6 +11,7 @@ CREATE TABLE `one_pk_no_uk` (
   `f_5` decimal64(10, 4) NULL COMMENT "",
   `f_6` float NULL COMMENT "",
   `f_7` double NULL COMMENT "",
+  `f_8` bigint(20) NULL COMMENT "",
   `f_9` datetime NULL COMMENT "",
   `f_10` varchar(1) NULL COMMENT "",
   `f_11` date NULL COMMENT "",

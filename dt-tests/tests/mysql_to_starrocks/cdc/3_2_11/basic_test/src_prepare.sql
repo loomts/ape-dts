@@ -15,6 +15,7 @@ CREATE TABLE test_db_1.one_pk_no_uk (
     f_5 decimal(10,4) DEFAULT NULL, 
     f_6 float(6,2) DEFAULT NULL, 
     f_7 double(8,3) DEFAULT NULL, 
+    f_8 bit(64) DEFAULT NULL,
     f_9 datetime(6) DEFAULT NULL, 
     f_10 time(6) DEFAULT NULL, 
     f_11 date DEFAULT NULL, 

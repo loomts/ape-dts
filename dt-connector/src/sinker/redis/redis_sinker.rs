@@ -90,7 +90,7 @@ impl RedisSinker {
 
         self.batch_sink(&cmds).await?;
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, cmds.len(), data_size, start_time).await
+        BaseSinker::update_batch_monitor(&mut self.monitor, cmds.len(), data_size, start_time)
     }
 
     async fn serial_sink_raw(&mut self, data: &mut [DtItem]) -> anyhow::Result<()> {
@@ -104,7 +104,6 @@ impl RedisSinker {
         }
 
         BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
-            .await
     }
 
     fn rewrite_entry(&mut self, dt_data: &mut DtData) -> anyhow::Result<Vec<RedisCmd>> {
@@ -173,7 +172,7 @@ impl RedisSinker {
         }
         self.batch_sink(&cmds).await?;
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, cmds.len(), data_size, start_time).await
+        BaseSinker::update_batch_monitor(&mut self.monitor, cmds.len(), data_size, start_time)
     }
 
     async fn serial_sink_dml(&mut self, data: &mut [RowData]) -> anyhow::Result<()> {
@@ -188,7 +187,6 @@ impl RedisSinker {
         }
 
         BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
-            .await
     }
 
     async fn dml_to_redis_cmd(&mut self, row_data: &RowData) -> anyhow::Result<Option<RedisCmd>> {

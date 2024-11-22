@@ -305,8 +305,10 @@ docker run --rm --network host \
 
 # CDC task
 
-## Drop slot if exists
+## Drop replication slot if exists
 ```
+psql -h 127.0.0.1 -U postgres -d postgres -p 5433 -W
+
 SELECT pg_drop_replication_slot('ape_test') FROM pg_replication_slots WHERE slot_name = 'ape_test';
 ```
 

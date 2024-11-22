@@ -173,7 +173,7 @@ impl PgMetaManager {
                 .get(&col_type_oid)
                 .unwrap()
                 .clone();
-            col_origin_type_map.insert(col.clone(), col_type.short_name.clone());
+            col_origin_type_map.insert(col.clone(), col_type.alias.clone());
             col_type_map.insert(col, col_type);
         }
 

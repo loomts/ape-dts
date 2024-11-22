@@ -353,12 +353,12 @@ impl PgStructFetcher {
             let is_identity = row.get("is_identity");
             let identity_generation = row.get("identity_generation");
             let generation_rule = Self::get_col_generation_rule(is_identity, identity_generation);
-
+            let is_nullable = Self::get_str_with_null(&row, "is_nullable")?.to_lowercase() == "yes";
             let column = Column {
                 column_name: Self::get_str_with_null(&row, "column_name")?,
                 ordinal_position: ordinal_position as u32,
                 column_default: row.get("column_default"),
-                is_nullable: Self::get_str_with_null(&row, "is_nullable")?,
+                is_nullable,
                 generated: generation_rule,
                 ..Default::default()
             };

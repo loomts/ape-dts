@@ -30,28 +30,28 @@ impl<'q> SqlxPgExt<'q> for Query<'q, Postgres, PgArguments> {
                 ColValue::Set2(v) => self.bind(v),
                 ColValue::Enum2(v) => self.bind(v),
                 ColValue::Json(v) => self.bind(v),
-                _ => match col_type.short_name.as_str() {
+                _ => match col_type.alias.as_str() {
                     "bool" => {
                         let none: Option<bool> = Option::None;
                         self.bind(none)
                     }
 
-                    "integer" | "int" | "int4" | "serial" | "serial2" | "serial4" => {
+                    "int4" | "serial4" => {
                         let none: Option<i32> = Option::None;
                         self.bind(none)
                     }
 
-                    "int2" | "smallserial" | "smallint" => {
+                    "int2" | "serial2" => {
                         let none: Option<i16> = Option::None;
                         self.bind(none)
                     }
 
-                    "bigint" | "bigserial" | "int8" | "oid" => {
+                    "int8" | "serial8" | "oid" => {
                         let none: Option<i64> = Option::None;
                         self.bind(none)
                     }
 
-                    "real" | "float4" => {
+                    "float4" => {
                         let none: Option<f32> = Option::None;
                         self.bind(none)
                     }

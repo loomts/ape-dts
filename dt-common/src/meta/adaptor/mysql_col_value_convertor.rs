@@ -221,10 +221,10 @@ impl MysqlColValueConvertor {
 
             ColumnValue::Enum(v) => match col_type {
                 MysqlColType::Enum { items } => {
-                    if let Some(item) = items.get(&v) {
-                        ColValue::Enum2(item.to_owned())
+                    // enum column value in binlog is a number starting from 1
+                    if v >= 1 && v as usize <= items.len() {
+                        ColValue::Enum2(items[v as usize - 1].clone())
                     } else {
-                        // should never happen
                         ColValue::None
                     }
                 }
@@ -237,12 +237,7 @@ impl MysqlColValueConvertor {
                 ColValue::Json2(v)
             }
 
-            // should never happen
-            ColumnValue::UnsignedTiny(..)
-            | ColumnValue::UnsignedShort(..)
-            | ColumnValue::UnsignedLong(..)
-            | ColumnValue::UnsignedLongLong(..)
-            | ColumnValue::None => ColValue::None,
+            ColumnValue::None => ColValue::None,
         };
 
         Ok(col_value)
@@ -330,7 +325,7 @@ impl MysqlColValueConvertor {
                 | MysqlColType::MediumBlob
                 | MysqlColType::Blob
                 | MysqlColType::LongBlob
-                | MysqlColType::Unkown => {
+                | MysqlColType::Unknown => {
                     bail! {Error::Unexpected(format!(
                         "unsupported column type: {:?}",
                         col_type
@@ -501,7 +496,7 @@ impl MysqlColValueConvertor {
                 // |  1 | 212765.7                  |
                 Ok(ColValue::Json2(value.to_string()))
             }
-            MysqlColType::Unkown => Ok(ColValue::None),
+            MysqlColType::Unknown => Ok(ColValue::None),
         }
     }
 }

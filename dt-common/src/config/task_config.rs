@@ -420,14 +420,14 @@ impl TaskConfig {
             },
 
             DbType::StarRocks => match sink_type {
-                SinkType::Write => SinkerConfig::Starrocks {
+                SinkType::Write => SinkerConfig::StarRocks {
                     url,
                     batch_size,
                     stream_load_url: loader.get_optional(SINKER, "stream_load_url"),
                     hard_delete: loader.get_optional(SINKER, "hard_delete"),
                 },
 
-                SinkType::Struct => SinkerConfig::StarrocksStruct {
+                SinkType::Struct => SinkerConfig::StarRocksStruct {
                     url,
                     conflict_policy,
                 },

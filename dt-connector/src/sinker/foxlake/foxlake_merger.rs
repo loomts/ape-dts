@@ -52,7 +52,6 @@ impl FoxlakeMerger {
             all_data_size,
             start_time,
         )
-        .await
     }
 
     pub async fn batch_merge(&mut self, data: Vec<DtItem>) -> anyhow::Result<(usize, usize)> {
