@@ -59,7 +59,7 @@ impl SqlUtil {
             DbType::Mysql | DbType::ClickHouse | DbType::Foxlake | DbType::StarRocks => {
                 vec![(MYSQL_ESCAPE, MYSQL_ESCAPE)]
             }
-            DbType::Pg | DbType::Duckdb => vec![(PG_ESCAPE, PG_ESCAPE)],
+            DbType::Pg => vec![(PG_ESCAPE, PG_ESCAPE)],
             DbType::Redis => vec![(REDIS_ESCAPE, REDIS_ESCAPE)],
             _ => vec![],
         }

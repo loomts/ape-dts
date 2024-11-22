@@ -22,8 +22,6 @@ pub enum DbType {
     StarRocks,
     #[strum(serialize = "foxlake")]
     Foxlake,
-    #[strum(serialize = "duckdb")]
-    Duckdb,
 }
 
 #[derive(Display, EnumString, IntoStaticStr, Debug, Clone)]

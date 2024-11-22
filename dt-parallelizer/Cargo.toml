@@ -3,11 +3,6 @@ name = "dt-parallelizer"
 version = "0.1.0"
 edition = "2021"
 
-[features]
-default = []
-# default = ["duckdb_connector"]
-duckdb_connector = []
-
 [lints]
 workspace = true
 

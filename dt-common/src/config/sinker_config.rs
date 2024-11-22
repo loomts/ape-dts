@@ -97,18 +97,6 @@ pub enum SinkerConfig {
         engine: String,
     },
 
-    #[cfg(feature = "duckdb_connector")]
-    Duckdb {
-        db_file: String,
-        batch_size: usize,
-    },
-
-    #[cfg(feature = "duckdb_connector")]
-    DuckdbStruct {
-        db_file: String,
-        conflict_policy: ConflictPolicyEnum,
-    },
-
     Foxlake {
         url: String,
         batch_size: usize,
