@@ -340,3 +340,6 @@ CREATE TABLE IF NOT EXISTS `test_db`.`one_pk_no_uk` (
    ) ENGINE = ReplacingMergeTree(`_ape_dts_version`) PRIMARY KEY (`f_0`) 
    ORDER BY (`f_0`)
 ```
+
+# DDL during CDC is NOT supported yet
+Currently, DDL events are ignored, we may support this in future.
