@@ -427,3 +427,6 @@ Hard delete prerequisites:
 We've tested on StarRocks 2.5.4 and 3.2.11, refer to [tests](/dt-tests/tests/mysql_to_starrocks/)
 
 For 2.5.4, the stream_load_url should use be_http_port instead of fe_http_port.
+
+# DDL during CDC is NOT supported yet
+Currently, DDL events are ignored, we may support this in future.

@@ -2,9 +2,11 @@
 
 Refer to [tutorial](/docs/en/tutorial/mysql_to_http_server_consumer.md)
 
-ape_dts starts as an HTTP server, pulling Snapshot/CDC data from MySQL/Postgres and cache it in memory.
+ape_dts starts as an HTTP server, pulling CDC data from MySQL/Postgres and cache it in memory. 
 
 Consumers can pull and consume data from ape_dts via API, the data format is Avro, same to [MySQL -> Kafka](/docs/en/consumer/kafka_consumer.md)
+
+Snapshot task is NOT supported since it is more convenient to query data through SQL and consume.
 
 # Api
 
