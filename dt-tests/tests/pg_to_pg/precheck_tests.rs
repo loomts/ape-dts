@@ -130,8 +130,8 @@ mod test {
         TestBase::run_precheck_test(
             test_dir,
             &ignore_check_items,
-            &src_expected_results,
-            &dst_expected_results,
+            src_expected_results,
+            dst_expected_results,
         )
         .await
     }

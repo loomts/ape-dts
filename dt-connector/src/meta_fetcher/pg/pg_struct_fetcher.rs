@@ -718,7 +718,7 @@ mod tests {
 
     #[test]
     fn get_sequence_name_by_default_value_test() {
-        let default_values = vec![
+        let default_values = [
             r#"('"aaaaaaadefdfd.dsds::er3\ddd"'::regclass)"#,
             r#"nextval('aaaaaaaaaa'::regclass)"#,
             r#"nextval('public.aaaaaaaaaa'::regclass)"#,

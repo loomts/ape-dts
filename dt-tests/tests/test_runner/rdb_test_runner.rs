@@ -88,8 +88,8 @@ impl RdbTestRunner {
         }
 
         let config = TaskConfig::new(&base.task_config_file).unwrap();
-        let router = RdbRouter::from_config(&config.router, &dst_db_type).unwrap();
-        let filter = RdbFilter::from_config(&config.filter, &dst_db_type).unwrap();
+        let router = RdbRouter::from_config(&config.router, dst_db_type).unwrap();
+        let filter = RdbFilter::from_config(&config.filter, dst_db_type).unwrap();
         let meta_center_pool_mysql = match &config.meta_center {
             Some(MetaCenterConfig::MySqlDbEngine { url, .. }) => Some(
                 TaskUtil::create_mysql_conn_pool(url, 1, false)
@@ -335,7 +335,7 @@ impl RdbTestRunner {
         Ok(())
     }
 
-    pub fn split_dml_sqls(dml_sqls: &Vec<String>) -> (Vec<String>, Vec<String>, Vec<String>) {
+    pub fn split_dml_sqls(dml_sqls: &[String]) -> (Vec<String>, Vec<String>, Vec<String>) {
         let mut insert_sqls = Vec::new();
         let mut update_sqls = Vec::new();
         let mut delete_sqls = Vec::new();
@@ -398,8 +398,8 @@ impl RdbTestRunner {
 
     pub async fn compare_data_for_tbs_ignore_filtered(
         &self,
-        src_db_tbs: &Vec<(String, String)>,
-        dst_db_tbs: &Vec<(String, String)>,
+        src_db_tbs: &[(String, String)],
+        dst_db_tbs: &[(String, String)],
     ) -> anyhow::Result<bool> {
         let filtered_db_tbs = self.get_filtered_db_tbs();
         for i in 0..src_db_tbs.len() {
@@ -413,8 +413,8 @@ impl RdbTestRunner {
 
     pub async fn compare_data_for_tbs(
         &self,
-        src_db_tbs: &Vec<(String, String)>,
-        dst_db_tbs: &Vec<(String, String)>,
+        src_db_tbs: &[(String, String)],
+        dst_db_tbs: &[(String, String)],
     ) -> anyhow::Result<bool> {
         let filtered_db_tbs = self.get_filtered_db_tbs();
         for i in 0..src_db_tbs.len() {
@@ -422,7 +422,7 @@ impl RdbTestRunner {
                 let dst_data = self.fetch_data(&dst_db_tbs[i], DST).await?;
                 if !dst_data.is_empty() {
                     println!("tb: {:?} is filtered but dst is not emtpy", dst_db_tbs[i]);
-                    assert!(false)
+                    panic!()
                 }
             } else {
                 assert!(self.compare_tb_data(&src_db_tbs[i], &dst_db_tbs[i]).await?)
@@ -458,8 +458,8 @@ impl RdbTestRunner {
 
     fn compare_row_data(
         &self,
-        src_data: &Vec<RowData>,
-        dst_data: &Vec<RowData>,
+        src_data: &[RowData],
+        dst_data: &[RowData],
         src_db_tb: &(String, String),
     ) -> bool {
         assert_eq!(src_data.len(), dst_data.len());
@@ -537,7 +537,7 @@ impl RdbTestRunner {
         // different databases support different column types,
         // for example: we use Year in mysql, but INT in StarRocks,
         // so try to compare after both converted to string.
-        return match src_col_value {
+        match src_col_value {
             // mysql 00:00:00 == foxlake 00:00:00.000000
             ColValue::Time(_) => {
                 DtNaiveTime::from_str(&src_col_value.to_string()).unwrap()
@@ -587,7 +587,7 @@ impl RdbTestRunner {
                 _ => false,
             },
             _ => src_col_value.to_option_string() == dst_col_value.to_option_string(),
-        };
+        }
     }
 
     pub async fn fetch_data(
@@ -617,7 +617,7 @@ impl RdbTestRunner {
     }
 
     pub fn parse_full_tb_name(full_tb_name: &str, db_type: &DbType) -> (String, String) {
-        let escape_pairs = SqlUtil::get_escape_pairs(&db_type);
+        let escape_pairs = SqlUtil::get_escape_pairs(db_type);
         let tokens = ConfigTokenParser::parse(full_tb_name, &['.'], &escape_pairs);
         let (db, tb) = if tokens.len() > 1 {
             (tokens[0].to_string(), tokens[1].to_string())
@@ -632,6 +632,7 @@ impl RdbTestRunner {
     }
 
     /// get compare tbs
+    #[allow(clippy::type_complexity)]
     pub fn get_compare_db_tbs(
         &self,
     ) -> anyhow::Result<(Vec<(String, String)>, Vec<(String, String)>)> {
@@ -656,7 +657,7 @@ impl RdbTestRunner {
 
     pub fn get_compare_db_tbs_from_sqls(
         db_type: &DbType,
-        sqls: &Vec<String>,
+        sqls: &[String],
     ) -> anyhow::Result<Vec<(String, String)>> {
         let mut db_tbs = vec![];
         let parser = DdlParser::new(db_type.to_owned());
@@ -691,7 +692,7 @@ impl RdbTestRunner {
         if BaseTestRunner::check_path_exists(&filtered_tbs_file) {
             let lines = BaseTestRunner::load_file(&filtered_tbs_file);
             for line in lines.iter() {
-                let db_tb = ConfigTokenParser::parse_config(line, &db_type, &delimiters).unwrap();
+                let db_tb = ConfigTokenParser::parse_config(line, db_type, &delimiters).unwrap();
                 if db_tb.len() == 2 {
                     let db = SqlUtil::unescape(&db_tb[0], &escape_pairs[0]);
                     let tb = SqlUtil::unescape(&db_tb[1], &escape_pairs[0]);

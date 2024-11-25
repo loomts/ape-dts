@@ -14,7 +14,7 @@ pub struct RdbStructTestRunner {
     pub base: RdbTestRunner,
 }
 
-const PG_GET_INDEXDEF: &'static str = "pg_get_indexdef";
+const PG_GET_INDEXDEF: &str = "pg_get_indexdef";
 
 impl RdbStructTestRunner {
     pub async fn new(relative_test_dir: &str) -> anyhow::Result<Self> {
@@ -87,7 +87,7 @@ impl RdbStructTestRunner {
 
             let src_ddl_sql = src_check_fetcher.fetch_database(&src_db_tbs[i].0).await;
             let dst_ddl_sql = dst_check_fetcher.fetch_database(&dst_db_tbs[i].0).await;
-            let key = format!("{}", &dst_db_tbs[i].0);
+            let key = dst_db_tbs[i].0.to_string();
             let expect_ddl_sql = expect_ddl_sqls.get(&key).unwrap().to_owned();
 
             println!("src_ddl_sql: {}\n", src_ddl_sql);
@@ -221,7 +221,7 @@ impl RdbStructTestRunner {
 
             let key = line.trim().to_owned();
             let mut sql = String::new();
-            while let Some(line) = lines.next() {
+            for line in lines.by_ref() {
                 if line.trim().is_empty() {
                     break;
                 }

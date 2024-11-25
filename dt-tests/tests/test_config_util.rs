@@ -44,12 +44,10 @@ impl TestConfigUtil {
         let path = PathBuf::from(absolute_dir.as_str());
 
         let entries = fs::read_dir(path).unwrap();
-        for entry in entries {
-            if let Ok(sub_path) = entry {
-                if sub_path.path().is_dir() {
-                    let sub_path_dir = sub_path.file_name().to_string_lossy().to_string();
-                    result_dir.push((format!("{}/{}", absolute_dir, sub_path_dir), sub_path_dir));
-                }
+        for entry in entries.flatten() {
+            if entry.path().is_dir() {
+                let sub_path_dir = entry.file_name().to_string_lossy().to_string();
+                result_dir.push((format!("{}/{}", absolute_dir, sub_path_dir), sub_path_dir));
             }
         }
 
@@ -83,8 +81,8 @@ impl TestConfigUtil {
         }
 
         TestConfigUtil::update_task_config(
-            &src_task_config_file,
-            &dst_task_config_file,
+            src_task_config_file,
+            dst_task_config_file,
             &update_configs,
         );
     }
@@ -94,7 +92,7 @@ impl TestConfigUtil {
         dst_task_config_file: &str,
         project_root: &str,
     ) {
-        let config = TaskConfig::new(&src_task_config_file).unwrap();
+        let config = TaskConfig::new(src_task_config_file).unwrap();
         let mut update_configs = Vec::new();
 
         // runtime/log4rs_file
@@ -188,8 +186,8 @@ impl TestConfigUtil {
         }
 
         TestConfigUtil::update_task_config(
-            &src_task_config_file,
-            &dst_task_config_file,
+            src_task_config_file,
+            dst_task_config_file,
             &update_configs,
         );
     }
@@ -206,7 +204,7 @@ impl TestConfigUtil {
 
         let path = Path::new(&dst_task_config_file);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
-        File::create(&dst_task_config_file)
+        File::create(dst_task_config_file)
             .unwrap()
             .set_len(0)
             .unwrap();
@@ -219,7 +217,7 @@ impl TestConfigUtil {
         config: &[(&'a str, &'a str, &'a str)],
     ) {
         let config: Vec<(String, String, String)> = config
-            .into_iter()
+            .iter()
             .map(|i| (i.0.to_string(), i.1.to_string(), i.2.to_string()))
             .collect();
         Self::update_task_config(src_task_config_file, dst_task_config_file, &config);

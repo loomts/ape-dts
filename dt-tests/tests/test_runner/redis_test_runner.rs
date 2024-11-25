@@ -229,10 +229,10 @@ impl RedisTestRunner {
 
             let get_expire = |result: Value| -> i64 {
                 match result {
-                    Value::Int(expire) => return expire,
+                    Value::Int(expire) => expire,
                     _ => {
                         // should never happen
-                        return -1000;
+                        -1000
                     }
                 }
             };
@@ -261,8 +261,8 @@ impl RedisTestRunner {
     fn compare_hash_entries(&mut self, db: &str, keys: &Vec<String>) {
         for key in keys {
             let src_kvs = self.redis_util.get_hash_entry(&mut self.src_conn, key);
-            let mut dst_node_conn = self.dst_conn.get_node_conn_by_key(key);
-            let dst_kvs = self.redis_util.get_hash_entry(&mut dst_node_conn, key);
+            let dst_node_conn = self.dst_conn.get_node_conn_by_key(key);
+            let dst_kvs = self.redis_util.get_hash_entry(dst_node_conn, key);
             println!(
                 "compare results for hash entries, \r\n src_kvs: {:?} \r\n dst_kvs: {:?}",
                 src_kvs, dst_kvs
@@ -352,10 +352,10 @@ impl RedisTestRunner {
             "src: {}",
             RedisUtil::get_redis_version(&mut self.src_conn).unwrap()
         );
-        let mut dst_node_conn = self.dst_conn.get_default_conn();
+        let dst_node_conn = self.dst_conn.get_default_conn();
         println!(
             "dst: {}",
-            RedisUtil::get_redis_version(&mut dst_node_conn).unwrap()
+            RedisUtil::get_redis_version(dst_node_conn).unwrap()
         );
     }
 }

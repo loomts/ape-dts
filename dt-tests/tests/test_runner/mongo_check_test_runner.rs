@@ -1,5 +1,3 @@
-
-
 use super::{check_util::CheckUtil, mongo_test_runner::MongoTestRunner};
 
 pub struct MongoCheckTestRunner {

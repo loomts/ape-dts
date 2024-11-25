@@ -31,14 +31,11 @@ impl RedisStatisticTestRunner {
         let expect_statistic_file =
             format!("{}/expect_statistic_log/statistic.log", self.base.test_dir);
 
-        match self.base.get_config().extractor {
-            ExtractorConfig::RedisScan { url, .. } => {
-                let mut src_conn = RedisUtil::create_redis_conn(&url).await.unwrap();
-                let redis_util = RedisTestUtil::new(vec![('"', '"')]);
-                redis_util.execute_cmds(&mut src_conn, &self.base.src_prepare_sqls.clone());
-                redis_util.execute_cmds(&mut src_conn, &self.base.src_test_sqls.clone());
-            }
-            _ => {}
+        if let ExtractorConfig::RedisScan { url, .. } = self.base.get_config().extractor {
+            let mut src_conn = RedisUtil::create_redis_conn(&url).await.unwrap();
+            let redis_util = RedisTestUtil::new(vec![('"', '"')]);
+            redis_util.execute_cmds(&mut src_conn, &self.base.src_prepare_sqls.clone());
+            redis_util.execute_cmds(&mut src_conn, &self.base.src_test_sqls.clone());
         };
 
         // start task
@@ -58,8 +55,8 @@ impl RedisStatisticTestRunner {
     }
 
     pub fn clear_statistic_log(dst_statistic_file: &str) {
-        if BaseTestRunner::check_path_exists(&dst_statistic_file) {
-            File::create(&dst_statistic_file)
+        if BaseTestRunner::check_path_exists(dst_statistic_file) {
+            File::create(dst_statistic_file)
                 .unwrap()
                 .set_len(0)
                 .unwrap();

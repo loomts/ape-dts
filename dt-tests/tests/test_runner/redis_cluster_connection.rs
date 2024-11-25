@@ -61,7 +61,7 @@ impl RedisClusterConnection {
         self.node_conn_map.get_mut(node).unwrap()
     }
 
-    pub fn get_node_conns_by_cmd<'a>(&'a mut self, args: &Vec<String>) -> Vec<&'a mut Connection> {
+    pub fn get_node_conns_by_cmd<'a>(&'a mut self, args: &[String]) -> Vec<&'a mut Connection> {
         if self.slot_node_map.is_empty() {
             return vec![self.get_default_conn()];
         }

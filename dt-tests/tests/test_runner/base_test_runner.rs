@@ -101,11 +101,7 @@ impl BaseTestRunner {
 
     fn get_enable_log4rs() -> bool {
         // all tests will be run in one process, and log4rs can only be inited once
-        let enable_log4rs = if unsafe { LOG4RS_INITED } {
-            false
-        } else {
-            true
-        };
+        let enable_log4rs = !unsafe { LOG4RS_INITED };
 
         if enable_log4rs {
             unsafe { LOG4RS_INITED = true };
@@ -114,7 +110,7 @@ impl BaseTestRunner {
     }
 
     pub fn load_file(file_path: &str) -> Vec<String> {
-        if fs::metadata(&file_path).is_err() {
+        if fs::metadata(file_path).is_err() {
             return Vec::new();
         }
 
@@ -122,14 +118,13 @@ impl BaseTestRunner {
         let reader = BufReader::new(file);
 
         let mut lines = Vec::new();
-        for line in reader.lines() {
-            if let Ok(str) = line {
-                lines.push(str);
-            }
+        for line in reader.lines().map_while(Result::ok) {
+            lines.push(line);
         }
         lines
     }
 
+    #[allow(clippy::type_complexity)]
     fn load_sqls(
         test_dir: &str,
     ) -> (
@@ -177,7 +172,7 @@ impl BaseTestRunner {
         let mut in_block = false;
         let mut multi_line_sql = String::new();
 
-        for line in Self::load_file(&sql_file).iter() {
+        for line in Self::load_file(sql_file).iter() {
             let line = line.trim();
             if line.is_empty() || line.starts_with("--") {
                 continue;
@@ -201,7 +196,7 @@ impl BaseTestRunner {
             }
 
             if in_block {
-                multi_line_sql.push_str(&line);
+                multi_line_sql.push_str(line);
                 multi_line_sql.push('\n');
             } else {
                 sqls.push(line.into());

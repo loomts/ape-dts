@@ -386,17 +386,17 @@ mod tests {
             let mut col_map = HashMap::new();
             col_map.insert("src_col_1".to_string(), "dst_col_1".to_string());
             col_map.insert("src_col_2".to_string(), "dst_col_2".to_string());
-            assert_col_map(&tb_col_map, "src_db_1", "src_tb_1", &col_map);
+            assert_col_map(tb_col_map, "src_db_1", "src_tb_1", &col_map);
 
             let mut col_map = HashMap::new();
             col_map.insert("src_col,1'".to_string(), "dst_col_1".to_string());
             col_map.insert("src_col,2'".to_string(), "dst_col_2".to_string());
-            assert_col_map(&tb_col_map, "src_db,2'", "src_tb,2'", &col_map);
+            assert_col_map(tb_col_map, "src_db,2'", "src_tb,2'", &col_map);
 
             let mut col_map = HashMap::new();
             col_map.insert("src_col:1,".to_string(), "dst_col:1,".to_string());
             col_map.insert("src_col:2,".to_string(), "dst_col:2,".to_string());
-            assert_col_map(&tb_col_map, "src_db:3,", "src_tb:3,", &col_map);
+            assert_col_map(tb_col_map, "src_db:3,", "src_tb:3,", &col_map);
 
             assert_eq!(
                 tb_col_map.get(&("src_db_4".into(), "src_tb_4".into())),

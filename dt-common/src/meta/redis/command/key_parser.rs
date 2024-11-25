@@ -221,7 +221,7 @@ mod tests {
 
     #[test]
     fn test_calc_slot() {
-        let keys = vec![
+        let keys = [
             "somekey",
             "中文",
             "set_key_3_  😀",
@@ -231,10 +231,10 @@ mod tests {
             "中文{hash_tag}set_key_3_  😀",
             "set_key_3_  😀{hash_tag}中文",
         ];
-        let expected_slots = vec![11058, 13257, 16210, 2515, 2515, 2515, 2515, 2515];
+        let expected_slots = [11058, 13257, 16210, 2515, 2515, 2515, 2515, 2515];
 
         for i in 0..keys.len() {
-            let slot = KeyParser::calc_slot(&keys[i].as_bytes());
+            let slot = KeyParser::calc_slot(keys[i].as_bytes());
             assert_eq!(slot, expected_slots[i]);
         }
     }
@@ -257,7 +257,7 @@ mod tests {
 
     #[test]
     fn test_parse_key_from_argv_2() {
-        let cmd_argv_vec = vec![
+        let cmd_argv_vec = [
             vec!["SET", "set_key_3_  😀", "val_2_  😀"],
             vec![
                 "XADD",
@@ -271,8 +271,8 @@ mod tests {
                 "val_3_  😀",
             ],
         ];
-        let expected_cmd_names = vec!["SET", "XADD"];
-        let expected_keys_vec = vec![vec!["set_key_3_  😀"], vec!["stream_key_2  中文😀"]];
+        let expected_cmd_names = ["SET", "XADD"];
+        let expected_keys_vec = [vec!["set_key_3_  😀"], vec!["stream_key_2  中文😀"]];
 
         let key_parser = KeyParser::new();
         for i in 0..cmd_argv_vec.len() {

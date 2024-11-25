@@ -84,6 +84,7 @@ impl RdbKafkaRdbTestRunner {
         );
 
         // stop
+        #[allow(clippy::needless_range_loop)]
         for i in 0..self.kafka_to_dst_runners.len() {
             self.kafka_to_dst_runners[i]
                 .abort_task(&kafka_to_dst_tasks[i])
@@ -113,6 +114,7 @@ impl RdbKafkaRdbTestRunner {
             .await?;
 
         // stop
+        #[allow(clippy::needless_range_loop)]
         for i in 0..self.kafka_to_dst_runners.len() {
             self.kafka_to_dst_runners[i]
                 .abort_task(&kafka_to_dst_tasks[i])
@@ -134,37 +136,34 @@ impl RdbKafkaRdbTestRunner {
         }
 
         let config = TaskConfig::new(&self.src_to_kafka_runner.task_config_file).unwrap();
-        match config.sinker {
-            SinkerConfig::Kafka { url, .. } => {
-                let check_topic_exist = |meta: &Metadata, topic: &str| -> bool {
-                    for exist_topic in meta.topics() {
-                        if exist_topic.name() == topic && !exist_topic.partitions().is_empty() {
-                            return true;
-                        }
-                    }
-                    false
-                };
-
-                let admin_client = Self::create_kafka_admin_client(&url);
-                let consumer: BaseConsumer = Self::create_kafka_base_consumer(&url);
-                for topic in topics.iter() {
-                    // delete_topic/create_topic may fail
-                    let mut meta = consumer.fetch_metadata(Some(topic), Duration::from_secs(10))?;
-                    while check_topic_exist(&meta, topic) {
-                        Self::delete_topic(&admin_client, topic).await;
-                        meta = consumer.fetch_metadata(Some(topic), Duration::from_secs(10))?;
-                        TimeUtil::sleep_millis(100).await;
-                    }
-
-                    while !check_topic_exist(&meta, topic) {
-                        Self::create_topic(&admin_client, topic).await;
-                        meta = consumer.fetch_metadata(Some(topic), Duration::from_secs(10))?;
-                        TimeUtil::sleep_millis(100).await;
-                        println!("kafka topic: [{}] is NOT ready", topic);
+        if let SinkerConfig::Kafka { url, .. } = config.sinker {
+            let check_topic_exist = |meta: &Metadata, topic: &str| -> bool {
+                for exist_topic in meta.topics() {
+                    if exist_topic.name() == topic && !exist_topic.partitions().is_empty() {
+                        return true;
                     }
                 }
+                false
+            };
+
+            let admin_client = Self::create_kafka_admin_client(&url);
+            let consumer: BaseConsumer = Self::create_kafka_base_consumer(&url);
+            for topic in topics.iter() {
+                // delete_topic/create_topic may fail
+                let mut meta = consumer.fetch_metadata(Some(topic), Duration::from_secs(10))?;
+                while check_topic_exist(&meta, topic) {
+                    Self::delete_topic(&admin_client, topic).await;
+                    meta = consumer.fetch_metadata(Some(topic), Duration::from_secs(10))?;
+                    TimeUtil::sleep_millis(100).await;
+                }
+
+                while !check_topic_exist(&meta, topic) {
+                    Self::create_topic(&admin_client, topic).await;
+                    meta = consumer.fetch_metadata(Some(topic), Duration::from_secs(10))?;
+                    TimeUtil::sleep_millis(100).await;
+                    println!("kafka topic: [{}] is NOT ready", topic);
+                }
             }
-            _ => {}
         }
         Ok(())
     }

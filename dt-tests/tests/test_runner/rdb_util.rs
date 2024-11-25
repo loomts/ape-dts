@@ -124,7 +124,7 @@ impl RdbUtil {
 
     pub async fn execute_sqls_pg(
         conn_pool: &Pool<Postgres>,
-        sqls: &Vec<String>,
+        sqls: &[String],
     ) -> anyhow::Result<()> {
         for sql in sqls.iter() {
             println!("executing sql: {}", sql);

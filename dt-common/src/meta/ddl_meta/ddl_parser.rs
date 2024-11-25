@@ -966,7 +966,7 @@ mod test_mysql {
 
     #[test]
     fn test_create_table_with_schema_mysql() {
-        let sqls = vec![
+        let sqls = [
             // schema.table
             "create table aaa.bbb (id int)",
             // escapes
@@ -983,7 +983,7 @@ mod test_mysql {
             "create /*some comments,*/table/*some comments*/ if  not  exists  `aaa` .  `bbb` (id int)  ",
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             "CREATE TABLE `aaa`.`bbb` (id int)",
             "CREATE TABLE `aaa`.`bbb` (id int)",
             "CREATE TABLE `aaa`.`bbb` (id int)",
@@ -1003,12 +1003,12 @@ mod test_mysql {
 
     #[test]
     fn test_create_table_with_schema_with_special_characters_mysql() {
-        let sqls = vec![
+        let sqls = [
             "CREATE TABLE IF NOT EXISTS `test_db_*.*`.bbb(id int);",
             "CREATE TABLE IF NOT EXISTS `中文.others*&^%$#@!+_)(&^%#`.`中文!@$#$%^&*&(_+)`(id int);",
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             "CREATE TABLE IF NOT EXISTS `test_db_*.*`.`bbb` (id int);",
             "CREATE TABLE IF NOT EXISTS `中文.others*&^%$#@!+_)(&^%#`.`中文!@$#$%^&*&(_+)` (id int);",
         ];
@@ -1023,7 +1023,7 @@ mod test_mysql {
 
     #[test]
     fn test_create_table_without_schema_mysql() {
-        let sqls = vec![
+        let sqls = [
             // schema.table
             "create table bbb (id int)",
             // escapes
@@ -1040,7 +1040,7 @@ mod test_mysql {
             "create /*some comments,*/table/*some comments*/ if  not  exists    `bbb` (id int)  ",
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             "CREATE TABLE `bbb` (id int)",
             "CREATE TABLE `bbb` (id int)",
             "CREATE TABLE `bbb` (id int)",
@@ -1060,7 +1060,7 @@ mod test_mysql {
 
     #[test]
     fn test_drop_table_with_schema_mysql() {
-        let sqls = vec![
+        let sqls = [
             // schema.table
             "drop table aaa.bbb",
             // escapes
@@ -1077,7 +1077,7 @@ mod test_mysql {
             "drop /*some comments,*/table/*some comments*/ if  exists  `aaa` .  `bbb`  ",
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             "DROP TABLE `aaa`.`bbb`",
             "DROP TABLE `aaa`.`bbb`",
             "DROP TABLE `aaa`.`bbb`",
@@ -1097,7 +1097,7 @@ mod test_mysql {
 
     #[test]
     fn test_drop_table_without_schema_mysql() {
-        let sqls = vec![
+        let sqls = [
             // schema.table
             "drop table bbb",
             // escapes
@@ -1114,7 +1114,7 @@ mod test_mysql {
             "drop /*some comments,*/table/*some comments*/ if  exists    `bbb`  ",
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             "DROP TABLE `bbb`",
             "DROP TABLE `bbb`",
             "DROP TABLE `bbb`",
@@ -1134,7 +1134,7 @@ mod test_mysql {
 
     #[test]
     fn test_alter_table_with_schema_mysql() {
-        let sqls = vec![
+        let sqls = [
             // schema.table
             "alter table aaa.bbb add column value int",
             // escapes
@@ -1151,7 +1151,7 @@ mod test_mysql {
             "alter /*some comments,*/table/*some comments*/   `aaa` .  `bbb`   add column value int",
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             "ALTER TABLE `aaa`.`bbb` add column value int",
             // escapes
             "ALTER TABLE `aaa`.`bbb` add column value int",
@@ -1177,7 +1177,7 @@ mod test_mysql {
 
     #[test]
     fn test_alter_table_without_schema_mysql() {
-        let sqls = vec![
+        let sqls = [
             // schema.table
             "alter table bbb add column value int",
             // escapes
@@ -1192,7 +1192,7 @@ mod test_mysql {
             "alter /*some comments,*/table/*some comments*/    `bbb`   add column value int",
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             // schema.table
             "ALTER TABLE `bbb` add column value int",
             // escapes
@@ -1217,7 +1217,7 @@ mod test_mysql {
 
     #[test]
     fn test_alter_rename_table_mysql() {
-        let sqls = vec![
+        let sqls = [
             "ALTER TABLE tb_2 RENAME  tb_3",
             "alter table tb_2 rename as tb_3",
             "alter table tb_2 rename to tb_3",
@@ -1226,7 +1226,7 @@ mod test_mysql {
             "alter table `db_1`.tb_2 rename to `db_2`.tb_3",
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             "ALTER TABLE `tb_2` RENAME TO `tb_3`",
             "ALTER TABLE `tb_2` RENAME TO `tb_3`",
             "ALTER TABLE `tb_2` RENAME TO `tb_3`",
@@ -1245,7 +1245,7 @@ mod test_mysql {
 
     #[test]
     fn test_create_database_mysql() {
-        let sqls = vec![
+        let sqls = [
             "create database aaa",
             // escapes
             "create database `aaa`",
@@ -1261,7 +1261,7 @@ mod test_mysql {
             "create /*some comments,*/database/*some comments*/ if  not  exists    `aaa`  ",
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             "CREATE DATABASE `aaa`",
             // escapes
             "CREATE DATABASE `aaa`",
@@ -1287,12 +1287,12 @@ mod test_mysql {
 
     #[test]
     fn test_create_database_with_special_characters_mysql() {
-        let sqls = vec![
+        let sqls = [
             "CREATE DATABASE IF NOT EXISTS `test_db_*.*`;",
             "CREATE DATABASE IF NOT EXISTS `中文.others*&^%$#@!+_)(&^%#`;",
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             "CREATE DATABASE IF NOT EXISTS `test_db_*.*` ;",
             "CREATE DATABASE IF NOT EXISTS `中文.others*&^%$#@!+_)(&^%#` ;",
         ];
@@ -1307,7 +1307,7 @@ mod test_mysql {
 
     #[test]
     fn test_drop_database_mysql() {
-        let sqls = vec![
+        let sqls = [
             "drop database aaa",
             // escapes
             "drop database `aaa`",
@@ -1323,7 +1323,7 @@ mod test_mysql {
             "drop /*some comments,*/database/*some comments*/ if  exists    `aaa`  ",
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             "DROP DATABASE `aaa`",
             // escapes
             "DROP DATABASE `aaa`",
@@ -1349,7 +1349,7 @@ mod test_mysql {
 
     #[test]
     fn test_alter_database_mysql() {
-        let sqls = vec![
+        let sqls = [
             "alter database aaa CHARACTER SET utf8",
             // escapes
             "alter database `aaa` CHARACTER SET utf8",
@@ -1363,7 +1363,7 @@ mod test_mysql {
             "alter /*some comments,*/database/*some comments*/    `aaa`   CHARACTER SET utf8",
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             "ALTER DATABASE `aaa` CHARACTER SET utf8",
             // escapes
             "ALTER DATABASE `aaa` CHARACTER SET utf8",
@@ -1387,7 +1387,7 @@ mod test_mysql {
 
     #[test]
     fn test_truncate_table_with_schema_mysql() {
-        let sqls = vec![
+        let sqls = [
             // schema.table
             "truncate table aaa.bbb",
             // escapes
@@ -1405,7 +1405,7 @@ mod test_mysql {
             "truncate /*some comments,*/table/*some comments*/ `aaa`.`bbb`",
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             // schema.table
             "TRUNCATE TABLE `aaa`.`bbb`",
             // escapes
@@ -1433,7 +1433,7 @@ mod test_mysql {
 
     #[test]
     fn test_truncate_table_without_schema_mysql() {
-        let sqls = vec![
+        let sqls = [
             // schema.table
             "truncate table bbb",
             // escapes
@@ -1448,7 +1448,7 @@ mod test_mysql {
             "truncate /*some comments,*/table/*some comments*/     `bbb`  ",
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             // schema.table
             "TRUNCATE TABLE `bbb`",
             // escapes
@@ -1473,7 +1473,7 @@ mod test_mysql {
 
     #[test]
     fn test_rename_table_mysql() {
-        let sqls = vec![
+        let sqls = [
             // schema.table
             "rename table aaa.bbb to aaa.ccc",
             // escapes
@@ -1504,7 +1504,7 @@ mod test_mysql {
               `中文😀`   to `中文`"#,
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             // schema.table
             "RENAME TABLE `aaa`.`bbb` TO `aaa`.`ccc`",
             // escapes
@@ -1532,12 +1532,12 @@ mod test_mysql {
 
     #[test]
     fn test_create_index_mysql() {
-        let sqls = vec![
+        let sqls = [
             "create index idx2 on t1 ((col1 + col2), (col1 - col2), col1);",
             "create unique index `idx2` using  btree  on `d1`.`t1`((col1 + col2), (col1 - col2), col1);",
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls =[
             "CREATE INDEX `idx2` ON `t1` ((col1 + col2), (col1 - col2), col1);",
             "CREATE UNIQUE INDEX `idx2` USING BTREE ON `d1`.`t1` ((col1 + col2), (col1 - col2), col1);",
         ];
@@ -1552,13 +1552,13 @@ mod test_mysql {
 
     #[test]
     fn test_drop_index_mysql() {
-        let sqls = vec![
+        let sqls = [
             "drop index index1 on t1 algorithm=default;",
             // escapes
             "drop index `index1` on `d1`.`t1` algorithm=default;",
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             "DROP INDEX `index1` ON `t1` algorithm=default;",
             "DROP INDEX `index1` ON `d1`.`t1` algorithm=default;",
         ];
@@ -1581,16 +1581,14 @@ mod test_pg {
 
     #[test]
     fn test_create_table_multi_lines_pg() {
-        let sqls = vec![
-            r#"CREATE TABLE -- some comments
+        let sqls = [r#"CREATE TABLE -- some comments
             IF NOT EXISTS 
             db_1.tb_1 
             (id int,
-            value int);"#,
-        ];
+            value int);"#];
 
         let expect_sqls =
-            vec!["CREATE TABLE IF NOT EXISTS \"db_1\".\"tb_1\" (id int,\n            value int);"];
+            ["CREATE TABLE IF NOT EXISTS \"db_1\".\"tb_1\" (id int,\n            value int);"];
 
         let parser = DdlParser::new(DbType::Pg);
         for i in 0..sqls.len() {
@@ -1602,12 +1600,12 @@ mod test_pg {
 
     #[test]
     fn test_create_table_with_schema_with_special_characters_pg() {
-        let sqls = vec![
+        let sqls = [
             r#"CREATE TABLE IF NOT EXISTS "test_db_*.*".bbb(id int);"#,
             r#"CREATE TABLE IF NOT EXISTS "中文.others*&^%$#@!+_)(&^%#"."中文!@$#$%^&*&(_+)"(id int);"#,
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             r#"CREATE TABLE IF NOT EXISTS "test_db_*.*"."bbb" (id int);"#,
             r#"CREATE TABLE IF NOT EXISTS "中文.others*&^%$#@!+_)(&^%#"."中文!@$#$%^&*&(_+)" (id int);"#,
         ];
@@ -1622,7 +1620,7 @@ mod test_pg {
 
     #[test]
     fn test_create_table_with_temporary_pg() {
-        let sqls = vec![
+        let sqls = [
             r#"create UNLOGGED table tb_1(ts TIMESTAMP);"#,
             r#"create TEMPORARY table tb_2(ts TIMESTAMP);"#,
             r#"create temp table tb_3(ts TIMESTAMP);"#,
@@ -1630,7 +1628,7 @@ mod test_pg {
             r#"create local temp table tb_5(ts TIMESTAMP);"#,
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             r#"CREATE UNLOGGED TABLE "tb_1" (ts TIMESTAMP);"#,
             r#"CREATE TEMPORARY TABLE "tb_2" (ts TIMESTAMP);"#,
             r#"CREATE temp TABLE "tb_3" (ts TIMESTAMP);"#,
@@ -1648,7 +1646,7 @@ mod test_pg {
 
     #[test]
     fn test_alter_table_with_schema_pg() {
-        let sqls = vec![
+        let sqls = [
             // escapes + spaces + comments
             r#"alter /*some comments,*/table/*some comments*/   "aaa" .  "bbb"   add column value int"#,
             // escapes + spaces + if exists + only + comments
@@ -1661,7 +1659,7 @@ mod test_pg {
             value int"#,
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             // escapes + spaces + comments
             r#"ALTER TABLE "aaa"."bbb" add column value int"#,
             // escapes + spaces + if exists + comments
@@ -1678,7 +1676,7 @@ mod test_pg {
 
     #[test]
     fn test_alter_table_without_schema_pg() {
-        let sqls = vec![
+        let sqls = [
             // schema.table
             "alter table bbb add column value int",
             // escapes
@@ -1693,7 +1691,7 @@ mod test_pg {
             "alter /*some comments,*/table/*some comments*/    `bbb`   add column value int",
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             // schema.table
             "ALTER TABLE `bbb` add column value int",
             // escapes
@@ -1718,7 +1716,7 @@ mod test_pg {
 
     #[test]
     fn test_alter_rename_table_pg() {
-        let sqls = vec![
+        let sqls = [
             "ALTER TABLE tb_1 RENAME TO tb_2",
             "alter table tb_1 rename to tb_2",
             r#"ALTER TABLE IF EXISTS ONLY "schema_1".tb_1 RENAME TO tb_2"#,
@@ -1727,7 +1725,7 @@ mod test_pg {
             r#"alter table "schema_1".tb_1 set schema tb_2"#,
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             r#"ALTER TABLE "tb_1" RENAME TO "tb_2""#,
             r#"ALTER TABLE "tb_1" RENAME TO "tb_2""#,
             r#"ALTER TABLE IF EXISTS ONLY "schema_1"."tb_1" RENAME TO "tb_2""#,
@@ -1746,7 +1744,7 @@ mod test_pg {
 
     #[test]
     fn test_create_schema_pg() {
-        let sqls = vec![
+        let sqls = [
             "create schema aaa",
             // escapes
             "create schema \"aaa\"",
@@ -1762,7 +1760,7 @@ mod test_pg {
             "create /*some comments,*/schema/*some comments*/ if  not  exists    \"aaa\"  ",
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             r#"CREATE SCHEMA "aaa""#,
             // escapes
             r#"CREATE SCHEMA "aaa""#,
@@ -1788,12 +1786,12 @@ mod test_pg {
 
     #[test]
     fn test_create_schema_with_special_characters_pg() {
-        let sqls = vec![
+        let sqls = [
             "CREATE SCHEMA IF NOT EXISTS \"test_db_*.*\";",
             "CREATE SCHEMA IF NOT EXISTS \"中文.others*&^%$#@!+_)(&^%#\";",
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             "CREATE SCHEMA IF NOT EXISTS \"test_db_*.*\" ;",
             "CREATE SCHEMA IF NOT EXISTS \"中文.others*&^%$#@!+_)(&^%#\" ;",
         ];
@@ -1808,7 +1806,7 @@ mod test_pg {
 
     #[test]
     fn test_drop_schema_pg() {
-        let sqls = vec![
+        let sqls = [
             "drop schema aaa",
             // escapes
             "drop schema \"aaa\"",
@@ -1824,7 +1822,7 @@ mod test_pg {
             "drop /*some comments,*/schema/*some comments*/ if  exists    \"aaa\"  ",
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             r#"DROP SCHEMA "aaa""#,
             // escapes
             r#"DROP SCHEMA "aaa""#,
@@ -1850,7 +1848,7 @@ mod test_pg {
 
     #[test]
     fn test_alter_schema_pg() {
-        let sqls = vec![
+        let sqls = [
             "alter schema aaa rename to bbb",
             // escapes
             "alter schema \"aaa\" rename to bbb",
@@ -1864,7 +1862,7 @@ mod test_pg {
             "alter /*some comments,*/schema/*some comments*/    \"aaa\"   rename to bbb",
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             r#"ALTER SCHEMA "aaa" rename to bbb"#,
             // escapes
             r#"ALTER SCHEMA "aaa" rename to bbb"#,
@@ -1888,7 +1886,7 @@ mod test_pg {
 
     #[test]
     fn test_truncate_table_pg() {
-        let sqls = vec![
+        let sqls = [
             // schema.table
             "truncate table aaa.bbb",
             // escapes + spaces + comments
@@ -1900,7 +1898,7 @@ mod test_pg {
             r#"truncate /*some comments,*/  ONLY "aaa"."bbb""#,
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             r#"TRUNCATE TABLE "aaa"."bbb""#,
             r#"TRUNCATE TABLE "aaa"."bbb""#,
             r#"TRUNCATE TABLE "aaa"."bbb""#,
@@ -1918,7 +1916,7 @@ mod test_pg {
 
     #[test]
     fn test_create_index_pg() {
-        let sqls = vec![
+        let sqls = [
             r#"create index on "tb_1"(id);"#,
             r#"create unique index 
             concurrently -- some comments
@@ -1935,7 +1933,7 @@ mod test_pg {
             "tb_1"(a);"#,
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             "CREATE INDEX ON \"tb_1\" (id);",
             "CREATE UNIQUE INDEX CONCURRENTLY \"idx3\" ON ONLY \"tb_1\" (a);",
             "CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS \"idx3\" ON ONLY \"tb_1\" (a);",
@@ -1951,13 +1949,13 @@ mod test_pg {
 
     #[test]
     fn test_drop_index_pg() {
-        let sqls = vec![
+        let sqls = [
             "drop index tb_1_id_idx",
             r#"drop index if exists tb_1_id_idx,tb_1_id_idx1 RESTRICT;"#,
             r#"drop index CONCURRENTLY if exists tb_1_id_idx3 RESTRICT;"#,
         ];
 
-        let expect_sqls = vec![
+        let expect_sqls = [
             r#"DROP INDEX "tb_1_id_idx""#,
             r#"DROP INDEX IF EXISTS "tb_1_id_idx", "tb_1_id_idx1" RESTRICT;"#,
             r#"DROP INDEX CONCURRENTLY IF EXISTS "tb_1_id_idx3" RESTRICT;"#,

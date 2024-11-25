@@ -3,8 +3,9 @@
 
 # Introduction
 
-- ape-dts is a data migration tool enabling any-to-any data transfers.
-- Lightweight and standalone, requiring no third-party components or extra storage.
+- ape-dts is a data migration tool enabling any-to-any data transfers. 
+- It also provides data subscription and data processing.
+- It is lightweight and standalone, requiring no third-party components or extra storage.
 - In Rust.
 
 
@@ -102,7 +103,7 @@ Refer to [test docs](./dt-tests/README.md) for details.
 
 - more benchmark [details](./docs/en/benchmark.md)
 
-# Contributions
+# Contributing
 
 ## Structure
 
@@ -117,8 +118,14 @@ Refer to [test docs](./dt-tests/README.md) for details.
 - dt-common: common utils, basic data structures, metadata management
 - dt-tests: integration tests
 
-## Build images
-[build images](./docs/en/build_images.md)
+- related sub module: [mysql binlog connector in rust](https://github.com/apecloud/mysql-binlog-connector-rust)
+
+## Build
+- cargo build
+- [build images](./docs/en/build_images.md)
+
+## Checklist
+- run `cargo clippy --all-targets --all-features --workspace` fix all clippy issues.
 
 # Contact us
 

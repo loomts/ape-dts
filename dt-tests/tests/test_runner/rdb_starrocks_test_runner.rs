@@ -89,7 +89,7 @@ impl RdbStarrocksTestRunner {
             let condition = "WHERE _ape_dts_is_deleted != 1";
             let dst_data_deleted = self
                 .base
-                .fetch_data_with_condition(db_tb, DST, &condition)
+                .fetch_data_with_condition(db_tb, DST, condition)
                 .await?;
             dst_tb_row_count_map_deleted.insert(db_tb.to_owned(), dst_data_deleted.len());
         }

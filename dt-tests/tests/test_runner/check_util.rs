@@ -64,7 +64,7 @@ impl CheckUtil {
             | SinkerConfig::MongoCheck { check_log_dir, .. } => check_log_dir.clone(),
             _ => String::new(),
         };
-        (expect_check_log_dir, dst_check_log_dir.into())
+        (expect_check_log_dir, dst_check_log_dir)
     }
 
     fn load_check_log(log_dir: &str) -> (HashSet<String>, HashSet<String>, HashSet<String>) {

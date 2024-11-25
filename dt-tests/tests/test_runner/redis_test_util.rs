@@ -42,11 +42,11 @@ impl RedisTestUtil {
                 if let redis::Value::BulkString(k) = k {
                     kvs.insert(String::from_utf8(k).unwrap(), v);
                 } else {
-                    assert!(false);
+                    panic!();
                 }
             }
         } else {
-            assert!(false);
+            panic!();
         }
         kvs
     }
@@ -54,7 +54,7 @@ impl RedisTestUtil {
     pub fn list_dbs(&self, conn: &mut Connection) -> Vec<String> {
         let mut dbs = Vec::new();
         let cmd = "INFO keyspace";
-        match self.execute_cmd(conn, &cmd) {
+        match self.execute_cmd(conn, cmd) {
             redis::Value::BulkString(data) => {
                 let spaces = String::from_utf8(data).unwrap();
                 for space in spaces.split("\r\n").collect::<Vec<&str>>() {
@@ -64,7 +64,7 @@ impl RedisTestUtil {
                     }
                 }
             }
-            _ => assert!(false),
+            _ => panic!(),
         }
         dbs
     }
@@ -83,11 +83,11 @@ impl RedisTestUtil {
                             }
                             keys.push(key)
                         }
-                        _ => assert!(false),
+                        _ => panic!(),
                     }
                 }
             }
-            _ => assert!(false),
+            _ => panic!(),
         }
         keys.sort();
         keys
@@ -97,12 +97,9 @@ impl RedisTestUtil {
         let cmd = format!("type {}", self.escape_key(key));
         let value = self.execute_cmd(conn, &cmd);
         match value {
-            redis::Value::SimpleString(key_type) => {
-                return key_type;
-            }
-            _ => assert!(false),
+            redis::Value::SimpleString(key_type) => key_type,
+            _ => panic!(),
         }
-        String::new()
     }
 
     pub fn escape_key(&self, key: &str) -> String {
@@ -112,7 +109,7 @@ impl RedisTestUtil {
         )
     }
 
-    pub fn execute_cmds(&self, conn: &mut Connection, cmds: &Vec<String>) {
+    pub fn execute_cmds(&self, conn: &mut Connection, cmds: &[String]) {
         for cmd in cmds.iter() {
             self.execute_cmd(conn, cmd);
         }
@@ -124,7 +121,7 @@ impl RedisTestUtil {
         conn.req_packed_command(&packed_cmd).unwrap()
     }
 
-    pub fn execute_cmds_in_cluster(&self, conn: &mut RedisClusterConnection, cmds: &Vec<String>) {
+    pub fn execute_cmds_in_cluster(&self, conn: &mut RedisClusterConnection, cmds: &[String]) {
         for cmd in cmds.iter() {
             self.execute_cmd_in_cluster(conn, cmd)
         }
@@ -132,8 +129,8 @@ impl RedisTestUtil {
 
     pub fn execute_cmd_in_cluster(&self, conn: &mut RedisClusterConnection, cmd: &str) {
         let args = self.get_cmd_args(cmd);
-        for mut node_conn in conn.get_node_conns_by_cmd(&args) {
-            self.execute_cmd(&mut node_conn, cmd);
+        for node_conn in conn.get_node_conns_by_cmd(&args) {
+            self.execute_cmd(node_conn, cmd);
         }
     }
 
@@ -150,7 +147,7 @@ impl RedisTestUtil {
                 cmd
             )
         }
-        self.execute_cmd(&mut node_conns[0], cmd)
+        self.execute_cmd(node_conns[0], cmd)
     }
 
     fn pack_cmd(&self, cmd: &str) -> Vec<u8> {

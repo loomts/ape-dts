@@ -2,8 +2,8 @@
 
 # 简介
 
-- ape-dts 是一款旨在实现 any-to-any 的数据迁移工具。
-- 简单，不依赖第三方组件和额外存储。
+- ape-dts 是一款旨在实现 any-to-any 的数据迁移工具，并具有数据订阅和数据加工能力。
+- 简单轻量，不依赖第三方组件和额外存储。
 - 使用 Rust。
 
 ## 支持任务类型
@@ -115,9 +115,15 @@
 - dt-task：根据配置创建 extractor，sinker，pipeline，parallelizer 以组装任务
 - dt-common：通用基础模块，基础数据结构，元数据管理
 - dt-tests：集成测试
+- 关联子模块：[mysql binlog connector](https://github.com/apecloud/mysql-binlog-connector-rust)
 
-## 生成镜像
-[生成镜像](./docs/en/build_images.md)
+## 编译
+- cargo build
+- [生成镜像](./docs/en/build_images.md)
+
+## 检查列表
+- 执行 `cargo clippy --all-targets --all-features --workspace` 并修复所有警告
+
 
 # 技术交流
 [Slack社区](https://join.slack.com/t/kubeblocks/shared_invite/zt-22cx2f84x-BPZvnLRqBOGdZ_XSjELh4Q)

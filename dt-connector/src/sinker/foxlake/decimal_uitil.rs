@@ -318,7 +318,7 @@ mod tests {
 
             let decimal1 = Decimal::from_str(&value).unwrap();
             let decimal2 = Decimal::from_str(&decimal_str).unwrap();
-            println!("decimal2: {}", decimal2.to_string());
+            println!("decimal2: {}", decimal2);
             assert_eq!(decimal1, decimal2);
         }
     }

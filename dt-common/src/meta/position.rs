@@ -152,7 +152,7 @@ mod test {
             assert_eq!(schema, "test_db_1");
             assert_eq!(tb, "one_pk_no_uk");
         } else {
-            assert!(false)
+            panic!()
         }
 
         if let Position::RdbSnapshot {
@@ -169,7 +169,7 @@ mod test {
             assert_eq!(order_col, "f_0");
             assert_eq!(value, "9");
         } else {
-            assert!(false)
+            panic!()
         }
 
         assert_eq!(Position::from_log(log3), Position::None);

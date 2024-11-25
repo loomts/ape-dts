@@ -237,53 +237,43 @@ impl MongoTestRunner {
     pub async fn execute_test_sqls(&self) -> anyhow::Result<()> {
         let sqls = MongoTestRunner::slice_sqls_by_db(&self.base.src_test_sqls);
         for (db, sqls) in sqls.iter() {
-            self.execute_dmls(&self.src_mongo_client.as_ref().unwrap(), db, sqls)
+            self.execute_dmls(self.src_mongo_client.as_ref().unwrap(), db, sqls)
                 .await
                 .unwrap();
         }
 
         let sqls = MongoTestRunner::slice_sqls_by_db(&self.base.dst_test_sqls);
         for (db, sqls) in sqls.iter() {
-            self.execute_dmls(&self.dst_mongo_client.as_ref().unwrap(), db, sqls)
+            self.execute_dmls(self.dst_mongo_client.as_ref().unwrap(), db, sqls)
                 .await
                 .unwrap();
         }
         Ok(())
     }
 
-    async fn execute_ddls(
-        &self,
-        client: &Client,
-        db: &str,
-        sqls: &Vec<String>,
-    ) -> anyhow::Result<()> {
+    async fn execute_ddls(&self, client: &Client, db: &str, sqls: &[String]) -> anyhow::Result<()> {
         for sql in sqls.iter() {
             if sql.contains("dropDatabase") {
-                self.execute_drop_database(client, &db).await.unwrap();
+                self.execute_drop_database(client, db).await.unwrap();
             } else if sql.contains("drop") {
-                self.execute_drop(client, &db, sql).await.unwrap();
+                self.execute_drop(client, db, sql).await.unwrap();
             } else if sql.contains("createCollection") {
-                self.execute_create(client, &db, sql).await.unwrap();
+                self.execute_create(client, db, sql).await.unwrap();
             }
         }
         Ok(())
     }
 
-    async fn execute_dmls(
-        &self,
-        client: &Client,
-        db: &str,
-        sqls: &Vec<String>,
-    ) -> anyhow::Result<()> {
+    async fn execute_dmls(&self, client: &Client, db: &str, sqls: &[String]) -> anyhow::Result<()> {
         for sql in sqls.iter() {
             if sql.contains("insert") {
-                self.execute_insert(client, &db, sql).await?;
+                self.execute_insert(client, db, sql).await?;
             }
             if sql.contains("update") {
-                self.execute_update(client, &db, sql).await?;
+                self.execute_update(client, db, sql).await?;
             }
             if sql.contains("delete") {
-                self.execute_delete(client, &db, sql).await?;
+                self.execute_delete(client, db, sql).await?;
             }
         }
         Ok(())
@@ -380,9 +370,9 @@ impl MongoTestRunner {
     }
 
     async fn compare_db_data(&self, db: &str) {
-        let tbs = self.list_tb(&db, SRC).await;
+        let tbs = self.list_tb(db, SRC).await;
         for tb in tbs.iter() {
-            self.compare_tb_data(&db, tb).await;
+            self.compare_tb_data(db, tb).await;
         }
     }
 
@@ -411,12 +401,11 @@ impl MongoTestRunner {
         } else {
             self.dst_mongo_client.as_ref().unwrap()
         };
-        let tbs = client
+        client
             .database(db)
             .list_collection_names(None)
             .await
-            .unwrap();
-        tbs
+            .unwrap()
     }
 
     pub async fn fetch_data(&self, db: &str, tb: &str, from: &str) -> HashMap<MongoKey, Document> {
@@ -441,7 +430,7 @@ impl MongoTestRunner {
         results
     }
 
-    fn slice_sqls_by_db(sqls: &Vec<String>) -> HashMap<String, Vec<String>> {
+    fn slice_sqls_by_db(sqls: &[String]) -> HashMap<String, Vec<String>> {
         let mut db = String::new();
         let mut sliced_sqls: HashMap<String, Vec<String>> = HashMap::new();
         for sql in sqls.iter() {
@@ -459,7 +448,7 @@ impl MongoTestRunner {
         sliced_sqls
     }
 
-    fn slice_sqls_by_type(sqls: &Vec<String>) -> (Vec<String>, Vec<String>, Vec<String>) {
+    fn slice_sqls_by_type(sqls: &[String]) -> (Vec<String>, Vec<String>, Vec<String>) {
         let mut insert_sqls = Vec::new();
         let mut update_sqls = Vec::new();
         let mut delete_sqls = Vec::new();

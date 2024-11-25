@@ -447,7 +447,7 @@ mod tests {
         {
             assert_eq!(row_data.to_owned(), decoded_row_data)
         } else {
-            assert!(false)
+            panic!()
         }
     }
 
@@ -463,7 +463,7 @@ mod tests {
         {
             assert_eq!(ddl_data.to_owned(), decoded_ddl_data)
         } else {
-            assert!(false)
+            panic!()
         }
     }
 }
