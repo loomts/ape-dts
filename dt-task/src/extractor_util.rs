@@ -409,13 +409,10 @@ impl ExtractorUtil {
                 Box::new(extractor)
             }
 
-            ExtractorConfig::RedisReshard { url, to_node_ids } => {
-                let to_node_ids: Vec<String> =
-                    to_node_ids.split(',').map(|i| i.to_string()).collect();
+            ExtractorConfig::RedisReshard { url } => {
                 let extractor = RedisReshardExtractor {
                     base_extractor,
                     url,
-                    to_node_ids,
                 };
                 Box::new(extractor)
             }

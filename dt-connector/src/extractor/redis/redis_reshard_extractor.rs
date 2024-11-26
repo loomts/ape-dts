@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{cmp, collections::HashMap};
 
 use async_trait::async_trait;
 use dt_common::{
@@ -18,7 +18,6 @@ const SLOTS_COUNT: usize = 16384;
 pub struct RedisReshardExtractor {
     pub base_extractor: BaseExtractor,
     pub url: String,
-    pub to_node_ids: Vec<String>,
 }
 
 #[async_trait]
@@ -35,44 +34,31 @@ impl RedisReshardExtractor {
         let mut conn = RedisUtil::create_redis_conn(&self.url).await?;
         let nodes = RedisUtil::get_cluster_master_nodes(&mut conn)?;
         let slot_address_map = RedisUtil::get_slot_address_map(&nodes);
+        let avg_slot_count = SLOTS_COUNT / nodes.len();
 
-        let avg_node_count = SLOTS_COUNT / nodes.len();
-        let mut node_slot_count = HashMap::new();
+        // find nodes with slots to be moved out
         let mut move_out_slots = Vec::new();
-
-        // calculate slots to be moved out from existing nodes
         for node in nodes.iter() {
-            node_slot_count.insert(node.id.clone(), node.slots.len());
-
-            if self.to_node_ids.contains(&node.id) {
-                continue;
-            }
-
-            for i in avg_node_count..node.slots.len() {
+            log_info!("node: [{}] has [{}] slots", node.id, node.slots.len());
+            for i in avg_slot_count..node.slots.len() {
                 move_out_slots.push(node.slots[i]);
             }
         }
 
+        // find nodes with slots to be moved in
         let mut node_move_in_slots = HashMap::new();
         let mut i = 0;
-        for node_id in self.to_node_ids.iter() {
-            let exist_slot_count = *node_slot_count.get(node_id).unwrap();
-            let mut move_in_slots = Vec::new();
-
-            while i < move_out_slots.len() {
-                if move_in_slots.len() + exist_slot_count >= avg_node_count {
-                    break;
-                }
-                move_in_slots.push(move_out_slots[i]);
-                i += 1;
+        for node in nodes.iter() {
+            if avg_slot_count <= node.slots.len() || move_out_slots.len() <= i {
+                continue;
             }
 
-            log_info!(
-                "will move slots to {}, slots: {}",
-                node_id,
-                json!(move_in_slots),
-            );
-            node_move_in_slots.insert(node_id.to_owned(), move_in_slots);
+            let count = cmp::min(move_out_slots.len() - i, avg_slot_count - node.slots.len());
+            let slots = move_out_slots[i..i + count].to_vec();
+            i += count;
+
+            log_info!("will move slots to: [{}], slots: {}", node.id, json!(slots));
+            node_move_in_slots.insert(node.id.clone(), slots);
         }
 
         self.move_slots(&nodes, &node_move_in_slots, &slot_address_map)

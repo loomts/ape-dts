@@ -280,10 +280,7 @@ impl TaskConfig {
                     }
                 }
 
-                ExtractType::Reshard => {
-                    let to_node_ids = loader.get_required(EXTRACTOR, "to_node_ids");
-                    ExtractorConfig::RedisReshard { url, to_node_ids }
-                }
+                ExtractType::Reshard => ExtractorConfig::RedisReshard { url },
 
                 _ => bail! { not_supported_err },
             },

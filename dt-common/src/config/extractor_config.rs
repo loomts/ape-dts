@@ -124,7 +124,6 @@ pub enum ExtractorConfig {
 
     RedisReshard {
         url: String,
-        to_node_ids: String,
     },
 
     Kafka {
