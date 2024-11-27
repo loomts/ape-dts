@@ -3,8 +3,17 @@
 # 简介
 
 - ape-dts 是一款旨在实现 any-to-any 的数据迁移工具，并具有数据订阅和数据加工能力。
-- 简单轻量，不依赖第三方组件和额外存储。
+- 简单、轻量、高效，不依赖第三方组件和额外存储。
 - 使用 Rust。
+
+## 主要特性
+- 支持多种数据库间的同构、异构数据迁移和同步。
+- 支持全量、增量任务的断点续传。
+- 支持数据校验、订正。
+- 支持库、表、列级别的过滤和路由。
+- 针对不同源、目标、任务类型，实现不同的并发算法，提高性能。
+- 可加载用户 lua 脚本，编辑正在迁移/同步的数据。
+- 支持以 HTTP Server 的方式启动 ape-dts 并拉取源端数据，用户可使用任何语言的 HTTP Client 获取数据并自主消费。 
 
 ## 支持任务类型
 
@@ -12,12 +21,12 @@
 
 <br/>
 
-|  | mysql -> mysql | pg -> pg | mongo -> mongo | redis -> redis | mysql -> kafka | pg -> kafka| mysql -> starrocks | mysql -> clickhouse |
-| :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- |
-| 全量迁移 | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
-| 增量同步 | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
-| 数据校验/订正/复查 | &#10004; | &#10004; | &#10004; | | | | | |
-| 库表结构迁移 | &#10004; | &#10004; | | | | | &#10004; | &#10004; |
+|  | mysql -> mysql | pg -> pg | mongo -> mongo | redis -> redis | mysql -> kafka | pg -> kafka| mysql -> starrocks | mysql -> clickhouse | mysql -> tidb |
+| :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- |
+| 全量迁移 | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
+| 增量同步 | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
+| 数据校验/订正/复查 | &#10004; | &#10004; | &#10004; | | | | | | &#10004; |
+| 库表结构迁移 | &#10004; | &#10004; | | | | | &#10004; | &#10004; | &#10004; |
 
 # 快速上手
 
@@ -29,6 +38,7 @@
 - [redis -> redis](./docs/en/tutorial/redis_to_redis.md)
 - [mysql -> starrocks](./docs/en/tutorial/mysql_to_starrocks.md)
 - [mysql -> clickhouse](./docs/en/tutorial/mysql_to_clickhouse.md)
+- [mysql -> tidb](./docs/en/tutorial/mysql_to_tidb.md)
 - [mysql -> kafka -> 消费者](./docs/en/tutorial/mysql_to_kafka_consumer.md)
 - [pg -> kafka -> 消费者](./docs/en/tutorial/pg_to_kafka_consumer.md)
 - [mysql -> ape_dts(HTTP server) -> 消费者](./docs/en/tutorial/mysql_to_http_server_consumer.md)
