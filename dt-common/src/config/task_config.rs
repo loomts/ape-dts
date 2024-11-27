@@ -327,7 +327,7 @@ impl TaskConfig {
             Error::ConfigError(format!("sinker db type: {} not supported", db_type));
 
         let sinker = match db_type {
-            DbType::Mysql => match sink_type {
+            DbType::Mysql | DbType::Tidb => match sink_type {
                 SinkType::Write => SinkerConfig::Mysql { url, batch_size },
 
                 SinkType::Check => SinkerConfig::MysqlCheck {

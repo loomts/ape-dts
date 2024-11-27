@@ -6,6 +6,7 @@ mod mysql_to_mysql;
 mod mysql_to_mysql_lua;
 mod mysql_to_redis;
 mod mysql_to_starrocks;
+mod mysql_to_tidb;
 mod pg_to_kafka_to_pg;
 mod pg_to_pg;
 mod pg_to_pg_lua;
