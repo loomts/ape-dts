@@ -75,7 +75,7 @@ impl RdbTestRunner {
 
         if !dst_url.is_empty() {
             match dst_db_type {
-                DbType::Mysql | DbType::Foxlake | DbType::StarRocks => {
+                DbType::Mysql | DbType::Foxlake | DbType::StarRocks | DbType::Tidb => {
                     dst_conn_pool_mysql =
                         Some(TaskUtil::create_mysql_conn_pool(dst_url, 1, false).await?);
                 }

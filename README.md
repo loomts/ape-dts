@@ -5,17 +5,25 @@
 
 - ape-dts is a data migration tool enabling any-to-any data transfers. 
 - It also provides data subscription and data processing.
-- It is lightweight and standalone, requiring no third-party components or extra storage.
+- It is lightweight, efficient and standalone, requiring no third-party components or extra storage.
 - In Rust.
 
+## Key features
+- Supports data migration between various databases, both homogeneous and heterogeneous.
+- Supports snapshot and cdc tasks with resume from breakpoint.
+- Supports checking and revising data.
+- Supports filtering and routing at the database, table, and column levels.
+- Implements different parallel algorithms for different sources, targets, and task types to improve performance.
+- Allows loading user-defined Lua scripts to modify the data.
+- Supports starting ape-dts as an HTTP server to pull data from the source, allowing users to use any language's HTTP client to retrieve and consume the data.
 
 ## Supported task types
-|  | mysql -> mysql | pg -> pg | mongo -> mongo | redis -> redis | mysql -> kafka | pg -> kafka| mysql -> starrocks | mysql -> clickhouse |
-| :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- |
-| Snapshot | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
-| CDC | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
-| Data check/revise/review | &#10004; | &#10004; | &#10004; | | | | | |
-| Structure migration | &#10004; | &#10004; | | | | | &#10004; | &#10004; |
+|  | mysql -> mysql | pg -> pg | mongo -> mongo | redis -> redis | mysql -> kafka | pg -> kafka| mysql -> starrocks | mysql -> clickhouse | mysql -> tidb |
+| :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- |
+| Snapshot | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
+| CDC | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
+| Data check/revise/review | &#10004; | &#10004; | &#10004; | | | | | | &#10004; |
+| Structure migration | &#10004; | &#10004; | | | | | &#10004; | &#10004; | &#10004; |
 
 
 # Quick starts
@@ -28,6 +36,7 @@
 - [redis -> redis](./docs/en/tutorial/redis_to_redis.md)
 - [mysql -> starrocks](./docs/en/tutorial/mysql_to_starrocks.md)
 - [mysql -> clickhouse](./docs/en/tutorial/mysql_to_clickhouse.md)
+- [mysql -> tidb](./docs/en/tutorial/mysql_to_tidb.md)
 - [mysql -> kafka -> consumer](./docs/en/tutorial/mysql_to_kafka_consumer.md)
 - [pg -> kafka -> consumer](./docs/en/tutorial/pg_to_kafka_consumer.md)
 - [mysql -> ape_dts(HTTP server) -> consumer](./docs/en/tutorial/mysql_to_http_server_consumer.md)

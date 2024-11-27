@@ -1,6 +1,6 @@
 use std::{collections::HashSet, fs::File};
 
-use dt_common::config::sinker_config::SinkerConfig;
+use dt_common::config::{config_enums::DbType, sinker_config::SinkerConfig};
 
 use super::base_test_runner::BaseTestRunner;
 
@@ -47,7 +47,9 @@ impl CheckUtil {
 
     pub fn get_check_log_dir(base_test_runner: &BaseTestRunner, version: &str) -> (String, String) {
         let mut expect_check_log_dir = format!("{}/expect_check_log", base_test_runner.test_dir);
-        if !BaseTestRunner::check_path_exists(&expect_check_log_dir) {
+        if !BaseTestRunner::check_path_exists(&expect_check_log_dir)
+            && base_test_runner.get_config().sinker_basic.db_type == DbType::Mysql
+        {
             // mysql 5.7, 8.0
             if version.starts_with("5.") {
                 expect_check_log_dir =
