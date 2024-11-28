@@ -27,7 +27,7 @@ use reqwest::{header, Client, Method, Response, StatusCode};
 use serde_json::{json, Value};
 
 const SIGN_COL_NAME: &str = "_ape_dts_is_deleted";
-const VERSION_COL_NAME: &str = "_ape_dts_version";
+const TIMESTAMP_COL_NAME: &str = "_ape_dts_timestamp";
 
 #[derive(Clone)]
 pub struct StarRocksSinker {
@@ -39,7 +39,7 @@ pub struct StarRocksSinker {
     pub password: String,
     pub meta_manager: MysqlMetaManager,
     pub monitor: Arc<Mutex<Monitor>>,
-    pub sync_version: i64,
+    pub sync_timestamp: i64,
     pub hard_delete: bool,
 }
 
@@ -96,9 +96,7 @@ impl StarRocksSinker {
         let tb = data[start_index].tb.clone();
         let first_row_type = data[start_index].row_type.clone();
         let tb_meta = self.meta_manager.get_tb_meta(&db, &tb).await?;
-
-        // use timestamp_millis as VERSION_COL value
-        self.sync_version = cmp::max(Utc::now().timestamp_millis(), self.sync_version + 1);
+        self.sync_timestamp = cmp::max(Utc::now().timestamp_millis(), self.sync_timestamp + 1);
 
         let mut data_size = 0;
         // build stream load data
@@ -117,10 +115,9 @@ impl StarRocksSinker {
                 row_data.after.as_mut().unwrap()
             };
 
-            // VERSION_COL value
             col_values.insert(
-                VERSION_COL_NAME.into(),
-                ColValue::LongLong(self.sync_version),
+                TIMESTAMP_COL_NAME.into(),
+                ColValue::LongLong(self.sync_timestamp),
             );
             load_data.push(col_values);
         }
