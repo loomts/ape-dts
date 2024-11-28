@@ -21,7 +21,7 @@ use serde_json::json;
 use crate::{call_batch_fn, sinker::base_sinker::BaseSinker, Sinker};
 
 const SIGN_COL_NAME: &str = "_ape_dts_is_deleted";
-const VERSION_COL_NAME: &str = "_ape_dts_version";
+const TIMESTAMP_COL_NAME: &str = "_ape_dts_timestamp";
 
 #[derive(Clone)]
 pub struct ClickhouseSinker {
@@ -32,7 +32,7 @@ pub struct ClickhouseSinker {
     pub username: String,
     pub password: String,
     pub monitor: Arc<Mutex<Monitor>>,
-    pub sync_version: i64,
+    pub sync_timestamp: i64,
 }
 
 #[async_trait]
@@ -69,9 +69,7 @@ impl ClickhouseSinker {
     ) -> anyhow::Result<usize> {
         let db = SqlUtil::escape_by_db_type(&data[start_index].schema, &DbType::ClickHouse);
         let tb = SqlUtil::escape_by_db_type(&data[start_index].tb, &DbType::ClickHouse);
-
-        // use timestamp_millis as VERSION_COL value
-        self.sync_version = cmp::max(Utc::now().timestamp_millis(), self.sync_version + 1);
+        self.sync_timestamp = cmp::max(Utc::now().timestamp_millis(), self.sync_timestamp + 1);
 
         let mut data_size = 0;
         // build stream load data
@@ -90,10 +88,9 @@ impl ClickhouseSinker {
                 row_data.after.as_mut().unwrap()
             };
 
-            // VERSION_COL value
             col_values.insert(
-                VERSION_COL_NAME.into(),
-                ColValue::LongLong(self.sync_version),
+                TIMESTAMP_COL_NAME.into(),
+                ColValue::LongLong(self.sync_timestamp),
             );
             load_data.push(col_values);
         }

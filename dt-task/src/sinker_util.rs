@@ -412,7 +412,7 @@ impl SinkerUtil {
                         batch_size,
                         meta_manager,
                         monitor: monitor.clone(),
-                        sync_version: Utc::now().timestamp_millis(),
+                        sync_timestamp: Utc::now().timestamp_millis(),
                         hard_delete,
                     };
                     sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
@@ -460,7 +460,7 @@ impl SinkerUtil {
                         password,
                         batch_size,
                         monitor: monitor.clone(),
-                        sync_version: Utc::now().timestamp_millis(),
+                        sync_timestamp: Utc::now().timestamp_millis(),
                     };
                     sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
                 }

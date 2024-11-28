@@ -33,6 +33,6 @@ CREATE TABLE test_db_1.one_pk_no_uk (
     f_27 VARCHAR(100),
     f_28 JSON,
     `_ape_dts_is_deleted` smallint(6) NULL COMMENT "",
-    `_ape_dts_version` bigint(20) NULL COMMENT ""
+    `_ape_dts_timestamp` bigint(20) NULL COMMENT ""
     ) ENGINE=OLAP PRIMARY KEY(f_0) DISTRIBUTED BY HASH(f_0);
 ```

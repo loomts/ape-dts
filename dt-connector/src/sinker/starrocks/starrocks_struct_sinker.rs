@@ -21,7 +21,7 @@ use sqlx::{MySql, Pool};
 
 const SIGN_COL_NAME: &str = "_ape_dts_is_deleted";
 const SIGN_COL_TYPE: &str = "SMALLINT";
-const VERSION_COL_NAME: &str = "_ape_dts_version";
+const VERSION_COL_NAME: &str = "_ape_dts_timestamp";
 const VERSION_COL_TYPE: &str = "BIGINT";
 
 #[derive(Clone)]

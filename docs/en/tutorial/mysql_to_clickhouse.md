@@ -71,9 +71,9 @@ CREATE TABLE test_db.tb_1
     `id` Int32,
     `value` Nullable(Int32),
     `_ape_dts_is_deleted` Int8,
-    `_ape_dts_version` Int64
+    `_ape_dts_timestamp` Int64
 )
-ENGINE = ReplacingMergeTree(_ape_dts_version)
+ENGINE = ReplacingMergeTree(_ape_dts_timestamp)
 PRIMARY KEY id
 ORDER BY id
 SETTINGS index_granularity = 8192
@@ -130,12 +130,12 @@ SELECT * FROM test_db.tb_1 ORDER BY id;
 ```
 
 ```
-   ┌─id─┬─value─┬─_ape_dts_is_deleted─┬─_ape_dts_version─┐
-1. │  1 │     1 │                   0 │    1731897789627 │
-2. │  2 │     2 │                   0 │    1731897789627 │
-3. │  3 │     3 │                   0 │    1731897789627 │
-4. │  4 │     4 │                   0 │    1731897789627 │
-   └────┴───────┴─────────────────────┴──────────────────┘
+   ┌─id─┬─value─┬─_ape_dts_is_deleted─┬─_ape_dts_timestamp─┐
+1. │  1 │     1 │                   0 │    1731897789627   │
+2. │  2 │     2 │                   0 │    1731897789627   │
+3. │  3 │     3 │                   0 │    1731897789627   │
+4. │  4 │     4 │                   0 │    1731897789627   │
+   └────┴───────┴─────────────────────┴────────────────────┘
 ```
 
 # Cdc task
@@ -194,13 +194,13 @@ SELECT * FROM test_db.tb_1;
 ```
 
 ```
-   ┌─id─┬───value─┬─_ape_dts_is_deleted─┬─_ape_dts_version─┐
-1. │  1 │       1 │                   1 │    1731900431736 │
-2. │  2 │ 2000000 │                   0 │    1731900431736 │
-3. │  3 │       3 │                   0 │    1731900332526 │
-4. │  4 │       4 │                   0 │    1731900332526 │
-5. │  5 │       5 │                   0 │    1731900431736 │
-   └────┴─────────┴─────────────────────┴──────────────────┘
+   ┌─id─┬───value─┬─_ape_dts_is_deleted─┬─_ape_dts_timestamp─┐
+1. │  1 │       1 │                   1 │    1731900431736   │
+2. │  2 │ 2000000 │                   0 │    1731900431736   │
+3. │  3 │       3 │                   0 │    1731900332526   │
+4. │  4 │       4 │                   0 │    1731900332526   │
+5. │  5 │       5 │                   0 │    1731900431736   │
+   └────┴─────────┴─────────────────────┴────────────────────┘
 ```
 
 # How it works
@@ -336,8 +336,8 @@ CREATE TABLE IF NOT EXISTS `test_db`.`one_pk_no_uk` (
    `f_27` Nullable(String), 
    `f_28` Nullable(String), 
    `_ape_dts_is_deleted` Int8, 
-   `_ape_dts_version` Int64
-   ) ENGINE = ReplacingMergeTree(`_ape_dts_version`) PRIMARY KEY (`f_0`) 
+   `_ape_dts_timestamp` Int64
+   ) ENGINE = ReplacingMergeTree(`_ape_dts_timestamp`) PRIMARY KEY (`f_0`) 
    ORDER BY (`f_0`)
 ```
 
