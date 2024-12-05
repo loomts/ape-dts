@@ -9,9 +9,11 @@ use tokio::task::JoinHandle;
 
 use crate::test_config_util::TestConfigUtil;
 
+#[derive(Default)]
 pub struct BaseTestRunner {
     pub test_dir: String,
     pub task_config_file: String,
+    pub struct_task_config_file: String,
     pub src_test_sqls: Vec<String>,
     pub dst_test_sqls: Vec<String>,
     pub src_prepare_sqls: Vec<String>,
@@ -26,21 +28,12 @@ static mut LOG4RS_INITED: bool = false;
 #[allow(dead_code)]
 impl BaseTestRunner {
     pub async fn new(relative_test_dir: &str) -> anyhow::Result<Self> {
-        let project_root = TestConfigUtil::get_project_root();
-        let tmp_dir = format!("{}/tmp/{}", project_root, relative_test_dir);
         let test_dir = TestConfigUtil::get_absolute_path(relative_test_dir);
-        let src_task_config_file = format!("{}/task_config.ini", test_dir);
-        let dst_task_config_file = format!("{}/task_config.ini", tmp_dir);
 
-        // update relative path to absolute path in task_config.ini
-        TestConfigUtil::update_file_paths_in_task_config(
-            &src_task_config_file,
-            &dst_task_config_file,
-            &project_root,
-        );
-
-        // update extractor / sinker urls from .env
-        TestConfigUtil::update_task_config_from_env(&dst_task_config_file, &dst_task_config_file);
+        let dst_task_config_file =
+            Self::generate_tmp_task_config_file(relative_test_dir, "task_config.ini");
+        let dst_struct_task_config_file =
+            Self::generate_tmp_task_config_file(relative_test_dir, "struct_task_config.ini");
 
         let (
             src_test_sqls,
@@ -54,6 +47,7 @@ impl BaseTestRunner {
 
         Ok(Self {
             task_config_file: dst_task_config_file,
+            struct_task_config_file: dst_struct_task_config_file,
             test_dir,
             src_test_sqls,
             dst_test_sqls,
@@ -63,6 +57,33 @@ impl BaseTestRunner {
             dst_clean_sqls,
             meta_center_prepare_sqls,
         })
+    }
+
+    pub fn generate_tmp_task_config_file(
+        relative_test_dir: &str,
+        task_config_file: &str,
+    ) -> String {
+        let project_root = TestConfigUtil::get_project_root();
+        let test_dir = TestConfigUtil::get_absolute_path(relative_test_dir);
+        let src_task_config_file = format!("{}/{}", test_dir, task_config_file);
+
+        if !Self::check_path_exists(&src_task_config_file) {
+            return String::new();
+        }
+
+        let tmp_dir = format!("{}/tmp/{}", project_root, relative_test_dir);
+        let dst_task_config_file = format!("{}/{}", tmp_dir, task_config_file);
+
+        // update relative path to absolute path in task_config.ini
+        TestConfigUtil::update_file_paths_in_task_config(
+            &src_task_config_file,
+            &dst_task_config_file,
+            &project_root,
+        );
+
+        // update extractor / sinker urls from .env
+        TestConfigUtil::update_task_config_from_env(&dst_task_config_file, &dst_task_config_file);
+        dst_task_config_file
     }
 
     pub fn get_config(&self) -> TaskConfig {
@@ -99,7 +120,7 @@ impl BaseTestRunner {
         Ok(())
     }
 
-    fn get_enable_log4rs() -> bool {
+    pub fn get_enable_log4rs() -> bool {
         // all tests will be run in one process, and log4rs can only be inited once
         let enable_log4rs = !unsafe { LOG4RS_INITED };
 

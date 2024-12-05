@@ -1,7 +1,9 @@
 use sqlx::{mysql::MySqlArguments, postgres::PgArguments, query::Query, MySql, Postgres};
 
 use crate::meta::{
-    col_value::ColValue, mysql::mysql_col_type::MysqlColType, pg::pg_col_type::PgColType,
+    col_value::ColValue,
+    mysql::mysql_col_type::MysqlColType,
+    pg::{pg_col_type::PgColType, pg_value_type::PgValueType},
 };
 
 pub trait SqlxPgExt<'q> {
@@ -25,38 +27,39 @@ impl<'q> SqlxPgExt<'q> for Query<'q, Postgres, PgArguments> {
                 ColValue::DateTime(v) => self.bind(v),
                 ColValue::Timestamp(v) => self.bind(v),
                 ColValue::String(v) => self.bind(v),
+                ColValue::Json2(v) => self.bind(v),
                 ColValue::RawString(v) => self.bind(v),
                 ColValue::Blob(v) => self.bind(v),
                 ColValue::Set2(v) => self.bind(v),
                 ColValue::Enum2(v) => self.bind(v),
                 ColValue::Json(v) => self.bind(v),
-                _ => match col_type.alias.as_str() {
-                    "bool" => {
+                _ => match col_type.value_type {
+                    PgValueType::Boolean => {
                         let none: Option<bool> = Option::None;
                         self.bind(none)
                     }
 
-                    "int4" | "serial4" => {
+                    PgValueType::Int32 => {
                         let none: Option<i32> = Option::None;
                         self.bind(none)
                     }
 
-                    "int2" | "serial2" => {
+                    PgValueType::Int16 => {
                         let none: Option<i16> = Option::None;
                         self.bind(none)
                     }
 
-                    "int8" | "serial8" | "oid" => {
+                    PgValueType::Int64 => {
                         let none: Option<i64> = Option::None;
                         self.bind(none)
                     }
 
-                    "float4" => {
+                    PgValueType::Float32 => {
                         let none: Option<f32> = Option::None;
                         self.bind(none)
                     }
 
-                    "float8" => {
+                    PgValueType::Float64 => {
                         let none: Option<f64> = Option::None;
                         self.bind(none)
                     }

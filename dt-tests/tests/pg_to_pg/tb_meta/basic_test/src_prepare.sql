@@ -89,23 +89,48 @@ CREATE TABLE tb_meta_test.full_column_type (
     timestampz_col_3 timestamp with time zone,
     timestampz_col_4 timestamp(6) with time zone,
 
+    date_col date, 
+    
+    bytea_col bytea, 
+
     -- bool
     boolean_col boolean, 
     bool_col bool,
 
-    -- others
-    box_col box, 
-    bytea_col bytea, 
-    cidr_col cidr,
-    circle_col circle,
-    date_col date, 
-    inet_col inet,
+    -- json
+    json_col json, 
+    jsonb_col jsonb, 
 
+    -- interval
     interval_col interval, 
     interval_col_2 interval(3), 
 
-    json_col json, 
-    jsonb_col jsonb, 
+    -- array
+    array_float4_col float4[],
+    array_float8_col float8[],
+
+    array_int2_col int2[],
+    array_int4_col int4[],
+    array_int8_col bigint[],
+    array_int8_col_2 int8[],
+
+    array_text_col text[],
+
+    array_boolean_col boolean[],
+    array_boolean_col_2 bool[],
+
+    array_date_col date[],
+
+    array_timestamp_col timestamp[],
+    array_timestamp_col_2 timestamp(6)[],
+    array_timestamptz_col timestamptz[],
+    array_timestamptz_col_2 timestamptz(6)[],
+
+    -- others
+    box_col box, 
+    cidr_col cidr,
+    circle_col circle,
+    inet_col inet,
 
     line_col line,
     lseg_col lseg, 

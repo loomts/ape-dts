@@ -506,13 +506,17 @@ impl RdbQueryBuilder<'_> {
     }
 
     fn get_pg_sql_value(&self, col_value: &ColValue) -> String {
-        let str = col_value.to_option_string();
-        if str.is_none() {
-            return "NULL".to_string();
-        }
+        match col_value {
+            ColValue::Blob(v) => format!(r#"'\x{}'"#, hex::encode(v)),
 
-        let value = str.unwrap();
-        format!(r#"'{}'"#, value.replace('\'', "\'\'"))
+            _ => {
+                if let Some(str) = col_value.to_option_string() {
+                    format!(r#"'{}'"#, str.replace('\'', "\'\'"))
+                } else {
+                    "NULL".to_string()
+                }
+            }
+        }
     }
 
     fn get_mysql_sql_value(&self, col: &str, col_value: &ColValue) -> anyhow::Result<String> {

@@ -300,6 +300,18 @@ impl MysqlMetaFetcher {
                 continue;
             }
 
+            // the key name for primary key is always "PRIMARY" even if created with a name
+            // create table test_db_1.a(id int, value int,
+            //      primary key some_pk_name(id, value),
+            //      unique key some_uk_name(value));
+            // mysql> SHOW INDEXES FROM test_db_1.a;
+            // +-------+------------+--------------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
+            // | Table | Non_unique | Key_name     | Seq_in_index | Column_name | Collation | Cardinality | Sub_part | Packed | Null | Index_type | Comment | Index_comment |
+            // +-------+------------+--------------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
+            // | a     |          0 | PRIMARY      |            1 | id          | A         |           0 |     NULL | NULL   |      | BTREE      |         |               |
+            // | a     |          0 | PRIMARY      |            2 | value       | A         |           0 |     NULL | NULL   |      | BTREE      |         |               |
+            // | a     |          0 | some_uk_name |            1 | value       | A         |           0 |     NULL | NULL   |      | BTREE      |         |               |
+            // +-------+------------+--------------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
             let mut key_name: String = row.try_get("Key_name")?;
             let mut col_name: String = row.try_get("Column_name")?;
             key_name = key_name.to_lowercase();

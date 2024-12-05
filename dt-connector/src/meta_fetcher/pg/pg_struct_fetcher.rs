@@ -85,7 +85,7 @@ impl PgStructFetcher {
         );
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-        if let Some(row) = rows.try_next().await.unwrap() {
+        if let Some(row) = rows.try_next().await? {
             let schema_name = Self::get_str_with_null(&row, "schema_name")?;
             let schema = Schema { name: schema_name };
             return Ok(schema);
@@ -133,7 +133,7 @@ impl PgStructFetcher {
         );
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-        while let Some(row) = rows.try_next().await.unwrap() {
+        while let Some(row) = rows.try_next().await? {
             let (sequence_schema, table_name, sequence_name): (String, String, String) = (
                 Self::get_str_with_null(&row, "sequence_schema")?,
                 Self::get_str_with_null(&row, "table_name")?,
@@ -172,7 +172,7 @@ impl PgStructFetcher {
 
         let mut results = Vec::new();
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-        while let Some(row) = rows.try_next().await.unwrap() {
+        while let Some(row) = rows.try_next().await? {
             let sequence = Sequence {
                 sequence_name: Self::get_str_with_null(&row, "sequence_name")?,
                 database_name: Self::get_str_with_null(&row, "sequence_catalog")?,
@@ -290,7 +290,7 @@ impl PgStructFetcher {
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
 
-        while let Some(row) = rows.try_next().await.unwrap() {
+        while let Some(row) = rows.try_next().await? {
             let (schema_name, table_name, seq_name): (String, String, String) = (
                 Self::get_str_with_null(&row, "nspname")?,
                 Self::get_str_with_null(&row, "table_name")?,
@@ -334,12 +334,13 @@ impl PgStructFetcher {
                 identity_generation,
                 ordinal_position
             FROM information_schema.columns c
-            WHERE table_schema ='{}' {}",
+            WHERE table_schema ='{}' {} 
+            ORDER BY table_schema, table_name, ordinal_position",
             &self.schema, tb_filter
         );
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-        while let Some(row) = rows.try_next().await.unwrap() {
+        while let Some(row) = rows.try_next().await? {
             let (table_schema, table_name) = (
                 Self::get_str_with_null(&row, "table_schema")?,
                 Self::get_str_with_null(&row, "table_name")?,
@@ -406,7 +407,7 @@ impl PgStructFetcher {
 
         let mut results = HashMap::new();
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-        while let Some(row) = rows.try_next().await.unwrap() {
+        while let Some(row) = rows.try_next().await? {
             let column_name: String = Self::get_str_with_null(&row, "column_name")?;
             let column_type: String = Self::get_str_with_null(&row, "column_type")?;
             results.insert(column_name, column_type);
@@ -444,7 +445,7 @@ impl PgStructFetcher {
         );
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-        while let Some(row) = rows.try_next().await.unwrap() {
+        while let Some(row) = rows.try_next().await? {
             let table_name = Self::get_str_with_null(&row, "relname")?;
             let constraint_type = Self::get_with_null(&row, "constraint_type", ColType::Char)?;
 
@@ -482,7 +483,7 @@ impl PgStructFetcher {
         );
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-        while let Some(row) = rows.try_next().await.unwrap() {
+        while let Some(row) = rows.try_next().await? {
             let table_name = Self::get_str_with_null(&row, "tablename")?;
             let definition = Self::get_str_with_null(&row, "indexdef")?;
 
@@ -528,7 +529,7 @@ impl PgStructFetcher {
         );
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-        while let Some(row) = rows.try_next().await.unwrap() {
+        while let Some(row) = rows.try_next().await? {
             let (schema_name, table_name): (String, String) = (
                 Self::get_str_with_null(&row, "nspname")?,
                 Self::get_str_with_null(&row, "relname")?,
@@ -579,7 +580,7 @@ impl PgStructFetcher {
         );
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-        while let Some(row) = rows.try_next().await.unwrap() {
+        while let Some(row) = rows.try_next().await? {
             let (schema_name, table_name, column_name) = (
                 Self::get_str_with_null(&row, "nspname")?,
                 Self::get_str_with_null(&row, "relname")?,

@@ -1,9 +1,8 @@
-use std::collections::HashMap;
-
 use futures::TryStreamExt;
 use sqlx::{postgres::PgRow, Pool, Postgres, Row};
+use std::collections::HashMap;
 
-use super::pg_col_type::PgColType;
+use super::{pg_col_type::PgColType, pg_value_type::PgValueType};
 
 #[derive(Clone)]
 pub struct TypeRegistry {
@@ -47,12 +46,11 @@ impl TypeRegistry {
 
     fn parse_col_meta(&mut self, row: &PgRow) -> anyhow::Result<PgColType> {
         let oid: i32 = row.get_unchecked("oid");
-        // cast to short name
+        let value_type = PgValueType::from_oid(oid);
         let name: String = row.try_get("name")?;
-        let alias = PgColType::get_alias(&name);
+        let alias = Self::name_to_alias(&name);
         let element_oid: i32 = row.get_unchecked("element");
         let parent_oid: i32 = row.get_unchecked("parentoid");
-        let modifiers: i32 = row.get_unchecked("modifiers");
         let category: String = row.get_unchecked("category");
         let enum_values: Option<Vec<u8>> = row.get_unchecked("enum_values");
         let enum_values = if enum_values.is_none() {
@@ -64,13 +62,39 @@ impl TypeRegistry {
 
         Ok(PgColType {
             oid,
+            value_type,
             name,
             alias,
             element_oid,
             parent_oid,
-            modifiers,
             category,
             enum_values,
         })
+    }
+
+    fn name_to_alias(name: &str) -> String {
+        // refer to: https://www.postgresql.org/docs/17/datatype.html
+        match name {
+            "bigint" => "int8",
+            "bigserial" => "serial8",
+            "bit varying" => "varbit",
+            "boolean" => "bool",
+            // fixed-length, blank-padded, refer to: https://www.postgresql.org/docs/17/datatype-character.html
+            "character" | "char" => "bpchar",
+            "character varying" => "varchar",
+            "double precision" => "float8",
+            "int" | "integer" => "int4",
+            "decimal" => "numeric",
+            "real" => "float4",
+            "smallint" => "int2",
+            "smallserial" => "serial2",
+            "serial" => "serial4",
+            "timestamp with time zone" => "timestamptz",
+            "timestamp without time zone" => "timestamp",
+            "time without time zone" => "time",
+            "time with time zone" => "timetz",
+            _ => name,
+        }
+        .to_string()
     }
 }

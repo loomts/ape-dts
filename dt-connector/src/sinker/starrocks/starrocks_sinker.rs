@@ -167,10 +167,13 @@ impl StarRocksSinker {
                 // {"id": 1, "json_field": "{\"name\": \"Alice\", \"age\": 30}"}
                 // ColValue::Json3 will be serialized to:
                 // {"id": 5, "json_field": {"name": "Alice", "age": 30}}
-                if let ColValue::Json2(v) = col_value {
-                    if let Ok(json_v) = serde_json::Value::from_str(v) {
-                        new_col_values.insert(col.to_owned(), ColValue::Json3(json_v));
+                match col_value {
+                    ColValue::Json2(v) | ColValue::String(v) => {
+                        if let Ok(json_v) = serde_json::Value::from_str(v) {
+                            new_col_values.insert(col.to_owned(), ColValue::Json3(json_v));
+                        }
                     }
+                    _ => {}
                 }
             }
 

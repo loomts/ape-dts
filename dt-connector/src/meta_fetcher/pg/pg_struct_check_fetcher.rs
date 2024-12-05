@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
 use dt_common::meta::{
-    adaptor::pg_col_value_convertor::PgColValueConvertor, col_value::ColValue,
-    pg::pg_col_type::PgColType,
+    adaptor::pg_col_value_convertor::PgColValueConvertor,
+    col_value::ColValue,
+    pg::{pg_col_type::PgColType, pg_value_type::PgValueType},
 };
 use futures::TryStreamExt;
 use sqlx::{postgres::PgRow, Pool, Postgres, Row};
@@ -253,20 +254,21 @@ impl PgStructCheckFetcher {
         Ok(results)
     }
 
-    fn mock_col_type(short_name: &str) -> PgColType {
+    fn mock_col_type(alias: &str) -> PgColType {
         let mut col_type = PgColType {
             name: String::new(),
             alias: "varchar".into(),
+            value_type: PgValueType::String,
             oid: 0,
             parent_oid: 0,
             element_oid: 0,
-            modifiers: 0,
             category: String::new(),
             enum_values: None,
         };
 
-        if !short_name.is_empty() {
-            col_type.alias = short_name.into();
+        if !alias.is_empty() {
+            col_type.alias = alias.into();
+            col_type.value_type = PgValueType::from_alias(alias);
         }
         col_type
     }

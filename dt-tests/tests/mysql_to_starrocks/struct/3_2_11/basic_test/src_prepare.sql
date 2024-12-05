@@ -38,3 +38,20 @@ CREATE TABLE test_db_1.one_pk_no_uk (
     f_28 json DEFAULT NULL,
     PRIMARY KEY (f_0) ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4; 
 ```
+
+-- In StarRocks:
+-- Key columns must be the first few columns of the schema and the order
+-- of the key columns must be consistent with the order of the schema.
+```
+CREATE TABLE test_db_1.check_pk_cols_order (
+  col_1 INT,
+  col_2 INT,
+  col_3 INT,
+  pk_3 INT,
+  pk_1 INT, 
+  col_4 INT,
+  pk_2 INT,
+  col_5 INT,
+  PRIMARY KEY(pk_1, pk_2, pk_3)
+);
+```
