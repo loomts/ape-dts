@@ -68,7 +68,7 @@ SHOW CREATE TABLE test_db.tb_1;
 CREATE TABLE `tb_1` (
   `id` int(11) NOT NULL COMMENT "",
   `value` int(11) NULL COMMENT "",
-  `_ape_dts_is_deleted` smallint(6) NULL COMMENT "",
+  `_ape_dts_is_deleted` boolean NULL COMMENT "",
   `_ape_dts_timestamp` bigint(20) NULL COMMENT ""
 ) ENGINE=OLAP 
 PRIMARY KEY(`id`)
@@ -290,7 +290,7 @@ batch_size=5000
 
 Refer to [config](/docs/en/config.md) for other common configurations
 
-# Suggested column type mapping
+# Data type mapping
 
 | MySQL | StarRocks |
 | :-------- | :-------- |

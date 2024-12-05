@@ -38,6 +38,7 @@
 - [mysql -> clickhouse](./docs/en/tutorial/mysql_to_clickhouse.md)
 - [mysql -> tidb](./docs/en/tutorial/mysql_to_tidb.md)
 - [mysql -> kafka -> consumer](./docs/en/tutorial/mysql_to_kafka_consumer.md)
+- [pg -> starrocks](./docs/en/tutorial/pg_to_starrocks.md)
 - [pg -> kafka -> consumer](./docs/en/tutorial/pg_to_kafka_consumer.md)
 - [mysql -> ape_dts(HTTP server) -> consumer](./docs/en/tutorial/mysql_to_http_server_consumer.md)
 - [pg -> ape_dts(HTTP server) -> consumer](./docs/en/tutorial/pg_to_http_server_consumer.md)
@@ -84,6 +85,7 @@ Refer to [test docs](./dt-tests/README.md) for details.
     - [mysql/pg -> ape_dts(HTTP server)](./docs/templates/rdb_to_http_server.md)
     - [mysql -> starrocks](./docs/templates/mysql_to_starrocks.md)
     - [mysql -> clickhouse](./docs/templates/mysql_to_clickhouse.md)
+    - [pg -> starrocks](./docs/templates/pg_to_starrocks.md)
 
 # Benchmark
 - MySQL -> MySQL, Snapshot
