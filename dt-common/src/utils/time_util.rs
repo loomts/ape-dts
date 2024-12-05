@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use anyhow::{bail, Context, Ok};
+use anyhow::{bail, Context};
 use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 
 pub struct TimeUtil {}
@@ -22,10 +22,13 @@ impl TimeUtil {
 
     #[inline(always)]
     pub fn datetime_from_utc_str(str: &str) -> anyhow::Result<DateTime<Utc>> {
-        let datetime = NaiveDateTime::parse_from_str(str, "%Y-%m-%d %H:%M:%S%.f")
-            .with_context(|| format!("datetime_from_utc_str failed, input: [{}]", str))?
-            .and_utc();
-        Ok(datetime)
+        if let Ok(dt) = NaiveDateTime::parse_from_str(str, "%Y-%m-%d %H:%M:%S%.f") {
+            Ok(dt.and_utc())
+        } else {
+            let dt = NaiveDateTime::parse_from_str(str, "%Y-%m-%d %H:%M:%S%.f%#z")
+                .with_context(|| format!("datetime_from_utc_str failed, input: [{}]", str))?;
+            Ok(dt.and_utc())
+        }
     }
 
     #[inline(always)]
@@ -45,10 +48,17 @@ mod tests {
 
     #[test]
     fn test_datetime_from_utc_str() {
-        let inputs = ["2024-04-17 12:34:56", "2024-05-28 01:12:13.123456"];
+        let inputs = [
+            "2024-04-17 12:34:56",
+            "2024-05-28 01:12:13.123456",
+            "2016-11-04 06:51:30.123456+00",
+            "2016-11-04 06:51:30.123456+0000",
+        ];
         let check_values = [
             "2024-04-17T12:34:56+0000",
             "2024-05-28T01:12:13.123456+0000",
+            "2016-11-04T06:51:30.123456+0000",
+            "2016-11-04T06:51:30.123456+0000",
         ];
 
         let datetime = TimeUtil::datetime_from_utc_str(inputs[0]).unwrap();
@@ -57,10 +67,12 @@ mod tests {
             check_values[0].to_owned()
         );
 
-        let datetime = TimeUtil::datetime_from_utc_str(inputs[1]).unwrap();
-        assert_eq!(
-            datetime.format("%Y-%m-%dT%H:%M:%S%.f%z").to_string(),
-            check_values[1].to_owned()
-        )
+        for i in 1..inputs.len() {
+            let datetime = TimeUtil::datetime_from_utc_str(inputs[i]).unwrap();
+            assert_eq!(
+                datetime.format("%Y-%m-%dT%H:%M:%S%.f%z").to_string(),
+                check_values[i].to_owned()
+            )
+        }
     }
 }

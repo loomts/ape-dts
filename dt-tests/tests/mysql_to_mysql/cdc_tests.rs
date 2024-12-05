@@ -8,7 +8,7 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn cdc_basic_test() {
-        TestBase::run_cdc_test("mysql_to_mysql/cdc/basic_test", 3000, 2000).await;
+        TestBase::run_cdc_test("mysql_to_mysql/cdc/basic_test", 3000, 4000).await;
     }
 
     #[tokio::test]

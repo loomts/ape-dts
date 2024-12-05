@@ -40,6 +40,7 @@
 - [mysql -> clickhouse](./docs/en/tutorial/mysql_to_clickhouse.md)
 - [mysql -> tidb](./docs/en/tutorial/mysql_to_tidb.md)
 - [mysql -> kafka -> 消费者](./docs/en/tutorial/mysql_to_kafka_consumer.md)
+- [pg -> starrocks](./docs/en/tutorial/pg_to_starrocks.md)
 - [pg -> kafka -> 消费者](./docs/en/tutorial/pg_to_kafka_consumer.md)
 - [mysql -> ape_dts(HTTP server) -> 消费者](./docs/en/tutorial/mysql_to_http_server_consumer.md)
 - [pg -> ape_dts(HTTP server) -> 消费者](./docs/en/tutorial/pg_to_http_server_consumer.md)
@@ -85,6 +86,7 @@
     - [mysql/pg -> ape_dts(HTTP server)](./docs/templates/rdb_to_http_server.md)
     - [mysql -> starrocks](./docs/templates/mysql_to_starrocks.md)
     - [mysql -> clickhouse](./docs/templates/mysql_to_clickhouse.md)
+    - [pg -> starrocks](./docs/templates/pg_to_starrocks.md)
 
 # Benchmark
 - MySQL -> MySQL，全量

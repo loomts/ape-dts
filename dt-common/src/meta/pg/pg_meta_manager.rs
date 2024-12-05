@@ -185,23 +185,25 @@ impl PgMetaManager {
         schema: &str,
         tb: &str,
     ) -> anyhow::Result<HashMap<String, Vec<String>>> {
-        // TODO, find pk and use pk as where_cols if tables has pk
         let sql = format!(
-            "SELECT t.relname AS tb_name,
-            i.relname AS index_name,
-            a.attname AS col_name,
-            ix.indisprimary AS is_primary
-            FROM pg_class t, pg_class i, pg_index ix, pg_attribute a
-            WHERE t.oid = ix.indrelid
-                AND i.oid = ix.indexrelid
-                AND a.attrelid = t.oid
-                AND a.attnum = ANY(ix.indkey)
-                AND t.relkind = 'r'
-                AND t.relname = '{}'
-                AND t.relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = '{}')
-                AND ix.indisunique = true
-            ORDER BY  t.relname, i.relname;",
-            tb, schema
+            "SELECT kcu.column_name as col_name, 
+                kcu.constraint_name as constraint_name,
+                tc.constraint_type as constraint_type
+            FROM 
+                information_schema.table_constraints AS tc
+            JOIN 
+                information_schema.key_column_usage AS kcu
+            ON 
+                tc.constraint_name = kcu.constraint_name
+                AND tc.table_schema = kcu.table_schema
+                AND tc.table_name = kcu.table_name
+            WHERE 
+                tc.table_schema = '{}' 
+                AND tc.table_name = '{}'
+                AND tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE')
+            ORDER BY 
+                kcu.ordinal_position;",
+            schema, tb
         );
 
         let mut key_map: HashMap<String, Vec<String>> = HashMap::new();
@@ -210,9 +212,9 @@ impl PgMetaManager {
             let mut col_name: String = row.try_get("col_name")?;
             col_name = col_name.to_lowercase();
 
-            let is_primary: bool = row.try_get("is_primary")?;
-            let mut key_name: String = row.try_get("index_name")?;
-            key_name = if is_primary {
+            let constraint_type: String = row.try_get("constraint_type")?;
+            let mut key_name: String = row.try_get("constraint_name")?;
+            key_name = if constraint_type == "PRIMARY KEY" {
                 "primary".to_string()
             } else {
                 key_name.to_lowercase()

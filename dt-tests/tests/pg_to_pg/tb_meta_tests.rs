@@ -21,6 +21,7 @@ mod test {
             .unwrap();
 
         let expect_col_alias_map = vec![
+            ("id", "int4"),
             ("char_col", "bpchar"),
             ("char_col_2", "bpchar"),
             ("character_col", "bpchar"),
@@ -36,10 +37,10 @@ mod test {
             ("float4_col", "float4"),
             ("double_precision_col", "float8"),
             ("float8_col", "float8"),
-            ("numeric_col", "decimal"),
-            ("numeric_col_2", "decimal"),
-            ("decimal_col", "decimal"),
-            ("decimal_col_2", "decimal"),
+            ("numeric_col", "numeric"),
+            ("numeric_col_2", "numeric"),
+            ("decimal_col", "numeric"),
+            ("decimal_col_2", "numeric"),
             ("smallint_col", "int2"),
             ("int2_col", "int2"),
             ("smallserial_col", "int2"),
@@ -102,14 +103,31 @@ mod test {
             ("txid_snapshot_col", "txid_snapshot"),
             ("uuid_col", "uuid"),
             ("xml_col", "xml"),
+            ("array_float4_col", "_float4"),
+            ("array_float8_col", "_float8"),
+            ("array_int2_col", "_int2"),
+            ("array_int4_col", "_int4"),
+            ("array_int8_col", "_int8"),
+            ("array_int8_col_2", "_int8"),
+            ("array_text_col", "_text"),
+            ("array_boolean_col", "_bool"),
+            ("array_boolean_col_2", "_bool"),
+            ("array_date_col", "_date"),
+            ("array_timestamp_col", "_timestamp"),
+            ("array_timestamp_col_2", "_timestamp"),
+            ("array_timestamptz_col", "_timestamptz"),
+            ("array_timestamptz_col_2", "_timestamptz"),
         ];
+
+        assert_eq!(expect_col_alias_map.len(), tb_meta.col_type_map.len());
 
         for (col, expect_col_alias) in expect_col_alias_map {
             let col_type = tb_meta.col_type_map.get(col).unwrap();
             println!(
-                "col: {}, name: {}, alias: {}",
-                col, col_type.name, col_type.alias
+                "col: {}, alias: {}, oid: {}",
+                col, col_type.alias, col_type.oid
             );
+            assert_eq!(col_type.alias, col_type.name);
             assert_eq!(expect_col_alias, col_type.alias);
         }
     }

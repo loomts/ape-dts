@@ -77,7 +77,7 @@ impl MysqlStructFetcher {
         );
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-        if let Some(row) = rows.try_next().await.unwrap() {
+        if let Some(row) = rows.try_next().await? {
             let schema_name = Self::get_str_with_null(&row, "SCHEMA_NAME")?;
             let default_character_set_name =
                 Self::get_str_with_null(&row, "DEFAULT_CHARACTER_SET_NAME")?;
@@ -131,7 +131,7 @@ impl MysqlStructFetcher {
         );
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-        while let Some(row) = rows.try_next().await.unwrap() {
+        while let Some(row) = rows.try_next().await? {
             let (db, tb) = (
                 Self::get_str_with_null(&row, "TABLE_SCHEMA")?,
                 Self::get_str_with_null(&row, "TABLE_NAME")?,
@@ -210,7 +210,7 @@ impl MysqlStructFetcher {
         );
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-        while let Some(row) = rows.try_next().await.unwrap() {
+        while let Some(row) = rows.try_next().await? {
             let (table_name, index_name) = (
                 Self::get_str_with_null(&row, "TABLE_NAME")?,
                 Self::get_str_with_null(&row, "INDEX_NAME")?,
@@ -292,7 +292,7 @@ impl MysqlStructFetcher {
         );
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-        while let Some(row) = rows.try_next().await.unwrap() {
+        while let Some(row) = rows.try_next().await? {
             let database_name = Self::get_str_with_null(&row, "CONSTRAINT_SCHEMA")?;
             let table_name = Self::get_str_with_null(&row, "TABLE_NAME")?;
             let constraint_name = Self::get_str_with_null(&row, "CONSTRAINT_NAME")?;
@@ -347,7 +347,7 @@ impl MysqlStructFetcher {
         );
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-        while let Some(row) = rows.try_next().await.unwrap() {
+        while let Some(row) = rows.try_next().await? {
             let database_name = Self::get_str_with_null(&row, "CONSTRAINT_SCHEMA")?;
             let constraint_name = Self::get_str_with_null(&row, "CONSTRAINT_NAME")?;
             let table_name = Self::get_str_with_null(&row, "TABLE_NAME")?;

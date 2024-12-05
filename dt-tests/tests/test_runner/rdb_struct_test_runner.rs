@@ -31,9 +31,13 @@ impl RdbStructTestRunner {
         self.base.base.start_task().await?;
 
         let expect_ddl_sqls = self.load_expect_ddl_sqls().await;
-        let src_check_fetcher = MysqlStructCheckFetcher {
-            conn_pool: self.base.src_conn_pool_mysql.as_mut().unwrap().clone(),
-        };
+        let src_check_fetcher =
+            self.base
+                .src_conn_pool_mysql
+                .as_ref()
+                .map(|conn_pool| MysqlStructCheckFetcher {
+                    conn_pool: conn_pool.clone(),
+                });
         let dst_check_fetcher = MysqlStructCheckFetcher {
             conn_pool: self.base.dst_conn_pool_mysql.as_mut().unwrap().clone(),
         };
@@ -49,16 +53,19 @@ impl RdbStructTestRunner {
 
         let (src_db_tbs, dst_db_tbs) = self.base.get_compare_db_tbs().unwrap();
         for i in 0..src_db_tbs.len() {
-            let src_ddl_sql = src_check_fetcher
-                .fetch_table(&src_db_tbs[i].0, &src_db_tbs[i].1)
-                .await;
+            if let Some(src_check_fetcher) = &src_check_fetcher {
+                let src_ddl_sql = src_check_fetcher
+                    .fetch_table(&src_db_tbs[i].0, &src_db_tbs[i].1)
+                    .await;
+                println!("src_ddl_sql: {}\n", src_ddl_sql);
+            }
+
             let dst_ddl_sql = dst_check_fetcher
                 .fetch_table(&dst_db_tbs[i].0, &dst_db_tbs[i].1)
                 .await;
             let key = format!("{}.{}", &dst_db_tbs[i].0, &dst_db_tbs[i].1);
             let expect_ddl_sql = expect_ddl_sqls.get(&key).unwrap().to_owned();
 
-            println!("src_ddl_sql: {}\n", src_ddl_sql);
             println!("dst_ddl_sql: {}\n", dst_ddl_sql);
             println!("expect_ddl_sql: {}\n", expect_ddl_sql);
             // show create table may return sqls with indexes in different orders during tests,
@@ -85,12 +92,15 @@ impl RdbStructTestRunner {
                 continue;
             }
 
-            let src_ddl_sql = src_check_fetcher.fetch_database(&src_db_tbs[i].0).await;
+            if let Some(src_check_fetcher) = &src_check_fetcher {
+                let src_ddl_sql = src_check_fetcher.fetch_database(&src_db_tbs[i].0).await;
+                println!("src_ddl_sql: {}\n", src_ddl_sql);
+            }
+
             let dst_ddl_sql = dst_check_fetcher.fetch_database(&dst_db_tbs[i].0).await;
             let key = dst_db_tbs[i].0.to_string();
             let expect_ddl_sql = expect_ddl_sqls.get(&key).unwrap().to_owned();
 
-            println!("src_ddl_sql: {}\n", src_ddl_sql);
             println!("dst_ddl_sql: {}\n", dst_ddl_sql);
             println!("expect_ddl_sql: {}\n", expect_ddl_sql);
 

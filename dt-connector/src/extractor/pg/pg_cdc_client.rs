@@ -149,8 +149,8 @@ impl PgCdcClient {
         let (pub_name, start_lsn) = self.prepare_slot(client).await?;
 
         // set extra_float_digits to max so no precision will lose
-        let query = "SET extra_float_digits=3";
-        client.simple_query(query).await?;
+        client.simple_query("SET extra_float_digits=3").await?;
+        client.simple_query("SET TIME ZONE 'UTC'").await?;
 
         // start replication slot
         let options = format!(

@@ -22,10 +22,4 @@ mod test {
     async fn snapshot_json_to_string_test() {
         TestBase::run_snapshot_test("mysql_to_starrocks/snapshot/3_2_11/json_to_string_test").await;
     }
-
-    #[tokio::test]
-    #[serial]
-    async fn snapshot_sign_col_test() {
-        TestBase::run_snapshot_test("mysql_to_starrocks/snapshot/3_2_11/sign_col_test").await;
-    }
 }

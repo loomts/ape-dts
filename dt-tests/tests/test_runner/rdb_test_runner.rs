@@ -19,9 +19,9 @@ use dt_common::meta::{
 use dt_connector::{
     meta_fetcher::mysql::mysql_struct_check_fetcher::MysqlStructCheckFetcher, rdb_router::RdbRouter,
 };
-use dt_task::task_util::TaskUtil;
+use dt_task::{task_runner::TaskRunner, task_util::TaskUtil};
 
-use sqlx::{query, MySql, Pool, Postgres, Row};
+use sqlx::{query, types::BigDecimal, MySql, Pool, Postgres, Row};
 use tokio::task::JoinHandle;
 
 use crate::test_config_util::TestConfigUtil;
@@ -361,7 +361,15 @@ impl RdbTestRunner {
         self.execute_src_sqls(&self.base.src_prepare_sqls).await?;
         self.execute_dst_sqls(&self.base.dst_prepare_sqls).await?;
         self.execute_meta_center_prepare_sqls(&self.base.meta_center_prepare_sqls)
-            .await
+            .await?;
+
+        // migrate database/table structures to target if needed
+        if !self.base.struct_task_config_file.is_empty() {
+            TaskRunner::new(&self.base.struct_task_config_file)?
+                .start_task(BaseTestRunner::get_enable_log4rs())
+                .await?;
+        }
+        Ok(())
     }
 
     pub async fn execute_meta_center_prepare_sqls(&self, sqls: &Vec<String>) -> anyhow::Result<()> {
@@ -534,6 +542,10 @@ impl RdbTestRunner {
             return false;
         }
 
+        if src_col_value.to_option_string() == dst_col_value.to_option_string() {
+            return true;
+        }
+
         // different databases support different column types,
         // for example: we use Year in mysql, but INT in StarRocks,
         // so try to compare after both converted to string.
@@ -586,6 +598,20 @@ impl RdbTestRunner {
                 ColValue::LongLong(dst_v) => *src_v == *dst_v as u64,
                 _ => false,
             },
+            ColValue::Decimal(src_v) => match dst_col_value {
+                // src_v = 30.00000, dst_v = 30.000000000
+                ColValue::Decimal(dst_v) => {
+                    BigDecimal::from_str(src_v) == BigDecimal::from_str(dst_v)
+                }
+                _ => false,
+            },
+            ColValue::Bool(src_v) => match dst_col_value {
+                // src_v, postgres, boolean
+                // dst_v, starrocks, boolean == tiny(1)
+                ColValue::Tiny(dst_v) => *src_v == (*dst_v == 1),
+                _ => false,
+            },
+
             _ => src_col_value.to_option_string() == dst_col_value.to_option_string(),
         }
     }

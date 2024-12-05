@@ -132,3 +132,5 @@ UPDATE test_db_1.json_test SET f_1 = JSON_REPLACE(f_1, '$.addr.detail.ab', '9707
 -- remove array value
 INSERT INTO test_db_1.json_test VALUES (NULL, '["foo","bar","baz"]')
 UPDATE test_db_1.json_test SET f_1 = JSON_REMOVE(f_1, '$[1]')
+
+DELETE FROM test_db_1.json_test;

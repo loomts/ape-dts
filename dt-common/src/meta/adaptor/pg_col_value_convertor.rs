@@ -3,44 +3,27 @@ use sqlx::{postgres::PgRow, Row};
 
 use crate::meta::{
     col_value::ColValue,
-    pg::{pg_col_type::PgColType, pg_meta_manager::PgMetaManager},
+    pg::{pg_col_type::PgColType, pg_meta_manager::PgMetaManager, pg_value_type::PgValueType},
 };
 
 pub struct PgColValueConvertor {}
 
 impl PgColValueConvertor {
     pub fn get_extract_type(col_type: &PgColType) -> String {
-        let extract_type = match col_type.alias.as_str() {
-            "bytea" => "bytea",
-
-            "oid" => "int8",
-
-            "citext" | "hstore" | "char" | "varchar" | "bpchar" | "text" | "geometry"
-            | "geography" | "json" | "jsonb" | "xml" | "uuid" | "tsrange" | "tstzrange"
-            | "daterange" | "inet" | "cidr" | "macaddr" | "macaddr8" | "int4range" | "numrange"
-            | "int8range" => "text",
-
-            "bit" | "varbit" => "text",
-
-            "numeric" | "decimal" => "text",
-
-            "date" | "timestamp" | "time" => "text",
-
-            "timestamptz" | "timetz" => "text",
-
-            "box" | "circle" | "interval" | "line" | "lseg" | "money" | "path" | "point"
-            | "polygon" => "text",
-
-            "pg_lsn" | "tsquery" | "tsvector" | "txid_snapshot" => "text",
-
-            // no need to cast
-            _ => "",
-        };
-
-        if extract_type.is_empty() && (col_type.is_array() || col_type.is_user_defined()) {
-            return "text".to_string();
+        if col_type.alias == "oid" {
+            "int8".to_string()
+        } else {
+            match col_type.value_type {
+                PgValueType::Bytes
+                | PgValueType::Boolean
+                | PgValueType::Int16
+                | PgValueType::Int32
+                | PgValueType::Int64
+                | PgValueType::Float32
+                | PgValueType::Float64 => col_type.alias.to_string(),
+                _ => "text".to_string(),
+            }
         }
-        extract_type.to_string()
     }
 
     pub fn from_str(
@@ -58,56 +41,57 @@ impl PgColValueConvertor {
             return Ok(ColValue::String(value_str));
         }
 
-        let col_value = match col_type.alias.as_str() {
-            "bool" => ColValue::Bool("t" == value_str.to_lowercase()),
+        let col_value = match col_type.value_type {
+            PgValueType::Boolean => ColValue::Bool("t" == value_str.to_lowercase()),
 
-            "int4" | "serial4" => {
+            PgValueType::Int32 => {
                 let res: i32 = value_str.parse()?;
                 ColValue::Long(res)
             }
 
-            "int2" | "serial2" => {
+            PgValueType::Int16 => {
                 let value: i16 = value_str.parse()?;
                 ColValue::Short(value)
             }
 
-            "int8" | "serial8" | "oid" => {
+            PgValueType::Int64 => {
                 let value: i64 = value_str.parse()?;
                 ColValue::LongLong(value)
             }
 
-            "float4" => {
+            PgValueType::Float32 => {
                 let value: f32 = value_str.parse()?;
                 ColValue::Float(value)
             }
 
-            "float8" => {
+            PgValueType::Float64 => {
                 let value: f64 = value_str.parse()?;
                 ColValue::Double(value)
             }
 
-            "bytea" => ColValue::String(value_str),
-
-            "decimal" => ColValue::Decimal(value_str),
-
-            "timestamptz" => ColValue::Timestamp(value_str),
-
-            "timestamp" => ColValue::DateTime(value_str),
-
-            "time" => ColValue::Time(value_str),
-
-            "timetz" => ColValue::String(value_str),
-
-            "date" => ColValue::String(value_str),
-
-            "hstore" | "character" | "char" | "character varying" | "varchar" | "bpchar"
-            | "text" | "geometry" | "geography" | "citext" | "bit" | "bit varying" | "varbit"
-            | "json" | "jsonb" | "xml" | "uuid" | "tsrange" | "tstzrange" | "daterange"
-            | "inet" | "cidr" | "macaddr" | "macaddr8" | "int4range" | "numrange" | "int8range"
-            | "box" | "circle" | "interval" | "line" | "lseg" | "money" | "path" | "point"
-            | "polygon" | "pg_lsn" | "tsquery" | "tsvector" | "txid_snapshot" => {
-                ColValue::String(value_str)
+            PgValueType::Bytes => {
+                // value_str == "\x000102"
+                if value_str.starts_with(r#"\x"#) {
+                    let bytes = hex::decode(value_str.trim_start_matches(r#"\x"#))?;
+                    ColValue::Blob(bytes)
+                } else {
+                    ColValue::String(value_str)
+                }
             }
+
+            PgValueType::Numeric => ColValue::Decimal(value_str),
+
+            PgValueType::TimestampTZ => ColValue::Timestamp(value_str),
+
+            PgValueType::Timestamp => ColValue::DateTime(value_str),
+
+            PgValueType::Time => ColValue::Time(value_str),
+
+            PgValueType::TimeTZ => ColValue::String(value_str),
+
+            PgValueType::Date => ColValue::String(value_str),
+
+            PgValueType::JSON => ColValue::Json2(value_str),
 
             _ => ColValue::String(value_str),
         };
@@ -137,80 +121,75 @@ impl PgColValueConvertor {
             return Ok(ColValue::String(value));
         }
 
-        let col_value = match col_type.alias.as_str() {
-            "bool" => {
+        let col_value = match col_type.value_type {
+            PgValueType::Boolean => {
                 let value: bool = row.try_get(col)?;
                 ColValue::Bool(value)
             }
 
-            "int4" | "serial4" => {
+            PgValueType::Int32 => {
                 let value: i32 = row.try_get(col)?;
                 ColValue::Long(value)
             }
 
-            "int2" | "serial2" => {
+            PgValueType::Int16 => {
                 let value: i16 = row.try_get(col)?;
                 ColValue::Short(value)
             }
 
-            "int8" | "serial8" | "oid" => {
+            PgValueType::Int64 => {
                 let value: i64 = row.try_get(col)?;
                 ColValue::LongLong(value)
             }
 
-            "float4" => {
+            PgValueType::Float32 => {
                 let value: f32 = row.try_get(col)?;
                 ColValue::Float(value)
             }
 
-            "float8" => {
+            PgValueType::Float64 => {
                 let value: f64 = row.try_get(col)?;
                 ColValue::Double(value)
             }
 
-            "bytea" => {
+            PgValueType::Bytes => {
                 let value: Vec<u8> = row.try_get(col)?;
                 ColValue::Blob(value)
             }
 
-            "decimal" => {
+            PgValueType::Numeric => {
                 let value: String = row.try_get(col)?;
                 ColValue::Decimal(value)
             }
 
-            "timestamptz" => {
+            PgValueType::TimestampTZ => {
                 let value: String = row.try_get(col)?;
                 ColValue::Timestamp(value)
             }
 
-            "timestamp" => {
+            PgValueType::Timestamp => {
                 let value: String = row.try_get(col)?;
                 ColValue::DateTime(value)
             }
 
-            "time" => {
+            PgValueType::Time => {
                 let value: String = row.try_get(col)?;
                 ColValue::Time(value)
             }
 
-            "timetz" => {
+            PgValueType::TimeTZ => {
                 let value: String = row.try_get(col)?;
                 ColValue::String(value)
             }
 
-            "date" => {
+            PgValueType::Date => {
                 let value: String = row.try_get(col)?;
                 ColValue::String(value)
             }
 
-            "hstore" | "character" | "char" | "character varying" | "varchar" | "bpchar"
-            | "text" | "geometry" | "geography" | "citext" | "bit" | "bit varying" | "varbit"
-            | "json" | "jsonb" | "xml" | "uuid" | "tsrange" | "tstzrange" | "daterange"
-            | "inet" | "cidr" | "macaddr" | "macaddr8" | "int4range" | "numrange" | "int8range"
-            | "box" | "circle" | "interval" | "line" | "lseg" | "money" | "path" | "point"
-            | "polygon" | "pg_lsn" | "tsquery" | "tsvector" | "txid_snapshot" => {
+            PgValueType::JSON => {
                 let value: String = row.try_get(col)?;
-                ColValue::String(value)
+                ColValue::Json2(value)
             }
 
             _ => {

@@ -68,7 +68,7 @@ SHOW CREATE TABLE test_db.tb_1;
 CREATE TABLE `tb_1` (
   `id` int(11) NOT NULL COMMENT "",
   `value` int(11) NULL COMMENT "",
-  `_ape_dts_is_deleted` smallint(6) NULL COMMENT "",
+  `_ape_dts_is_deleted` boolean NULL COMMENT "",
   `_ape_dts_timestamp` bigint(20) NULL COMMENT ""
 ) ENGINE=OLAP 
 PRIMARY KEY(`id`)
@@ -290,7 +290,7 @@ batch_size=5000
 
 Refer to [config](/docs/en/config.md) for other common configurations
 
-# Suggested column type mapping
+# Data type mapping
 
 | MySQL | StarRocks |
 | :-------- | :-------- |
@@ -312,10 +312,10 @@ Refer to [config](/docs/en/config.md) for other common configurations
 | time | VARCHAR |
 | date | DATE |
 | year | INT |
-| timestamp | VARCHAR |
+| timestamp | DATETIME |
 | char | CHAR |
 | varchar | VARCHAR |
-| binary | BINARY |
+| binary | VARBINARY |
 | varbinary | VARBINARY |
 | tinytext | CHAR/VARCHAR/STRING/TEXT |
 | text | CHAR/VARCHAR/STRING/TEXT |
@@ -374,41 +374,41 @@ CREATE TABLE test_db.one_pk_no_uk (
 - The generated sql to be executed in StarRocks when migrate structures by ape_dts:
 ```
 CREATE TABLE IF NOT EXISTS `test_db`.`one_pk_no_uk` (
-    `f_0` TINYINT, 
-    `f_0_1` SMALLINT, 
-    `f_1` SMALLINT, 
-    `f_1_1` INT, 
-    `f_2` INT, 
-    `f_2_1` BIGINT, 
-    `f_3` INT, 
-    `f_3_1` BIGINT, 
-    `f_4` BIGINT, 
-    `f_4_1` LARGEINT, 
-    `f_5` DECIMAL(10, 4), 
-    `f_6` FLOAT, 
-    `f_7` DOUBLE, 
+    `f_0` TINYINT NOT NULL,
+    `f_0_1` SMALLINT,
+    `f_1` SMALLINT,
+    `f_1_1` INT,
+    `f_2` INT,
+    `f_2_1` BIGINT,
+    `f_3` INT,
+    `f_3_1` BIGINT,
+    `f_4` BIGINT,
+    `f_4_1` LARGEINT,
+    `f_5` DECIMAL(10, 4),
+    `f_6` FLOAT,
+    `f_7` DOUBLE,
     `f_8` BIGINT,
-    `f_9` DATETIME, 
-    `f_10` VARCHAR, 
-    `f_11` DATE, 
-    `f_12` INT, 
-    `f_13` VARCHAR, 
-    `f_14` CHAR(255), 
-    `f_15` VARCHAR(255), 
-    `f_16` BINARY, 
-    `f_17` BINARY, 
-    `f_18` String, 
-    `f_19` String, 
-    `f_20` String, 
-    `f_21` String, 
-    `f_22` BINARY, 
-    `f_23` BINARY, 
-    `f_24` BINARY, 
-    `f_25` BINARY, 
-    `f_26` VARCHAR, 
-    `f_27` VARCHAR, 
-    `f_28` JSON, 
-    `_ape_dts_is_deleted` SMALLINT, 
+    `f_9` DATETIME,
+    `f_10` VARCHAR(255),
+    `f_11` DATE,
+    `f_12` INT,
+    `f_13` DATETIME,
+    `f_14` CHAR(255),
+    `f_15` VARCHAR(255),
+    `f_16` VARBINARY,
+    `f_17` VARBINARY,
+    `f_18` STRING,
+    `f_19` STRING,
+    `f_20` STRING,
+    `f_21` STRING,
+    `f_22` VARBINARY,
+    `f_23` VARBINARY,
+    `f_24` VARBINARY,
+    `f_25` VARBINARY,
+    `f_26` VARCHAR(255),
+    `f_27` VARCHAR(255),
+    `f_28` JSON,
+    `_ape_dts_is_deleted` BOOLEAN,
     `_ape_dts_timestamp` BIGINT
 ) PRIMARY KEY (`f_0`) DISTRIBUTED BY HASH(`f_0`);
 ```
