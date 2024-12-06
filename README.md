@@ -18,12 +18,12 @@
 - Supports starting ape-dts as an HTTP server to pull data from the source, allowing users to use any language's HTTP client to retrieve and consume the data.
 
 ## Supported task types
-|  | mysql -> mysql | pg -> pg | mongo -> mongo | redis -> redis | mysql -> kafka | pg -> kafka| mysql -> starrocks | mysql -> clickhouse | mysql -> tidb |
-| :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- |
-| Snapshot | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
-| CDC | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
-| Data check/revise/review | &#10004; | &#10004; | &#10004; | | | | | | &#10004; |
-| Structure migration | &#10004; | &#10004; | | | | | &#10004; | &#10004; | &#10004; |
+|  | mysql -> mysql | pg -> pg | mongo -> mongo | redis -> redis | mysql -> kafka | pg -> kafka| mysql -> starrocks | mysql -> clickhouse | mysql -> tidb | pg -> starrocks |
+| :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- |
+| Snapshot | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
+| CDC | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
+| Data check/revise/review | &#10004; | &#10004; | &#10004; | | | | | | &#10004; | |
+| Structure migration | &#10004; | &#10004; | | | | | &#10004; | &#10004; | &#10004; | &#10004; |
 
 
 # Quick starts

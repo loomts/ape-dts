@@ -22,6 +22,8 @@ docker run -itd --name some-starrocks \
 # Migrate structures
 ## Prepare source data
 ```
+mysql -h127.0.0.1 -uroot -p123456 -P3307
+
 CREATE DATABASE test_db;
 CREATE TABLE test_db.tb_1(id int, value int, primary key(id));
 ```
@@ -317,10 +319,10 @@ Refer to [config](/docs/en/config.md) for other common configurations
 | varchar | VARCHAR |
 | binary | VARBINARY |
 | varbinary | VARBINARY |
-| tinytext | CHAR/VARCHAR/STRING/TEXT |
-| text | CHAR/VARCHAR/STRING/TEXT |
-| mediumtext | CHAR/VARCHAR/STRING/TEXT |
-| longtext | CHAR/VARCHAR/STRING/TEXT |
+| tinytext | STRING |
+| text | STRING |
+| mediumtext | STRING |
+| longtext | STRING |
 | tinyblob | VARBINARY |
 | blob | VARBINARY |
 | mediumblob | VARBINARY |

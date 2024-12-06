@@ -122,12 +122,22 @@ impl ClickhouseSinker {
         let mut new_col_values: HashMap<String, ColValue> = HashMap::new();
         for (col, col_value) in col_values.iter() {
             match col_value {
-                ColValue::Blob(v) | ColValue::RawString(v) => {
-                    new_col_values.insert(
-                        col.to_owned(),
-                        ColValue::String(SqlUtil::binary_to_str(v).0),
-                    );
+                ColValue::RawString(v) => {
+                    let (str, is_hex) = SqlUtil::binary_to_str(v);
+                    if is_hex {
+                        new_col_values
+                            .insert(col.to_owned(), ColValue::String(format!("0x{}", str)));
+                    } else {
+                        new_col_values.insert(col.to_owned(), ColValue::String(str));
+                    }
                 }
+
+                ColValue::Blob(v) => {
+                    let hex_str = hex::encode(v);
+                    new_col_values
+                        .insert(col.to_owned(), ColValue::String(format!("0x{}", hex_str)));
+                }
+
                 _ => {}
             }
         }
