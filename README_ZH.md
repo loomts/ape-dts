@@ -139,3 +139,7 @@
 
 # 技术交流
 [Slack社区](https://join.slack.com/t/kubeblocks/shared_invite/zt-22cx2f84x-BPZvnLRqBOGdZ_XSjELh4Q)
+
+微信交流群
+
+<img src="./docs/img/wechat_group.jpg" width="55%" style="display: block; margin-left: 0;"/>

@@ -141,3 +141,7 @@ Refer to [test docs](./dt-tests/README.md) for details.
 # Contact us
 
 [Slack Community](https://join.slack.com/t/kubeblocks/shared_invite/zt-22cx2f84x-BPZvnLRqBOGdZ_XSjELh4Q)
+
+Wechat Group
+
+<img src="./docs/img/wechat_group.jpg" width="55%" style="display: block; margin-left: 0;"/>
