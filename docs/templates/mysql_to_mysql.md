@@ -141,7 +141,7 @@ log4rs_file=./log4rs.yaml
 | :-------- | :-------- | :-------- | :-------- |
 | binlog_filename | the starting binlog file, if empty,  will pull binlog from the last position of the last file | mysql-bin.000035 | empty |
 | binlog_position | the starting position in binlog_file to pull binlog, only works when binlog_filename is NOT empty | 5299302 | 0 |
-| server_id | the identifier of the client, required  | 2000 | - |
+| server_id | the identifier of current ape-dts instance in the MySQL replication group, with a value from 1 to 2^32 - 1, required  | 2000 | - |
 
 # CDC with gtid
 ```
