@@ -207,7 +207,7 @@ impl RdbStructTestRunner {
         self.base.base.start_task().await
     }
 
-    async fn load_expect_ddl_sqls(&self) -> HashMap<String, String> {
+    pub async fn load_expect_ddl_sqls(&self) -> HashMap<String, String> {
         let config = TaskConfig::new(&self.base.base.task_config_file).unwrap();
         let ddl_file = match config.sinker_basic.db_type {
             DbType::Mysql => {

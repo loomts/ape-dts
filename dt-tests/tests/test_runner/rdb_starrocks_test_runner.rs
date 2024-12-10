@@ -8,11 +8,11 @@ use super::{
     rdb_test_runner::{RdbTestRunner, SRC},
 };
 
-pub struct RdbStarrocksTestRunner {
+pub struct RdbStarRocksTestRunner {
     base: RdbTestRunner,
 }
 
-impl RdbStarrocksTestRunner {
+impl RdbStarRocksTestRunner {
     pub async fn new(relative_test_dir: &str) -> anyhow::Result<Self> {
         Ok(Self {
             base: RdbTestRunner::new(relative_test_dir).await?,

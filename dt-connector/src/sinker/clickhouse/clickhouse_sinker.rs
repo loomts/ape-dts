@@ -138,6 +138,14 @@ impl ClickhouseSinker {
                         .insert(col.to_owned(), ColValue::String(format!("0x{}", hex_str)));
                 }
 
+                ColValue::Time(v) | ColValue::Timestamp(v) => {
+                    // postgres: 10:20:12+00 -> 10:20:12, 2019-02-10 11:35:00+00 -> 2019-02-10 11:35:00
+                    new_col_values.insert(
+                        col.to_owned(),
+                        ColValue::String(v.trim_end_matches("+00").to_string()),
+                    );
+                }
+
                 _ => {}
             }
         }

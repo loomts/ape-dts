@@ -1,4 +1,4 @@
-pub mod decimal_uitil;
+pub mod decimal_util;
 pub mod foxlake_merger;
 pub mod foxlake_pusher;
 pub mod foxlake_sinker;
