@@ -36,7 +36,7 @@ impl PgColValueConvertor {
             return Self::from_str(&parent_col_type, value_str, meta_manager);
         }
 
-        let value_str = value_str.to_string();
+        let mut value_str = value_str.to_string();
         if col_type.is_array() {
             return Ok(ColValue::String(value_str));
         }
@@ -93,7 +93,15 @@ impl PgColValueConvertor {
 
             PgValueType::JSON => ColValue::Json2(value_str),
 
-            _ => ColValue::String(value_str),
+            _ => {
+                // bpchar: fixed-length, blank-padded
+                // In wal log, if a column type is char(10), column value is 'aaa',
+                // the value_str will be 'aaa      ' which is blank-padded.
+                if col_type.alias == "bpchar" {
+                    value_str = value_str.trim_end().into();
+                }
+                ColValue::String(value_str)
+            }
         };
         Ok(col_value)
     }

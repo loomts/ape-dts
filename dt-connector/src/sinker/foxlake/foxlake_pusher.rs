@@ -37,7 +37,7 @@ use uuid::Uuid;
 use crate::{rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker};
 
 use super::{
-    decimal_uitil::DecimalUtil,
+    decimal_util::DecimalUtil,
     orc_sequencer::{OrcSequenceInfo, OrcSequencer},
     unicode_util::UnicodeUtil,
 };

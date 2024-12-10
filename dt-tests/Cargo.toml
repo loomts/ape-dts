@@ -27,6 +27,7 @@ serial_test = { workspace = true }
 configparser = { workspace = true }
 project-root = { workspace = true }
 regex = { workspace = true }
+serde ={ workspace = true }
 serde_json = { workspace = true }
 concurrent-queue = { workspace = true }
 redis = { workspace = true }
@@ -34,3 +35,5 @@ rdkafka = { workspace = true }
 url = { workspace = true }
 chrono =  { workspace = true }
 anyhow = { workspace = true }
+hex = { workspace = true }
+clickhouse = { workspace = true, features = ["time"] }

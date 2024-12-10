@@ -15,7 +15,7 @@ DROP TABLE IF EXISTS numeric_decimal_table;
 CREATE TABLE numeric_decimal_table (pk SERIAL, d DECIMAL(3,2), dzs DECIMAL(4), dvs DECIMAL, d_nn DECIMAL(3,2), n NUMERIC(6,4), nzs NUMERIC(4), nvs NUMERIC, d_int DECIMAL(3,2), dzs_int DECIMAL(4), dvs_int DECIMAL, n_int NUMERIC(6,4), nzs_int NUMERIC(4), nvs_int NUMERIC, d_nan DECIMAL(3,2), dzs_nan DECIMAL(4), dvs_nan DECIMAL, n_nan NUMERIC(6,4), nzs_nan NUMERIC(4), nvs_nan NUMERIC, PRIMARY KEY(pk));
 
 DROP TABLE IF EXISTS string_table;
-CREATE TABLE string_table (pk SERIAL, vc VARCHAR(2), vcv CHARACTER VARYING(2), ch CHARACTER(4), c CHAR(3), t TEXT, b BYTEA, bnn BYTEA, ct CITEXT, PRIMARY KEY(pk));
+CREATE TABLE string_table (pk SERIAL, vc VARCHAR(255), vcv CHARACTER VARYING(255), ch CHARACTER(255), c CHAR(255), t TEXT, b BYTEA, bnn BYTEA, ct CITEXT, PRIMARY KEY(pk));
 
 DROP TABLE IF EXISTS network_address_table;
 CREATE TABLE network_address_table (pk SERIAL, i INET, PRIMARY KEY(pk));

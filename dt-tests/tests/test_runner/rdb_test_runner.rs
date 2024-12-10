@@ -729,7 +729,7 @@ impl RdbTestRunner {
         filtered_db_tbs
     }
 
-    async fn get_tb_cols(
+    pub async fn get_tb_cols(
         &self,
         db_tb: &(String, String),
         from: &str,

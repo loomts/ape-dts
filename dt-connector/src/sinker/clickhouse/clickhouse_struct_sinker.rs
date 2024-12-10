@@ -140,7 +140,8 @@ impl ClickhouseStructSinker {
             Self::get_dst_col_type_from_pg(col, pg_tb_meta.unwrap())
         }?;
 
-        let mut dst_col = if column.is_nullable {
+        // Nested type Array() cannot be inside Nullable type
+        let mut dst_col = if column.is_nullable && !dst_col_type.starts_with("Array") {
             format!("`{}` Nullable({})", col, dst_col_type)
         } else {
             format!("`{}` {}", col, dst_col_type)
@@ -217,24 +218,24 @@ impl ClickhouseStructSinker {
             PgValueType::JSON => "String",
             PgValueType::Timestamp => "DateTime64(6)",
             PgValueType::TimestampTZ => "DateTime64(6)",
-            PgValueType::Time => "DateTime64(6)",
-            PgValueType::TimeTZ => "DateTime64(6)",
+            // PgValueType::Time => "DateTime64(6)",
+            // PgValueType::TimeTZ => "DateTime64(6)",
             PgValueType::Date => "Date32",
-            PgValueType::Interval => "interval",
+            // PgValueType::Interval => "String",
             PgValueType::Bytes => "String",
             PgValueType::Struct => "String",
             PgValueType::UUID => "UUID",
-            PgValueType::HStore => "String",
-            PgValueType::ArrayFloat32 => "Array(Float32)",
-            PgValueType::ArrayFloat64 => "Array(Float64)",
-            PgValueType::ArrayInt16 => "Array(Int16)",
-            PgValueType::ArrayInt32 => "Array(Int32)",
-            PgValueType::ArrayInt64 => "Array(Int64)",
-            PgValueType::ArrayString => "Array(String)",
-            PgValueType::ArrayBoolean => "Array(Bool)",
-            PgValueType::ArrayDate => "Array(Date)",
-            PgValueType::ArrayTimestamp => "Array(DateTime64(6))",
-            PgValueType::ArrayTimestampTZ => "Array(DateTime64(6))",
+            // PgValueType::HStore => "String",
+            // PgValueType::ArrayFloat32 => "Array(Float32)",
+            // PgValueType::ArrayFloat64 => "Array(Float64)",
+            // PgValueType::ArrayInt16 => "Array(Int16)",
+            // PgValueType::ArrayInt32 => "Array(Int32)",
+            // PgValueType::ArrayInt64 => "Array(Int64)",
+            // PgValueType::ArrayString => "Array(String)",
+            // PgValueType::ArrayBoolean => "Array(Bool)",
+            // PgValueType::ArrayDate => "Array(Date)",
+            // PgValueType::ArrayTimestamp => "Array(DateTime64(6))",
+            // PgValueType::ArrayTimestampTZ => "Array(DateTime64(6))",
             _ => "String",
         };
         Ok(dst_col.to_string())
