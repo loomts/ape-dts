@@ -74,3 +74,5 @@ INSERT INTO test_db_1.set_table VALUES(1, ''), (2, 'a'), (3, 'a,b'), (4, 'a,b,c,
 -- ignore cols
 INSERT INTO test_db_1.ignore_cols_1 VALUES(1, 1, 1, 1),(2, 2, 2, 2);
 INSERT INTO test_db_1.ignore_cols_2 VALUES(1, 1, 1, 1),(2, 2, 2, 2);
+
+INSERT INTO Case_Mix_DB.Case_Mix_TB VALUES(1, 1, 1, 1, 1),(2, 2, 2, 2, 2);

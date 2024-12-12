@@ -159,3 +159,7 @@ DELETE FROM col_has_special_character_table;
 INSERT INTO ignore_cols_1 VALUES(1, 1, 1, 1),(2, 2, 2, 2);
 UPDATE ignore_cols_1 SET f_1=5, f_2=5, f_3=5 WHERE f_0 > 0;
 DELETE FROM ignore_cols_1;
+
+INSERT INTO Case_Mix_DB.Case_Mix_TB VALUES(1, 1, 1, 1, 1),(2, 2, 2, 2, 2);
+UPDATE Case_Mix_DB.Case_Mix_TB SET Field_4=5;
+DELETE FROM Case_Mix_DB.Case_Mix_TB;
