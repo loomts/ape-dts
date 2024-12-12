@@ -89,7 +89,7 @@ impl PgSnapshotExtractor {
         let sql = self.build_extract_sql(tb_meta, false)?;
         let ignore_cols = self.filter.get_ignore_cols(&self.schema, &self.tb);
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
-        while let Some(row) = rows.try_next().await.unwrap() {
+        while let Some(row) = rows.try_next().await? {
             let row_data = RowData::from_pg_row(&row, tb_meta, &ignore_cols);
             self.base_extractor
                 .push_row(row_data, Position::None)
@@ -135,7 +135,7 @@ impl PgSnapshotExtractor {
 
             let mut rows = query.fetch(&self.conn_pool);
             let mut slice_count = 0usize;
-            while let Some(row) = rows.try_next().await.unwrap() {
+            while let Some(row) = rows.try_next().await? {
                 start_value = PgColValueConvertor::from_query(&row, order_col, order_col_type)?;
                 slice_count += 1;
                 extracted_count += 1;

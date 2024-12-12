@@ -128,8 +128,8 @@ impl MysqlMetaFetcher {
         let sql = format!("DESC `{}`.`{}`", schema, tb);
         let mut rows = sqlx::query(&sql).disable_arguments().fetch(conn_pool);
         while let Some(row) = rows.try_next().await? {
-            let col_name: String = row.try_get("Field")?;
-            cols.push(col_name);
+            let col: String = row.try_get("Field")?;
+            cols.push(col.to_lowercase());
         }
 
         let sql = if db_type == &DbType::Mysql {
@@ -149,7 +149,8 @@ impl MysqlMetaFetcher {
         };
 
         while let Some(row) = rows.try_next().await? {
-            let col: String = row.try_get(COLUMN_NAME)?;
+            let mut col: String = row.try_get(COLUMN_NAME)?;
+            col = col.to_lowercase();
             let (origin_type, col_type) = Self::get_col_type(&row).await?;
             col_origin_type_map.insert(col.clone(), origin_type);
             col_type_map.insert(col, col_type);
