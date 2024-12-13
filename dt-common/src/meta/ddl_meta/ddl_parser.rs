@@ -1,4 +1,4 @@
-use crate::{config::config_enums::DbType, error::Error};
+use crate::{config::config_enums::DbType, error::Error, utils::sql_util::SqlUtil};
 use anyhow::bail;
 use nom::{
     branch::alt,
@@ -7,7 +7,7 @@ use nom::{
         complete::{multispace0, multispace1},
         is_alphanumeric,
     },
-    combinator::{map, not, opt, peek},
+    combinator::{map, not, opt, peek, recognize},
     multi::many1,
     sequence::{delimited, pair, preceded, tuple},
     IResult,
@@ -106,7 +106,7 @@ impl DdlParser {
         ))(i)?;
 
         let statement = CreateDatabaseStatement {
-            db: String::from_utf8_lossy(database).to_string(),
+            db: self.identifier_to_string(database),
             if_not_exists: if_not_exists.is_some(),
             unparsed: to_string(remaining_input),
         };
@@ -131,7 +131,7 @@ impl DdlParser {
         ))(i)?;
 
         let statement = DropDatabaseStatement {
-            db: String::from_utf8_lossy(database).to_string(),
+            db: self.identifier_to_string(database),
             if_exists: if_exists.is_some(),
             unparsed: to_string(remaining_input),
         };
@@ -155,7 +155,7 @@ impl DdlParser {
         ))(i)?;
 
         let statement = AlterDatabaseStatement {
-            db: String::from_utf8_lossy(database).to_string(),
+            db: self.identifier_to_string(database),
             unparsed: to_string(remaining_input),
         };
 
@@ -179,7 +179,7 @@ impl DdlParser {
         ))(i)?;
 
         let statement = CreateSchemaStatement {
-            schema: String::from_utf8_lossy(schema).to_string(),
+            schema: self.identifier_to_string(schema),
             if_not_exists: if_not_exists.is_some(),
             unparsed: to_string(remaining_input),
         };
@@ -204,7 +204,7 @@ impl DdlParser {
         ))(i)?;
 
         let statement = DropSchemaStatement {
-            schema: String::from_utf8_lossy(schema).to_string(),
+            schema: self.identifier_to_string(schema),
             if_exists: if_exists.is_some(),
             unparsed: to_string(remaining_input),
         };
@@ -228,7 +228,7 @@ impl DdlParser {
         ))(i)?;
 
         let statement = AlterSchemaStatement {
-            schema: String::from_utf8_lossy(schema).to_string(),
+            schema: self.identifier_to_string(schema),
             unparsed: to_string(remaining_input),
         };
 
@@ -261,7 +261,7 @@ impl DdlParser {
         ))(i)?;
 
         // temporary tables won't be in binlog
-        let (schema, tb) = parse_table(table);
+        let (schema, tb) = self.parse_table(table);
         let statement = MysqlCreateTableStatement {
             db: schema,
             tb,
@@ -316,7 +316,7 @@ impl DdlParser {
             ))(i)?;
 
         // temporary tables won't be in binlog
-        let (schema, tb) = parse_table(table);
+        let (schema, tb) = self.parse_table(table);
         let statement = PgCreateTableStatement {
             schema,
             tb,
@@ -348,7 +348,7 @@ impl DdlParser {
 
         let mut schema_tbs = Vec::new();
         for table in table_list {
-            schema_tbs.push(parse_table(table))
+            schema_tbs.push(self.parse_table(table))
         }
 
         let statement = DropMultiTableStatement {
@@ -386,7 +386,7 @@ impl DdlParser {
                 |i| self.schema_table(i),
                 multispace0,
             ))(i)?;
-            Ok((remaining_input, parse_table(new_table)))
+            Ok((remaining_input, self.parse_table(new_table)))
         };
 
         let (remaining_input, (_, _, _, _, table, _, rename_to, _)) = tuple((
@@ -400,7 +400,7 @@ impl DdlParser {
             multispace0,
         ))(i)?;
 
-        let (db, tb) = parse_table(table);
+        let (db, tb) = self.parse_table(table);
         if let Some((new_db, new_tb)) = rename_to {
             let statement = MysqlAlterTableRenameStatement {
                 db,
@@ -441,7 +441,7 @@ impl DdlParser {
                 |i| self.schema_table(i),
                 multispace0,
             ))(i)?;
-            Ok((remaining_input, parse_table(new_table)))
+            Ok((remaining_input, self.parse_table(new_table)))
         };
 
         let set_schema = |i: &'a [u8]| -> IResult<&'a [u8], String> {
@@ -453,7 +453,7 @@ impl DdlParser {
                 |i| self.sql_identifier(i),
                 multispace0,
             ))(i)?;
-            Ok((remaining_input, to_string(new_schema)))
+            Ok((remaining_input, self.identifier_to_string(new_schema)))
         };
 
         let (
@@ -473,7 +473,7 @@ impl DdlParser {
             multispace0,
         ))(i)?;
 
-        let (schema, tb) = parse_table(table);
+        let (schema, tb) = self.parse_table(table);
         if let Some((new_schema, new_tb)) = rename_to_res {
             let statement = PgAlterTableRenameStatement {
                 schema,
@@ -543,7 +543,7 @@ impl DdlParser {
             multispace0,
         ))(i)?;
 
-        let (db, tb) = parse_table(table);
+        let (db, tb) = self.parse_table(table);
         let statement = MysqlTruncateTableStatement {
             db,
             tb,
@@ -570,7 +570,7 @@ impl DdlParser {
             multispace0,
         ))(i)?;
 
-        let (schema, tb) = parse_table(table);
+        let (schema, tb) = self.parse_table(table);
         let statement = PgTruncateTableStatement {
             schema,
             tb,
@@ -599,8 +599,8 @@ impl DdlParser {
         let mut schema_tbs = Vec::new();
         let mut new_schema_tbs = Vec::new();
         for (from, to) in table_to_table_list {
-            let from = parse_table(from);
-            let to = parse_table(to);
+            let from = self.parse_table(from);
+            let to = self.parse_table(to);
             schema_tbs.push(from);
             new_schema_tbs.push(to);
         }
@@ -657,7 +657,7 @@ impl DdlParser {
                 multispace0,
             ))(i)?;
 
-        let (db, tb) = parse_table(table);
+        let (db, tb) = self.parse_table(table);
         let index_kind_str = if let Some((index_kind, _)) = index_kind {
             Some(to_string(index_kind))
         } else {
@@ -674,7 +674,7 @@ impl DdlParser {
             tb,
             index_kind: index_kind_str,
             index_type: index_type_str,
-            index_name: to_string(index_name),
+            index_name: self.identifier_to_string(index_name),
             unparsed: to_string(remaining_input),
         };
 
@@ -709,12 +709,12 @@ impl DdlParser {
             ))(i)?;
 
         let (if_not_exists, index_name) = if let Some(name) = name {
-            (name.0.is_some(), Some(to_string(name.1)))
+            (name.0.is_some(), Some(self.identifier_to_string(name.1)))
         } else {
             (false, None)
         };
 
-        let (schema, tb) = parse_table(table);
+        let (schema, tb) = self.parse_table(table);
         let statement = PgCreateIndexStatement {
             schema,
             tb,
@@ -757,11 +757,11 @@ impl DdlParser {
             multispace0,
         ))(i)?;
 
-        let (db, tb) = parse_table(table);
+        let (db, tb) = self.parse_table(table);
         let statement = MysqlDropIndexStatement {
             db,
             tb,
-            index_name: to_string(index_name),
+            index_name: self.identifier_to_string(index_name),
             unparsed: to_string(remaining_input),
         };
 
@@ -789,7 +789,7 @@ impl DdlParser {
 
         let mut index_names: Vec<String> = Vec::new();
         for name in index_name_list.iter() {
-            index_names.push(to_string(name));
+            index_names.push(self.identifier_to_string(name));
         }
 
         let statement = PgDropMultiIndexStatement {
@@ -860,11 +860,18 @@ impl DdlParser {
                     not(peek(|i| self.sql_keyword(i))),
                     take_while1(is_sql_identifier),
                 ),
-                delimited(
+                // delimited(
+                //     tag("\""),
+                //     take_while1(is_escaped_sql_identifier_2),
+                //     tag("\""),
+                // );
+
+                // keep tag("\""), input: "Abc", return: "Abc"
+                recognize(tuple((
                     tag("\""),
                     take_while1(is_escaped_sql_identifier_2),
                     tag("\""),
-                ),
+                ))),
             ))(i);
         }
 
@@ -873,6 +880,7 @@ impl DdlParser {
                 not(peek(|i| self.sql_keyword(i))),
                 take_while1(is_sql_identifier),
             ),
+            // remove tag("`"), input: `Abc``, return: Abc
             delimited(tag("`"), take_while1(is_escaped_sql_identifier_1), tag("`")),
         ))(i)
     }
@@ -899,6 +907,32 @@ impl DdlParser {
             keyword_o_to_s,
             keyword_s_to_z,
         ))(i)
+    }
+
+    fn parse_table(&self, table: (Option<Vec<u8>>, Vec<u8>)) -> (String, String) {
+        let schema = if let Some(schema_raw) = &table.0 {
+            self.identifier_to_string(schema_raw)
+        } else {
+            String::new()
+        };
+        let tb = self.identifier_to_string(&table.1);
+        (schema, tb)
+    }
+
+    fn identifier_to_string(&self, i: &[u8]) -> String {
+        let identifier = to_string(i);
+        if self.db_type == DbType::Pg {
+            // In PostgreSQL, Identifiers (including column names) that are not double-quoted are folded to lower case.
+            // Identifiers created with double quotes retain upper case letters
+            let escape_pair = SqlUtil::get_escape_pairs(&self.db_type)[0];
+            if SqlUtil::is_escaped(&identifier, &escape_pair) {
+                SqlUtil::unescape(&identifier, &escape_pair)
+            } else {
+                identifier.to_lowercase()
+            }
+        } else {
+            identifier
+        }
     }
 }
 
@@ -941,16 +975,6 @@ fn if_exists(i: &[u8]) -> IResult<&[u8], ()> {
 
 fn ws_sep_comma(i: &[u8]) -> IResult<&[u8], &[u8]> {
     delimited(multispace0, tag(","), multispace0)(i)
-}
-
-fn parse_table(table: (Option<Vec<u8>>, Vec<u8>)) -> (String, String) {
-    let schema = if let Some(schema_raw) = &table.0 {
-        to_string(schema_raw)
-    } else {
-        String::new()
-    };
-    let tb = to_string(&table.1);
-    (schema, tb)
 }
 
 fn to_string(i: &[u8]) -> String {
@@ -1589,6 +1613,28 @@ mod test_pg {
 
         let expect_sqls =
             ["CREATE TABLE IF NOT EXISTS \"db_1\".\"tb_1\" (id int,\n            value int);"];
+
+        let parser = DdlParser::new(DbType::Pg);
+        for i in 0..sqls.len() {
+            let r = parser.parse(sqls[i]).unwrap();
+            assert_eq!(r.ddl_type, DdlType::CreateTable);
+            assert_eq!(r.to_sql(), expect_sqls[i]);
+        }
+    }
+
+    #[test]
+    fn test_create_table_with_schema_with_upper_case_pg() {
+        let sqls = [
+            r#"CREATE TABLE IF NOT EXISTS Test_DB.Test_TB(id int, "Value" int);"#,
+            r#"CREATE TABLE IF NOT EXISTS "Test_DB".Test_TB(id int, "Value" int);"#,
+            r#"CREATE TABLE IF NOT EXISTS "Test_DB"."Test_TB"(id int, "Value" int);"#,
+        ];
+
+        let expect_sqls = [
+            r#"CREATE TABLE IF NOT EXISTS "test_db"."test_tb" (id int, "Value" int);"#,
+            r#"CREATE TABLE IF NOT EXISTS "Test_DB"."test_tb" (id int, "Value" int);"#,
+            r#"CREATE TABLE IF NOT EXISTS "Test_DB"."Test_TB" (id int, "Value" int);"#,
+        ];
 
         let parser = DdlParser::new(DbType::Pg);
         for i in 0..sqls.len() {

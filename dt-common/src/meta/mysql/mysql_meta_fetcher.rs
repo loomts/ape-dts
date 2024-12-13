@@ -55,7 +55,7 @@ impl MysqlMetaFetcher {
 
     pub fn invalidate_cache(&mut self, schema: &str, tb: &str) {
         if !schema.is_empty() && !tb.is_empty() {
-            let full_name = format!("{}.{}", schema, tb).to_lowercase();
+            let full_name = format!("{}.{}", schema, tb);
             self.cache.remove(&full_name);
         } else {
             // clear all cache is always safe
@@ -80,7 +80,7 @@ impl MysqlMetaFetcher {
         schema: &str,
         tb: &str,
     ) -> anyhow::Result<&'a MysqlTbMeta> {
-        let full_name = format!("{}.{}", schema, tb).to_lowercase();
+        let full_name = format!("{}.{}", schema, tb);
         if !self.cache.contains_key(&full_name) {
             let (cols, col_origin_type_map, col_type_map) =
                 Self::parse_cols(&self.conn_pool, &self.db_type, schema, tb).await?;
@@ -128,6 +128,23 @@ impl MysqlMetaFetcher {
         let sql = format!("DESC `{}`.`{}`", schema, tb);
         let mut rows = sqlx::query(&sql).disable_arguments().fetch(conn_pool);
         while let Some(row) = rows.try_next().await? {
+            // Column and index names are not case sensitive on any platform, nor are column aliases.
+            // But when table created with uppercase columns, DESC table will return uppercase fields
+            // CREATE TABLE Upper_Case_DB.Upper_Case_TB (
+            //     Id INT,
+            //     FIELD_1 INT,
+            //     field_2 INT,
+            //     PRIMARY KEY(Id),
+            //     UNIQUE KEY(FIELD_1, field_2)
+            // );
+            // mysql> DESC upper_case_db.upper_case_tb;
+            // +---------+---------+------+-----+---------+-------+
+            // | Field   | Type    | Null | Key | Default | Extra |
+            // +---------+---------+------+-----+---------+-------+
+            // | Id      | int(11) | NO   | PRI | NULL    |       |
+            // | FIELD_1 | int(11) | YES  | MUL | NULL    |       |
+            // | field_2 | int(11) | YES  |     | NULL    |       |
+            // +---------+---------+------+-----+---------+-------+
             let col: String = row.try_get("Field")?;
             cols.push(col.to_lowercase());
         }
@@ -370,11 +387,11 @@ impl MysqlMetaFetcher {
             let ref_tb: String = row.try_get("REFERENCED_TABLE_NAME")?;
             let ref_col: String = row.try_get("REFERENCED_COLUMN_NAME")?;
             let key = ForeignKey {
-                schema: my_schema.to_lowercase(),
-                tb: my_tb.to_lowercase(),
+                schema: my_schema,
+                tb: my_tb,
                 col: my_col.to_lowercase(),
-                ref_schema: ref_schema.to_lowercase(),
-                ref_tb: ref_tb.to_lowercase(),
+                ref_schema,
+                ref_tb,
                 ref_col: ref_col.to_lowercase(),
             };
 

@@ -5,8 +5,11 @@ CREATE EXTENSION IF NOT EXISTS citext;
 CREATE EXTENSION IF NOT EXISTS hstore;
 CREATE EXTENSION IF NOT EXISTS postgis;
 
-DROP SCHEMA IF EXISTS Case_Mix_DB CASCADE;
-CREATE SCHEMA Case_Mix_DB;
+DROP SCHEMA IF EXISTS Upper_Case_DB CASCADE;
+CREATE SCHEMA Upper_Case_DB;
+
+DROP SCHEMA IF EXISTS "Upper_Case_DB" CASCADE;
+CREATE SCHEMA "Upper_Case_DB";
 
 DROP TABLE IF EXISTS default_table;
 CREATE TABLE default_table(pk serial, val numeric(20,8), created_at timestamp, created_at_tz timestamptz, ctime time , ctime_tz timetz , cdate date , cmoney money , cbits bit(3) , csmallint smallint , cinteger integer , cbigint bigint , creal real , cbool bool , cfloat8 float8 , cnumeric numeric(6,2) , cvarchar varchar(5) , cbox box , ccircle circle , cinterval interval , cline line , clseg lseg , cpath path , cpoint point , cpolygon polygon , cchar char , ctext text , cjson json , cxml xml , cuuid uuid , cvarbit varbit(3) , cinet inet , ccidr cidr , cmacaddr macaddr , PRIMARY KEY(pk));
@@ -87,13 +90,25 @@ DROP TABLE IF EXISTS ignore_cols_1;
 CREATE TABLE ignore_cols_1 ( f_0 smallint, f_1 smallint DEFAULT NULL, f_2 smallint DEFAULT NULL, f_3 smallint DEFAULT NULL, PRIMARY KEY (f_0) );
 
 ```
-CREATE TABLE Case_Mix_DB.Case_Mix_TB (
-    Id INT, 
-    FIELD_0 INT,
+CREATE TABLE "Upper_Case_DB"."Upper_Case_TB" (
+    "Id" INT, 
+    "FIELD_1" INT,
     field_2 INT,
     Field_3 INT,
-    Field_4 INT,
-    PRIMARY KEY(Id),
-    UNIQUE(FIELD_0, field_2, Field_3)
+    "Field_4" INT,
+    PRIMARY KEY("Id"),
+    UNIQUE("FIELD_1", field_2, Field_3)
+);
+```
+
+```
+CREATE TABLE Upper_Case_DB.Upper_Case_TB (
+    "Id" INT, 
+    "FIELD_1" INT,
+    field_2 INT,
+    Field_3 INT,
+    "Field_4" INT,
+    PRIMARY KEY("Id"),
+    UNIQUE("FIELD_1", field_2, Field_3)
 );
 ```

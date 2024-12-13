@@ -74,7 +74,7 @@ INSERT INTO test_db_1.set_table VALUES(1, ''), (2, 'a'), (3, 'a,e'), (4, 'a,b,c,
 INSERT INTO test_db_1.ignore_cols_1 VALUES(1, 1, 1, 1),(2, 2, 2, 2);
 INSERT INTO test_db_1.ignore_cols_2 VALUES(1, 1, 1, 1),(2, 2, 2, 2);
 
-INSERT INTO Case_Mix_DB.Case_Mix_TB VALUES(1, 1, 1, 1, 1),(2, 2, 2, 2, 2);
+INSERT INTO Upper_Case_DB.Upper_Case_TB VALUES(1, 1, 1, 1, 1),(2, 2, 2, 2, 2);
 
 
 UPDATE test_db_1.no_pk_no_uk SET f_1=20, f_2=30, f_3=40, f_4=50, f_5=654321.4321, f_6=4321.21, f_7=54321.321, f_8=3045, f_9='2021-02-01 04:05:06.654321', f_10='04:05:06.654321', f_11='2012-02-01', f_12=2021, f_13='2021-02-01 04:05:06.654321', f_14='1', f_15='2', f_16='3', f_17='4', f_18='5', f_19='6', f_20='7', f_21='8', f_22=x'ABCDEF0123456789', f_23=x'ABCDEF0123456789', f_24=x'ABCDEF0123456789', f_25=x'ABCDEF0123456789', f_26='small', f_27='b', f_28=NULL WHERE f_0=1;
@@ -112,7 +112,7 @@ UPDATE test_db_1.set_table SET f_1 = '' WHERE f_0 = 5;
 UPDATE test_db_1.ignore_cols_1 SET f_1=5, f_2=5, f_3=5 WHERE f_0 > 0;
 UPDATE test_db_1.ignore_cols_2 SET f_1=5, f_2=5, f_3=5 WHERE f_0 > 0;
 
-UPDATE Case_Mix_DB.Case_Mix_TB SET field_4 = 5;
+UPDATE Upper_Case_DB.Upper_Case_TB SET field_4 = 5;
 
 DELETE FROM test_db_1.no_pk_no_uk;
 DELETE FROM test_db_1.one_pk_no_uk;
@@ -125,4 +125,4 @@ DELETE FROM test_db_1.date_time_table;
 DELETE FROM test_db_1.set_table;
 DELETE FROM test_db_1.ignore_cols_1;
 DELETE FROM test_db_1.ignore_cols_2;
-DELETE FROM Case_Mix_DB.Case_Mix_TB;
+DELETE FROM Upper_Case_DB.Upper_Case_TB;

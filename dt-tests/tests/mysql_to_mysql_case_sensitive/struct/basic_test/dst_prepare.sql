@@ -1,0 +1,1 @@
+drop database if exists STRUCT_it_mysql2mysql_1;

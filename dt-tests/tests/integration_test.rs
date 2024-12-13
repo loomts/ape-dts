@@ -4,6 +4,7 @@ mod mysql_to_clickhouse;
 mod mysql_to_foxlake;
 mod mysql_to_kafka_to_mysql;
 mod mysql_to_mysql;
+mod mysql_to_mysql_case_sensitive;
 mod mysql_to_mysql_lua;
 mod mysql_to_redis;
 mod mysql_to_starrocks;

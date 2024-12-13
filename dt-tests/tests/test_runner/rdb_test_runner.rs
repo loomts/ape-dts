@@ -689,9 +689,11 @@ impl RdbTestRunner {
         let parser = DdlParser::new(db_type.to_owned());
 
         for sql in sqls.iter() {
-            let sql = sql.to_lowercase().trim().to_string();
+            let sql = sql.trim().to_string();
             let tokens: Vec<&str> = sql.split(" ").collect();
-            if tokens[0].trim() != "create" || tokens[1].trim() != "table" {
+            if tokens[0].trim().to_lowercase() != "create"
+                || tokens[1].trim().to_lowercase() != "table"
+            {
                 continue;
             }
 
