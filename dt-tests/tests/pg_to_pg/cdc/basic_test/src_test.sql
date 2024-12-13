@@ -160,6 +160,12 @@ INSERT INTO ignore_cols_1 VALUES(1, 1, 1, 1),(2, 2, 2, 2);
 UPDATE ignore_cols_1 SET f_1=5, f_2=5, f_3=5 WHERE f_0 > 0;
 DELETE FROM ignore_cols_1;
 
-INSERT INTO Case_Mix_DB.Case_Mix_TB VALUES(1, 1, 1, 1, 1),(2, 2, 2, 2, 2);
-UPDATE Case_Mix_DB.Case_Mix_TB SET Field_4=5;
-DELETE FROM Case_Mix_DB.Case_Mix_TB;
+INSERT INTO Upper_Case_DB.Upper_Case_TB VALUES(1, 1, 1, 1, 1),(2, 2, 2, 2, 2);
+UPDATE Upper_Case_DB.Upper_Case_TB SET "FIELD_1"=5, field_2=5, Field_3=5, "Field_4"=5 WHERE "Id"=1;
+UPDATE Upper_Case_DB.Upper_Case_TB SET "FIELD_1"=6, field_2=6, Field_3=6, "Field_4"=6 WHERE "Id"=2;
+DELETE FROM Upper_Case_DB.Upper_Case_TB;
+
+INSERT INTO "Upper_Case_DB"."Upper_Case_TB" VALUES(3, 3, 3, 3, 3),(4, 4, 4, 4, 4);
+UPDATE "Upper_Case_DB"."Upper_Case_TB" SET "FIELD_1"=7, field_2=7, Field_3=7, "Field_4"=7 WHERE "Id"=3;
+UPDATE "Upper_Case_DB"."Upper_Case_TB" SET "FIELD_1"=8, field_2=8, Field_3=8, "Field_4"=8 WHERE "Id"=4;
+DELETE FROM "Upper_Case_DB"."Upper_Case_TB";

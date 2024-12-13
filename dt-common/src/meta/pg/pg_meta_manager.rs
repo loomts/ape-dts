@@ -74,7 +74,7 @@ impl PgMetaManager {
         schema: &str,
         tb: &str,
     ) -> anyhow::Result<&'a PgTbMeta> {
-        let full_name = format!(r#""{}"."{}""#, schema, tb).to_lowercase();
+        let full_name = format!(r#""{}"."{}""#, schema, tb);
         if !self.name_to_tb_meta.contains_key(&full_name) {
             let oid = Self::get_oid(&self.conn_pool, schema, tb).await?;
             let (cols, col_origin_type_map, col_type_map) =
@@ -111,7 +111,7 @@ impl PgMetaManager {
     pub fn invalidate_cache(&mut self, schema: &str, tb: &str) {
         // TODO, if schema is not empty but tb is empty, only clear cache for the schema
         if !schema.is_empty() && !tb.is_empty() {
-            let full_name = format!(r#""{}"."{}""#, schema, tb).to_lowercase();
+            let full_name = format!(r#""{}"."{}""#, schema, tb);
             self.name_to_tb_meta.remove(&full_name);
         } else {
             self.name_to_tb_meta.clear();
@@ -209,16 +209,12 @@ impl PgMetaManager {
         let mut key_map: HashMap<String, Vec<String>> = HashMap::new();
         let mut rows = sqlx::query(&sql).fetch(conn_pool);
         while let Some(row) = rows.try_next().await? {
-            let mut col_name: String = row.try_get("col_name")?;
-            col_name = col_name.to_lowercase();
-
+            let col_name: String = row.try_get("col_name")?;
             let constraint_type: String = row.try_get("constraint_type")?;
             let mut key_name: String = row.try_get("constraint_name")?;
-            key_name = if constraint_type == "PRIMARY KEY" {
-                "primary".to_string()
-            } else {
-                key_name.to_lowercase()
-            };
+            if constraint_type == "PRIMARY KEY" {
+                key_name = "primary".to_string();
+            }
 
             // key_map
             if let Some(key_cols) = key_map.get_mut(&key_name) {
@@ -287,12 +283,12 @@ impl PgMetaManager {
             let ref_tb: String = row.try_get("referenced_table_name")?;
             let ref_col: String = row.try_get("referenced_column_name")?;
             let key = ForeignKey {
-                schema: my_schema.to_lowercase(),
-                tb: my_tb.to_lowercase(),
-                col: my_col.to_lowercase(),
-                ref_schema: ref_schema.to_lowercase(),
-                ref_tb: ref_tb.to_lowercase(),
-                ref_col: ref_col.to_lowercase(),
+                schema: my_schema,
+                tb: my_tb,
+                col: my_col,
+                ref_schema,
+                ref_tb,
+                ref_col,
             };
             if key.schema == schema && key.tb == tb {
                 foreign_keys.push(key.clone());

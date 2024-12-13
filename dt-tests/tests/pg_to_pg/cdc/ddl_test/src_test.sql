@@ -32,7 +32,20 @@ DROP TABLE test_db_1.drop_tb_1;
 DROP SCHEMA test_db_3 CASCADE;
 
 -- create schema
-CREATE SCHEMA test_db_4;
+
+-- in target, should execute: create schema Test_db_4;
+DROP SCHEMA IF EXISTS Test_db_4 CASCADE;
+CREATE SCHEMA Test_db_4;
+-- in target, should execute: create schema Test_db_4; 
+CREATE TABLE Test_db_4.Tb_1( f_0 int, f_1 int DEFAULT NULL, "F_2" int DEFAULT NULL, PRIMARY KEY (f_0) ) ; 
+INSERT INTO Test_db_4.Tb_1 VALUES (1,1,1);
+
+-- in target, should execute: create schema "Test_db_4"
+DROP SCHEMA IF EXISTS "Test_db_4" CASCADE;
+CREATE SCHEMA "Test_db_4";
+-- in target, should execute: create schema "Test_db_4"."Tb_1"; 
+CREATE TABLE "Test_db_4"."Tb_1"( f_0 int, f_1 int DEFAULT NULL, "F_2" int DEFAULT NULL, PRIMARY KEY (f_0) ) ; 
+INSERT INTO "Test_db_4"."Tb_1" VALUES (2,2,2);
 
 -- create table
 CREATE TABLE test_db_2.tb_1 ( f_0 int, f_1 int DEFAULT NULL, f_2 int DEFAULT NULL, PRIMARY KEY (f_0) ) ; 

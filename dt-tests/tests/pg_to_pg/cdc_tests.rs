@@ -8,7 +8,7 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn cdc_basic_test() {
-        TestBase::run_cdc_test("pg_to_pg/cdc/basic_test", 3000, 7000).await;
+        TestBase::run_cdc_test("pg_to_pg/cdc/basic_test", 3000, 9000).await;
     }
 
     #[tokio::test]

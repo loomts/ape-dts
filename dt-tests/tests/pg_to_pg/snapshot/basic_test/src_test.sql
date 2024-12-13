@@ -79,4 +79,6 @@ INSERT INTO col_has_special_character_table VALUES(2, NULL, NULL, NULL);
 
 INSERT INTO ignore_cols_1 VALUES(1, 1, 1, 1),(2, 2, 2, 2);
 
-INSERT INTO Case_Mix_DB.Case_Mix_TB VALUES(1, 1, 1, 1, 1),(2, 2, 2, 2, 2);
+INSERT INTO "Upper_Case_DB"."Upper_Case_TB" VALUES(1, 1, 1, 1, 1),(2, 2, 2, 2, 2);
+
+INSERT INTO Upper_Case_DB.Upper_Case_TB VALUES(3, 3, 3, 3, 3),(4, 4, 4, 4, 4);

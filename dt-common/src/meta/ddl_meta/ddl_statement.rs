@@ -747,11 +747,11 @@ impl PgDropMultiIndexStatement {
 }
 
 fn append_tb(sql: &str, schema: &str, tb: &str, db_type: &DbType) -> String {
-    let tb = SqlUtil::escape_by_db_type(tb, db_type);
+    let tb = escape_identifier(tb, db_type);
     if schema.is_empty() {
         format!("{} {}", sql, tb)
     } else {
-        let schema = SqlUtil::escape_by_db_type(schema, db_type);
+        let schema = escape_identifier(schema, db_type);
         format!("{} {}.{}", sql, schema, tb)
     }
 }
@@ -770,11 +770,11 @@ fn append_identifier(
     with_white_space: bool,
     db_type: &DbType,
 ) -> String {
-    let escaped_identifier = SqlUtil::escape_by_db_type(identifier, db_type);
+    let identifier = escape_identifier(identifier, db_type);
     if with_white_space {
-        format!("{} {}", sql, escaped_identifier)
+        format!("{} {}", sql, identifier)
     } else {
-        format!("{}{}", sql, escaped_identifier)
+        format!("{}{}", sql, identifier)
     }
 }
 
@@ -783,4 +783,8 @@ fn append_unparsed(sql: String, unparsed: &str) -> String {
         return format!("{} {}", sql, unparsed);
     }
     sql
+}
+
+fn escape_identifier(identifier: &str, db_type: &DbType) -> String {
+    SqlUtil::escape_by_db_type(identifier, db_type)
 }

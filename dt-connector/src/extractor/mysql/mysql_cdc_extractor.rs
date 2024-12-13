@@ -3,6 +3,7 @@ use async_recursion::async_recursion;
 use async_trait::async_trait;
 use sqlx::{mysql::MySqlArguments, query::Query, MySql, Pool};
 use std::{
+    cmp,
     collections::HashMap,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -315,7 +316,8 @@ impl MysqlCdcExtractor {
         }
 
         let mut data = HashMap::new();
-        for i in (0..tb_meta.basic.cols.len()).rev() {
+        let col_count = cmp::min(tb_meta.basic.cols.len(), included_columns.len());
+        for i in (0..col_count).rev() {
             let col = tb_meta.basic.cols.get(i).unwrap();
             if ignore_cols.map_or(false, |cols| cols.contains(col)) {
                 continue;
