@@ -76,3 +76,8 @@ INSERT INTO test_db_1.ignore_cols_1 VALUES(1, 1, 1, 1),(2, 2, 2, 2);
 INSERT INTO test_db_1.ignore_cols_2 VALUES(1, 1, 1, 1),(2, 2, 2, 2);
 
 INSERT INTO Upper_Case_DB.Upper_Case_TB VALUES(1, 1, 1, 1, 1),(2, 2, 2, 2, 2);
+
+-- test where condition
+INSERT INTO test_db_1.where_condition_1 VALUES(1, 1),(2, 2),(3, 3),(4, 4),(5, 5),(6, 6),(7, 7),(8, 8),(9, 9),(10, 10);
+INSERT INTO test_db_1.where_condition_2 VALUES(1, 1),(2, 2),(3, 3),(4, 4),(5, 5),(6, 6),(7, 7),(8, 8),(9, 9),(10, 10);
+INSERT INTO test_db_1.where_condition_3 VALUES(1, 1),(2, 2),(3, 3),(4, 4),(5, 5),(6, 6),(7, 7),(8, 8),(9, 9),(10, 10);

@@ -630,12 +630,13 @@ impl RdbTestRunner {
         from: &str,
         condition: &str,
     ) -> anyhow::Result<Vec<RowData>> {
+        let where_sql = self.get_where_sql(&db_tb.0, &db_tb.1, condition);
         let (conn_pool_mysql, conn_pool_pg) = self.get_conn_pool(from);
         let data = if let Some(pool) = conn_pool_mysql {
             let db_type = self.get_db_type(from);
-            RdbUtil::fetch_data_mysql_compatible(pool, None, db_tb, &db_type, condition).await?
+            RdbUtil::fetch_data_mysql_compatible(pool, None, db_tb, &db_type, &where_sql).await?
         } else if let Some(pool) = conn_pool_pg {
-            RdbUtil::fetch_data_pg(pool, None, db_tb).await?
+            RdbUtil::fetch_data_pg(pool, None, db_tb, &where_sql).await?
         } else {
             Vec::new()
         };
@@ -777,6 +778,23 @@ impl RdbTestRunner {
             Ok((binlog_file, binlog_position))
         } else {
             Ok((String::new(), 0))
+        }
+    }
+
+    pub fn get_where_sql(&self, schema: &str, tb: &str, condition: &str) -> String {
+        let mut res: String = String::new();
+        if let Some(where_condition) = self.filter.get_where_condition(schema, tb) {
+            res = format!("WHERE {}", where_condition);
+        }
+
+        if condition.is_empty() {
+            return res;
+        }
+
+        if res.is_empty() {
+            format!("WHERE {}", condition)
+        } else {
+            format!("{} AND {}", res, condition)
         }
     }
 }

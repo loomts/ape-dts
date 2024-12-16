@@ -122,15 +122,15 @@ impl PgSnapshotExtractor {
 
         let mut extracted_count = 0;
         let mut start_value = resume_value;
-        let sql1 = self.build_extract_sql(tb_meta, false)?;
-        let sql2 = self.build_extract_sql(tb_meta, true)?;
+        let sql_1 = self.build_extract_sql(tb_meta, false)?;
+        let sql_2 = self.build_extract_sql(tb_meta, true)?;
         let ignore_cols = self.filter.get_ignore_cols(&self.schema, &self.tb);
         loop {
             let start_value_for_bind = start_value.clone();
             let query = if let ColValue::None = start_value {
-                sqlx::query(&sql1)
+                sqlx::query(&sql_1)
             } else {
-                sqlx::query(&sql2).bind_col_value(Some(&start_value_for_bind), order_col_type)
+                sqlx::query(&sql_2).bind_col_value(Some(&start_value_for_bind), order_col_type)
             };
 
             let mut rows = query.fetch(&self.conn_pool);
@@ -183,31 +183,29 @@ impl PgSnapshotExtractor {
         let ignore_cols = self.filter.get_ignore_cols(&self.schema, &self.tb);
         let query_builder = RdbQueryBuilder::new_for_pg(tb_meta, ignore_cols);
         let cols_str = query_builder.build_extract_cols_str()?;
+        let where_sql = BaseExtractor::get_where_sql(&self.filter, &self.schema, &self.tb, "");
 
         // SELECT col_1, col_2::text FROM tb_1 WHERE col_1 > $1 ORDER BY col_1;
         if let Some(order_col) = &tb_meta.basic.order_col {
             if has_start_value {
                 let order_col_type = tb_meta.get_col_type(order_col)?;
+                let condition = format!(r#""{}" > $1::{}"#, order_col, order_col_type.alias);
+                let where_sql =
+                    BaseExtractor::get_where_sql(&self.filter, &self.schema, &self.tb, &condition);
                 Ok(format!(
-                    r#"SELECT {} FROM "{}"."{}" WHERE "{}" > $1::{} ORDER BY "{}" ASC LIMIT {}"#,
-                    cols_str,
-                    self.schema,
-                    self.tb,
-                    order_col,
-                    order_col_type.alias,
-                    order_col,
-                    self.batch_size
+                    r#"SELECT {} FROM "{}"."{}" {} ORDER BY "{}" ASC LIMIT {}"#,
+                    cols_str, self.schema, self.tb, where_sql, order_col, self.batch_size
                 ))
             } else {
                 Ok(format!(
-                    r#"SELECT {} FROM "{}"."{}" ORDER BY "{}" ASC LIMIT {}"#,
-                    cols_str, self.schema, self.tb, order_col, self.batch_size
+                    r#"SELECT {} FROM "{}"."{}" {} ORDER BY "{}" ASC LIMIT {}"#,
+                    cols_str, self.schema, self.tb, where_sql, order_col, self.batch_size
                 ))
             }
         } else {
             Ok(format!(
-                r#"SELECT {} FROM "{}"."{}""#,
-                cols_str, self.schema, self.tb
+                r#"SELECT {} FROM "{}"."{}" {}"#,
+                cols_str, self.schema, self.tb, where_sql
             ))
         }
     }

@@ -108,7 +108,7 @@ Refer to [test docs](./dt-tests/README.md) for details.
 
 - Image size
 
-| ape_dts:2.0.3	| debezium/connect:2.7 |
+| ape_dts:2.0.14	| debezium/connect:2.7 |
 | :-------- | :-------- |
 | 86.4 MB |	1.38 GB |
 
@@ -144,4 +144,4 @@ Refer to [test docs](./dt-tests/README.md) for details.
 
 Wechat Group
 
-<img src="./docs/img/wechat_group.jpg" width="55%" style="display: block; margin-left: 0;"/>
+<img src="./docs/img/wechat_group.png" width="55%" style="display: block; margin-left: 0;"/>
