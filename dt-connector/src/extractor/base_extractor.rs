@@ -10,6 +10,7 @@ use dt_common::{
     error::Error,
     log_error, log_info, log_warn,
     meta::{ddl_meta::ddl_data::DdlData, dt_queue::DtQueue, struct_meta::struct_data::StructData},
+    rdb_filter::RdbFilter,
     utils::{sql_util::SqlUtil, time_util::TimeUtil},
 };
 use dt_common::{
@@ -138,6 +139,23 @@ impl BaseExtractor {
         ddl_data.default_schema = schema.to_string();
         ddl_data.query = query.to_string();
         Ok(ddl_data)
+    }
+
+    pub fn get_where_sql(filter: &RdbFilter, schema: &str, tb: &str, condition: &str) -> String {
+        let mut res: String = String::new();
+        if let Some(where_condition) = filter.get_where_condition(schema, tb) {
+            res = format!("WHERE {}", where_condition);
+        }
+
+        if condition.is_empty() {
+            return res;
+        }
+
+        if res.is_empty() {
+            format!("WHERE {}", condition)
+        } else {
+            format!("{} AND {}", res, condition)
+        }
     }
 
     pub fn precheck_heartbeat(

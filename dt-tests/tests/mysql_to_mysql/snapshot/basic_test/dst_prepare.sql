@@ -51,3 +51,7 @@ CREATE TABLE Upper_Case_DB.Upper_Case_TB (
     UNIQUE KEY(FIELD_1, field_2, Field_3)
 );
 ```
+
+CREATE TABLE test_db_1.where_condition_1 ( f_0 int, f_1 int ); 
+CREATE TABLE test_db_1.where_condition_2 ( f_0 int, f_1 int, PRIMARY KEY (f_0) ); 
+CREATE TABLE test_db_1.where_condition_3 ( f_0 int, f_1 int ); 

@@ -9,4 +9,5 @@ pub struct FilterConfig {
     pub do_structures: String,
     pub do_ddls: String,
     pub ignore_cmds: String,
+    pub where_conditions: String,
 }

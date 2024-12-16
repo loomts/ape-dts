@@ -16,6 +16,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 type IgnoreCols = HashMap<(String, String), HashSet<String>>;
+type WhereConditions = HashMap<(String, String), String>;
 
 const JSON_PREFIX: &str = "json:";
 
@@ -31,6 +32,7 @@ pub struct RdbFilter {
     pub do_structures: HashSet<String>,
     pub do_ddls: HashSet<String>,
     pub ignore_cmds: HashSet<String>,
+    pub where_conditions: WhereConditions,
     pub cache: HashMap<(String, String), bool>,
 }
 
@@ -47,6 +49,7 @@ impl RdbFilter {
             do_structures: Self::parse_single_tokens(&config.do_structures, db_type)?,
             do_ddls: Self::parse_single_tokens(&config.do_ddls, db_type)?,
             ignore_cmds: Self::parse_single_tokens(&config.ignore_cmds, db_type)?,
+            where_conditions: Self::parse_where_conditions(&config.where_conditions)?,
             cache: HashMap::new(),
         })
     }
@@ -127,6 +130,11 @@ impl RdbFilter {
 
     pub fn add_do_tb(&mut self, schema: &str, tb: &str) {
         self.do_tbs.insert((schema.into(), tb.into()));
+    }
+
+    pub fn get_where_condition(&self, schema: &str, tb: &str) -> Option<&String> {
+        self.where_conditions
+            .get(&(schema.to_string(), tb.to_string()))
     }
 
     fn match_all(set: &HashSet<String>) -> bool {
@@ -222,6 +230,26 @@ impl RdbFilter {
             serde_json::from_str(config_str.trim_start_matches(JSON_PREFIX))?;
         for i in config {
             results.insert((i.db, i.tb), i.ignore_cols);
+        }
+        Ok(results)
+    }
+
+    fn parse_where_conditions(config_str: &str) -> anyhow::Result<WhereConditions> {
+        let mut results = WhereConditions::new();
+        if config_str.trim().is_empty() {
+            return Ok(results);
+        }
+        // where_conditions=json:[{"db":"test_db","tb":"tb_1","condition":"id > 1 and `age` > 100"}]
+        #[derive(Serialize, Deserialize)]
+        struct Condition {
+            db: String,
+            tb: String,
+            condition: String,
+        }
+        let config: Vec<Condition> =
+            serde_json::from_str(config_str.trim_start_matches(JSON_PREFIX))?;
+        for i in config {
+            results.insert((i.db, i.tb), i.condition);
         }
         Ok(results)
     }

@@ -32,7 +32,6 @@ impl TaskUtil {
         max_connections: u32,
         enable_sqlx_log: bool,
     ) -> anyhow::Result<Pool<MySql>> {
-        log_info!("mysql url: {}", url);
         let mut conn_options = MySqlConnectOptions::from_str(url)?;
         // The default character set is `utf8mb4`
         conn_options
@@ -55,7 +54,6 @@ impl TaskUtil {
         max_connections: u32,
         enable_sqlx_log: bool,
     ) -> anyhow::Result<Pool<Postgres>> {
-        log_info!("pg url: {}", url);
         let mut conn_options = PgConnectOptions::from_str(url)?;
         conn_options
             .log_statements(log::LevelFilter::Info)

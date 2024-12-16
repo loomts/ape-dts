@@ -140,7 +140,11 @@ impl MysqlSnapshotExtractor {
 
         let ignore_cols = self.filter.get_ignore_cols(&self.db, &self.tb);
         let cols_str = self.build_extract_cols_str(tb_meta)?;
-        let sql = format!("SELECT {} FROM `{}`.`{}`", cols_str, self.db, self.tb);
+        let where_sql = BaseExtractor::get_where_sql(&self.filter, &self.db, &self.tb, "");
+        let sql = format!(
+            "SELECT {} FROM `{}`.`{}` {}",
+            cols_str, self.db, self.tb, where_sql
+        );
 
         let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
@@ -164,21 +168,26 @@ impl MysqlSnapshotExtractor {
         let ignore_cols = self.filter.get_ignore_cols(&self.db, &self.tb);
         let cols_str = self.build_extract_cols_str(tb_meta)?;
 
-        let sql1 = format!(
-            "SELECT {} FROM `{}`.`{}` ORDER BY `{}` ASC LIMIT {}",
-            cols_str, self.db, self.tb, order_col, self.batch_size
+        let where_sql_1 = BaseExtractor::get_where_sql(&self.filter, &self.db, &self.tb, "");
+        let sql_1 = format!(
+            "SELECT {} FROM `{}`.`{}` {} ORDER BY `{}` ASC LIMIT {}",
+            cols_str, self.db, self.tb, where_sql_1, order_col, self.batch_size
         );
-        let sql2 = format!(
-            "SELECT {} FROM `{}`.`{}` WHERE `{}` > ? ORDER BY `{}` ASC LIMIT {}",
-            cols_str, self.db, self.tb, order_col, order_col, self.batch_size
+
+        let condition_2 = format!("`{}` > ?", order_col);
+        let where_sql_2 =
+            BaseExtractor::get_where_sql(&self.filter, &self.db, &self.tb, &condition_2);
+        let sql_2 = format!(
+            "SELECT {} FROM `{}`.`{}` {} ORDER BY `{}` ASC LIMIT {}",
+            cols_str, self.db, self.tb, where_sql_2, order_col, self.batch_size
         );
 
         loop {
             let start_value_for_bind = start_value.clone();
             let query = if let ColValue::None = start_value {
-                sqlx::query(&sql1)
+                sqlx::query(&sql_1)
             } else {
-                sqlx::query(&sql2).bind_col_value(Some(&start_value_for_bind), order_col_type)
+                sqlx::query(&sql_2).bind_col_value(Some(&start_value_for_bind), order_col_type)
             };
 
             let mut rows = query.fetch(&self.conn_pool);
@@ -234,17 +243,26 @@ impl MysqlSnapshotExtractor {
         let mut start_value = resume_value;
         let cols_str = self.build_extract_cols_str(tb_meta)?;
 
-        let sql1 = format!(
-            "SELECT {} FROM `{}`.`{}` ORDER BY `{}` ASC LIMIT {}",
-            cols_str, self.db, self.tb, order_col, batch_size
+        let where_sql_1 = BaseExtractor::get_where_sql(&self.filter, &self.db, &self.tb, "");
+        let sql_1 = format!(
+            "SELECT {} FROM `{}`.`{}` {} ORDER BY `{}` ASC LIMIT {}",
+            cols_str, self.db, self.tb, where_sql_1, order_col, batch_size
         );
-        let sql2 = format!(
-            "SELECT {} FROM `{}`.`{}` WHERE `{}` > ? AND `{}` <= ? ORDER BY `{}` ASC LIMIT {}",
-            cols_str, self.db, self.tb, order_col, order_col, order_col, batch_size
+
+        let condition_2 = format!("`{}` > ? AND `{}` <= ?", order_col, order_col);
+        let where_sql_2 =
+            BaseExtractor::get_where_sql(&self.filter, &self.db, &self.tb, &condition_2);
+        let sql_2 = format!(
+            "SELECT {} FROM `{}`.`{}` {} ORDER BY `{}` ASC LIMIT {}",
+            cols_str, self.db, self.tb, where_sql_2, order_col, batch_size
         );
-        let sql3 = format!(
-            "SELECT {} FROM `{}`.`{}` WHERE `{}` > ? ORDER BY `{}` ASC LIMIT {}",
-            cols_str, self.db, self.tb, order_col, order_col, batch_size
+
+        let condition_3 = format!("`{}` > ?", order_col);
+        let where_sql_3 =
+            BaseExtractor::get_where_sql(&self.filter, &self.db, &self.tb, &condition_3);
+        let sql_3 = format!(
+            "SELECT {} FROM `{}`.`{}` {} ORDER BY `{}` ASC LIMIT {}",
+            cols_str, self.db, self.tb, where_sql_3, order_col, batch_size
         );
 
         loop {
@@ -259,7 +277,7 @@ impl MysqlSnapshotExtractor {
 
             if let ColValue::None = start_value {
                 let mut slice_count = 0;
-                let query = sqlx::query(&sql1);
+                let query = sqlx::query(&sql_1);
                 let mut rows = query.fetch(&self.conn_pool);
                 while let Some(row) = rows.try_next().await.unwrap() {
                     start_value =
@@ -295,9 +313,9 @@ impl MysqlSnapshotExtractor {
                         Self::get_sub_extractor_range(&start_value, i, batch_size);
                     let sql = if i == parallel_size - 1 {
                         // the last extractor
-                        sql3.clone()
+                        sql_3.clone()
                     } else {
-                        sql2.clone()
+                        sql_2.clone()
                     };
 
                     let future: JoinHandle<anyhow::Result<()>> = tokio::spawn(async move {
