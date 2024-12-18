@@ -178,8 +178,8 @@ impl RedisCdcExtractor {
                     continue;
                 }
 
-                // transaction end
-                if cmd_name == "exec" {
+                // transaction end or a single ping(should NOT be in a transaction)
+                if cmd_name == "exec" || cmd_name == "ping" {
                     self.base_extractor
                         .push_dt_data(DtData::Commit { xid: String::new() }, position)
                         .await?;

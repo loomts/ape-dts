@@ -207,12 +207,9 @@ impl BasePipeline {
                     continue;
                 }
 
-                DtData::Redis { entry } => {
+                DtData::Redis { .. } => {
                     last_received_position = Some(i.position.clone());
                     last_commit_position = last_received_position.clone();
-                    if !entry.is_raw() && entry.cmd.get_name().eq_ignore_ascii_case("ping") {
-                        continue;
-                    }
                 }
 
                 DtData::Begin {} => {
