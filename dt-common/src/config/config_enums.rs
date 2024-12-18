@@ -32,6 +32,8 @@ pub enum ExtractType {
     Snapshot,
     #[strum(serialize = "cdc")]
     Cdc,
+    #[strum(serialize = "snapshot_and_cdc")]
+    SnapshotAndCdc,
     #[strum(serialize = "check_log")]
     CheckLog,
     #[strum(serialize = "struct")]

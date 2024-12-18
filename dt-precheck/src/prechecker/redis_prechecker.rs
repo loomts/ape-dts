@@ -2,8 +2,12 @@ use std::sync::{atomic::AtomicBool, Arc, Mutex};
 
 use async_trait::async_trait;
 use dt_common::{
-    config::{config_enums::DbType, extractor_config::ExtractorConfig, task_config::TaskConfig},
-    meta::dt_queue::DtQueue,
+    config::{
+        config_enums::{DbType, ExtractType},
+        extractor_config::ExtractorConfig,
+        task_config::TaskConfig,
+    },
+    meta::{dt_queue::DtQueue, syncer::Syncer},
     monitor::monitor::Monitor,
     rdb_filter::RdbFilter,
     time_filter::TimeFilter,
@@ -13,6 +17,7 @@ use dt_connector::{
         base_extractor::BaseExtractor,
         extractor_monitor::ExtractorMonitor,
         redis::{redis_client::RedisClient, redis_psync_extractor::RedisPsyncExtractor},
+        resumer::cdc_resumer::CdcResumer,
     },
     rdb_router::RdbRouter,
 };
@@ -73,12 +78,11 @@ impl Prechecker for RedisPrechecker {
             // should never happen since we've already checked the extractor type before into this function
             _ => 0,
         };
-        let mut conn = RedisClient::new(&self.fetcher.url).await?;
         let buffer = Arc::new(DtQueue::new(1, 0));
 
         let filter = RdbFilter::from_config(&self.task_config.filter, &DbType::Redis)?;
         let monitor = Arc::new(Mutex::new(Monitor::new("extractor", 1, 100, 1)));
-        let mut base_extractor = BaseExtractor {
+        let base_extractor = BaseExtractor {
             buffer,
             router: RdbRouter::from_config(&self.task_config.router, &DbType::Redis)?,
             shut_down: Arc::new(AtomicBool::new(false)),
@@ -88,17 +92,22 @@ impl Prechecker for RedisPrechecker {
         };
 
         let mut psyncer = RedisPsyncExtractor {
-            conn: &mut conn,
+            conn: RedisClient::new(&self.fetcher.url).await?,
             repl_id: String::new(),
             repl_offset: 0,
             now_db_id: 0,
             repl_port,
             filter,
-            base_extractor: &mut base_extractor,
+            base_extractor,
+            extract_type: ExtractType::Snapshot,
+            syncer: Arc::new(Mutex::new(Syncer::default())),
+            resumer: CdcResumer::default(),
+            keepalive_interval_secs: 0,
+            heartbeat_interval_secs: 0,
+            heartbeat_key: String::new(),
         };
 
         if let Err(error) = psyncer.start_psync().await {
-            conn.close().await?;
             return Ok(CheckResult::build_with_err(
                 CheckItem::CheckAccountPermission,
                 self.is_source,
@@ -106,7 +115,6 @@ impl Prechecker for RedisPrechecker {
                 Some(error),
             ));
         } else {
-            conn.close().await?;
             Ok(CheckResult::build(
                 CheckItem::CheckAccountPermission,
                 self.is_source,

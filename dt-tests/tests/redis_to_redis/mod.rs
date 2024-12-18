@@ -15,6 +15,7 @@ pub mod snapshot_5_0_tests;
 pub mod snapshot_6_0_tests;
 pub mod snapshot_6_2_tests;
 pub mod snapshot_7_0_tests;
+pub mod snapshot_and_cdc_7_0_tests;
 pub mod snapshot_cross_version_tests;
 pub mod snapshot_rebloom_tests;
 pub mod snapshot_redisearch_tests;

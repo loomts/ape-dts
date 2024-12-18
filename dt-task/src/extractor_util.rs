@@ -5,7 +5,11 @@ use std::{
 };
 
 use dt_common::{
-    config::{config_enums::DbType, extractor_config::ExtractorConfig, task_config::TaskConfig},
+    config::{
+        config_enums::{DbType, ExtractType},
+        extractor_config::ExtractorConfig,
+        task_config::TaskConfig,
+    },
     meta::{
         dt_queue::DtQueue, mysql::mysql_meta_manager::MysqlMetaManager,
         rdb_meta_manager::RdbMetaManager,
@@ -43,10 +47,9 @@ use dt_connector::{
             pg_snapshot_extractor::PgSnapshotExtractor, pg_struct_extractor::PgStructExtractor,
         },
         redis::{
-            redis_cdc_extractor::RedisCdcExtractor, redis_client::RedisClient,
+            redis_client::RedisClient, redis_psync_extractor::RedisPsyncExtractor,
             redis_reshard_extractor::RedisReshardExtractor,
             redis_scan_extractor::RedisScanExtractor,
-            redis_snapshot_extractor::RedisSnapshotExtractor,
             redis_snapshot_file_extractor::RedisSnapshotFileExtractor,
         },
         resumer::{cdc_resumer::CdcResumer, snapshot_resumer::SnapshotResumer},
@@ -345,12 +348,20 @@ impl ExtractorUtil {
             }
 
             ExtractorConfig::RedisSnapshot { url, repl_port } => {
-                let conn = RedisClient::new(&url).await?;
-                let extractor = RedisSnapshotExtractor {
-                    conn,
+                let extractor = RedisPsyncExtractor {
+                    conn: RedisClient::new(&url).await?,
+                    syncer,
                     repl_port,
                     filter,
+                    resumer: cdc_resumer,
                     base_extractor,
+                    extract_type: ExtractType::Snapshot,
+                    repl_id: String::new(),
+                    repl_offset: 0,
+                    now_db_id: 0,
+                    keepalive_interval_secs: 0,
+                    heartbeat_interval_secs: 0,
+                    heartbeat_key: String::new(),
                 };
                 Box::new(extractor)
             }
@@ -391,9 +402,8 @@ impl ExtractorUtil {
                 heartbeat_interval_secs,
                 heartbeat_key,
             } => {
-                let conn = RedisClient::new(&url).await?;
-                let extractor = RedisCdcExtractor {
-                    conn,
+                let extractor = RedisPsyncExtractor {
+                    conn: RedisClient::new(&url).await?,
                     repl_id,
                     repl_offset,
                     keepalive_interval_secs,
@@ -405,6 +415,33 @@ impl ExtractorUtil {
                     filter,
                     resumer: cdc_resumer,
                     base_extractor,
+                    extract_type: ExtractType::Cdc,
+                };
+                Box::new(extractor)
+            }
+
+            ExtractorConfig::RedisSnapshotAndCdc {
+                url,
+                repl_id,
+                repl_port,
+                keepalive_interval_secs,
+                heartbeat_interval_secs,
+                heartbeat_key,
+            } => {
+                let extractor = RedisPsyncExtractor {
+                    conn: RedisClient::new(&url).await?,
+                    syncer,
+                    repl_port,
+                    filter,
+                    resumer: cdc_resumer,
+                    base_extractor,
+                    extract_type: ExtractType::SnapshotAndCdc,
+                    repl_id,
+                    repl_offset: 0,
+                    now_db_id: 0,
+                    keepalive_interval_secs,
+                    heartbeat_interval_secs,
+                    heartbeat_key,
                 };
                 Box::new(extractor)
             }

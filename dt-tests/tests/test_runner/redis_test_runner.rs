@@ -35,7 +35,9 @@ impl RedisTestRunner {
 
         let config = TaskConfig::new(&base.task_config_file).unwrap();
         let src_conn = match config.extractor {
-            ExtractorConfig::RedisSnapshot { url, .. } | ExtractorConfig::RedisCdc { url, .. } => {
+            ExtractorConfig::RedisSnapshot { url, .. }
+            | ExtractorConfig::RedisCdc { url, .. }
+            | ExtractorConfig::RedisSnapshotAndCdc { url, .. } => {
                 RedisUtil::create_redis_conn(&url).await.unwrap()
             }
             _ => {
