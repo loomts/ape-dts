@@ -53,7 +53,7 @@ impl MongoSnapshotExtractor {
             self.resumer
                 .get_resume_value(&self.db, &self.tb, MongoConstants::ID, false)
         {
-            let start_id = ObjectId::parse_str(resume_value).unwrap();
+            let start_id = ObjectId::parse_str(resume_value)?;
             log_info!("start_id: {}", start_id.to_string());
             Some(doc! {MongoConstants::ID: {"$gt": start_id}})
         } else {
@@ -69,9 +69,9 @@ impl MongoSnapshotExtractor {
             .mongo_client
             .database(&self.db)
             .collection::<Document>(&self.tb);
-        let mut cursor = collection.find(filter, find_options).await.unwrap();
-        while cursor.advance().await.unwrap() {
-            let doc = cursor.deserialize_current().unwrap();
+        let mut cursor = collection.find(filter, find_options).await?;
+        while cursor.advance().await? {
+            let doc = cursor.deserialize_current()?;
             let object_id = Self::get_object_id(&doc);
 
             let mut after = HashMap::new();
@@ -97,10 +97,7 @@ impl MongoSnapshotExtractor {
                 value: object_id,
             };
 
-            self.base_extractor
-                .push_row(row_data, position)
-                .await
-                .unwrap();
+            self.base_extractor.push_row(row_data, position).await?;
         }
 
         log_info!(
