@@ -68,6 +68,7 @@ impl BaseExtractor {
                     // then current transaction should NOT be filtered by default.
                     // set reseted = false, just to make sure is_marker_info won't be called again
                     // in current transaction
+                    data_marker.filter = false;
                     data_marker.reseted = false;
                 }
             }

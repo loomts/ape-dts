@@ -112,6 +112,15 @@ pub enum ExtractorConfig {
         now_db_id: i64,
     },
 
+    RedisSnapshotAndCdc {
+        url: String,
+        repl_id: String,
+        repl_port: u64,
+        keepalive_interval_secs: u64,
+        heartbeat_interval_secs: u64,
+        heartbeat_key: String,
+    },
+
     RedisSnapshotFile {
         file_path: String,
     },

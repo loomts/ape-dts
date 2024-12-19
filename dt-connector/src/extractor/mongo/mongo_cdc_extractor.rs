@@ -72,8 +72,7 @@ impl Extractor for MongoCdcExtractor {
         );
 
         // start heartbeat
-        self.start_heartbeat(self.base_extractor.shut_down.clone())
-            .unwrap();
+        self.start_heartbeat(self.base_extractor.shut_down.clone())?;
 
         match self.source {
             MongoCdcSource::OpLog => self.extract_oplog().await?,
@@ -102,10 +101,10 @@ impl MongoCdcExtractor {
             .mongo_client
             .database("local")
             .collection::<Document>("oplog.rs");
-        let mut cursor = oplog.find(filter, options).await.unwrap();
+        let mut cursor = oplog.find(filter, options).await?;
 
-        while cursor.advance().await.unwrap() {
-            let doc: Document = cursor.deserialize_current().unwrap();
+        while cursor.advance().await? {
+            let doc: Document = cursor.deserialize_current()?;
             // https://github.com/mongodb/mongo/blob/master/src/mongo/db/repl/oplog.cpp
             // op:
             //     "i" insert
@@ -206,7 +205,7 @@ impl MongoCdcExtractor {
             // get db & tb
             let (row_data, position) =
                 Self::build_oplog_row_data(&ns, &ts, row_type, before, after);
-            self.push_row_to_buf(row_data, position).await.unwrap();
+            self.push_row_to_buf(row_data, position).await?;
         }
         Ok(())
     }
@@ -328,7 +327,7 @@ impl MongoCdcExtractor {
         let (resume_token, start_timestamp) = if self.resume_token.is_empty() {
             (None, Some(self.parse_start_timestamp()))
         } else {
-            let token: ResumeToken = serde_json::from_str(&self.resume_token).unwrap();
+            let token: ResumeToken = serde_json::from_str(&self.resume_token)?;
             (Some(token), None)
         };
 
@@ -342,9 +341,9 @@ impl MongoCdcExtractor {
             .full_document_before_change(Some(FullDocumentBeforeChangeType::WhenAvailable))
             .build();
 
-        let mut change_stream = self.mongo_client.watch(None, stream_options).await.unwrap();
+        let mut change_stream = self.mongo_client.watch(None, stream_options).await?;
         loop {
-            let result = change_stream.next_if_any().await.unwrap();
+            let result = change_stream.next_if_any().await?;
             if let Some(doc) = result {
                 let resume_token = doc.id;
                 let position = if let Some(operation_time) = doc.cluster_time {
@@ -412,7 +411,7 @@ impl MongoCdcExtractor {
                 }
 
                 let row_data = RowData::new(db, tb, row_type, Some(before), Some(after));
-                self.push_row_to_buf(row_data, position).await.unwrap();
+                self.push_row_to_buf(row_data, position).await?;
             }
         }
     }

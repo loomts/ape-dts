@@ -280,6 +280,18 @@ impl TaskConfig {
                     }
                 }
 
+                ExtractType::SnapshotAndCdc => {
+                    let repl_port = loader.get_with_default(EXTRACTOR, REPL_PORT, 10008);
+                    ExtractorConfig::RedisSnapshotAndCdc {
+                        url,
+                        repl_port,
+                        repl_id: loader.get_optional(EXTRACTOR, "repl_id"),
+                        keepalive_interval_secs,
+                        heartbeat_interval_secs,
+                        heartbeat_key: loader.get_optional(EXTRACTOR, "heartbeat_key"),
+                    }
+                }
+
                 ExtractType::Reshard => ExtractorConfig::RedisReshard { url },
 
                 _ => bail! { not_supported_err },
