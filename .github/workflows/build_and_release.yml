@@ -40,6 +40,10 @@ jobs:
           echo "tag_info: ${tag_info}"
           upload_url=$(echo $tag_info | jq -r '.upload_url')
           echo "upload_url: ${upload_url}"
+          if [ -z "$upload_url" ] || [ "$upload_url" == "null" ]; then
+            echo "Upload URL is null or empty. Exiting workflow."
+            exit 1
+          fi
           echo "UPLOAD_URL=${upload_url}" >> $GITHUB_ENV
 
       - name: Set up Rust toolchain
