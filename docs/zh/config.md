@@ -37,6 +37,7 @@
 | do_ddls | 需同步的 ddl，适用于 mysql cdc 任务 | create_database,drop_database,alter_database,create_table,drop_table,truncate_table,rename_table,alter_table,create_index,drop_index | - |
 | do_structures | 需同步的结构，适用于 mysql/pg 结构迁移任务 | database,table,constraint,sequence,comment,index | * |
 | ignore_cmds | 需忽略的命令，适用于 redis 增量任务 | flushall,flushdb | - |
+| where_conditions | 全量同步时，对源端 select sql 添加过滤条件 | json:[{"db":"db_1","tb":"tb_1","condition":"f_0 > 1"},{"db":"db_2","tb":"tb_2","condition":"f_0 > 1 AND f_1 < 9"}] | - |
 
 
 ## 取值范围
@@ -44,7 +45,7 @@
 - 所有配置项均支持多条配置，如 do_dbs 可包含多个库，以 , 分隔。
 - 如某配置项需匹配所有条目，则设置成 *，如 do_dbs=\*。
 - 如某配置项不匹配任何条目，则设置成空，如 ignore_dbs=。
-- ignore_cols 是 JSON 格式，应包含 "json:" 前缀。
+- ignore_cols 和 where_conditions 是 JSON 格式，应包含 "json:" 前缀。
 - do_events 取值：insert、update、delete 中的一个或多个。
 
 ## 优先级

@@ -86,7 +86,7 @@ log4rs_file=./log4rs.yaml
 
 | Config | Description | Example | Default |
 | :-------- | :-------- | :-------- | :-------- |
-| source | op_log / change_stream | op_log | change_stream |
+| source | op_log / change_stream, change_stream is recommended if the source mongo version is 6.0+ | op_log | change_stream |
 | start_timestamp | the starting UTC timestamp to pull op logs from | 1728525445 | 0, which means from newest |
 
 # CDC, by change_stream

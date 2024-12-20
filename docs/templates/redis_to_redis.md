@@ -2,6 +2,12 @@
 
 Refer to [config details](/docs/en/config.md) for explanations of common fields.
 
+ape-dts uses PSYNC to synchronize Redis data.
+
+- Snapshot: only migrates the snapshot, which is the RDB returned by PSYNC.
+- Snapshot + CDC: migrates the snapshot and synchronizes incremental data, including the RDB and AOF.
+- CDC: receive but discard RDB (if PSYNC returns RDB), only synchronizes the AOF.
+
 # Snapshot
 ```
 [extractor]
@@ -52,6 +58,48 @@ log_dir=./logs
 ```
 [extractor]
 db_type=redis
+extract_type=snapshot_and_cdc
+repl_port=10008
+url=redis://:123456@127.0.0.1:6380
+
+[filter]
+do_dbs=*
+do_events=
+ignore_dbs=1,2
+ignore_tbs=
+do_tbs=
+ignore_cmds=flushall,flushdb
+
+[sinker]
+db_type=redis
+sink_type=write
+method=restore
+url=redis://:123456@127.0.0.1:6390
+batch_size=200
+
+[router]
+db_map=
+col_map=
+tb_map=
+
+[pipeline]
+buffer_size=16000
+checkpoint_interval_secs=10
+
+[parallelizer]
+parallel_type=redis
+parallel_size=8
+
+[runtime]
+log_level=info
+log4rs_file=./log4rs.yaml
+log_dir=./logs
+```
+
+# CDC
+```
+[extractor]
+db_type=redis
 extract_type=cdc
 repl_port=10008
 url=redis://:123456@127.0.0.1:6380
@@ -62,7 +110,7 @@ do_events=
 ignore_dbs=1,2
 ignore_tbs=
 do_tbs=
-ignore_cmds=flushall
+ignore_cmds=flushall,flushdb
 
 [sinker]
 db_type=redis

@@ -37,6 +37,7 @@ Since different tasks may require extra configs, please refer to examples in dt-
 | do_ddls | ddls to be synced, for mysql cdc tasks | create_database,drop_database,alter_database,create_table,drop_table,truncate_table,rename_table,alter_table,create_index,drop_index | - |
 | do_structures | structures to be migrated, for mysql/pg structure migration tasks | database,table,constraint,sequence,comment,index | * |
 | ignore_cmds | commands to be filtered, for redis cdc tasks | flushall,flushdb | - |
+| where_conditions | where conditions for the source SELECT SQL during snapshot migration |	json:[{"db":"db_1","tb":"tb_1","condition":"f_0 > 1"},{"db":"db_2","tb":"tb_2","condition":"f_0 > 1 AND f_1 < 9"}] | - |
 
 
 ## Values
@@ -44,7 +45,7 @@ Since different tasks may require extra configs, please refer to examples in dt-
 - All configurations support multiple items, which are separated by ",". Example: do_dbs=db_1,db_2.
 - Set to * to match all. Example: do_dbs=\*.
 - Keep empty to match nothing. Example: ignore_dbs=.
-- ignore_cols is in JSON format, it should starts with "json:".
+- ignore_cols and where_conditions are in JSON format, it should starts with "json:".
 - do_events takes one or more values from **insert**, **update**, and **delete**.
 
 ## Priority

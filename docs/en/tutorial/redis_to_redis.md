@@ -112,7 +112,7 @@ flushall
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
 db_type=redis
-extract_type=cdc
+extract_type=snapshot_and_cdc
 repl_id=
 now_db_id=0
 repl_port=10008
@@ -121,7 +121,7 @@ url=redis://:123456@127.0.0.1:6380
 
 [filter]
 do_dbs=*
-ignore_cmds=flushall
+ignore_cmds=flushall,flushdb
 
 [sinker]
 db_type=redis
