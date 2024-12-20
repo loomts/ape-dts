@@ -32,26 +32,15 @@ jobs:
         with:
           ref: ${{ inputs.branch }}
 
-      - name: Check if Release Exists
-        id: check_release
+      - name: Get Release Upload URL
+        id: get_upload_url
         run: |
-          RELEASE_ID=$(curl -s -X GET \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ inputs.tag_name }} \
-            | jq -r '.id')
-          echo "Release ID for tag ${{ inputs.tag_name }}: $RELEASE_ID"
-          echo "::set-output name=release_id::$RELEASE_ID"
-
-      - name: Create Release
-        if: steps.check_release.outputs.release_id == 'null' || steps.check_release.outputs.release_id == ''
-        id: create_release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ inputs.tag_name }}
-          files: |
-            artifacts/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          tag_info=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ inputs.tag_name }}")
+          echo "tag_info: ${tag_info}"
+          upload_url=$(echo $tag_info | jq -r '.upload_url' | sed 's/{?name,label}//')
+          echo "upload_url: ${upload_url}"
+          echo "UPLOAD_URL=${upload_url}" >> $GITHUB_ENV
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -82,7 +71,7 @@ jobs:
         id: upload_release_asset
         uses: actions/upload-release-asset@v1
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          upload_url: ${{ env.UPLOAD_URL }}
           asset_path: ape-dts-${{ github.run_id }}-${{ matrix.target }}.tar.gz
           asset_name: ape-dts-${{ github.run_id }}-${{ matrix.target }}.tar.gz
           asset_content_type: application/gzip
