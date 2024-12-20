@@ -32,7 +32,18 @@ jobs:
         with:
           ref: ${{ inputs.branch }}
 
+      - name: Check if Release Exists
+        id: check_release
+        run: |
+          RELEASE_ID=$(curl -s -X GET \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ inputs.tag_name }} \
+            | jq -r '.id')
+          echo "Release ID for tag ${{ inputs.tag_name }}: $RELEASE_ID"
+          echo "::set-output name=release_id::$RELEASE_ID"
+
       - name: Create Release
+        if: steps.check_release.outputs.release_id == 'null' || steps.check_release.outputs.release_id == ''
         id: create_release
         uses: softprops/action-gh-release@v1
         with:
