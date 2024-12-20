@@ -47,19 +47,18 @@ jobs:
 
       - name: Install target
         run: rustup target add ${{ matrix.target }}
-      
-      - name: Install cross-compilation tools for aarch64
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            gcc-aarch64-linux-gnu \
-            g++-aarch64-linux-gnu \
-            binutils-aarch64-linux-gnu \
-            qemu-user-static
 
+      # Build linux targets by cross, otherwise there may be runtime errors when running on other linux versions:
+      # ./ape-dts: /lib/x86_64-linux-gnu/libm.so.6: version `GLIBC_2.38' not found (required by ./ape-dts)
+      # ./ape-dts: /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.38' not found (required by ./ape-dts)
       - name: Build binary
-        run: cargo build --release --target=${{ matrix.target }}
+        run: |
+          if [ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ] || [ "${{ matrix.target }}" == "x86_64-unknown-linux-gnu" ]; then
+            cargo install cross
+            cross build --release --target=${{ matrix.target }}
+          else 
+            cargo build --release --target=${{ matrix.target }}
+          fi
 
       - name: Create release artifact
         run: |
