@@ -54,6 +54,7 @@ db_type=pg
 sink_type=write
 url=postgres://postgres:postgres@127.0.0.1:5434/postgres?options[statement_timeout]=10s
 batch_size=200
+replace=true
 
 [filter]
 do_dbs=
@@ -102,6 +103,7 @@ db_type=pg
 sink_type=write
 url=postgres://postgres:postgres@127.0.0.1:5434/postgres?options[statement_timeout]=10s
 batch_size=200
+replace=true
 
 [router]
 tb_map=

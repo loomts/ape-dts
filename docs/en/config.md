@@ -21,6 +21,7 @@ Since different tasks may require extra configs, please refer to examples in dt-
 | sink_type | write, check | write | write |
 | url | database url | mysql://root:123456@127.0.0.1:3308 | - |
 | batch_size | number of records written in a batch, 1 for serial | 200 | 200 |
+| replace | when inserting data, whether to force replacement if data already exists in target database, used in snapshot/cdc tasks for MySQL/PG | false | true |
 
 Since different tasks may require extra configs, please refer to examples in dt-tests/tests and [task templates](/docs/templates/).
 

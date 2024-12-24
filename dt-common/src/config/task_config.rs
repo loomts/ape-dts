@@ -70,6 +70,7 @@ const REVERSE: &str = "reverse";
 const REPL_PORT: &str = "repl_port";
 const PARALLEL_SIZE: &str = "parallel_size";
 const DDL_CONFLICT_POLICY: &str = "ddl_conflict_policy";
+const REPLACE: &str = "replace";
 // default values
 const APE_DTS: &str = "APE_DTS";
 const ASTRISK: &str = "*";
@@ -340,7 +341,11 @@ impl TaskConfig {
 
         let sinker = match db_type {
             DbType::Mysql | DbType::Tidb => match sink_type {
-                SinkType::Write => SinkerConfig::Mysql { url, batch_size },
+                SinkType::Write => SinkerConfig::Mysql {
+                    url,
+                    batch_size,
+                    replace: loader.get_with_default(SINKER, REPLACE, true),
+                },
 
                 SinkType::Check => SinkerConfig::MysqlCheck {
                     url,
@@ -361,7 +366,11 @@ impl TaskConfig {
             },
 
             DbType::Pg => match sink_type {
-                SinkType::Write => SinkerConfig::Pg { url, batch_size },
+                SinkType::Write => SinkerConfig::Pg {
+                    url,
+                    batch_size,
+                    replace: loader.get_with_default(SINKER, REPLACE, true),
+                },
 
                 SinkType::Check => SinkerConfig::PgCheck {
                     url,
