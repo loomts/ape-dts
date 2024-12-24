@@ -1,5 +1,4 @@
 use std::{
-    env,
     fs::{self, File},
     io::Read,
     panic,
@@ -74,7 +73,6 @@ impl TaskRunner {
             self.init_log4rs()?;
         }
 
-        env::set_var("RUST_BACKTRACE", "1");
         panic::set_hook(Box::new(|panic_info| {
             log_error!("panic: {}", panic_info);
         }));
