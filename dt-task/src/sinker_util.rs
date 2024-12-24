@@ -84,7 +84,11 @@ impl SinkerUtil {
                 }
             }
 
-            SinkerConfig::Mysql { url, batch_size } => {
+            SinkerConfig::Mysql {
+                url,
+                batch_size,
+                replace,
+            } => {
                 let router = RdbRouter::from_config(&task_config.router, &DbType::Mysql)?;
                 let conn_pool =
                     TaskUtil::create_mysql_conn_pool(&url, parallel_size * 2, enable_sqlx_log)
@@ -102,6 +106,7 @@ impl SinkerUtil {
                         batch_size,
                         monitor: monitor.clone(),
                         data_marker: data_marker.clone(),
+                        replace,
                     };
                     sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
                 }
@@ -137,7 +142,11 @@ impl SinkerUtil {
                 }
             }
 
-            SinkerConfig::Pg { url, batch_size } => {
+            SinkerConfig::Pg {
+                url,
+                batch_size,
+                replace,
+            } => {
                 let router = RdbRouter::from_config(&task_config.router, &DbType::Pg)?;
                 let conn_pool =
                     TaskUtil::create_pg_conn_pool(&url, parallel_size * 2, enable_sqlx_log).await?;
@@ -152,6 +161,7 @@ impl SinkerUtil {
                         batch_size,
                         monitor: monitor.clone(),
                         data_marker: data_marker.clone(),
+                        replace,
                     };
                     sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
                 }

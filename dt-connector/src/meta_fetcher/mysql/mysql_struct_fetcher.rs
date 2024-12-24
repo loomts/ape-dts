@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     str::FromStr,
 };
 
@@ -216,16 +216,14 @@ impl MysqlStructFetcher {
                 Self::get_str_with_null(&row, "INDEX_NAME")?,
             );
 
+            // in mysql 5.*, SEQ_IN_INDEX: bigint(2)
+            // in mysql 8.*, SEQ_IN_INDEX: int unsigned
+            let seq_in_index = row
+                .try_get_unchecked::<u32, &str>("SEQ_IN_INDEX")
+                .unwrap_or_default();
             let column = IndexColumn {
                 column_name: Self::get_str_with_null(&row, "COLUMN_NAME")?,
-                seq_in_index: {
-                    if self.meta_manager.meta_fetcher.version.starts_with("5.") {
-                        let seq_in_index: i32 = row.try_get("SEQ_IN_INDEX")?;
-                        seq_in_index as u32
-                    } else {
-                        row.try_get("SEQ_IN_INDEX")?
-                    }
-                },
+                seq_in_index,
             };
 
             let key = (table_name.clone(), index_name.clone());
@@ -263,8 +261,10 @@ impl MysqlStructFetcher {
         tb: &str,
     ) -> anyhow::Result<HashMap<String, Vec<Constraint>>> {
         let mut results: HashMap<String, Vec<Constraint>> = HashMap::new();
-        // mysql 5.7 does not support check constraints
-        if self.meta_manager.meta_fetcher.version.starts_with("5.") {
+        // information_schema.check_constraints was introduced from MySQL 8.0.16
+        // also, many MySQL-like databases: PolarDB/PolarX doesn't have check_constraints
+        let info_tbs = self.get_information_schema_tables().await?;
+        if !info_tbs.contains("check_constraints") {
             return Ok(results);
         }
 
@@ -369,6 +369,17 @@ impl MysqlStructFetcher {
             self.push_to_results(&mut results, &table_name, constraint);
         }
         Ok(results)
+    }
+
+    async fn get_information_schema_tables(&mut self) -> anyhow::Result<HashSet<String>> {
+        let mut tbs = HashSet::new();
+        let sql = "SHOW TABLES IN INFORMATION_SCHEMA";
+        let mut rows = sqlx::query(sql).fetch(&self.conn_pool);
+        while let Some(row) = rows.try_next().await? {
+            let tb: String = row.get(0);
+            tbs.insert(tb.to_lowercase());
+        }
+        Ok(tbs)
     }
 
     fn get_str_with_null(row: &MySqlRow, col_name: &str) -> anyhow::Result<String> {

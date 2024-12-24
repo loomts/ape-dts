@@ -66,6 +66,7 @@ db_type=mysql
 sink_type=write
 url=mysql://root:123456@127.0.0.1:3308?ssl-mode=disabled
 batch_size=200
+replace=true
 
 [filter]
 do_dbs=
@@ -115,6 +116,7 @@ db_type=mysql
 sink_type=write
 batch_size=200
 url=mysql://root:123456@127.0.0.1:3308?ssl-mode=disabled
+replace=true
 
 [router]
 tb_map=
@@ -165,6 +167,7 @@ db_type=mysql
 sink_type=write
 batch_size=200
 url=mysql://root:123456@127.0.0.1:3308?ssl-mode=disabled
+replace=true
 
 [router]
 tb_map=
@@ -218,6 +221,7 @@ url=mysql://root:123456@127.0.0.1:3307?ssl-mode=disabled
 db_type=mysql
 sink_type=check
 url=mysql://root:123456@127.0.0.1:3308?ssl-mode=disabled
+replace=true
 
 [filter]
 do_dbs=test_db

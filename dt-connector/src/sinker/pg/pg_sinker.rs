@@ -33,6 +33,7 @@ pub struct PgSinker {
     pub batch_size: usize,
     pub monitor: Arc<Mutex<Monitor>>,
     pub data_marker: Option<Arc<RwLock<DataMarker>>>,
+    pub replace: bool,
 }
 
 #[async_trait]
@@ -122,7 +123,7 @@ impl PgSinker {
             let tb_meta = self.meta_manager.get_tb_meta_by_row_data(row_data).await?;
             let query_builder = RdbQueryBuilder::new_for_pg(tb_meta, None);
 
-            let query_info = query_builder.get_query_info(row_data, true)?;
+            let query_info = query_builder.get_query_info(row_data, self.replace)?;
             let query = query_builder.create_pg_query(&query_info);
             query
                 .execute(&mut tx)
@@ -177,7 +178,7 @@ impl PgSinker {
         let query_builder = RdbQueryBuilder::new_for_pg(&tb_meta, None);
 
         let (query_info, data_size) =
-            query_builder.get_batch_insert_query(data, start_index, batch_size)?;
+            query_builder.get_batch_insert_query(data, start_index, batch_size, self.replace)?;
         let query = query_builder.create_pg_query(&query_info);
 
         let exec_error = if let Some(sql) = self.get_data_marker_sql() {

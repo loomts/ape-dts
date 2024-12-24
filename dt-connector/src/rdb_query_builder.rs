@@ -170,6 +170,7 @@ impl RdbQueryBuilder<'_> {
         data: &'a [RowData],
         start_index: usize,
         batch_size: usize,
+        replace: bool,
     ) -> anyhow::Result<(RdbQueryInfo<'a>, usize)> {
         let mut malloc_size = 0;
         let mut placeholder_index = 1;
@@ -202,7 +203,7 @@ impl RdbQueryBuilder<'_> {
             }
         }
 
-        if self.mysql_tb_meta.is_some() {
+        if replace && self.mysql_tb_meta.is_some() {
             sql = format!("REPLACE{}", sql.trim_start_matches("INSERT"));
         }
         Ok((RdbQueryInfo { sql, cols, binds }, malloc_size))

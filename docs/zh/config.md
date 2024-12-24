@@ -21,6 +21,7 @@
 | sink_type | 拉取类型（写入：write，校验：check） | write | write |
 | url | 目标库连接信息 | mysql://root:123456@127.0.0.1:3308 | - |
 | batch_size | 批量写入数据条数，1 代表串行 | 200 | 200 |
+| replace | 插入数据时，如果已存在于目标库，是否强行替换，适用于 mysql/pg 的全量/增量任务 | false | true |
 
 不同任务类型需要不同的参数，详情请参考 dt-tests/tests 及 [任务模版](/docs/templates/)。
 
