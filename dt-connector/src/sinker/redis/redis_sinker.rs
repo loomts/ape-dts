@@ -6,10 +6,13 @@ use std::time::Instant;
 use anyhow::bail;
 use async_trait::async_trait;
 use dt_common::error::Error;
+use dt_common::log_debug;
 use dt_common::meta::dt_data::DtData;
 use dt_common::meta::dt_data::DtItem;
 use dt_common::meta::rdb_meta_manager::RdbMetaManager;
+use dt_common::meta::redis::cluster_node::ClusterNode;
 use dt_common::meta::redis::command::cmd_encoder::CmdEncoder;
+use dt_common::meta::redis::command::key_parser::KeyParser;
 use dt_common::meta::redis::redis_object::RedisCmd;
 use dt_common::meta::redis::redis_object::RedisObject;
 use dt_common::meta::redis::redis_write_method::RedisWriteMethod;
@@ -18,6 +21,7 @@ use dt_common::meta::row_type::RowType;
 use dt_common::monitor::monitor::Monitor;
 use redis::Connection;
 use redis::ConnectionLike;
+use redis::Value;
 
 use crate::call_batch_fn;
 use crate::data_marker::DataMarker;
@@ -27,7 +31,7 @@ use crate::Sinker;
 use super::entry_rewriter::EntryRewriter;
 
 pub struct RedisSinker {
-    pub id: String,
+    pub cluster_node: Option<ClusterNode>,
     pub batch_size: usize,
     pub conn: Connection,
     pub now_db_id: i64,
@@ -36,6 +40,7 @@ pub struct RedisSinker {
     pub meta_manager: Option<RdbMetaManager>,
     pub monitor: Arc<Mutex<Monitor>>,
     pub data_marker: Option<Arc<RwLock<DataMarker>>>,
+    pub key_parser: KeyParser,
 }
 
 #[async_trait]
@@ -45,10 +50,11 @@ impl Sinker for RedisSinker {
             return Ok(());
         }
 
-        if self.batch_size > 1 {
-            call_batch_fn!(self, data, Self::batch_sink_raw);
-        } else {
+        let is_cluster_two_way = self.cluster_node.is_some() && self.data_marker.is_some();
+        if self.batch_size <= 1 || is_cluster_two_way {
             self.serial_sink_raw(&mut data).await?;
+        } else {
+            call_batch_fn!(self, data, Self::batch_sink_raw);
         }
         Ok(())
     }
@@ -67,7 +73,11 @@ impl Sinker for RedisSinker {
     }
 
     fn get_id(&self) -> String {
-        self.id.clone()
+        if let Some(node) = &self.cluster_node {
+            node.address.clone()
+        } else {
+            String::new()
+        }
     }
 }
 
@@ -100,7 +110,9 @@ impl RedisSinker {
         for dt_item in data.iter_mut() {
             data_size += dt_item.dt_data.get_data_size();
             let cmds = self.rewrite_entry(&mut dt_item.dt_data)?;
-            self.serial_sink(cmds).await?;
+            for cmd in cmds {
+                self.batch_sink(&[cmd]).await?;
+            }
         }
 
         BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
@@ -182,7 +194,7 @@ impl RedisSinker {
         for row_data in data.iter_mut() {
             data_size += row_data.data_size;
             if let Some(cmd) = self.dml_to_redis_cmd(row_data).await? {
-                self.serial_sink(vec![cmd]).await?
+                self.batch_sink(&[cmd]).await?
             }
         }
 
@@ -255,76 +267,92 @@ impl RedisSinker {
         }
 
         let mut packed_cmds = Vec::new();
-        if let Some(data_marker_cmd) = self.get_data_marker_cmd() {
-            let multi_cmd = self.get_multi_cmd();
+        let mut is_tx = false;
+        let mut tx_wrapper_cmds = Vec::new();
+        if let Some(data_marker_cmd) = self.get_data_marker_cmd(cmds[0].clone())? {
+            let multi_cmd = RedisCmd::from_str_args(&["MULTI"]);
             packed_cmds.extend_from_slice(&CmdEncoder::encode(&multi_cmd));
             packed_cmds.extend_from_slice(&CmdEncoder::encode(&data_marker_cmd));
+            tx_wrapper_cmds.push(multi_cmd);
+            tx_wrapper_cmds.push(data_marker_cmd);
+            is_tx = true;
         }
 
         for cmd in cmds.iter() {
             packed_cmds.extend_from_slice(&CmdEncoder::encode(cmd));
         }
 
-        if self.data_marker.is_some() {
-            let exec_cmd = self.get_exec_cmd();
+        if is_tx {
+            let exec_cmd = RedisCmd::from_str_args(&["EXEC"]);
             packed_cmds.extend_from_slice(&CmdEncoder::encode(&exec_cmd));
+            tx_wrapper_cmds.push(exec_cmd);
         }
 
-        let result = self.conn.req_packed_commands(&packed_cmds, 0, cmds.len());
-        if let Err(error) = result {
-            bail! {Error::SinkerError(format!(
-                "batch sink failed, error: {:?}",
-                error
-            ))}
-        }
-        Ok(())
-    }
-
-    async fn serial_sink(&mut self, cmds: Vec<RedisCmd>) -> anyhow::Result<()> {
-        if let Some(data_marker_cmd) = self.get_data_marker_cmd() {
-            let multi_cmd = self.get_multi_cmd();
-            let mut packed_cmds = Vec::new();
-            packed_cmds.extend_from_slice(&CmdEncoder::encode(&multi_cmd));
-            packed_cmds.extend_from_slice(&CmdEncoder::encode(&data_marker_cmd));
-            self.conn.req_packed_commands(&packed_cmds, 0, 2)?;
-        }
-
-        for cmd in cmds {
-            let result = self.conn.req_packed_command(&CmdEncoder::encode(&cmd));
-            if let Err(error) = result {
+        let count = if is_tx { cmds.len() + 3 } else { cmds.len() };
+        let result = self.conn.req_packed_commands(&packed_cmds, 0, count);
+        match result {
+            Err(error) => {
                 bail! {Error::SinkerError(format!(
-                    "serial sink failed, error: {:?}, cmd: {}",
-                    error, cmd
+                    "batch sink failed, error: {:?}",
+                    error
                 ))}
             }
-        }
 
-        if self.data_marker.is_some() {
-            let exec_cmd = self.get_exec_cmd();
-            self.conn
-                .req_packed_command(&CmdEncoder::encode(&exec_cmd))?;
+            Ok(values) => {
+                for (i, v) in values.iter().enumerate() {
+                    if *v == Value::Okay {
+                        continue;
+                    }
+
+                    let cmd = if is_tx {
+                        match i {
+                            0 => &tx_wrapper_cmds[0],
+                            1 => &tx_wrapper_cmds[1],
+                            n if n == values.len() - 1 => &tx_wrapper_cmds[2],
+                            n => &cmds[n - 2],
+                        }
+                    } else {
+                        &cmds[i]
+                    };
+
+                    match v {
+                        Value::ServerError(e) => {
+                            bail! {Error::SinkerError(format!(
+                                "sink failed, server error: [{:?}], result: [{:?}], cmd: [{}]",
+                                e, v, cmd
+                            ))}
+                        }
+                        _ => {
+                            log_debug!("sink result: [{:?}], cmd: [{}]", v, cmd)
+                        }
+                    }
+                }
+            }
         }
         Ok(())
     }
 
-    fn get_multi_cmd(&self) -> RedisCmd {
-        RedisCmd::from_str_args(&["MULTI"])
-    }
-
-    fn get_exec_cmd(&self) -> RedisCmd {
-        RedisCmd::from_str_args(&["EXEC"])
-    }
-
-    fn get_data_marker_cmd(&self) -> Option<RedisCmd> {
+    fn get_data_marker_cmd(&self, mut cmd: RedisCmd) -> anyhow::Result<Option<RedisCmd>> {
         if let Some(data_marker) = &self.data_marker {
             let data_marker = data_marker.read().unwrap();
-            let cmd = RedisCmd::from_str_args(&[
-                "SET",
-                &data_marker.marker,
-                &data_marker.data_origin_node,
-            ]);
-            return Some(cmd);
+            let key = if let Some(node) = &self.cluster_node {
+                // the target Redis is a cluster node.
+                // use hash_tag to ensure that the marker key can be hashed to the target node,
+                cmd.parse_keys(&self.key_parser)?;
+                if !cmd.keys.is_empty() {
+                    &format!("{}{{{}}}", data_marker.marker, cmd.keys[0])
+                } else {
+                    &format!("{}{{{}}}", data_marker.marker, node.hash_tag)
+                }
+            } else {
+                &data_marker.marker
+            };
+
+            let data_marker_cmd =
+                RedisCmd::from_str_args(&["SET", key, &data_marker.data_origin_node]);
+            log_debug!("data_marker_cmd: [{}] by cmd: [{}]", data_marker_cmd, cmd);
+            return Ok(Some(data_marker_cmd));
         }
-        None
+        Ok(None)
     }
 }

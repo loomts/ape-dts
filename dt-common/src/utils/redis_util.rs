@@ -2,6 +2,7 @@ use crate::error::Error;
 use crate::log_info;
 use crate::meta::redis::cluster_node::ClusterNode;
 use crate::meta::redis::command::cmd_encoder::CmdEncoder;
+use crate::meta::redis::command::key_parser::KeyParser;
 use crate::meta::redis::redis_object::RedisCmd;
 use anyhow::{bail, Context};
 use redis::{Connection, ConnectionLike, Value};
@@ -122,11 +123,18 @@ impl RedisUtil {
 
             _ => {
                 bail! {Error::RedisResultError(
-                    "redis result type can not be parsed as string".into(),
+                    format!("redis result type can not be parsed as string, value: {:?}", value),
                 )}
             }
         }
         Ok(results)
+    }
+
+    fn find_a_slot_hash_tag(slot: u16) -> String {
+        (0..)
+            .find(|i| KeyParser::calc_slot(i.to_string().as_bytes()) == slot)
+            .unwrap()
+            .to_string()
     }
 
     fn parse_cluster_nodes(nodes_str: &str) -> anyhow::Result<Vec<ClusterNode>> {
@@ -172,6 +180,7 @@ impl RedisUtil {
                 host,
                 address,
                 slots: Vec::new(),
+                hash_tag: String::new(),
             };
 
             if !is_master {
@@ -211,6 +220,9 @@ impl RedisUtil {
             }
 
             all_slots_count += slots.len();
+            if !slots.is_empty() {
+                node.hash_tag = Self::find_a_slot_hash_tag(slots[0]);
+            }
             node.slots = slots;
             parsed_nodes.push(node);
         }

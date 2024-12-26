@@ -23,7 +23,7 @@ impl RedisRespReader {
         let len = res.len();
         self.read_len += len;
 
-        if len == 1 {
+        if len <= 1 {
             return Ok(Value::Nil);
         }
         if len < 3 {

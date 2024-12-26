@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use dt_common::{
     config::{config_enums::DbType, data_marker_config::DataMarkerConfig},
-    meta::dt_data::DtData,
+    meta::{dt_data::DtData, redis::redis_entry::RedisEntry},
 };
 
 #[derive(Debug, Clone, Default)]
@@ -74,18 +74,24 @@ impl DataMarker {
 
     pub fn is_marker_info(&self, dt_data: &DtData) -> bool {
         match dt_data {
-            DtData::Dml { row_data } => self.is_marker_info_2(&row_data.schema, &row_data.tb),
-
-            DtData::Redis { entry } => {
-                let entry_key = entry.cmd.get_str_arg(1);
-                entry_key == self.marker
-            }
-
+            DtData::Dml { row_data } => self.is_rdb_marker_info(&row_data.schema, &row_data.tb),
+            DtData::Redis { entry } => self.is_redis_marker_info(entry),
             _ => false,
         }
     }
 
-    pub fn is_marker_info_2(&self, schema: &str, tb: &str) -> bool {
+    pub fn is_redis_marker_info(&self, entry: &RedisEntry) -> bool {
+        let entry_key = if entry.is_raw() {
+            entry.key.to_string()
+        } else {
+            entry.cmd.get_str_arg(1)
+        };
+        // if self.marker is "data_marker_topo1_test",
+        // both "data_marker_topo1_test" and "data_marker_topo1_test{b}" can match
+        entry_key == self.marker || entry_key.starts_with(&format!("{}{{", self.marker))
+    }
+
+    pub fn is_rdb_marker_info(&self, schema: &str, tb: &str) -> bool {
         self.marker_schema == schema && self.marker_tb == tb
     }
 

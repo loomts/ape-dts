@@ -9,6 +9,7 @@ use dt_common::{
         config_enums::DbType, extractor_config::ExtractorConfig, sinker_config::SinkerConfig,
         task_config::TaskConfig,
     },
+    meta::redis::command::key_parser::KeyParser,
     monitor::monitor::Monitor,
     rdb_filter::RdbFilter,
     utils::url_util::UrlUtil,
@@ -339,7 +340,7 @@ impl SinkerUtil {
                         let new_url = format!("redis://{}:{}@{}", username, password, node.address);
                         let conn = RedisUtil::create_redis_conn(&new_url).await?;
                         let sinker = RedisSinker {
-                            id: node.address.clone(),
+                            cluster_node: Some(node.clone()),
                             conn,
                             batch_size,
                             now_db_id: -1,
@@ -348,6 +349,7 @@ impl SinkerUtil {
                             meta_manager: meta_manager.clone(),
                             monitor: monitor.clone(),
                             data_marker: data_marker.clone(),
+                            key_parser: KeyParser::new(),
                         };
                         sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
                     }
@@ -355,7 +357,7 @@ impl SinkerUtil {
                     for _ in 0..parallel_size {
                         let conn = RedisUtil::create_redis_conn(&url).await?;
                         let sinker = RedisSinker {
-                            id: url.to_string(),
+                            cluster_node: None,
                             conn,
                             batch_size,
                             now_db_id: -1,
@@ -364,6 +366,7 @@ impl SinkerUtil {
                             meta_manager: meta_manager.clone(),
                             monitor: monitor.clone(),
                             data_marker: data_marker.clone(),
+                            key_parser: KeyParser::new(),
                         };
                         sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
                     }

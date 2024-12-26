@@ -39,7 +39,7 @@ pub struct BaseExtractor {
 impl BaseExtractor {
     pub fn is_data_marker_info(&self, schema: &str, tb: &str) -> bool {
         if let Some(data_marker) = &self.data_marker {
-            return data_marker.is_marker_info_2(schema, tb);
+            return data_marker.is_rdb_marker_info(schema, tb);
         }
         false
     }

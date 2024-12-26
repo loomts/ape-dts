@@ -11,7 +11,7 @@ use dt_common::rdb_filter::RdbFilter;
 use dt_common::utils::sql_util::SqlUtil;
 use dt_common::utils::time_util::TimeUtil;
 use dt_common::{error::Error, log_info};
-use dt_common::{log_error, log_position, log_warn};
+use dt_common::{log_debug, log_error, log_position, log_warn};
 
 use crate::extractor::base_extractor::BaseExtractor;
 use crate::extractor::redis::rdb::rdb_parser::RdbParser;
@@ -180,6 +180,12 @@ impl RedisPsyncExtractor {
                     self.extract_type,
                     ExtractType::Snapshot | ExtractType::SnapshotAndCdc
                 ) {
+                    if let Some(data_marker) = &self.base_extractor.data_marker {
+                        if data_marker.is_redis_marker_info(&entry) {
+                            continue;
+                        }
+                    }
+
                     Self::push_to_buf(
                         &mut self.base_extractor,
                         &mut self.filter,
@@ -246,11 +252,13 @@ impl RedisPsyncExtractor {
 
             let (value, n) = self.conn.read_with_len().await?;
             if Value::Nil == value {
+                TimeUtil::sleep_millis(1).await;
                 continue;
             }
 
             self.repl_offset += n as u64;
             let cmd = self.handle_redis_value(value).await?;
+            log_debug!("received cmd: [{}]", cmd);
 
             if !cmd.args.is_empty() {
                 let cmd_name = cmd.get_name().to_ascii_lowercase();

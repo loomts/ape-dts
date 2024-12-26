@@ -8,4 +8,5 @@ pub struct ClusterNode {
     pub port: String,
     pub address: String,
     pub slots: Vec<u16>,
+    pub hash_tag: String,
 }
