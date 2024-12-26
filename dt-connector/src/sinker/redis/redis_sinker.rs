@@ -337,13 +337,18 @@ impl RedisSinker {
             let data_marker = data_marker.read().unwrap();
             let key = if let Some(node) = &self.cluster_node {
                 // the target Redis is a cluster node.
-                // use hash_tag to ensure that the marker key can be hashed to the target node,
                 cmd.parse_keys(&self.key_parser)?;
-                if !cmd.keys.is_empty() {
-                    &format!("{}{{{}}}", data_marker.marker, cmd.keys[0])
+                let hash_tag = if !cmd.keys.is_empty() {
+                    // find the hash_tag for the slot which cmd.keys[0] belongs to,
+                    // otherwise we may get: (error) CROSSSLOT Keys in request don't hash to the same slot
+                    let slot = KeyParser::calc_slot(cmd.keys[0].as_bytes());
+                    node.slot_hash_tag_map.get(&slot).unwrap()
                 } else {
-                    &format!("{}{{{}}}", data_marker.marker, node.hash_tag)
-                }
+                    // if the redis cmd has no key, find a hash_tag for any slot in current node
+                    let (_, hash_tag) = node.slot_hash_tag_map.iter().next().unwrap();
+                    hash_tag
+                };
+                &format!("{}{{{}}}", data_marker.marker, hash_tag)
             } else {
                 &data_marker.marker
             };
