@@ -201,7 +201,7 @@ impl BasePipeline {
         let mut last_commit_position = Option::None;
         for i in data.iter() {
             match &i.dt_data {
-                DtData::Commit { .. } | DtData::Ddl { .. } => {
+                DtData::Commit { .. } | DtData::Heartbeat {} | DtData::Ddl { .. } => {
                     last_commit_position = Some(i.position.clone());
                     last_received_position = last_commit_position.clone();
                     continue;
@@ -231,7 +231,7 @@ impl BasePipeline {
         let mut last_commit_position = Option::None;
         for i in data.drain(..) {
             match i.dt_data {
-                DtData::Commit { .. } => {
+                DtData::Commit { .. } | DtData::Heartbeat {} => {
                     last_commit_position = Some(i.position);
                     last_received_position = last_commit_position.clone();
                     continue;
@@ -255,7 +255,7 @@ impl BasePipeline {
         let mut last_commit_position = Option::None;
         for i in data.drain(..) {
             match i.dt_data {
-                DtData::Commit { .. } => {
+                DtData::Commit { .. } | DtData::Heartbeat {} => {
                     last_commit_position = Some(i.position);
                     last_received_position = last_commit_position.clone();
                     continue;
@@ -286,7 +286,7 @@ impl BasePipeline {
                     _ => return SinkMethod::Dml,
                 },
                 DtData::Redis { .. } | DtData::Foxlake { .. } => return SinkMethod::Raw,
-                DtData::Begin {} | DtData::Commit { .. } => {
+                DtData::Begin {} | DtData::Commit { .. } | DtData::Heartbeat {} => {
                     continue;
                 }
             }

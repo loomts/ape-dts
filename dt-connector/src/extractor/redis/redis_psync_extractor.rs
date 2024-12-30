@@ -298,16 +298,22 @@ impl RedisPsyncExtractor {
                     // 1, only the first command following MULTI be considered as data marker info.
                     // 2, data_marker will be reset follwing EXEC.
                     self.base_extractor
-                        .push_dt_data(DtData::Begin {}, position)
-                        .await?;
-                    // ignore MULTI & EXEC, otherwise we may get error: "MULTI calls can not be nested"
+                        .refresh_and_check_data_marker(&DtData::Begin {});
+                    // ignore MULTI & EXEC
                     continue;
                 }
 
-                // transaction end or a single ping(should NOT be in a transaction)
-                if cmd_name == "exec" || cmd_name == "ping" {
+                // transaction end
+                if cmd_name == "exec" {
                     self.base_extractor
-                        .push_dt_data(DtData::Commit { xid: String::new() }, position)
+                        .refresh_and_check_data_marker(&DtData::Commit { xid: String::new() });
+                    continue;
+                }
+
+                // a single ping(should NOT be in a transaction)
+                if cmd_name == "ping" {
+                    self.base_extractor
+                        .push_dt_data(DtData::Heartbeat {}, position)
                         .await?;
                     continue;
                 }
