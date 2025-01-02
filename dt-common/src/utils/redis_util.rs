@@ -2,6 +2,7 @@ use crate::error::Error;
 use crate::log_info;
 use crate::meta::redis::cluster_node::ClusterNode;
 use crate::meta::redis::command::cmd_encoder::CmdEncoder;
+use crate::meta::redis::command::key_parser::KeyParser;
 use crate::meta::redis::redis_object::RedisCmd;
 use anyhow::{bail, Context};
 use redis::{Connection, ConnectionLike, Value};
@@ -122,17 +123,34 @@ impl RedisUtil {
 
             _ => {
                 bail! {Error::RedisResultError(
-                    "redis result type can not be parsed as string".into(),
+                    format!("redis result type can not be parsed as string, value: {:?}", value),
                 )}
             }
         }
         Ok(results)
     }
 
+    fn get_slot_hash_tag_map() -> HashMap<u16, String> {
+        let mut res: HashMap<u16, String> = HashMap::new();
+        for i in 0.. {
+            let key = i.to_string();
+            let slot = KeyParser::calc_slot(key.as_bytes());
+            //  0 to 16383
+            if (slot as usize) < SLOTS_COUNT && !res.contains_key(&slot) {
+                res.insert(slot, key);
+            }
+            if res.len() >= SLOTS_COUNT {
+                break;
+            }
+        }
+        res
+    }
+
     fn parse_cluster_nodes(nodes_str: &str) -> anyhow::Result<Vec<ClusterNode>> {
         // refer: https://github.com/tair-opensource/RedisShake/blob/v4/internal/utils/cluster_nodes.go
         let mut all_slots_count = 0;
         let mut parsed_nodes = Vec::new();
+        let all_slot_hash_tag_map = Self::get_slot_hash_tag_map();
 
         log_info!("cluster nodes: {}", nodes_str);
         // 5bafc7277da3038a8fbf01873179260351ed0a0a 172.28.0.13:6379@16379 master - 0 1712124938134 3 connected 12589-15758 15760-16383
@@ -172,6 +190,7 @@ impl RedisUtil {
                 host,
                 address,
                 slots: Vec::new(),
+                slot_hash_tag_map: HashMap::new(),
             };
 
             if !is_master {
@@ -211,6 +230,14 @@ impl RedisUtil {
             }
 
             all_slots_count += slots.len();
+            if !slots.is_empty() {
+                let mut node_slot_hash_tag_map = HashMap::with_capacity(slots.len());
+                for i in slots.iter() {
+                    node_slot_hash_tag_map
+                        .insert(*i, all_slot_hash_tag_map.get(i).unwrap().to_owned());
+                }
+                node.slot_hash_tag_map = node_slot_hash_tag_map;
+            }
             node.slots = slots;
             parsed_nodes.push(node);
         }

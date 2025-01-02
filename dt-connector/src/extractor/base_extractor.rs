@@ -39,7 +39,7 @@ pub struct BaseExtractor {
 impl BaseExtractor {
     pub fn is_data_marker_info(&self, schema: &str, tb: &str) -> bool {
         if let Some(data_marker) = &self.data_marker {
-            return data_marker.is_marker_info_2(schema, tb);
+            return data_marker.is_rdb_marker_info(schema, tb);
         }
         false
     }
@@ -53,30 +53,8 @@ impl BaseExtractor {
             return Ok(());
         }
 
-        // data_marker does not support DDL event yet.
-        // user needs to ensure only one-way DDL replication exists in the topology
-        if let Some(data_marker) = &mut self.data_marker {
-            if dt_data.is_begin() || dt_data.is_commit() {
-                data_marker.reset();
-            } else if data_marker.reseted {
-                if data_marker.is_marker_info(&dt_data) {
-                    data_marker.refresh(&dt_data);
-                    // after data_marker refreshed, discard the marker data itself
-                    return Ok(());
-                } else {
-                    // the first dml/ddl after the last transaction commit is NOT marker_info,
-                    // then current transaction should NOT be filtered by default.
-                    // set reseted = false, just to make sure is_marker_info won't be called again
-                    // in current transaction
-                    data_marker.filter = false;
-                    data_marker.reseted = false;
-                }
-            }
-
-            // data from origin node are filtered
-            if data_marker.filter {
-                return Ok(());
-            }
+        if self.refresh_and_check_data_marker(&dt_data) {
+            return Ok(());
         }
 
         self.monitor.counters.record_count += 1;
@@ -95,6 +73,35 @@ impl BaseExtractor {
             data_origin_node,
         };
         self.buffer.push(item).await
+    }
+
+    pub fn refresh_and_check_data_marker(&mut self, dt_data: &DtData) -> bool {
+        // data_marker does not support DDL event yet.
+        // user needs to ensure only one-way DDL replication exists in the topology
+        if let Some(data_marker) = &mut self.data_marker {
+            if dt_data.is_begin() || dt_data.is_commit() {
+                data_marker.reset();
+            } else if data_marker.reseted {
+                if data_marker.is_marker_info(&dt_data) {
+                    data_marker.refresh(&dt_data);
+                    // after data_marker refreshed, discard the marker data itself
+                    return true;
+                } else {
+                    // the first dml/ddl after the last transaction commit is NOT marker_info,
+                    // then current transaction should NOT be filtered by default.
+                    // set reseted = false, just to make sure is_marker_info won't be called again
+                    // in current transaction
+                    data_marker.filter = false;
+                    data_marker.reseted = false;
+                }
+            }
+
+            // data from origin node are filtered
+            if data_marker.filter {
+                return true;
+            }
+        }
+        false
     }
 
     pub async fn push_row(&mut self, row_data: RowData, position: Position) -> anyhow::Result<()> {

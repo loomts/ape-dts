@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 #[derive(Clone)]
 pub struct ClusterNode {
     pub is_master: bool,
@@ -8,4 +10,5 @@ pub struct ClusterNode {
     pub port: String,
     pub address: String,
     pub slots: Vec<u16>,
+    pub slot_hash_tag_map: HashMap<u16, String>,
 }

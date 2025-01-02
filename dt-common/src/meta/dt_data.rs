@@ -36,6 +36,7 @@ pub enum DtData {
     Commit {
         xid: String,
     },
+    Heartbeat {},
     #[serde(skip)]
     Redis {
         entry: RedisEntry,
