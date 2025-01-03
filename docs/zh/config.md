@@ -1,8 +1,8 @@
 # 配置详情
 
-# 示例: MySQL -> MySQL
+不同任务类型需要不同的参数，详情请参考 [任务模版](/docs/templates/) 和 [教程](/docs/en/tutorial/)。
 
-参考 [任务模版](../templates/mysql_to_mysql.md) 和 [教程](../en/tutorial/mysql_to_mysql.md)
+# 示例: MySQL -> MySQL
 
 # [extractor]
 | 配置 | 作用 | 示例 | 默认 |
@@ -12,7 +12,13 @@
 | url | 源库连接信息 | mysql://root:123456@127.0.0.1:3307 | - |
 | batch_size | 批量拉取数据条数 | 10000 | 和 [pipeline] buffer_size 一致 |
 
-不同任务类型需要不同的参数，详情请参考 dt-tests/tests 及 [任务模版](/docs/templates/)。
+## url 转义
+- 如果用户名/密码中包含特殊字符，需要对相应部分进行通用的 url 百分号转义，如：
+```
+create user user1@'%' identified by 'abc%$#?@';
+对应的 url 为：
+url=mysql://user1:abc%25%24%23%3F%40@127.0.0.1:3307?ssl-mode=disabled
+```
 
 # [sinker]
 | 配置 | 作用 | 示例 | 默认 |
@@ -22,8 +28,6 @@
 | url | 目标库连接信息 | mysql://root:123456@127.0.0.1:3308 | - |
 | batch_size | 批量写入数据条数，1 代表串行 | 200 | 200 |
 | replace | 插入数据时，如果已存在于目标库，是否强行替换，适用于 mysql/pg 的全量/增量任务 | false | true |
-
-不同任务类型需要不同的参数，详情请参考 dt-tests/tests 及 [任务模版](/docs/templates/)。
 
 # [filter]
 

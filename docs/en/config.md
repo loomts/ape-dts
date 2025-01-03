@@ -1,8 +1,8 @@
 # Config details
 
-# Config content
+Different tasks may require extra configs, refer to [task templates](/docs/templates/) and [tutorial](/docs/en/tutorial/)
 
-Refer to [task templates](../templates/mysql_to_mysql.md) and [tutorial](../en/tutorial/mysql_to_mysql.md)
+# Example: MySQL -> MySQL
 
 # [extractor]
 | Config | Description | Example | Default |
@@ -12,7 +12,13 @@ Refer to [task templates](../templates/mysql_to_mysql.md) and [tutorial](../en/t
 | url | database url | mysql://root:123456@127.0.0.1:3307 | - |
 | batch_size | number of extracted records in a batch | 10000 | same as [pipeline] buffer_size |
 
-Since different tasks may require extra configs, please refer to examples in dt-tests/tests and [task templates](/docs/templates/).
+## URL escaping
+- If the username/password contains special characters, the corresponding parts need to be percent-encoded, for example:
+```
+create user user1@'%' identified by 'abc%$#?@';
+The url should be:
+url=mysql://user1:abc%25%24%23%3F%40@127.0.0.1:3307?ssl-mode=disabled
+```
 
 # [sinker]
 | Config | Description | Example | Default |
@@ -23,7 +29,6 @@ Since different tasks may require extra configs, please refer to examples in dt-
 | batch_size | number of records written in a batch, 1 for serial | 200 | 200 |
 | replace | when inserting data, whether to force replacement if data already exists in target database, used in snapshot/cdc tasks for MySQL/PG | false | true |
 
-Since different tasks may require extra configs, please refer to examples in dt-tests/tests and [task templates](/docs/templates/).
 
 # [filter]
 
