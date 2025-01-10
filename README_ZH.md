@@ -21,12 +21,12 @@
 
 <br/>
 
-|  | mysql -> mysql | pg -> pg | mongo -> mongo | redis -> redis | mysql -> kafka | pg -> kafka| mysql -> starrocks | mysql -> clickhouse | mysql -> tidb | pg -> starrocks |
-| :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- |
-| 全量迁移 | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
-| 增量同步 | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
-| 数据校验/订正/复查 | &#10004; | &#10004; | &#10004; | | | | | | &#10004; | |
-| 库表结构迁移 | &#10004; | &#10004; | | | | | &#10004; | &#10004; | &#10004; | &#10004; |
+|  | mysql -> mysql | pg -> pg | mongo -> mongo | redis -> redis | mysql -> kafka | pg -> kafka| mysql -> starrocks | mysql -> clickhouse | mysql -> tidb | pg -> starrocks | pg -> clickhouse |
+| :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- |
+| 全量迁移 | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
+| 增量同步 | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
+| 数据校验/订正/复查 | &#10004; | &#10004; | &#10004; | | | | | | &#10004; | | |
+| 库表结构迁移 | &#10004; | &#10004; | | | | | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
 
 # 快速上手
 
@@ -41,6 +41,7 @@
 - [mysql -> tidb](./docs/en/tutorial/mysql_to_tidb.md)
 - [mysql -> kafka -> 消费者](./docs/en/tutorial/mysql_to_kafka_consumer.md)
 - [pg -> starrocks](./docs/en/tutorial/pg_to_starrocks.md)
+- [pg -> clickhouse](./docs/en/tutorial/pg_to_clickhouse.md)
 - [pg -> kafka -> 消费者](./docs/en/tutorial/pg_to_kafka_consumer.md)
 - [mysql -> ape_dts(HTTP server) -> 消费者](./docs/en/tutorial/mysql_to_http_server_consumer.md)
 - [pg -> ape_dts(HTTP server) -> 消费者](./docs/en/tutorial/pg_to_http_server_consumer.md)
@@ -87,6 +88,7 @@
     - [mysql -> starrocks](./docs/templates/mysql_to_starrocks.md)
     - [mysql -> clickhouse](./docs/templates/mysql_to_clickhouse.md)
     - [pg -> starrocks](./docs/templates/pg_to_starrocks.md)
+    - [pg -> clickhouse](./docs/templates/pg_to_clickhouse.md)
 
 # Benchmark
 - MySQL -> MySQL，全量
