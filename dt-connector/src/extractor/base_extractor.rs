@@ -82,8 +82,8 @@ impl BaseExtractor {
             if dt_data.is_begin() || dt_data.is_commit() {
                 data_marker.reset();
             } else if data_marker.reseted {
-                if data_marker.is_marker_info(&dt_data) {
-                    data_marker.refresh(&dt_data);
+                if data_marker.is_marker_info(dt_data) {
+                    data_marker.refresh(dt_data);
                     // after data_marker refreshed, discard the marker data itself
                     return true;
                 } else {

@@ -395,7 +395,12 @@ impl SinkerUtil {
                 url,
                 batch_size,
                 stream_load_url,
-                hard_delete,
+                ..
+            }
+            | SinkerConfig::Doris {
+                url,
+                batch_size,
+                stream_load_url,
             } => {
                 for _ in 0..parallel_size {
                     let url_info = UrlUtil::parse(&stream_load_url)?;
@@ -416,7 +421,9 @@ impl SinkerUtil {
                         DbType::StarRocks,
                     )
                     .await?;
-                    let sinker = StarRocksSinker {
+
+                    let mut sinker = StarRocksSinker {
+                        db_type: task_config.sinker_basic.db_type.clone(),
                         http_client,
                         host,
                         port,
@@ -426,13 +433,21 @@ impl SinkerUtil {
                         meta_manager,
                         monitor: monitor.clone(),
                         sync_timestamp: Utc::now().timestamp_millis(),
-                        hard_delete,
+                        hard_delete: false,
                     };
+                    if let SinkerConfig::StarRocks { hard_delete, .. } = task_config.sinker {
+                        sinker.hard_delete = hard_delete;
+                    }
+
                     sub_sinkers.push(Arc::new(async_mutex::Mutex::new(Box::new(sinker))));
                 }
             }
 
             SinkerConfig::StarRocksStruct {
+                url,
+                conflict_policy,
+            }
+            | SinkerConfig::DorisStruct {
                 url,
                 conflict_policy,
             } => {
@@ -443,6 +458,7 @@ impl SinkerUtil {
                     .await?
                     .unwrap();
                 let sinker = StarrocksStructSinker {
+                    db_type: task_config.sinker_basic.db_type.clone(),
                     conn_pool,
                     conflict_policy,
                     filter,

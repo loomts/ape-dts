@@ -83,6 +83,17 @@ pub enum SinkerConfig {
         hard_delete: bool,
     },
 
+    DorisStruct {
+        url: String,
+        conflict_policy: ConflictPolicyEnum,
+    },
+
+    Doris {
+        url: String,
+        batch_size: usize,
+        stream_load_url: String,
+    },
+
     StarRocksStruct {
         url: String,
         conflict_policy: ConflictPolicyEnum,

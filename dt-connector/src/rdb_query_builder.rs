@@ -543,8 +543,8 @@ impl RdbQueryBuilder<'_> {
 
         let col_type = self.mysql_tb_meta.unwrap().get_col_type(col)?;
         let is_str = match col_type {
-            MysqlColType::DateTime
-            | MysqlColType::Time
+            MysqlColType::DateTime { .. }
+            | MysqlColType::Time { .. }
             | MysqlColType::Date
             | MysqlColType::Timestamp { .. }
             | MysqlColType::Binary { .. }

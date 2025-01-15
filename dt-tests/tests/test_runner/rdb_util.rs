@@ -39,9 +39,10 @@ impl RdbUtil {
         );
 
         let mut query = sqlx::query(&sql);
-        if *db_type == DbType::StarRocks || *db_type == DbType::Foxlake {
+        if matches!(db_type, DbType::StarRocks | DbType::Foxlake | DbType::Doris) {
             query = query.disable_arguments();
         }
+
         let mut rows = query.fetch(conn_pool);
         let mut result = Vec::new();
         while let Some(row) = rows.try_next().await.unwrap() {
