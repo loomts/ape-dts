@@ -148,11 +148,11 @@ impl MysqlColValueConvertor {
 
             ColumnValue::Timestamp(v) => {
                 if let MysqlColType::Timestamp {
-                    timezone_offset: timezone_diff_utc_seconds,
+                    timezone_offset, ..
                 } = *col_type
                 {
                     // the value parsed from binlog is in millis with UTC
-                    let dt = Utc.timestamp_nanos(v * 1000 + timezone_diff_utc_seconds * 1000000000);
+                    let dt = Utc.timestamp_nanos(v * 1000 + timezone_offset * 1000000000);
                     ColValue::Timestamp(dt.to_string().replace(" UTC", ""))
                 } else {
                     let dt = Utc.timestamp_nanos(v * 1000);
@@ -298,11 +298,11 @@ impl MysqlColValueConvertor {
                 | MysqlColType::LongText { .. } => ColValue::String(value_str),
 
                 MysqlColType::Decimal { .. } => ColValue::Decimal(value_str),
-                MysqlColType::Time => ColValue::Time(value_str),
+                MysqlColType::Time { .. } => ColValue::Time(value_str),
                 MysqlColType::Date => ColValue::Date(value_str),
-                MysqlColType::DateTime => ColValue::DateTime(value_str),
+                MysqlColType::DateTime { .. } => ColValue::DateTime(value_str),
 
-                MysqlColType::Timestamp { timezone_offset: _ } => ColValue::Timestamp(value_str),
+                MysqlColType::Timestamp { .. } => ColValue::Timestamp(value_str),
 
                 MysqlColType::Year => match value_str.parse::<u16>() {
                     Ok(value) => ColValue::Year(value),
@@ -400,7 +400,7 @@ impl MysqlColValueConvertor {
                 let value: BigDecimal = row.get_unchecked(col);
                 Ok(ColValue::Decimal(value.to_string()))
             }
-            MysqlColType::Time => match db_type {
+            MysqlColType::Time { .. } => match db_type {
                 DbType::Foxlake => {
                     let value: Vec<u8> = row.get_unchecked(col);
                     let str: String = String::from_utf8_lossy(&value).to_string();
@@ -424,7 +424,7 @@ impl MysqlColValueConvertor {
                     Ok(ColValue::Date(value.format("%Y-%m-%d").to_string()))
                 }
             },
-            MysqlColType::DateTime => match db_type {
+            MysqlColType::DateTime { .. } => match db_type {
                 DbType::StarRocks | DbType::Foxlake => {
                     let value: Vec<u8> = row.get_unchecked(col);
                     let str: String = String::from_utf8_lossy(&value).to_string();
@@ -437,7 +437,7 @@ impl MysqlColValueConvertor {
                     ))
                 }
             },
-            MysqlColType::Timestamp { timezone_offset: _ } => match db_type {
+            MysqlColType::Timestamp { .. } => match db_type {
                 DbType::Foxlake => {
                     let value: Vec<u8> = row.get_unchecked(col);
                     let str: String = String::from_utf8_lossy(&value).to_string();

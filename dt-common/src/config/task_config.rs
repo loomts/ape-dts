@@ -453,6 +453,21 @@ impl TaskConfig {
                 _ => bail! { not_supported_err },
             },
 
+            DbType::Doris => match sink_type {
+                SinkType::Write => SinkerConfig::Doris {
+                    url,
+                    batch_size,
+                    stream_load_url: loader.get_optional(SINKER, "stream_load_url"),
+                },
+
+                SinkType::Struct => SinkerConfig::DorisStruct {
+                    url,
+                    conflict_policy,
+                },
+
+                _ => bail! { not_supported_err },
+            },
+
             DbType::ClickHouse => match sink_type {
                 SinkType::Write => SinkerConfig::ClickHouse { url, batch_size },
 

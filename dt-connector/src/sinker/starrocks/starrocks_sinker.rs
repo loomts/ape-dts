@@ -11,6 +11,7 @@ use anyhow::bail;
 use async_trait::async_trait;
 use chrono::Utc;
 use dt_common::{
+    config::config_enums::DbType,
     error::Error,
     log_error,
     meta::mysql::{
@@ -31,6 +32,7 @@ const TIMESTAMP_COL_NAME: &str = "_ape_dts_timestamp";
 
 #[derive(Clone)]
 pub struct StarRocksSinker {
+    pub db_type: DbType,
     pub batch_size: usize,
     pub http_client: Client,
     pub host: String,
@@ -108,28 +110,36 @@ impl StarRocksSinker {
 
             let col_values = if row_data.row_type == RowType::Delete {
                 let before = row_data.before.as_mut().unwrap();
-                // SIGN_COL value
-                before.insert(SIGN_COL_NAME.into(), ColValue::Long(1));
+                if self.db_type == DbType::StarRocks {
+                    // SIGN_COL value
+                    before.insert(SIGN_COL_NAME.into(), ColValue::Long(1));
+                }
                 before
             } else {
                 row_data.after.as_mut().unwrap()
             };
 
-            col_values.insert(
-                TIMESTAMP_COL_NAME.into(),
-                ColValue::LongLong(self.sync_timestamp),
-            );
+            if self.db_type == DbType::StarRocks {
+                col_values.insert(
+                    TIMESTAMP_COL_NAME.into(),
+                    ColValue::LongLong(self.sync_timestamp),
+                );
+            }
+
             load_data.push(col_values);
         }
 
-        let hard_delete = self.hard_delete
-            || !tb_meta
-                .basic
-                .col_origin_type_map
-                .contains_key(SIGN_COL_NAME);
-
         let mut op = "";
-        if first_row_type == RowType::Delete && hard_delete {
+        if self.db_type == DbType::StarRocks {
+            let hard_delete = self.hard_delete
+                || !tb_meta
+                    .basic
+                    .col_origin_type_map
+                    .contains_key(SIGN_COL_NAME);
+            if first_row_type == RowType::Delete && hard_delete {
+                op = "delete";
+            }
+        } else if first_row_type == RowType::Delete {
             op = "delete";
         }
 
@@ -206,7 +216,6 @@ impl StarRocksSinker {
             Some(self.password.clone())
         };
 
-        // https://docs.starrocks.io/en-us/2.5/loading/Load_to_Primary_Key_tables
         let mut put = self
             .http_client
             .request(Method::PUT, url)
@@ -214,11 +223,35 @@ impl StarRocksSinker {
             .header(header::EXPECT, "100-continue")
             .header("format", "json")
             .header("strip_outer_array", "true")
+            .header("timezone", "UTC")
             .body(body.to_string());
         // by default, the __op will be upsert
         if !op.is_empty() {
-            let op = format!("__op='{}'", op);
-            put = put.header("columns", op);
+            match self.db_type {
+                DbType::StarRocks => {
+                    // https://docs.starrocks.io/docs/loading/Load_to_Primary_Key_tables/
+                    // https://docs.starrocks.io/docs/loading/Stream_Load_transaction_interface/
+                    let op = format!("__op='{}'", op);
+                    put = put.header("columns", op);
+                }
+                DbType::Doris => {
+                    // https://doris.apache.org/docs/1.2/data-operate/update-delete/batch-delete-manual
+                    // https://doris.apache.org/docs/1.2/data-operate/import/import-way/stream-load-manual
+                    // if bulk delete support is enabled (enable_batch_delete_by_default=true or ALTER TABLE tablename ENABLE FEATURE "BATCH_DELETE"),
+                    // there will be 2 hidden columns for each table:
+                    // Doris > DESC `test_db`.`tb_1`;
+                    // +-----------------------+---------+------+-------+---------+-------+
+                    // | Field                 | Type    | Null | Key   | Default | Extra |
+                    // +-----------------------+---------+------+-------+---------+-------+
+                    // | id                    | INT     | No   | true  | NULL    |       |
+                    // | value                 | INT     | Yes  | false | NULL    | NONE  |
+                    // | __DORIS_DELETE_SIGN__ | TINYINT | No   | false | 0       | NONE  |
+                    // | __DORIS_VERSION_COL__ | BIGINT  | No   | false | 0       | NONE  |
+                    // +-----------------------+---------+------+-------+---------+-------+
+                    put = put.header("merge_type", op);
+                }
+                _ => {}
+            }
         }
         Ok(put.build()?)
     }

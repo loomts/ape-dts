@@ -438,9 +438,9 @@ impl FoxlakePusher {
             }
 
             MysqlColType::Year => Schema::Long,
-            MysqlColType::Time
+            MysqlColType::Time { .. }
             | MysqlColType::Date
-            | MysqlColType::DateTime
+            | MysqlColType::DateTime { .. }
             | MysqlColType::Timestamp { .. } => Schema::Long,
 
             MysqlColType::Binary { .. }

@@ -186,6 +186,20 @@ impl MysqlMetaFetcher {
         let column_type: String = row.try_get(COLUMN_TYPE)?;
         let data_type: String = row.try_get(DATA_TYPE)?;
 
+        let parse_precesion = || {
+            let precision = if column_type.contains('(') {
+                // "datetime(6)", "timestamp(6)"
+                column_type
+                    .split('(')
+                    .nth(1)
+                    .and_then(|s| s.trim_end_matches(')').parse().ok())
+                    .unwrap_or(0)
+            } else {
+                0
+            };
+            precision
+        };
+
         let unsigned = column_type.to_lowercase().contains("unsigned");
         let col_type = match data_type.as_str() {
             "tinyint" => MysqlColType::TinyInt { unsigned },
@@ -224,7 +238,10 @@ impl MysqlMetaFetcher {
             // src server will convert the timestamp field into UTC for sqx,
             // and then sqx will write it into dst server by UTC,
             // and then dst server will convert the received UTC timestamp into its own timezone.
-            "timestamp" => MysqlColType::Timestamp { timezone_offset: 0 },
+            "timestamp" => MysqlColType::Timestamp {
+                precision: parse_precesion(),
+                timezone_offset: 0,
+            },
 
             "tinyblob" => MysqlColType::TinyBlob,
             "mediumblob" => MysqlColType::MediumBlob,
@@ -279,9 +296,14 @@ impl MysqlMetaFetcher {
                 MysqlColType::Set { items }
             }
 
-            "datetime" => MysqlColType::DateTime,
+            "datetime" => MysqlColType::DateTime {
+                precision: parse_precesion(),
+            },
+
             "date" => MysqlColType::Date,
-            "time" => MysqlColType::Time,
+            "time" => MysqlColType::Time {
+                precision: parse_precesion(),
+            },
             "year" => MysqlColType::Year,
             "bit" => MysqlColType::Bit,
             "json" => MysqlColType::Json,
@@ -351,7 +373,7 @@ impl MysqlMetaFetcher {
     ) -> anyhow::Result<(Vec<ForeignKey>, Vec<ForeignKey>)> {
         let mut foreign_keys = Vec::new();
         let mut ref_by_foreign_keys = Vec::new();
-        if db_type == &DbType::StarRocks {
+        if matches!(db_type, DbType::StarRocks | DbType::Doris) {
             return Ok((foreign_keys, ref_by_foreign_keys));
         }
 

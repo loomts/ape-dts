@@ -174,10 +174,10 @@ impl ClickhouseStructSinker {
                 format!("Decimal({},{})", precision, scale).leak()
             }
 
-            MysqlColType::Time => "String",
+            MysqlColType::Time { .. } => "String",
             MysqlColType::Date => "Date32",
-            MysqlColType::DateTime => "DateTime64(6)",
-            MysqlColType::Timestamp { timezone_offset: _ } => "DateTime64(6)",
+            MysqlColType::DateTime { .. } => "DateTime64(6)",
+            MysqlColType::Timestamp { .. } => "DateTime64(6)",
             MysqlColType::Year => "Int32",
 
             MysqlColType::Char { .. }

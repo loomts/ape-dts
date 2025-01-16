@@ -20,6 +20,8 @@ pub enum DbType {
     ClickHouse,
     #[strum(serialize = "starrocks")]
     StarRocks,
+    #[strum(serialize = "doris")]
+    Doris,
     #[strum(serialize = "foxlake")]
     Foxlake,
     #[strum(serialize = "tidb")]
