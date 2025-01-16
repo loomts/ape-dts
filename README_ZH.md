@@ -21,12 +21,12 @@
 
 <br/>
 
-|  | mysql -> mysql | pg -> pg | mongo -> mongo | redis -> redis | mysql -> kafka | pg -> kafka| mysql -> starrocks | mysql -> clickhouse | mysql -> tidb | pg -> starrocks | pg -> clickhouse |
-| :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- |
-| 全量迁移 | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
-| 增量同步 | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
-| 数据校验/订正/复查 | &#10004; | &#10004; | &#10004; | | | | | | &#10004; | | |
-| 库表结构迁移 | &#10004; | &#10004; | | | | | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
+|  | mysql -> mysql | pg -> pg | mongo -> mongo | redis -> redis | mysql -> kafka | pg -> kafka| mysql -> starrocks | mysql -> clickhouse | mysql -> tidb | pg -> starrocks | pg -> clickhouse | mysql -> doris | pg -> doris |
+| :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- |
+| 全量迁移 | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
+| 增量同步 | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
+| 数据校验/订正/复查 | &#10004; | &#10004; | &#10004; | | | | | | &#10004; | | | | |
+| 库表结构迁移 | &#10004; | &#10004; | | | | | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
 
 # 快速上手
 
@@ -37,10 +37,12 @@
 - [mongo -> mongo](./docs/en/tutorial/mongo_to_mongo.md)
 - [redis -> redis](./docs/en/tutorial/redis_to_redis.md)
 - [mysql -> starrocks](./docs/en/tutorial/mysql_to_starrocks.md)
+- [mysql -> doris](./docs/en/tutorial/mysql_to_doris.md)
 - [mysql -> clickhouse](./docs/en/tutorial/mysql_to_clickhouse.md)
 - [mysql -> tidb](./docs/en/tutorial/mysql_to_tidb.md)
 - [mysql -> kafka -> 消费者](./docs/en/tutorial/mysql_to_kafka_consumer.md)
 - [pg -> starrocks](./docs/en/tutorial/pg_to_starrocks.md)
+- [pg -> doris](./docs/en/tutorial/pg_to_doris.md)
 - [pg -> clickhouse](./docs/en/tutorial/pg_to_clickhouse.md)
 - [pg -> kafka -> 消费者](./docs/en/tutorial/pg_to_kafka_consumer.md)
 - [mysql -> ape_dts(HTTP server) -> 消费者](./docs/en/tutorial/mysql_to_http_server_consumer.md)
@@ -86,8 +88,10 @@
     - [mysql/pg -> kafka](./docs/templates/rdb_to_kafka.md)
     - [mysql/pg -> ape_dts(HTTP server)](./docs/templates/rdb_to_http_server.md)
     - [mysql -> starrocks](./docs/templates/mysql_to_starrocks.md)
+    - [mysql -> doris](./docs/templates/mysql_to_doris.md)
     - [mysql -> clickhouse](./docs/templates/mysql_to_clickhouse.md)
     - [pg -> starrocks](./docs/templates/pg_to_starrocks.md)
+    - [pg -> doris](./docs/templates/pg_to_doris.md)
     - [pg -> clickhouse](./docs/templates/pg_to_clickhouse.md)
 
 # Benchmark

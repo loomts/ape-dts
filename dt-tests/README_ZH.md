@@ -92,6 +92,9 @@ docker run -itd --name some-starrocks-2.5.4 \
 starrocks/allin1-ubuntu:2.5.4
 ```
 
+# Doris
+[创建 Doris](/docs/en/tutorial/mysql_to_doris.md)
+
 # Redis
 [创建 Redis](/docs/en/tutorial/redis_to_redis.md)
 
