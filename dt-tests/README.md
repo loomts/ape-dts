@@ -92,6 +92,9 @@ docker run -itd --name some-starrocks-2.5.4 \
 starrocks/allin1-ubuntu:2.5.4
 ```
 
+# Doris
+[Prepare Doris instances](/docs/en/tutorial/mysql_to_doris.md)
+
 # Redis
 [Prepare Redis instances](/docs/en/tutorial/redis_to_redis.md)
 

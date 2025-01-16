@@ -18,12 +18,12 @@
 - Supports starting ape-dts as an HTTP server to pull data from the source, allowing users to use any language's HTTP client to retrieve and consume the data.
 
 ## Supported task types
-|  | mysql -> mysql | pg -> pg | mongo -> mongo | redis -> redis | mysql -> kafka | pg -> kafka| mysql -> starrocks | mysql -> clickhouse | mysql -> tidb | pg -> starrocks | pg -> clickhouse |
-| :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- |
-| Snapshot | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
-| CDC | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
-| Data check/revise/review | &#10004; | &#10004; | &#10004; | | | | | | &#10004; | | |
-| Structure migration | &#10004; | &#10004; | | | | | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
+|  | mysql -> mysql | pg -> pg | mongo -> mongo | redis -> redis | mysql -> kafka | pg -> kafka| mysql -> starrocks | mysql -> clickhouse | mysql -> tidb | pg -> starrocks | pg -> clickhouse | mysql -> doris | pg -> doris |
+| :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- | :-------- |
+| Snapshot | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
+| CDC | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
+| Data check/revise/review | &#10004; | &#10004; | &#10004; | | | | | | &#10004; | | | | |
+| Structure migration | &#10004; | &#10004; | | | | | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; | &#10004; |
 
 
 # Quick starts
@@ -35,10 +35,12 @@
 - [mongo -> mongo](./docs/en/tutorial/mongo_to_mongo.md)
 - [redis -> redis](./docs/en/tutorial/redis_to_redis.md)
 - [mysql -> starrocks](./docs/en/tutorial/mysql_to_starrocks.md)
+- [mysql -> doris](./docs/en/tutorial/mysql_to_doris.md)
 - [mysql -> clickhouse](./docs/en/tutorial/mysql_to_clickhouse.md)
 - [mysql -> tidb](./docs/en/tutorial/mysql_to_tidb.md)
 - [mysql -> kafka -> consumer](./docs/en/tutorial/mysql_to_kafka_consumer.md)
 - [pg -> starrocks](./docs/en/tutorial/pg_to_starrocks.md)
+- [pg -> doris](./docs/en/tutorial/pg_to_doris.md)
 - [pg -> clickhouse](./docs/en/tutorial/pg_to_clickhouse.md)
 - [pg -> kafka -> consumer](./docs/en/tutorial/pg_to_kafka_consumer.md)
 - [mysql -> ape_dts(HTTP server) -> consumer](./docs/en/tutorial/mysql_to_http_server_consumer.md)
@@ -85,8 +87,10 @@ Refer to [test docs](./dt-tests/README.md) for details.
     - [mysql/pg -> kafka](./docs/templates/rdb_to_kafka.md)
     - [mysql/pg -> ape_dts(HTTP server)](./docs/templates/rdb_to_http_server.md)
     - [mysql -> starrocks](./docs/templates/mysql_to_starrocks.md)
+    - [mysql -> doris](./docs/templates/mysql_to_doris.md)
     - [mysql -> clickhouse](./docs/templates/mysql_to_clickhouse.md)
     - [pg -> starrocks](./docs/templates/pg_to_starrocks.md)
+    - [pg -> doris](./docs/templates/pg_to_doris.md)
     - [pg -> clickhouse](./docs/templates/pg_to_clickhouse.md)
 
 # Benchmark
