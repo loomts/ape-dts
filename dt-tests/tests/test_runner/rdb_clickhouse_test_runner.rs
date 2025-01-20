@@ -1,9 +1,9 @@
 use clickhouse::{Client, Row};
-use dt_common::utils::url_util::UrlUtil;
 use dt_common::{meta::col_value::ColValue, utils::time_util::TimeUtil};
 use dt_task::task_runner::TaskRunner;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use url::Url;
 
 use super::{
     base_test_runner::BaseTestRunner,
@@ -22,7 +22,7 @@ impl RdbClickHouseTestRunner {
         let rdb_test_runner = RdbTestRunner::new(relative_test_dir).await?;
         let rdb_struct_test_runner = RdbStructTestRunner::new(relative_test_dir).await?;
 
-        let url_info = UrlUtil::parse(&rdb_test_runner.base.get_config().sinker_basic.url)?;
+        let url_info = Url::parse(&rdb_test_runner.base.get_config().sinker_basic.url)?;
         let host = url_info.host_str().unwrap().to_string();
         let port = format!("{}", url_info.port().unwrap());
 

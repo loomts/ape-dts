@@ -79,3 +79,6 @@ INSERT INTO timezone_table VALUES(1, now(), now(), now(), now());
 INSERT INTO timezone_table VALUES(2, NULL, NULL, NULL, NULL);
 
 INSERT INTO ignore_cols_1 VALUES(1, 1, 1, 1),(2, 2, 2, 2);
+
+INSERT INTO test_db_2.router_test_1 VALUES (1,1),(2,NULL);
+INSERT INTO test_db_2.router_test_2 VALUES (1,2),(2,NULL);

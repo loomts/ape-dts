@@ -153,3 +153,11 @@ DELETE FROM timezone_table;
 INSERT INTO ignore_cols_1 VALUES(1, 1, 1, 1),(2, 2, 2, 2);
 UPDATE ignore_cols_1 SET f_1=5, f_2=5, f_3=5 WHERE f_0 > 0;
 DELETE FROM ignore_cols_1;
+
+INSERT INTO test_db_2.router_test_1 VALUES (1,1),(2,NULL);
+UPDATE test_db_2.router_test_1 SET col_1=3;
+DELETE FROM test_db_2.router_test_1;
+
+INSERT INTO test_db_2.router_test_2 VALUES (1,2),(2,NULL);
+UPDATE test_db_2.router_test_2 SET col_1=3;
+DELETE FROM test_db_2.router_test_2;

@@ -6,3 +6,12 @@ UPDATE test_db_1.one_pk_no_uk SET f_1=20, f_2=30, f_3=40, f_4=50, f_5=654321.432
 UPDATE test_db_1.one_pk_no_uk SET f_1=2, f_2=3, f_3=4, f_4=5, f_5=123456.1234, f_6=1234.12, f_7=12345.123, f_8=x'0000000000000000', f_9='2022-01-02 03:04:05.123456', f_10='03:04:05.123456', f_11='2022-01-02', f_12=2022, f_13='2022-01-02 03:04:05.123456', f_14='ab', f_15='cd', f_16='ef', f_17='gh', f_18='ij', f_19='kl', f_20='mn', f_21='op', f_22=x'0123456789ABCDEF', f_23=x'0123456789ABCDEF', f_24=x'0123456789ABCDEF', f_25=x'0123456789ABCDEF', f_26='x-small', f_27='c', f_28='{"中文":"😀"}' WHERE f_0=2;
 
 DELETE FROM test_db_1.one_pk_no_uk;
+
+INSERT INTO test_db_2.router_test_1 VALUES (1,1),(2,NULL);
+INSERT INTO test_db_2.router_test_2 VALUES (1,2),(2,NULL);
+
+UPDATE test_db_2.router_test_1 SET col_1=3;
+UPDATE test_db_2.router_test_2 SET col_1=3;
+
+DELETE FROM test_db_2.router_test_1;
+DELETE FROM test_db_2.router_test_2;

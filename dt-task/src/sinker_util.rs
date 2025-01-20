@@ -12,7 +12,6 @@ use dt_common::{
     meta::redis::command::key_parser::KeyParser,
     monitor::monitor::Monitor,
     rdb_filter::RdbFilter,
-    utils::url_util::UrlUtil,
 };
 use dt_common::{
     meta::{
@@ -403,7 +402,7 @@ impl SinkerUtil {
                 stream_load_url,
             } => {
                 for _ in 0..parallel_size {
-                    let url_info = UrlUtil::parse(&stream_load_url)?;
+                    let url_info = Url::parse(&stream_load_url)?;
                     let host = url_info.host_str().unwrap().to_string();
                     let port = format!("{}", url_info.port().unwrap());
                     let username = url_info.username().to_string();
@@ -471,7 +470,7 @@ impl SinkerUtil {
 
             SinkerConfig::ClickHouse { url, batch_size } => {
                 for _ in 0..parallel_size {
-                    let url_info = UrlUtil::parse(&url)?;
+                    let url_info = Url::parse(&url)?;
                     let host = url_info.host_str().unwrap().to_string();
                     let port = format!("{}", url_info.port().unwrap());
                     let username = url_info.username().to_string();
@@ -500,7 +499,7 @@ impl SinkerUtil {
                 conflict_policy,
                 engine,
             } => {
-                let url_info = UrlUtil::parse(&url)?;
+                let url_info = Url::parse(&url)?;
                 let host = url_info.host_str().unwrap().to_string();
                 let port = format!("{}", url_info.port().unwrap());
                 let client = clickhouse::Client::default()

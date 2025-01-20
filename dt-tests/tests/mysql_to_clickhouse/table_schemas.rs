@@ -44,3 +44,9 @@ pub(super) struct MysqlBasicTable {
     // _ape_dts_is_deleted: i8,
     // _ape_dts_timestamp: i64,
 }
+
+#[derive(Row, Deserialize, Serialize)]
+pub(super) struct MysqlRouteTable {
+    pk: i8,
+    tinyint_col: Option<i8>,
+}

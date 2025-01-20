@@ -1,6 +1,9 @@
 test_db_1
 CREATE DATABASE `test_db_1`
 
+dst_test_db_2
+CREATE DATABASE `dst_test_db_2`
+
 test_db_1.full_column_type
 CREATE TABLE `full_column_type` (
   `id` int(11) NOT NULL COMMENT "",
@@ -164,6 +167,41 @@ CREATE TABLE `check_pk_cols_order` (
 ) ENGINE=OLAP 
 PRIMARY KEY(`pk_1`, `pk_2`, `pk_3`)
 DISTRIBUTED BY HASH(`pk_1`)
+PROPERTIES (
+"replication_num" = "1",
+"in_memory" = "false",
+"enable_persistent_index" = "true",
+"replicated_storage" = "true",
+"compression" = "LZ4"
+);
+
+
+dst_test_db_2.router_test_1
+CREATE TABLE `router_test_1` (
+  `pk` int(11) NOT NULL COMMENT "",
+  `col_1` int(11) NULL COMMENT "",
+  `_ape_dts_is_deleted` boolean NULL COMMENT "",
+  `_ape_dts_timestamp` bigint(20) NULL COMMENT ""
+) ENGINE=OLAP 
+PRIMARY KEY(`pk`)
+DISTRIBUTED BY HASH(`pk`)
+PROPERTIES (
+"replication_num" = "1",
+"in_memory" = "false",
+"enable_persistent_index" = "true",
+"replicated_storage" = "true",
+"compression" = "LZ4"
+);
+
+dst_test_db_2.dst_router_test_2
+CREATE TABLE `dst_router_test_2` (
+  `pk` int(11) NOT NULL COMMENT "",
+  `col_1` int(11) NULL COMMENT "",
+  `_ape_dts_is_deleted` boolean NULL COMMENT "",
+  `_ape_dts_timestamp` bigint(20) NULL COMMENT ""
+) ENGINE=OLAP 
+PRIMARY KEY(`pk`)
+DISTRIBUTED BY HASH(`pk`)
 PROPERTIES (
 "replication_num" = "1",
 "in_memory" = "false",

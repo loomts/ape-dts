@@ -1,6 +1,8 @@
 DROP DATABASE IF EXISTS test_db_1;
+DROP DATABASE IF EXISTS test_db_2;
 
 CREATE DATABASE test_db_1;
+CREATE DATABASE test_db_2;
 
 ```
 CREATE TABLE test_db_1.one_pk_no_uk ( 
@@ -53,5 +55,21 @@ CREATE TABLE test_db_1.check_pk_cols_order (
   pk_2 INT,
   col_5 INT,
   PRIMARY KEY(pk_1, pk_2, pk_3)
+);
+```
+
+```
+CREATE TABLE test_db_2.router_test_1 (
+  pk INT,
+  col_1 INT,
+  PRIMARY KEY(pk)
+);
+```
+
+```
+CREATE TABLE test_db_2.router_test_2 (
+  pk INT,
+  col_1 INT,
+  PRIMARY KEY(pk)
 );
 ```

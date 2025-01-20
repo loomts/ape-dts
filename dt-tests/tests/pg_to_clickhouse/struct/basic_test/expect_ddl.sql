@@ -126,3 +126,29 @@ ENGINE = ReplacingMergeTree(_ape_dts_timestamp)
 PRIMARY KEY (pk_1, pk_2, pk_3)
 ORDER BY (pk_1, pk_2, pk_3)
 SETTINGS index_granularity = 8192
+
+dst_test_db_2.router_test_1
+CREATE TABLE dst_test_db_2.router_test_1
+(
+    `pk` Int32,
+    `col_1` Nullable(Int32),
+    `_ape_dts_is_deleted` Int8,
+    `_ape_dts_timestamp` Int64
+)
+ENGINE = ReplacingMergeTree(_ape_dts_timestamp)
+PRIMARY KEY pk
+ORDER BY pk
+SETTINGS index_granularity = 8192
+
+dst_test_db_2.dst_router_test_2
+CREATE TABLE dst_test_db_2.dst_router_test_2
+(
+    `pk` Int32,
+    `col_1` Nullable(Int32),
+    `_ape_dts_is_deleted` Int8,
+    `_ape_dts_timestamp` Int64
+)
+ENGINE = ReplacingMergeTree(_ape_dts_timestamp)
+PRIMARY KEY pk
+ORDER BY pk
+SETTINGS index_granularity = 8192

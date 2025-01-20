@@ -1,11 +1,11 @@
 use anyhow::{bail, Ok};
 use dt_common::error::Error;
-use dt_common::utils::url_util::UrlUtil;
 use dt_common::{log_info, log_warn};
 use postgres_types::PgLsn;
 use tokio_postgres::NoTls;
 use tokio_postgres::SimpleQueryMessage::Row;
 use tokio_postgres::{replication::LogicalReplicationStream, Client};
+use url::Url;
 
 pub struct PgCdcClient {
     pub url: String,
@@ -17,7 +17,7 @@ pub struct PgCdcClient {
 
 impl PgCdcClient {
     pub async fn connect(&mut self) -> anyhow::Result<(LogicalReplicationStream, String)> {
-        let url_info = UrlUtil::parse(&self.url)?;
+        let url_info = Url::parse(&self.url)?;
         let host = url_info.host_str().unwrap().to_string();
         let port = format!("{}", url_info.port().unwrap());
         let dbname = url_info.path().trim_start_matches('/');
