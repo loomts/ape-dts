@@ -45,6 +45,7 @@ impl Sinker for StarrocksStructSinker {
             self.backend_count = self.get_backend_count().await?;
         }
 
+        let reverse_router = self.router.reverse();
         for i in data {
             match i.statement {
                 StructStatement::MysqlCreateDatabase(statement) => {
@@ -56,8 +57,8 @@ impl Sinker for StarrocksStructSinker {
                 }
 
                 StructStatement::MysqlCreateTable(statement) => {
-                    let schema = &statement.table.database_name;
-                    let tb = &statement.table.table_name;
+                    let (schema, tb) = reverse_router
+                        .get_tb_map(&statement.table.database_name, &statement.table.table_name);
                     if let Some(meta_manager) =
                         self.extractor_meta_manager.mysql_meta_manager.as_mut()
                     {
@@ -74,8 +75,8 @@ impl Sinker for StarrocksStructSinker {
                 }
 
                 StructStatement::PgCreateTable(statement) => {
-                    let schema = &statement.table.schema_name;
-                    let tb = &statement.table.table_name;
+                    let (schema, tb) = reverse_router
+                        .get_tb_map(&statement.table.schema_name, &statement.table.table_name);
                     if let Some(meta_manager) = self.extractor_meta_manager.pg_meta_manager.as_mut()
                     {
                         let tb_meta = meta_manager.get_tb_meta(schema, tb).await?.to_owned();
@@ -136,10 +137,15 @@ impl StarrocksStructSinker {
             dst_cols.push(format!("`{}` {}", TIMESTAMP_COL_NAME, TIMESTAMP_COL_TYPE));
         }
 
+        let schema = if mysql_tb_meta.is_some() {
+            &table.database_name
+        } else {
+            &table.schema_name
+        };
         let mut sql = format!(
             "CREATE TABLE IF NOT EXISTS `{}`.`{}` ({})",
-            rdb_tb_meta.schema,
-            rdb_tb_meta.tb,
+            schema,
+            table.table_name,
             dst_cols.join(", "),
         );
 

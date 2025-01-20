@@ -1,6 +1,9 @@
 test_db_1
 CREATE DATABASE `test_db_1`
 
+dst_test_db_2
+CREATE DATABASE `dst_test_db_2`
+
 test_db_1.full_column_type
 CREATE TABLE `full_column_type` (
   `id` INT NOT NULL,
@@ -173,6 +176,50 @@ CREATE TABLE `check_pk_cols_order` (
 UNIQUE KEY(`pk_1`, `pk_2`, `pk_3`)
 COMMENT 'OLAP'
 DISTRIBUTED BY HASH(`pk_1`) BUCKETS 10
+PROPERTIES (
+"replication_allocation" = "tag.location.default: 1",
+"min_load_replica_num" = "-1",
+"is_being_synced" = "false",
+"storage_medium" = "hdd",
+"storage_format" = "V2",
+"enable_unique_key_merge_on_write" = "true",
+"light_schema_change" = "true",
+"disable_auto_compaction" = "false",
+"enable_single_replica_compaction" = "false",
+"group_commit_interval_ms" = "10000",
+"group_commit_data_bytes" = "134217728"
+);
+
+dst_test_db_2.router_test_1
+CREATE TABLE `router_test_1` (
+  `pk` INT NOT NULL,
+  `col_1` INT NULL
+) ENGINE=OLAP
+UNIQUE KEY(`pk`)
+COMMENT 'OLAP'
+DISTRIBUTED BY HASH(`pk`) BUCKETS 10
+PROPERTIES (
+"replication_allocation" = "tag.location.default: 1",
+"min_load_replica_num" = "-1",
+"is_being_synced" = "false",
+"storage_medium" = "hdd",
+"storage_format" = "V2",
+"enable_unique_key_merge_on_write" = "true",
+"light_schema_change" = "true",
+"disable_auto_compaction" = "false",
+"enable_single_replica_compaction" = "false",
+"group_commit_interval_ms" = "10000",
+"group_commit_data_bytes" = "134217728"
+);
+
+dst_test_db_2.dst_router_test_2
+CREATE TABLE `dst_router_test_2` (
+  `pk` INT NOT NULL,
+  `col_1` INT NULL
+) ENGINE=OLAP
+UNIQUE KEY(`pk`)
+COMMENT 'OLAP'
+DISTRIBUTED BY HASH(`pk`) BUCKETS 10
 PROPERTIES (
 "replication_allocation" = "tag.location.default: 1",
 "min_load_replica_num" = "-1",

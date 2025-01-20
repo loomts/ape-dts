@@ -6,10 +6,11 @@ use dt_common::{
     meta::redis::{
         cluster_node::ClusterNode, command::cmd_encoder::CmdEncoder, redis_object::RedisCmd,
     },
-    utils::{redis_util::RedisUtil, url_util::UrlUtil},
+    utils::redis_util::RedisUtil,
 };
 use redis::{Connection, ConnectionLike};
 use serde_json::json;
+use url::Url;
 
 use crate::{extractor::base_extractor::BaseExtractor, Extractor};
 
@@ -196,7 +197,7 @@ impl RedisReshardExtractor {
     }
 
     async fn get_node_conn(&self, node: &ClusterNode) -> anyhow::Result<Connection> {
-        let url_info = UrlUtil::parse(&self.url)?;
+        let url_info = Url::parse(&self.url)?;
         let username = url_info.username();
         let password = url_info.password().unwrap_or("").to_string();
         let url = format!("redis://{}:{}@{}", username, password, node.address);

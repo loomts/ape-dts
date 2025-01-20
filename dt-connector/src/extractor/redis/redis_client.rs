@@ -8,8 +8,8 @@ use async_std::prelude::*;
 use dt_common::error::Error;
 use dt_common::meta::redis::command::cmd_encoder::CmdEncoder;
 use dt_common::meta::redis::redis_object::RedisCmd;
-use dt_common::utils::url_util::UrlUtil;
 use futures::executor::block_on;
+use url::Url;
 
 pub struct RedisClient {
     pub url: String,
@@ -24,7 +24,7 @@ impl StreamReader for RedisClient {
 
 impl RedisClient {
     pub async fn new(url: &str) -> anyhow::Result<Self> {
-        let url_info = UrlUtil::parse(url)?;
+        let url_info = Url::parse(url)?;
         let host = url_info.host_str().unwrap();
         let port = url_info.port().unwrap();
         let username = url_info.username();

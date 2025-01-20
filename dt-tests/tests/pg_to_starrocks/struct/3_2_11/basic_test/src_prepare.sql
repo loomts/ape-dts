@@ -1,6 +1,8 @@
 drop schema if exists test_db_1 CASCADE;
+drop schema if exists test_db_2 CASCADE;
 
 create schema test_db_1;
+create schema test_db_2;
 
 -- all basic column types:
 -- https://www.postgresql.org/docs/17/datatype.html
@@ -196,5 +198,21 @@ CREATE TABLE test_db_1.check_pk_cols_order (
   pk_2 INT,
   col_5 INT,
   PRIMARY KEY(pk_1, pk_2, pk_3)
+);
+```
+
+```
+CREATE TABLE test_db_2.router_test_1 (
+  pk INT,
+  col_1 INT,
+  PRIMARY KEY(pk)
+);
+```
+
+```
+CREATE TABLE test_db_2.router_test_2 (
+  pk INT,
+  col_1 INT,
+  PRIMARY KEY(pk)
 );
 ```

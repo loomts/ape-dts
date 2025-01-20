@@ -1,1 +1,2 @@
 DROP DATABASE IF EXISTS test_db_1;
+DROP DATABASE IF EXISTS dst_test_db_2;

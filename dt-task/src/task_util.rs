@@ -143,7 +143,6 @@ impl TaskUtil {
     }
 
     pub async fn create_mongo_client(url: &str, app_name: &str) -> anyhow::Result<mongodb::Client> {
-        log_info!("mongo url: {}", url);
         let mut client_options = ClientOptions::parse_async(url).await?;
         // app_name only for debug usage
         client_options.app_name = Some(app_name.to_string());
@@ -205,8 +204,7 @@ impl TaskUtil {
         db_type: &DbType,
     ) -> anyhow::Result<()> {
         log_info!(
-            "url: {}, schema: {}, tb: {}, schema_sql: {}, tb_sql: {}",
-            url,
+            "schema: {}, tb: {}, schema_sql: {}, tb_sql: {}",
             schema,
             tb,
             schema_sql,

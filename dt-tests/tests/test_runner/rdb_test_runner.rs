@@ -741,9 +741,6 @@ impl RdbTestRunner {
         db_tb: &(String, String),
         from: &str,
     ) -> anyhow::Result<Vec<String>> {
-        let db_tb = self.router.get_tb_map(&db_tb.0, &db_tb.1);
-        let db_tb = &(db_tb.0.into(), db_tb.1.into());
-
         let (conn_pool_mysql, conn_pool_pg) = self.get_conn_pool(from);
         let cols = if let Some(conn_pool) = conn_pool_mysql {
             let tb_meta = RdbUtil::get_tb_meta_mysql(conn_pool, db_tb).await?;
