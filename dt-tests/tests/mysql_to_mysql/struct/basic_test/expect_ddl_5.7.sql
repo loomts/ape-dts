@@ -101,12 +101,19 @@ CREATE TABLE `full_index_type` (
   `f_7` text,
   `f_8` text,
   `f_9` point NOT NULL,
+  `f_10` varchar(10) DEFAULT NULL,
+  `f_11` varchar(10) DEFAULT NULL,
+  `f_12` varchar(10) DEFAULT NULL,
+  `f_13` varchar(10) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_unique_1` (`f_1`,`f_2`,`f_3`),
   UNIQUE KEY `idx_unique_2` (`f_3`),
   SPATIAL KEY `idx_spatial_1` (`f_9`),
   FULLTEXT KEY `idx_full_text_1` (`f_6`,`f_7`,`f_8`),
-  FULLTEXT KEY `idx_full_text_2` (`f_8`)
+  FULLTEXT KEY `idx_full_text_2` (`f_8`),
+  KEY `idx_btree_text_1` (`f_10`),
+  KEY `idx_btree_text_2` (`f_11`),
+  KEY `idx_btree_text_3` (`f_13`,`f_12`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8
 
 struct_it_mysql2mysql_1.constraint_table

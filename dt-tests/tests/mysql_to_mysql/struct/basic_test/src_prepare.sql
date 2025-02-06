@@ -112,7 +112,12 @@ CREATE TABLE struct_it_mysql2mysql_1.full_index_type(
     f_6 TEXT,
     f_7 TEXT, 
     f_8 TEXT, 
-    f_9 POINT NOT NULL
+    f_9 POINT NOT NULL,
+    f_10 varchar(10),
+    f_11 varchar(10),
+    f_12 varchar(10),
+    f_13 varchar(10),
+    KEY idx_btree_text_1 (f_10)
 );
 ```
 
@@ -134,6 +139,10 @@ CREATE FULLTEXT INDEX idx_full_text_2 ON struct_it_mysql2mysql_1.full_index_type
 -- spatial index
 -- only 1 column supported in spatial key
 CREATE SPATIAL INDEX idx_spatial_1 ON struct_it_mysql2mysql_1.full_index_type(f_9);
+
+CREATE INDEX idx_btree_text_2 ON struct_it_mysql2mysql_1.full_index_type(f_11);
+
+CREATE INDEX idx_btree_text_3 ON struct_it_mysql2mysql_1.full_index_type(f_13, f_12);
 
 -- full constraint
 ```
