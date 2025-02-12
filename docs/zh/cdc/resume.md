@@ -37,13 +37,13 @@
 
 # 配置
 
-增量任务断点续传配置和 [全量任务](../snapshot/resume.md) 类似，可参考。
+增量任务断点续传配置和 [全量任务](../snapshot/resume.md) 类似，请先阅读以了解其原理。
 
 不同点：
 - MySQL/Postgres 增量位点信息取自 position.log 中的 checkpoint_position。
 - Mongo 增量取位点信息取自 current_position。
 
-# 例子 1
+# 例子 1（推荐使用）
 
 - task_config.ini
 ```
@@ -55,10 +55,9 @@ binlog_filename=mysql-bin.000004
 
 [resumer]
 resume_from_log=true
-resume_log_dir=./resume_logs
 ```
 
-- ./resume_logs/position.log
+- 任务中断前产生的 position.log
 ```
 2024-10-18 05:21:45.207788 | checkpoint_position | {"type":"MysqlCdc","server_id":"","binlog_filename":"mysql-bin.000004","next_event_position":73685,"gtid_set":"","timestamp":"2024-10-18 05:21:44.000"}
 ```
@@ -82,7 +81,7 @@ binlog_filename=mysql-bin.000004
 resume_config_file=./resume.config
 ```
 
-- ./resume.config
+- ./resume.config（需由用户写入）
 ```
 2024-10-18 05:21:45.207788 | checkpoint_position | {"type":"MysqlCdc","server_id":"","binlog_filename":"mysql-bin.000004","next_event_position":73685,"gtid_set":"","timestamp":"2024-10-18 05:21:44.000"}
 ```

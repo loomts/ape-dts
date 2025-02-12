@@ -27,32 +27,36 @@
 ```
 
 # 配置
-## 从进度日志断点续传
+## 方法 1：从进度日志断点续传（推荐使用）
 ```
 [resumer]
 resume_from_log=true
-resume_log_dir=
 ```
-- resume_log_dir 为可选，默认为当前任务的日志目录。
-- 任务重启后，finished.log 中的表将不会被重复同步。
+- 任务重启后，将根据中断前已写入的 position.log 和 finished.log 断点续传。
+- 注意：重启的新任务和旧任务必须使用 **同一个日志目录**，方法 1 断点续传才会生效。
+- finished.log 中的表将不会被重复同步。
 - 正在同步且未完成的表，会根据 position.log 中记录的最新进度，从断点处开始同步。
 - 如果一张表没有 **单一列构成的 主键/唯一键**，则 position.log 中不会产生位点信息，但 finished.log 中会有完成信息。
 
-## 指定进度信息文件
-- 除了 resume_from_log，用户也可选择指定进度文件。
+## 方法 2：指定进度信息文件（适用于基于 ape-dts 开发管控系统）
+- 如果用户不想从默认的 finished.log 和 position.log 断点续传，也可自行指定 resume_log_dir 或 resume_config_file 的路径，如：
 ```
 [resumer]
+resume_log_dir=./resume_logs
 resume_config_file=./resume.config
 ```
-
-- resume.config 文件内容格式基本和 position.log / finished.log 保持一致，如：
+- 注意：resume_log_dir 和 resume.config 不是 ape-dts 运行中产生的，而是用户为了 **自行指定断点续传的位点信息** 而手动创建的。
+- 用户需要将想指定的断点续传位点信息写入：
+    - resume_log_dir/position.log
+    - resume_log_dir/finished.log 
+    - resume.config
+- resume.config 文件内容格式要和 position.log / finished.log 保持一致，但可省略行头的日志时间，如：
 ```
 | current_position | {"type":"RdbSnapshot","db_type":"mysql","schema":"test_db","tb":"a","order_col":"id","value":"6"}
 {"type":"RdbSnapshotFinished","db_type":"mysql","schema":"test_db","tb":"d"}
 ```
 
 - 如果同一张表的进度在 position.log 和 resume.config 中都存在，优先使用 position.log。
-
 
 # 例子
 - task_config.ini
@@ -63,7 +67,7 @@ resume_log_dir=./resume_logs
 resume_config_file=./resume.config
 ```
 
-- ./resume.config
+- ./resume.config（需由用户写入）
 ```
 {"type":"RdbSnapshotFinished","db_type":"mysql","schema":"test_db_@","tb":"finished_table_*$1"}
 {"type":"RdbSnapshotFinished","db_type":"mysql","schema":"test_db_@","tb":"finished_table_*$2"}
@@ -72,13 +76,13 @@ resume_config_file=./resume.config
 {"type":"RdbSnapshot","db_type":"mysql","schema":"test_db_@","tb":"resume_table_*$4","order_col":"p.k","value":"1"}
 ```
 
-- ./resume_logs/finished.log
+- ./resume_logs/finished.log（需由用户写入）
 ```
 2024-04-01 07:08:05.459594 | {"type":"RdbSnapshotFinished","db_type":"mysql","schema":"test_db_@","tb":"in_finished_log_table_*$1"}
 2024-04-01 07:08:06.537135 | {"type":"RdbSnapshotFinished","db_type":"mysql","schema":"test_db_@","tb":"in_finished_log_table_*$2"}
 ```
 
-- ./resume_logs/position.log
+- ./resume_logs/position.log（需由用户写入）
 ```
 2024-03-29 07:02:24.463776 | current_position | {"type":"RdbSnapshot","db_type":"mysql","schema":"test_db_@","tb":"in_position_log_table_*$1","order_col":"p.k","value":"0"}
 2024-03-29 07:02:24.463777 | current_position | {"type":"RdbSnapshot","db_type":"mysql","schema":"test_db_@","tb":"in_position_log_table_*$1","order_col":"p.k","value":"1"}

@@ -37,7 +37,7 @@ To avoid syncing duplicate data, the task can resume at the breakpoint in finish
 
 # Configurations
 
-CDC resume configuration is similar to [snapshot task](../snapshot/resume.md)
+CDC resume configuration is similar to [snapshot task](../snapshot/resume.md), please read first to understand its principles.
 
 Differences:
 - MySQL/Postgres position info will load from checkpoint_position in position.log.
@@ -55,10 +55,9 @@ binlog_filename=mysql-bin.000004
 
 [resumer]
 resume_from_log=true
-resume_log_dir=./resume_logs
 ```
 
-- ./resume_logs/position.log
+- position.log generated before the task was interrupted:
 ```
 2024-10-18 05:21:45.207788 | checkpoint_position | {"type":"MysqlCdc","server_id":"","binlog_filename":"mysql-bin.000004","next_event_position":73685,"gtid_set":"","timestamp":"2024-10-18 05:21:44.000"}
 ```
@@ -83,7 +82,7 @@ binlog_filename=mysql-bin.000004
 resume_config_file=./resume.config
 ```
 
-- ./resume.config
+- ./resume.config (filled in by user)
 ```
 2024-10-18 05:21:45.207788 | checkpoint_position | {"type":"MysqlCdc","server_id":"","binlog_filename":"mysql-bin.000004","next_event_position":73685,"gtid_set":"","timestamp":"2024-10-18 05:21:44.000"}
 ```
