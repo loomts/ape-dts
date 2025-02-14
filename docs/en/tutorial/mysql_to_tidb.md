@@ -29,7 +29,7 @@ mysql -h 127.0.0.1 -P 4000 -u root -D test --prompt="tidb> "
 
 CREATE DATABASE demo CHARACTER SET utf8 COLLATE utf8_general_ci;
 CREATE USER 'demo'@'%' IDENTIFIED BY '123456';
-GRANT ALL PRIVILEGES ON demo.* TO 'demo'@'%';
+GRANT ALL PRIVILEGES ON *.* TO 'demo'@'%';
 FLUSH PRIVILEGES;
 ```
 

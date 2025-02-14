@@ -79,10 +79,9 @@ end
 ## Filter rows
 - set row_type to "", the row will be filtered
 ```
-if (schema == "lua_test" and tb == "filter_row_test")
-then
-    if (before.id == 1 or after.id == 1)
-    then
+if schema == "lua_test" and tb == "filter_row_test" then
+    if (after.create_time ~= nil and after.create_time < '2024-12-01 00:00:00') or
+       (before.create_time ~= nil and before.create_time < '2024-12-01 00:00:00') then
         row_type = ""
     end
 end

@@ -147,5 +147,8 @@
 [Slack社区](https://join.slack.com/t/kubeblocks/shared_invite/zt-22cx2f84x-BPZvnLRqBOGdZ_XSjELh4Q)
 
 微信交流群
+- 微信群已满 200，无法自动扫描进群
+- 请添加此微信，将手动拉你进群
+- 添加时请备注：**ape-dts**
 
 <img src="./docs/img/wechat_group.png" width="55%" style="display: block; margin-left: 0;"/>
