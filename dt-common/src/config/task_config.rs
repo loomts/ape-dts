@@ -575,6 +575,7 @@ impl TaskConfig {
                 "log4rs_file",
                 "./log4rs.yaml".to_string(),
             ),
+            tb_parallel_size: loader.get_with_default(RUNTIME, "tb_parallel_size", 1),
         })
     }
 

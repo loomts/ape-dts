@@ -1,4 +1,5 @@
 use std::{
+    collections::VecDeque,
     fs::{self, File},
     io::Read,
     panic,
@@ -21,7 +22,7 @@ use dt_common::{
     error::Error,
     log_finished, log_info,
     meta::{avro::avro_converter::AvroConverter, dt_queue::DtQueue},
-    monitor::monitor::Monitor,
+    monitor::{group_monitor::GroupMonitor, monitor::Monitor, FlushableMonitor},
     rdb_filter::RdbFilter,
     utils::{sql_util::SqlUtil, time_util::TimeUtil},
 };
@@ -42,7 +43,7 @@ use dt_pipeline::{
 
 use log4rs::config::RawConfig;
 use ratelimit::Ratelimiter;
-use tokio::try_join;
+use tokio::{task::JoinSet, try_join};
 
 use crate::task_util::TaskUtil;
 
@@ -50,8 +51,12 @@ use super::{
     extractor_util::ExtractorUtil, parallelizer_util::ParallelizerUtil, sinker_util::SinkerUtil,
 };
 
+#[derive(Clone)]
 pub struct TaskRunner {
     config: TaskConfig,
+    extractor_monitor: Arc<Mutex<GroupMonitor>>,
+    pipeline_monitor: Arc<Mutex<GroupMonitor>>,
+    sinker_monitor: Arc<Mutex<GroupMonitor>>,
 }
 
 const CHECK_LOG_DIR_PLACEHODLER: &str = "CHECK_LOG_DIR_PLACEHODLER";
@@ -65,7 +70,12 @@ impl TaskRunner {
     pub fn new(task_config_file: &str) -> anyhow::Result<Self> {
         let config = TaskConfig::new(task_config_file)
             .with_context(|| format!("invalid configs in [{}]", task_config_file))?;
-        Ok(Self { config })
+        Ok(Self {
+            config,
+            extractor_monitor: Arc::new(Mutex::new(GroupMonitor::new("extractor", "global"))),
+            pipeline_monitor: Arc::new(Mutex::new(GroupMonitor::new("pipeline", "global"))),
+            sinker_monitor: Arc::new(Mutex::new(GroupMonitor::new("sinker", "global"))),
+        })
     }
 
     pub async fn start_task(&self, enable_log4rs: bool) -> anyhow::Result<()> {
@@ -94,13 +104,14 @@ impl TaskRunner {
             }
 
             _ => {
-                self.start_single_task(
-                    &self.config.extractor,
-                    &router,
-                    &snapshot_resumer,
-                    &cdc_resumer,
-                )
-                .await?
+                self.clone()
+                    .start_single_task(
+                        &self.config.extractor,
+                        &router,
+                        &snapshot_resumer,
+                        &cdc_resumer,
+                    )
+                    .await?
             }
         };
 
@@ -118,6 +129,7 @@ impl TaskRunner {
         let db_type = &self.config.extractor_basic.db_type;
         let mut filter = RdbFilter::from_config(&self.config.filter, db_type)?;
 
+        let mut pending_tbs = VecDeque::new();
         let schemas = TaskUtil::list_schemas(url, db_type).await?;
         for schema in schemas.iter() {
             if filter.filter_schema(schema) {
@@ -141,88 +153,186 @@ impl TaskRunner {
             };
 
             if let Some(extractor_config) = schema_extractor_config {
-                self.start_single_task(&extractor_config, router, snapshot_resumer, cdc_resumer)
+                self.clone()
+                    .start_single_task(&extractor_config, router, snapshot_resumer, cdc_resumer)
                     .await?;
                 continue;
             }
 
-            // start a task for each tb
+            // find pending tables
             let tbs = TaskUtil::list_tbs(url, schema, db_type).await?;
             for tb in tbs.iter() {
                 if snapshot_resumer.check_finished(schema, tb) {
-                    log_info!("schema: {}, tb: {} already finished", schema, tb);
+                    log_info!("schema: {}, tb: {}, already finished", schema, tb);
                     continue;
                 }
-
                 if filter.filter_event(schema, tb, &RowType::Insert) {
+                    log_info!("schema: {}, tb: {}, insert events filtered", schema, tb);
                     continue;
                 }
+                pending_tbs.push_back((schema.to_owned(), tb.to_owned()));
+            }
+        }
 
-                let tb_extractor_config = match &self.config.extractor {
-                    ExtractorConfig::MysqlSnapshot {
-                        url,
-                        sample_interval,
-                        parallel_size,
-                        batch_size,
-                        ..
-                    } => ExtractorConfig::MysqlSnapshot {
-                        url: url.clone(),
-                        db: schema.clone(),
-                        tb: tb.clone(),
-                        sample_interval: *sample_interval,
-                        parallel_size: *parallel_size,
-                        batch_size: *batch_size,
-                    },
+        // start a thread to flush global monitors
+        let global_shut_down = Arc::new(AtomicBool::new(false));
+        let global_shut_down_clone = global_shut_down.clone();
+        let interval_secs = self.config.pipeline.checkpoint_interval_secs;
+        let extractor_monitor = self.extractor_monitor.clone();
+        let pipeline_monitor = self.pipeline_monitor.clone();
+        let sinker_monitor = self.sinker_monitor.clone();
+        let global_monitor_task = tokio::spawn(async move {
+            Self::flush_group_monitors(
+                interval_secs,
+                global_shut_down_clone,
+                extractor_monitor,
+                pipeline_monitor,
+                sinker_monitor,
+            )
+            .await
+        });
 
-                    ExtractorConfig::PgSnapshot {
-                        url,
-                        sample_interval,
-                        batch_size,
-                        ..
-                    } => ExtractorConfig::PgSnapshot {
-                        url: url.clone(),
-                        schema: schema.clone(),
-                        tb: tb.clone(),
-                        sample_interval: *sample_interval,
-                        batch_size: *batch_size,
-                    },
+        // process all tables in parallel
+        let tb_parallel_size = self.config.runtime.tb_parallel_size;
+        let semaphore = Arc::new(tokio::sync::Semaphore::new(tb_parallel_size));
+        let mut join_set: JoinSet<(String, anyhow::Result<()>)> = JoinSet::new();
 
-                    ExtractorConfig::MongoSnapshot { url, app_name, .. } => {
-                        ExtractorConfig::MongoSnapshot {
-                            url: url.clone(),
-                            app_name: app_name.clone(),
-                            db: schema.clone(),
-                            tb: tb.clone(),
-                        }
-                    }
-
-                    ExtractorConfig::FoxlakeS3 {
-                        url,
-                        s3_config,
-                        batch_size,
-                        ..
-                    } => ExtractorConfig::FoxlakeS3 {
-                        url: url.clone(),
-                        schema: schema.clone(),
-                        tb: tb.clone(),
-                        s3_config: s3_config.clone(),
-                        batch_size: *batch_size,
-                    },
-
-                    _ => {
-                        bail! {Error::ConfigError("unsupported extractor config".into())};
-                    }
-                };
-
-                self.start_single_task(&tb_extractor_config, router, snapshot_resumer, cdc_resumer)
+        // initialize the task pool to its maximum capacity
+        while join_set.len() < tb_parallel_size && !pending_tbs.is_empty() {
+            if let Some((schema, tb)) = pending_tbs.pop_front() {
+                self.clone()
+                    .spawn_single_task(
+                        &schema,
+                        &tb,
+                        router,
+                        snapshot_resumer,
+                        cdc_resumer,
+                        &mut join_set,
+                        &semaphore,
+                    )
                     .await?;
             }
         }
+
+        // when a task is completed, if there are still pending tables, add a new task
+        while let Some(result) = join_set.join_next().await {
+            match result {
+                Ok((_, Ok(()))) => {
+                    if let Some((schema, tb)) = pending_tbs.pop_front() {
+                        self.clone()
+                            .spawn_single_task(
+                                &schema,
+                                &tb,
+                                router,
+                                snapshot_resumer,
+                                cdc_resumer,
+                                &mut join_set,
+                                &semaphore,
+                            )
+                            .await?;
+                    }
+                }
+                Ok((single_task_id, Err(e))) => {
+                    log_error!("single task: [{}] failed, error: {}", single_task_id, e)
+                }
+                Err(e) => log_error!("join error: {}", e),
+            }
+        }
+
+        global_shut_down.store(true, Ordering::Release);
+        global_monitor_task.await?;
+        Ok(())
+    }
+
+    async fn spawn_single_task(
+        self,
+        schema: &str,
+        tb: &str,
+        router: &RdbRouter,
+        snapshot_resumer: &SnapshotResumer,
+        cdc_resumer: &CdcResumer,
+        join_set: &mut JoinSet<(String, anyhow::Result<()>)>,
+        semaphore: &Arc<tokio::sync::Semaphore>,
+    ) -> anyhow::Result<()> {
+        let tb_extractor_config = match &self.config.extractor {
+            ExtractorConfig::MysqlSnapshot {
+                url,
+                sample_interval,
+                parallel_size,
+                batch_size,
+                ..
+            } => ExtractorConfig::MysqlSnapshot {
+                url: url.clone(),
+                db: schema.into(),
+                tb: tb.into(),
+                sample_interval: *sample_interval,
+                parallel_size: *parallel_size,
+                batch_size: *batch_size,
+            },
+
+            ExtractorConfig::PgSnapshot {
+                url,
+                sample_interval,
+                batch_size,
+                ..
+            } => ExtractorConfig::PgSnapshot {
+                url: url.clone(),
+                schema: schema.into(),
+                tb: tb.into(),
+                sample_interval: *sample_interval,
+                batch_size: *batch_size,
+            },
+
+            ExtractorConfig::MongoSnapshot { url, app_name, .. } => {
+                ExtractorConfig::MongoSnapshot {
+                    url: url.clone(),
+                    app_name: app_name.clone(),
+                    db: schema.into(),
+                    tb: tb.into(),
+                }
+            }
+
+            ExtractorConfig::FoxlakeS3 {
+                url,
+                s3_config,
+                batch_size,
+                ..
+            } => ExtractorConfig::FoxlakeS3 {
+                url: url.into(),
+                schema: schema.into(),
+                tb: tb.into(),
+                s3_config: s3_config.clone(),
+                batch_size: *batch_size,
+            },
+
+            _ => {
+                bail! {Error::ConfigError("unsupported extractor config".into())};
+            }
+        };
+
+        let single_task_id = format!("{}.{}", schema, tb);
+        let router = router.clone();
+        let snapshot_resumer = snapshot_resumer.clone();
+        let cdc_resumer = cdc_resumer.clone();
+        let semaphore = Arc::clone(semaphore);
+        let me = self.clone();
+        join_set.spawn(async move {
+            let _permit = semaphore.acquire().await.unwrap();
+            let res = me
+                .start_single_task(
+                    &tb_extractor_config,
+                    &router,
+                    &snapshot_resumer,
+                    &cdc_resumer,
+                )
+                .await;
+            (single_task_id, res)
+        });
         Ok(())
     }
 
     async fn start_single_task(
-        &self,
+        self,
         extractor_config: &ExtractorConfig,
         router: &RdbRouter,
         snapshot_resumer: &SnapshotResumer,
@@ -255,12 +365,20 @@ impl TaskRunner {
             .clone()
             .map(|data_marker| Arc::new(RwLock::new(data_marker)));
 
+        let single_task_id = match extractor_config {
+            ExtractorConfig::MysqlSnapshot { db, tb, .. } => format!("{}.{}", db, tb),
+            ExtractorConfig::PgSnapshot { schema, tb, .. } => format!("{}.{}", schema, tb),
+            ExtractorConfig::MongoSnapshot { db, tb, .. } => format!("{}.{}", db, tb),
+            _ => String::new(),
+        };
+
         // extractor
         let monitor_time_window_secs = self.config.pipeline.counter_time_window_secs as usize;
         let monitor_max_sub_count = self.config.pipeline.counter_max_sub_count as usize;
         let monitor_count_window = self.config.pipeline.buffer_size;
         let extractor_monitor = Arc::new(Mutex::new(Monitor::new(
             "extractor",
+            &single_task_id,
             monitor_time_window_secs,
             monitor_max_sub_count,
             monitor_count_window,
@@ -282,6 +400,7 @@ impl TaskRunner {
         // sinkers
         let sinker_monitor = Arc::new(Mutex::new(Monitor::new(
             "sinker",
+            &single_task_id,
             monitor_time_window_secs,
             monitor_max_sub_count,
             monitor_count_window,
@@ -297,6 +416,7 @@ impl TaskRunner {
         // pipeline
         let pipeline_monitor = Arc::new(Mutex::new(Monitor::new(
             "pipeline",
+            &single_task_id,
             monitor_time_window_secs,
             monitor_max_sub_count,
             monitor_count_window,
@@ -312,6 +432,17 @@ impl TaskRunner {
                 rw_sinker_data_marker.clone(),
             )
             .await?;
+
+        // add monitors to global monitors
+        if let Ok(guard) = self.extractor_monitor.lock().as_mut() {
+            guard.add_monitor(&single_task_id, extractor_monitor.clone());
+        }
+        if let Ok(guard) = self.pipeline_monitor.lock().as_mut() {
+            guard.add_monitor(&single_task_id, pipeline_monitor.clone());
+        }
+        if let Ok(guard) = self.sinker_monitor.lock().as_mut() {
+            guard.add_monitor(&single_task_id, sinker_monitor.clone());
+        }
 
         // do pre operations before task starts
         self.pre_single_task(sinker_data_marker).await?;
@@ -358,6 +489,17 @@ impl TaskRunner {
                 }
                 .to_string()
             );
+        }
+
+        // remove monitors from global monitors
+        if let Ok(guard) = self.extractor_monitor.lock().as_mut() {
+            guard.remove_monitor(&single_task_id);
+        }
+        if let Ok(guard) = self.pipeline_monitor.lock().as_mut() {
+            guard.remove_monitor(&single_task_id);
+        }
+        if let Ok(guard) = self.sinker_monitor.lock().as_mut() {
+            guard.remove_monitor(&single_task_id);
         }
 
         Ok(())
@@ -485,6 +627,42 @@ impl TaskRunner {
         pipeline_monitor: Arc<Mutex<Monitor>>,
         sinker_monitor: Arc<Mutex<Monitor>>,
     ) {
+        Self::flush_monitors_generic(
+            interval_secs,
+            shut_down,
+            extractor_monitor,
+            pipeline_monitor,
+            sinker_monitor,
+        )
+        .await
+    }
+
+    async fn flush_group_monitors(
+        interval_secs: u64,
+        shut_down: Arc<AtomicBool>,
+        extractor_monitor: Arc<Mutex<GroupMonitor>>,
+        pipeline_monitor: Arc<Mutex<GroupMonitor>>,
+        sinker_monitor: Arc<Mutex<GroupMonitor>>,
+    ) {
+        Self::flush_monitors_generic(
+            interval_secs,
+            shut_down,
+            extractor_monitor,
+            pipeline_monitor,
+            sinker_monitor,
+        )
+        .await
+    }
+
+    async fn flush_monitors_generic<T>(
+        interval_secs: u64,
+        shut_down: Arc<AtomicBool>,
+        extractor_monitor: Arc<Mutex<T>>,
+        pipeline_monitor: Arc<Mutex<T>>,
+        sinker_monitor: Arc<Mutex<T>>,
+    ) where
+        T: FlushableMonitor,
+    {
         loop {
             // do an extra flush before exit if task finished
             let finished = shut_down.load(Ordering::Acquire);
