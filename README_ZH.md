@@ -66,6 +66,7 @@
     - [订正](./docs/zh/snapshot/revise.md)
     - [复查](./docs/zh/snapshot/review.md)
     - [断点续传](./docs/zh/snapshot/resume.md)
+    - [多表并行](./docs/zh/snapshot/tb_in_parallel.md)
 - 增量任务
     - [迁移](./docs/zh/cdc/sync.md)
     - [开启源库心跳](./docs/zh/cdc/heartbeat.md)
