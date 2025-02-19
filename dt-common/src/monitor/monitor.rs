@@ -6,10 +6,12 @@ use crate::monitor::counter_type::AggregateType;
 use super::counter::Counter;
 use super::counter_type::{CounterType, WindowType};
 use super::time_window_counter::TimeWindowCounter;
+use super::FlushableMonitor;
 
 #[derive(Clone, Default)]
 pub struct Monitor {
     pub name: String,
+    pub description: String,
     pub no_window_counters: HashMap<CounterType, Counter>,
     pub time_window_counters: HashMap<CounterType, TimeWindowCounter>,
     pub time_window_secs: usize,
@@ -17,15 +19,23 @@ pub struct Monitor {
     pub count_window: usize,
 }
 
+impl FlushableMonitor for Monitor {
+    fn flush(&mut self) {
+        self.flush();
+    }
+}
+
 impl Monitor {
     pub fn new(
         name: &str,
+        description: &str,
         time_window_secs: usize,
         max_sub_count: usize,
         count_window: usize,
     ) -> Self {
         Self {
             name: name.into(),
+            description: description.into(),
             no_window_counters: HashMap::new(),
             time_window_counters: HashMap::new(),
             time_window_secs,
@@ -37,7 +47,7 @@ impl Monitor {
     pub fn flush(&mut self) {
         for (counter_type, counter) in self.time_window_counters.iter_mut() {
             let statistics = counter.statistics();
-            let mut log = format!("{} | {}", self.name, counter_type);
+            let mut log = format!("{} | {} | {}", self.name, self.description, counter_type);
             for aggregate_type in counter_type.get_aggregate_types() {
                 let aggregate_value = match aggregate_type {
                     AggregateType::AvgByCount => statistics.avg_by_count,
@@ -54,7 +64,7 @@ impl Monitor {
         }
 
         for (counter_type, counter) in self.no_window_counters.iter() {
-            let mut log = format!("{} | {}", self.name, counter_type);
+            let mut log = format!("{} | {} | {}", self.name, self.description, counter_type);
             for aggregate_type in counter_type.get_aggregate_types() {
                 let aggregate_value = match aggregate_type {
                     AggregateType::Latest => counter.value,

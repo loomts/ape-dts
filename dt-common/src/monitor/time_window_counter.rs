@@ -3,7 +3,7 @@ use std::{cmp, collections::LinkedList};
 use super::counter::Counter;
 
 #[derive(Default)]
-pub struct WindowCounterStatistic {
+pub struct WindowCounterStatistics {
     pub sum: usize,
     pub max: usize,
     pub max_by_sec: usize,
@@ -39,10 +39,10 @@ impl TimeWindowCounter {
     }
 
     #[inline(always)]
-    pub fn statistics(&mut self) -> WindowCounterStatistic {
+    pub fn statistics(&mut self) -> WindowCounterStatistics {
         self.refresh_window();
 
-        let mut statistics = WindowCounterStatistic {
+        let mut statistics = WindowCounterStatistics {
             ..Default::default()
         };
 

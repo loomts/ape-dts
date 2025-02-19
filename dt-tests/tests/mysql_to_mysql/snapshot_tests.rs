@@ -90,4 +90,12 @@ mod test {
     async fn snapshot_parallel_test() {
         TestBase::run_snapshot_test("mysql_to_mysql/snapshot/parallel_test").await;
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn snapshot_tb_parallel_test() {
+        // [runtime]
+        // tb_parallel_size=3
+        TestBase::run_snapshot_test("mysql_to_mysql/snapshot/tb_parallel_test").await;
+    }
 }

@@ -65,6 +65,7 @@ Refer to [test docs](./dt-tests/README.md) for details.
     - [data revise](./docs/en/snapshot/revise.md)
     - [data review](./docs/en/snapshot/review.md)
     - [resume at breakpoint](./docs/en/snapshot/resume.md)
+    - [multiple tables in parallel](./docs/en/snapshot/tb_in_parallel.md)
 - CDC tasks
     - [data sync](./docs/en/cdc/sync.md)
     - [heartbeat to source database](./docs/en/cdc/heartbeat.md)
