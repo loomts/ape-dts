@@ -151,7 +151,7 @@ impl MysqlColValueConvertor {
                     timezone_offset, ..
                 } = *col_type
                 {
-                    // the value parsed from binlog is in millis with UTC
+                    // the value parsed from binlog is in micros with UTC
                     let dt = Utc.timestamp_nanos(v * 1000 + timezone_offset * 1000000000);
                     ColValue::Timestamp(dt.to_string().replace(" UTC", ""))
                 } else {

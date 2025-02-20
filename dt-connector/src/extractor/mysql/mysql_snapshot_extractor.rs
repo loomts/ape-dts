@@ -8,6 +8,7 @@ use std::{
 
 use async_trait::async_trait;
 use dt_common::{
+    log_debug,
     meta::{
         adaptor::{mysql_col_value_convertor::MysqlColValueConvertor, sqlx_ext::SqlxMysqlExt},
         col_value::ColValue,
@@ -24,6 +25,7 @@ use dt_common::{
 };
 use futures::TryStreamExt;
 
+use serde_json::json;
 use sqlx::{MySql, Pool};
 
 use dt_common::{config::config_enums::DbType, log_info};
@@ -380,6 +382,7 @@ impl MysqlSnapshotExtractor {
             position,
             data_origin_node: String::new(),
         };
+        log_debug!("extacted item: {}", json!(item));
         buffer.push(item).await
     }
 
