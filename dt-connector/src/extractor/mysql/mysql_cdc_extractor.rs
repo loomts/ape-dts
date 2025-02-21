@@ -12,10 +12,13 @@ use std::{
     time::Instant,
 };
 
-use dt_common::meta::{
-    adaptor::mysql_col_value_convertor::MysqlColValueConvertor, col_value::ColValue,
-    dt_data::DtData, mysql::mysql_meta_manager::MysqlMetaManager, position::Position,
-    row_data::RowData, row_type::RowType, syncer::Syncer,
+use dt_common::{
+    log_debug,
+    meta::{
+        adaptor::mysql_col_value_convertor::MysqlColValueConvertor, col_value::ColValue,
+        dt_data::DtData, mysql::mysql_meta_manager::MysqlMetaManager, position::Position,
+        row_data::RowData, row_type::RowType, syncer::Syncer,
+    },
 };
 use mysql_binlog_connector_rust::{
     binlog_client::BinlogClient,
@@ -51,6 +54,7 @@ pub struct MysqlCdcExtractor {
     pub server_id: u64,
     pub gtid_enabled: bool,
     pub gtid_set: String,
+    pub binlog_heartbeat_interval_secs: u64,
     pub heartbeat_interval_secs: u64,
     pub heartbeat_tb: String,
     pub syncer: Arc<Mutex<Syncer>>,
@@ -119,6 +123,7 @@ impl MysqlCdcExtractor {
             server_id: self.server_id,
             gtid_enabled: self.gtid_enabled,
             gtid_set: self.gtid_set.clone(),
+            heartbeat_interval_secs: self.binlog_heartbeat_interval_secs,
         };
         let mut stream = client.connect().await?;
 
@@ -158,6 +163,12 @@ impl MysqlCdcExtractor {
         data: EventData,
         ctx: &mut Context,
     ) -> anyhow::Result<()> {
+        log_debug!(
+            "received binlog, event header: {:?}, event data: {:?}",
+            header,
+            data
+        );
+
         // TODO, get server_id from source mysql
         let server_id = String::new();
         let timestamp = Position::format_timestamp_millis(header.timestamp as i64 * 1000);
