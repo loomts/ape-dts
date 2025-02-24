@@ -545,7 +545,7 @@ impl RdbQueryBuilder<'_> {
         let is_str = match col_type {
             MysqlColType::DateTime { .. }
             | MysqlColType::Time { .. }
-            | MysqlColType::Date
+            | MysqlColType::Date { .. }
             | MysqlColType::Timestamp { .. }
             | MysqlColType::Binary { .. }
             | MysqlColType::VarBinary { .. }

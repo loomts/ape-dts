@@ -248,8 +248,9 @@ impl StarrocksStructSinker {
             MysqlColType::Year => "INT",
 
             // https://github.com/apache/doris-flink-connector/blob/master/flink-doris-connector/src/main/java/org/apache/doris/flink/tools/cdc/mysql/MysqlType.java
-            MysqlColType::Date => "DATE",
-            MysqlColType::DateTime { precision } | MysqlColType::Timestamp { precision, .. } => {
+            MysqlColType::Date { .. } => "DATE",
+            MysqlColType::DateTime { precision, .. }
+            | MysqlColType::Timestamp { precision, .. } => {
                 if self.db_type == DbType::StarRocks {
                     "DATETIME"
                 } else {

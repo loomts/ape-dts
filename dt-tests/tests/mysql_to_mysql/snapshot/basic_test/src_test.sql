@@ -81,3 +81,7 @@ INSERT INTO Upper_Case_DB.Upper_Case_TB VALUES(1, 1, 1, 1, 1),(2, 2, 2, 2, 2);
 INSERT INTO test_db_1.where_condition_1 VALUES(1, 1),(2, 2),(3, 3),(4, 4),(5, 5),(6, 6),(7, 7),(8, 8),(9, 9),(10, 10);
 INSERT INTO test_db_1.where_condition_2 VALUES(1, 1),(2, 2),(3, 3),(4, 4),(5, 5),(6, 6),(7, 7),(8, 8),(9, 9),(10, 10);
 INSERT INTO test_db_1.where_condition_3 VALUES(1, 1),(2, 2),(3, 3),(4, 4),(5, 5),(6, 6),(7, 7),(8, 8),(9, 9),(10, 10);
+
+-- fix: https://github.com/apecloud/ape-dts/issues/328
+-- test null datetime, date, time, timestamp
+INSERT INTO test_db_1.zero_date_time_table VALUES(1, '0000-00-00 00:00:00', '00:00:00', '0000-00-00', '0000-00-00 00:00:00');

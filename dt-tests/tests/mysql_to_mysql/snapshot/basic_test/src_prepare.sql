@@ -55,3 +55,13 @@ CREATE TABLE Upper_Case_DB.Upper_Case_TB (
 CREATE TABLE test_db_1.where_condition_1 ( f_0 int, f_1 int ); 
 CREATE TABLE test_db_1.where_condition_2 ( f_0 int, f_1 int, PRIMARY KEY (f_0) ); 
 CREATE TABLE test_db_1.where_condition_3 ( f_0 int, f_1 int ); 
+
+```
+CREATE TABLE test_db_1.zero_date_time_table ( f_0 int, 
+    f_1 datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+    f_2 time NOT NULL DEFAULT '00:00:00',
+    f_3 date NOT NULL DEFAULT '0000-00-00',
+    f_4 timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
+    PRIMARY KEY(f_0)
+);
+```

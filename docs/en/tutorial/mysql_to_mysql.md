@@ -23,6 +23,7 @@ docker run -d --name some-mysql-1 \
  --gtid_mode=ON \
  --enforce_gtid_consistency=ON \
  --binlog_format=ROW \
+ --sql_mode=NO_ENGINE_SUBSTITUTION \
  --default_time_zone=+08:00
 ```
 
@@ -42,7 +43,8 @@ docker run -d --name some-mysql-2 \
  --gtid_mode=ON \
  --enforce_gtid_consistency=ON \
  --binlog_format=ROW \
- --default_time_zone=+07:00
+ --sql_mode=NO_ENGINE_SUBSTITUTION \
+ --default_time_zone=+07:00 
 ```
 
 # Migrate structures

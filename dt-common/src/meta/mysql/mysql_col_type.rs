@@ -30,15 +30,19 @@ pub enum MysqlColType {
     Time {
         precision: u32,
     },
-    Date,
+    Date {
+        is_nullable: bool,
+    },
     DateTime {
         precision: u32,
+        is_nullable: bool,
     },
     // timezone diff with utc in seconds
     // refer: https://dev.mysql.com/doc/refman/8.0/en/datetime.html
     Timestamp {
         precision: u32,
         timezone_offset: i64,
+        is_nullable: bool,
     },
     Year,
     // for char(length), the maximum length is 255,

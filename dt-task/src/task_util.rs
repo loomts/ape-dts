@@ -35,8 +35,8 @@ impl TaskUtil {
         let mut conn_options = MySqlConnectOptions::from_str(url)?;
         // The default character set is `utf8mb4`
         conn_options
-            .log_statements(log::LevelFilter::Info)
-            .log_slow_statements(log::LevelFilter::Info, Duration::from_secs(1));
+            .log_statements(log::LevelFilter::Debug)
+            .log_slow_statements(log::LevelFilter::Debug, Duration::from_secs(1));
 
         if !enable_sqlx_log {
             conn_options.disable_statement_logging();
@@ -56,8 +56,8 @@ impl TaskUtil {
     ) -> anyhow::Result<Pool<Postgres>> {
         let mut conn_options = PgConnectOptions::from_str(url)?;
         conn_options
-            .log_statements(log::LevelFilter::Info)
-            .log_slow_statements(log::LevelFilter::Info, Duration::from_secs(1));
+            .log_statements(log::LevelFilter::Debug)
+            .log_slow_statements(log::LevelFilter::Debug, Duration::from_secs(1));
 
         if !enable_sqlx_log {
             conn_options.disable_statement_logging();
