@@ -28,6 +28,7 @@ const CHARACTER_MAXIMUM_LENGTH: &str = "CHARACTER_MAXIMUM_LENGTH";
 const CHARACTER_SET_NAME: &str = "CHARACTER_SET_NAME";
 const NUMERIC_PRECISION: &str = "NUMERIC_PRECISION";
 const NUMERIC_SCALE: &str = "NUMERIC_SCALE";
+const IS_NULLABLE: &str = "IS_NULLABLE";
 
 impl MysqlMetaFetcher {
     pub async fn new(conn_pool: Pool<MySql>) -> anyhow::Result<Self> {
@@ -150,12 +151,12 @@ impl MysqlMetaFetcher {
         }
 
         let sql = if db_type == &DbType::Mysql {
-            format!("SELECT {}, {}, {}, {}, {}, {}, {} FROM information_schema.columns WHERE table_schema = ? AND table_name = ?", 
-                COLUMN_NAME, COLUMN_TYPE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_SET_NAME, NUMERIC_PRECISION, NUMERIC_SCALE)
+            format!("SELECT {}, {}, {}, {}, {}, {}, {}, {} FROM information_schema.columns WHERE table_schema = ? AND table_name = ?", 
+                COLUMN_NAME, COLUMN_TYPE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_SET_NAME, NUMERIC_PRECISION, NUMERIC_SCALE, IS_NULLABLE)
         } else {
             // starrocks
-            format!("SELECT {}, {}, {}, {}, {}, {}, {} FROM information_schema.columns WHERE table_schema = '{}' AND table_name = '{}'", 
-                COLUMN_NAME, COLUMN_TYPE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_SET_NAME, NUMERIC_PRECISION, NUMERIC_SCALE, &schema, &tb)
+            format!("SELECT {}, {}, {}, {}, {}, {}, {}, {} FROM information_schema.columns WHERE table_schema = '{}' AND table_name = '{}'", 
+                COLUMN_NAME, COLUMN_TYPE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_SET_NAME, NUMERIC_PRECISION, NUMERIC_SCALE,IS_NULLABLE, &schema, &tb)
         };
 
         let mut rows = if db_type == &DbType::Mysql {
@@ -185,6 +186,7 @@ impl MysqlMetaFetcher {
     async fn get_col_type(row: &MySqlRow) -> anyhow::Result<(String, MysqlColType)> {
         let column_type: String = row.try_get(COLUMN_TYPE)?;
         let data_type: String = row.try_get(DATA_TYPE)?;
+        let is_nullable = row.try_get::<String, _>(IS_NULLABLE)?.to_lowercase() == "yes";
 
         let parse_precesion = || {
             let precision = if column_type.contains('(') {
@@ -241,6 +243,7 @@ impl MysqlMetaFetcher {
             "timestamp" => MysqlColType::Timestamp {
                 precision: parse_precesion(),
                 timezone_offset: 0,
+                is_nullable,
             },
 
             "tinyblob" => MysqlColType::TinyBlob,
@@ -298,9 +301,10 @@ impl MysqlMetaFetcher {
 
             "datetime" => MysqlColType::DateTime {
                 precision: parse_precesion(),
+                is_nullable,
             },
 
-            "date" => MysqlColType::Date,
+            "date" => MysqlColType::Date { is_nullable },
             "time" => MysqlColType::Time {
                 precision: parse_precesion(),
             },

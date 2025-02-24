@@ -299,7 +299,7 @@ impl MysqlColValueConvertor {
 
                 MysqlColType::Decimal { .. } => ColValue::Decimal(value_str),
                 MysqlColType::Time { .. } => ColValue::Time(value_str),
-                MysqlColType::Date => ColValue::Date(value_str),
+                MysqlColType::Date { .. } => ColValue::Date(value_str),
                 MysqlColType::DateTime { .. } => ColValue::DateTime(value_str),
 
                 MysqlColType::Timestamp { .. } => ColValue::Timestamp(value_str),
@@ -352,7 +352,7 @@ impl MysqlColValueConvertor {
     ) -> anyhow::Result<ColValue> {
         let value: Option<Vec<u8>> = row.get_unchecked(col);
         if value.is_none() {
-            return Ok(ColValue::None);
+            return Self::from_query_none_value(col_type);
         }
 
         match col_type {
@@ -413,7 +413,7 @@ impl MysqlColValueConvertor {
                     Self::parse_time(buf)
                 }
             },
-            MysqlColType::Date => match db_type {
+            MysqlColType::Date { .. } => match db_type {
                 DbType::StarRocks | DbType::Foxlake => {
                     let value: Vec<u8> = row.get_unchecked(col);
                     let str: String = String::from_utf8_lossy(&value).to_string();
@@ -497,6 +497,26 @@ impl MysqlColValueConvertor {
                 Ok(ColValue::Json2(value.to_string()))
             }
             MysqlColType::Unknown => Ok(ColValue::None),
+        }
+    }
+
+    fn from_query_none_value(col_type: &MysqlColType) -> anyhow::Result<ColValue> {
+        // fix: https://github.com/apecloud/ape-dts/issues/328
+        // table: CREATE TABLE `a` (`id` int, `value` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00');
+        // source value: insert into a values(1, '0000-00-00 00:00:00')
+        // ape-dts extractor get: (1, None)
+        // ape-dts sinker: insert into `a` values(1, NULL, NULL, NULL) which will fail
+        match col_type {
+            MysqlColType::Timestamp {
+                is_nullable: false, ..
+            } => Ok(ColValue::Timestamp("0000-00-00 00:00:00".to_string())),
+            MysqlColType::DateTime {
+                is_nullable: false, ..
+            } => Ok(ColValue::DateTime("0000-00-00 00:00:00".to_string())),
+            MysqlColType::Date { is_nullable: false } => {
+                Ok(ColValue::DateTime("0000-00-00".to_string()))
+            }
+            _ => Ok(ColValue::None),
         }
     }
 }
