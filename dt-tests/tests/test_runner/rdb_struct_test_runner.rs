@@ -46,7 +46,7 @@ impl RdbStructTestRunner {
             let mut line_set = HashSet::new();
             let lines: Vec<&str> = sql.split("\n").collect();
             for line in lines {
-                line_set.insert(line.trim_end_matches(",").to_owned());
+                line_set.insert(line.trim().trim_end_matches(",").to_owned());
             }
             line_set
         };
@@ -73,16 +73,14 @@ impl RdbStructTestRunner {
             let dst_ddl_sql_lines = get_sql_lines(&dst_ddl_sql);
             let expect_ddl_sql_lines = get_sql_lines(&expect_ddl_sql);
 
-            println!("dst_ddl_sql_lines:");
             for line in dst_ddl_sql_lines.iter() {
-                println!("{}", line);
+                println!("dst_ddl_sql_line: {}", line);
+                if !expect_ddl_sql_lines.contains(line) {
+                    println!("dst_ddl_sql_line NOT exists in expect_ddl_sql_lines");
+                    assert!(false);
+                }
             }
-            println!("\nexpect_ddl_sql_lines:");
-            for line in expect_ddl_sql_lines.iter() {
-                println!("{}", line);
-            }
-
-            assert_eq!(dst_ddl_sql_lines, expect_ddl_sql_lines);
+            assert_eq!(dst_ddl_sql_lines.len(), expect_ddl_sql_lines.len());
         }
 
         // show create database

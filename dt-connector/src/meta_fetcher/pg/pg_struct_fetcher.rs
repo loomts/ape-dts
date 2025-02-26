@@ -7,7 +7,7 @@ use dt_common::meta::struct_meta::{
         pg_create_table_statement::PgCreateTableStatement,
     },
     structure::{
-        column::Column,
+        column::{Column, ColumnDefault},
         comment::{Comment, CommentType},
         constraint::{Constraint, ConstraintType},
         index::{Index, IndexKind},
@@ -204,7 +204,7 @@ impl PgStructFetcher {
 
         let mut independent_squence_names = Vec::new();
         for column in table.columns.iter() {
-            if let Some(default_value) = &column.column_default {
+            if let Some(ColumnDefault::Literal(default_value)) = &column.column_default {
                 let (schema, sequence_name) =
                     Self::get_sequence_name_by_default_value(default_value);
                 // example, default_value is 'Standard'::text
@@ -355,10 +355,15 @@ impl PgStructFetcher {
             let identity_generation = row.get("identity_generation");
             let generation_rule = Self::get_col_generation_rule(is_identity, identity_generation);
             let is_nullable = Self::get_str_with_null(&row, "is_nullable")?.to_lowercase() == "yes";
+            let column_default = if let Some(str) = row.get("column_default") {
+                Some(ColumnDefault::Literal(str))
+            } else {
+                None
+            };
             let column = Column {
                 column_name: Self::get_str_with_null(&row, "column_name")?,
                 ordinal_position: ordinal_position as u32,
-                column_default: row.get("column_default"),
+                column_default,
                 is_nullable,
                 generated: generation_rule,
                 ..Default::default()

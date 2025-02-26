@@ -4,6 +4,7 @@ use crate::config::config_enums::DbType;
 use crate::error::Error;
 use crate::meta::ddl_meta::ddl_parser::DdlParser;
 use crate::meta::ddl_meta::ddl_statement::DdlStatement;
+use crate::meta::struct_meta::structure::column::ColumnDefault;
 use crate::rdb_filter::RdbFilter;
 
 use crate::meta::struct_meta::structure::{
@@ -156,7 +157,9 @@ impl PgCreateTableStatement {
                 sql.push_str("NOT NULL ");
             }
             match &column.column_default {
-                Some(x) => sql.push_str(format!("DEFAULT {} ", x).as_str()),
+                Some(ColumnDefault::Expression(v)) | Some(ColumnDefault::Literal(v)) => {
+                    sql.push_str(format!("DEFAULT {} ", v).as_str())
+                }
                 None => {}
             }
             match &column.generated {
