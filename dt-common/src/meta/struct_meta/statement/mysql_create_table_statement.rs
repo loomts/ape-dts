@@ -1,3 +1,4 @@
+use crate::meta::struct_meta::structure::column::ColumnDefault;
 use crate::{config::config_enums::DbType, rdb_filter::RdbFilter};
 
 use crate::meta::struct_meta::structure::{
@@ -108,65 +109,71 @@ impl MysqlCreateTableStatement {
         }
 
         if !table.table_comment.is_empty() {
-            sql = format!("{} COMMENT='{}'", sql, table.table_comment);
+            sql = format!("{} COMMENT='{}'", sql, Self::escape(&table.table_comment));
         }
 
         sql
     }
 
     fn columns_to_sql(columns: &mut Vec<Column>) -> (String, Vec<String>) {
-        let (mut sql, mut pks) = (String::new(), Vec::new());
+        let (mut sql_lines, mut pks) = (Vec::new(), Vec::new());
 
         columns.sort_by(|c1, c2| c1.ordinal_position.cmp(&c2.ordinal_position));
-        for i in columns {
-            sql.push_str(&format!("`{}` {} ", i.column_name, i.column_type));
+        for i in columns.iter() {
+            let mut line = String::new();
+            line.push_str(&format!("`{}` {}", i.column_name, i.column_type));
 
             if !i.character_set_name.is_empty() {
-                sql.push_str(&format!("CHARACTER SET {} ", i.character_set_name))
+                line.push_str(&format!(" CHARACTER SET {}", i.character_set_name))
             }
 
             if !i.collation_name.is_empty() {
-                sql.push_str(&format!("COLLATE {} ", i.collation_name))
+                line.push_str(&format!(" COLLATE {}", i.collation_name))
             }
 
-            if let Some(v) = &i.column_default {
-                if v.to_lowercase().starts_with("current_") {
-                    sql.push_str(&format!("DEFAULT {} ", v));
-                } else {
-                    sql.push_str(&format!("DEFAULT '{}' ", v));
+            match &i.column_default {
+                Some(ColumnDefault::Expression(v)) => line.push_str(&format!(" DEFAULT {}", v)),
+                Some(ColumnDefault::Literal(v)) => {
+                    if i.column_type.to_lowercase().starts_with("bit") {
+                        // https://github.com/apecloud/ape-dts/issues/319
+                        // CREATE TABLE a(b bit(1) default b'1');
+                        line.push_str(&format!(" DEFAULT {}", v))
+                    } else {
+                        line.push_str(&format!(" DEFAULT '{}'", Self::escape(v)))
+                    }
                 }
+                _ => {}
             }
 
-            if !i.extra.is_empty() {
-                // DEFAULT_GENERATED
-                // DEFAULT_GENERATED on update CURRENT_TIMESTAMP
-                sql.push_str(&format!("{} ", i.extra.replace("DEFAULT_GENERATED", "")));
+            // auto_increment
+            // on update CURRENT_TIMESTAMP
+            // mysql 8.0:
+            //  DEFAULT_GENERATED
+            //  DEFAULT_GENERATED on update CURRENT_TIMESTAMP
+            let extra = i.extra.replacen("DEFAULT_GENERATED", "", 1);
+            if !extra.is_empty() {
+                line.push_str(&format!(" {}", extra));
             }
 
             let nullable = if !i.is_nullable {
-                String::from("NOT NULL ")
+                String::from("NOT NULL")
             } else {
-                String::from("NULL ")
+                String::from("NULL")
             };
 
             if !i.column_comment.is_empty() {
-                sql.push_str(&format!("COMMENT '{}' ", i.column_comment))
+                line.push_str(&format!(" COMMENT '{}'", Self::escape(&i.column_comment)))
             }
 
-            sql.push_str(&format!("{} ", nullable));
-
-            sql.push(',');
+            line.push_str(&format!(" {}", nullable));
+            sql_lines.push(line);
 
             if i.column_key == "PRI" {
                 pks.push(i.column_name.clone());
             }
         }
 
-        if sql.ends_with(',') {
-            sql = sql[0..sql.len() - 1].to_string();
-        }
-
-        (sql, pks)
+        (sql_lines.join(", "), pks)
     }
 
     fn index_to_sql(index: &mut Index) -> String {
@@ -190,7 +197,7 @@ impl MysqlCreateTableStatement {
         );
 
         if !index.comment.is_empty() {
-            sql.push_str(&format!("COMMENT '{}' ", index.comment));
+            sql.push_str(&format!("COMMENT '{}' ", Self::escape(&index.comment)));
         }
 
         sql
@@ -206,5 +213,9 @@ impl MysqlCreateTableStatement {
             constraint.constraint_type.to_str(DbType::Mysql),
             constraint.definition
         )
+    }
+
+    fn escape(text: &str) -> String {
+        text.replace('\'', "\'\'").to_string()
     }
 }

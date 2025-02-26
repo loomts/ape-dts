@@ -11,20 +11,20 @@ CREATE TABLE struct_it_mysql2mysql_1.full_column_type (id INT UNSIGNED AUTO_INCR
     mediumtext_col MEDIUMTEXT COMMENT 'mediumtext_col_comment',
     longtext_col LONGTEXT COMMENT 'longtext_col_comment',
     text_col TEXT COMMENT 'text_col_comment',
-    tinyint_col TINYINT DEFAULT 0 COMMENT 'tinyint_col_comment',
+    tinyint_col TINYINT COMMENT 'tinyint_col_comment',
     smallint_col SMALLINT COMMENT 'smallint_col_comment',
     mediumint_col MEDIUMINT COMMENT 'mediumint_col_comment',
     int_col INT COMMENT 'int_col_comment',
     bigint_col BIGINT COMMENT 'bigint_col_comment',
     float_col FLOAT(8, 2) COMMENT 'float_col_comment',
     double_col DOUBLE(16, 4) COMMENT 'double_col_comment',
-    bit_col BIT(64) DEFAULT NULL COMMENT 'bit_col_comment',
+    bit_col BIT(64) COMMENT 'bit_col_comment',
     decimal_col DECIMAL(10, 2) COMMENT 'decimal_col_comment',
     date_col DATE COMMENT 'date_col_comment',
     datetime_col DATETIME COMMENT 'datetime_col_comment',
     datetime_col2 DATETIME(6) COMMENT 'datetime_col2_comment',
-    timestamp_col TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'timestamp_col_comment',
-    timestamp_co2 TIMESTAMP DEFAULT CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP COMMENT 'timestamp_co2_comment',
+    timestamp_col TIMESTAMP COMMENT 'timestamp_col_comment',
+    timestamp_col2 TIMESTAMP(6) COMMENT 'timestamp_col2_comment',
     time_col TIME COMMENT 'time_col_comment',
     time_col2 TIME(2) COMMENT 'time_col2_comment',
     year_col YEAR COMMENT 'year_col_comment',
@@ -36,8 +36,68 @@ CREATE TABLE struct_it_mysql2mysql_1.full_column_type (id INT UNSIGNED AUTO_INCR
     longblob_col LONGBLOB COMMENT 'longblob_col_comment',
     enum_col ENUM('value1', 'value2', 'value3') COMMENT 'enum_col_comment',
     set_col SET('option1', 'option2', 'option3') COMMENT 'set_col_comment',
-    json_col JSON DEFAULT NULL COMMENT 'json_col_comment'
+    json_col JSON COMMENT 'json_col_comment'
 ); 
+```
+
+-- full column type with default value
+-- The BLOB, TEXT, GEOMETRY, and JSON data types cannot be assigned a default value.
+```
+CREATE TABLE struct_it_mysql2mysql_1.full_column_type_with_default (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    varchar_col VARCHAR(255) NOT NULL DEFAULT 'abc中文' COMMENT 'varchar_col_comment',
+    char_col CHAR(255) DEFAULT 'abc中文' COMMENT 'char_col_comment',
+    tinytext_col TINYTEXT COMMENT 'tinytext_col_comment',
+    mediumtext_col MEDIUMTEXT COMMENT 'mediumtext_col_comment',
+    longtext_col LONGTEXT COMMENT 'longtext_col_comment',
+    text_col TEXT COMMENT 'text_col_comment',
+    tinyint_col TINYINT DEFAULT 10 COMMENT 'tinyint_col_comment',
+    smallint_col SMALLINT DEFAULT 100 COMMENT 'smallint_col_comment',
+    mediumint_col MEDIUMINT DEFAULT 1000 COMMENT 'mediumint_col_comment',
+    int_col INT DEFAULT 10000 COMMENT 'int_col_comment',
+    bigint_col BIGINT DEFAULT 100000 COMMENT 'bigint_col_comment',
+    float_col FLOAT(8, 2) DEFAULT 1.01 COMMENT 'float_col_comment',
+    double_col DOUBLE(16, 4) DEFAULT 1.0001 COMMENT 'double_col_comment',
+    bit_col BIT(1) DEFAULT b'1' COMMENT 'bit_col_comment',
+    bit_col2 BIT(1) DEFAULT B'0' COMMENT 'bit_col_comment',
+    bit_col3 BIT(64) DEFAULT 13 COMMENT 'bit_col_comment',
+    bit_col4 BIT(64) DEFAULT 'abcde' COMMENT 'bit_col_comment',
+    decimal_col DECIMAL(10, 2) DEFAULT 1.01 COMMENT 'decimal_col_comment',
+    date_col DATE DEFAULT '1970-01-01' COMMENT 'date_col_comment',
+    datetime_col DATETIME DEFAULT '1970-01-01 00:00:00' COMMENT 'datetime_col_comment',
+    datetime_col2 DATETIME(6) DEFAULT '1970-01-01 00:00:00.000000' COMMENT 'datetime_col2_comment',
+    datetime_col3 DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'datetime_col2_comment',
+    timestamp_col TIMESTAMP DEFAULT '2024-01-01 00:00:00' COMMENT 'timestamp_col_comment',
+    timestamp_col2 TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'timestamp_col2_comment',
+    timestamp_col3 TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'timestamp_col3_comment',
+    time_col TIME DEFAULT '00:00:00' COMMENT 'time_col_comment',
+    time_col2 TIME(2) DEFAULT '01:01:01.01' COMMENT 'time_col2_comment',
+    year_col YEAR DEFAULT 1970 COMMENT 'year_col_comment',
+
+    -- TODO: binary_col and varbinary_col default value is not supported
+    binary_col BINARY(16) COMMENT 'binary_col_comment',
+    varbinary_col VARBINARY(255) COMMENT 'varbinary_col_comment',
+    -- binary_col BINARY(16) DEFAULT x'0123456789ABCDEF' COMMENT 'binary_col_comment',
+    -- binary_col BINARY(16) DEFAULT 0x1234 COMMENT 'binary_col_comment',
+    -- varbinary_col VARBINARY(255) DEFAULT x'0123456789ABCDEF' COMMENT 'varbinary_col_comment',
+    -- varbinary_col VARBINARY(255) DEFAULT 0x1234 COMMENT 'varbinary_col_comment',
+
+    blob_col BLOB COMMENT 'blob_col_comment',
+    tinyblob_col TINYBLOB COMMENT 'tinyblob_col_comment',
+    mediumblob_col MEDIUMBLOB COMMENT 'mediumblob_col_comment',
+    longblob_col LONGBLOB COMMENT 'longblob_col_comment',
+    enum_col ENUM('value1', 'value2', 'value3') DEFAULT 'value1' COMMENT 'enum_col_comment',
+    set_col SET('option1', 'option2', 'option3') DEFAULT 'option1' COMMENT 'set_col_comment',
+    json_col JSON DEFAULT NULL COMMENT 'json_col_comment'
+) DEFAULT CHARSET=utf8mb4;
+```
+
+-- default value and comment
+```
+CREATE TABLE struct_it_mysql2mysql_1.special_default_and_comment (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    f_1 VARCHAR(255) NOT NULL DEFAULT 'abc''中文''' COMMENT '中文注释''f_1''' 
+) COMMENT='中文注释''special_default_and_comment''';
 ```
 
 -- full index type

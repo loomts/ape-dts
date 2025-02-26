@@ -5,14 +5,14 @@ use std::{
 
 use anyhow::bail;
 use dt_common::meta::{
-    mysql::mysql_meta_manager::MysqlMetaManager,
+    mysql::{mysql_col_type::MysqlColType, mysql_meta_manager::MysqlMetaManager},
     struct_meta::{
         statement::{
             mysql_create_database_statement::MysqlCreateDatabaseStatement,
             mysql_create_table_statement::MysqlCreateTableStatement,
         },
         structure::{
-            column::Column,
+            column::{Column, ColumnDefault},
             constraint::{Constraint, ConstraintType},
             database::Database,
             index::{Index, IndexColumn, IndexKind, IndexType},
@@ -146,14 +146,24 @@ impl MysqlStructFetcher {
             let engine_name = Self::get_str_with_null(&row, "ENGINE")?;
             let table_comment = Self::get_str_with_null(&row, "TABLE_COMMENT")?;
             let is_nullable = Self::get_str_with_null(&row, "IS_NULLABLE")?.to_lowercase() == "yes";
+            let extra = Self::get_str_with_null(&row, "EXTRA")?;
+            let column_name = Self::get_str_with_null(&row, "COLUMN_NAME")?;
+            let column_default = if let Some(column_default_str) = row.get("COLUMN_DEFAULT") {
+                Some(
+                    self.parse_column_default(&db, &tb, &column_name, column_default_str, &extra)
+                        .await?,
+                )
+            } else {
+                None
+            };
             let column = Column {
-                column_name: Self::get_str_with_null(&row, "COLUMN_NAME")?,
+                column_name,
                 ordinal_position: row.try_get("ORDINAL_POSITION")?,
-                column_default: row.get("COLUMN_DEFAULT"),
+                column_default,
                 is_nullable,
                 column_type: Self::get_str_with_null(&row, "COLUMN_TYPE")?,
                 column_key: Self::get_str_with_null(&row, "COLUMN_KEY")?,
-                extra: Self::get_str_with_null(&row, "EXTRA")?,
+                extra,
                 column_comment: Self::get_str_with_null(&row, "COLUMN_COMMENT")?,
                 character_set_name: Self::get_str_with_null(&row, "CHARACTER_SET_NAME")?,
                 collation_name: Self::get_str_with_null(&row, "COLLATION_NAME")?,
@@ -182,6 +192,62 @@ impl MysqlStructFetcher {
         }
 
         Ok(results)
+    }
+
+    async fn parse_column_default(
+        &mut self,
+        schema: &str,
+        tb: &str,
+        col: &str,
+        column_default_str: &str,
+        extra: &str,
+    ) -> anyhow::Result<ColumnDefault> {
+        // https://dev.mysql.com/doc/refman/8.4/en/data-type-defaults.html
+        // https://dev.mysql.com/doc/refman/5.7/en/data-type-defaults.html
+        let str = column_default_str.to_string();
+        // 5.7 case: CREATE TABLE a (d DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
+        // | COLUMN_DEFAULT    | EXTRA                       |
+        // | CURRENT_TIMESTAMP | on update CURRENT_TIMESTAMP |
+        // 8.0 case 1: CREATE TABLE a (d DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
+        // | COLUMN_DEFAULT    | EXTRA                                         |
+        // | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
+        // 8.0 case 2: CREATE TABLE a (t TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
+        // | COLUMN_DEFAULT    | EXTRA             |
+        // | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+        // enclose expression default values within parentheses to distinguish them from literal constant default values,
+        // with 1 exception: for TIMESTAMP and DATETIME columns, you can specify the CURRENT_TIMESTAMP function as the default, without enclosing parentheses
+        // 8.0 case 3: CREATE TABLE a (f FLOAT DEFAULT (RAND() * RAND()), j JSON DEFAULT (JSON_ARRAY()));
+        // |COLUMN_NAME    | COLUMN_DEFAULT    | EXTRA             |
+        // |f              | (rand() * rand()) | DEFAULT_GENERATED |
+        // |j              | json_array()      | DEFAULT_GENERATED |
+        if extra.starts_with("DEFAULT_GENERATED") || extra.to_lowercase().contains("on update") {
+            if str.to_uppercase().eq("CURRENT_TIMESTAMP")
+                || (str.starts_with("(") && str.ends_with(")"))
+            {
+                return Ok(ColumnDefault::Expression(str));
+            } else {
+                return Ok(ColumnDefault::Expression(format!("({})", str)));
+            }
+        }
+
+        let tb_meta = self.meta_manager.get_tb_meta(schema, tb).await?;
+        let col_type = tb_meta.get_col_type(col)?;
+        // 5.7: the default value specified in a DEFAULT clause must be a literal constant;
+        // it cannot be a function or an expression. This means, for example,
+        // that you cannot set the default for a date column to be the value of a function
+        // such as NOW() or CURRENT_DATE. The exception is that, for TIMESTAMP and DATETIME columns,
+        // you can specify CURRENT_TIMESTAMP as the default.
+        // 8.0: function or expression will also cause EXTRA to be 'DEFAULT_GENERATED'
+        if str.to_uppercase().eq("CURRENT_TIMESTAMP") {
+            if matches!(
+                col_type,
+                MysqlColType::DateTime { .. } | MysqlColType::Timestamp { .. }
+            ) {
+                return Ok(ColumnDefault::Expression(str));
+            }
+        }
+
+        Ok(ColumnDefault::Literal(str))
     }
 
     async fn get_indexes(&mut self, tb: &str) -> anyhow::Result<HashMap<String, Vec<Index>>> {

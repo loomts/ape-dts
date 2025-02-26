@@ -40,4 +40,10 @@ mod test {
     async fn struct_route_test() {
         TestBase::run_mysql_struct_test("mysql_to_mysql/struct/route_test").await;
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn struct_8_0_basic_test() {
+        TestBase::run_mysql_struct_test("mysql_to_mysql/struct/8_0_basic_test").await;
+    }
 }
