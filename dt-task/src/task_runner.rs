@@ -84,7 +84,8 @@ impl TaskRunner {
         }
 
         panic::set_hook(Box::new(|panic_info| {
-            log_error!("panic: {}", panic_info);
+            let backtrace = std::backtrace::Backtrace::capture();
+            log_error!("panic: {}\nbacktrace:\n{}", panic_info, backtrace);
         }));
 
         let db_type = &self.config.extractor_basic.db_type;

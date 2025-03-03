@@ -126,3 +126,8 @@ DELETE FROM test_db_1.set_table;
 DELETE FROM test_db_1.ignore_cols_1;
 DELETE FROM test_db_1.ignore_cols_2;
 DELETE FROM Upper_Case_DB.Upper_Case_TB;
+
+-- test foreign key check ignored
+INSERT INTO test_db_1.fk_tb_1 VALUES(1,1,1,1),(2,2,2,2);
+UPDATE test_db_1.fk_tb_1 SET f_1 = 3, f_2 = 3, f_3 = 3 WHERE f_0 = 1;
+-- DELETE FROM test_db_1.fk_tb_1;

@@ -15,6 +15,7 @@ use futures::TryStreamExt;
 use mongodb::options::ClientOptions;
 use rusoto_core::Region;
 use rusoto_s3::S3Client;
+use sqlx::Executor;
 use sqlx::{
     mysql::{MySqlConnectOptions, MySqlPoolOptions},
     postgres::{PgConnectOptions, PgPoolOptions},
@@ -44,6 +45,13 @@ impl TaskUtil {
 
         let conn_pool = MySqlPoolOptions::new()
             .max_connections(max_connections)
+            .after_connect(move |conn, _meta| {
+                Box::pin(async move {
+                    conn.execute(sqlx::query("SET FOREIGN_KEY_CHECKS = 0;"))
+                        .await?;
+                    Ok(())
+                })
+            })
             .connect_with(conn_options)
             .await?;
         Ok(conn_pool)
