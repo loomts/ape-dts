@@ -6,6 +6,8 @@ If task interrupts, you need to restart it manually. By default, it will start f
 
 To avoid syncing duplicate data, the task can resume at the breakpoint in finished.log.
 
+Since resuming depends on position.log, if you have multiple tasks, **you must set up separate log directories for each task**.
+
 ## Supported
 - MySQL as source
 - Postgres as source

@@ -6,6 +6,7 @@ If a task interrupts, you need to restart it manually. By default, it will start
 
 To avoid handling duplicate data, the task can resume at the breakpoint in position.log / finished.log.
 
+Since resuming depends on position.log, if you have multiple tasks, **you must set up separate log directories for each task**.
 
 ## Supported
 - MySQL as source

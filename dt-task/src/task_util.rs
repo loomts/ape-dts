@@ -12,6 +12,7 @@ use dt_common::meta::{
     rdb_meta_manager::RdbMetaManager,
 };
 use futures::TryStreamExt;
+use mongodb::bson::doc;
 use mongodb::options::ClientOptions;
 use rusoto_core::Region;
 use rusoto_s3::S3Client;
@@ -269,7 +270,8 @@ impl TaskUtil {
             "SELECT table_name 
             FROM information_schema.tables
             WHERE table_catalog = current_database() 
-            AND table_schema = '{}'",
+            AND table_schema = '{}' 
+            AND table_type = 'BASE TABLE'",
             schema
         );
         let mut rows = sqlx::query(&sql).fetch(&conn_pool);
@@ -302,11 +304,14 @@ impl TaskUtil {
         let mut tbs = Vec::new();
         let conn_pool = Self::create_mysql_conn_pool(url, 1, false).await?;
 
-        let sql = format!("SHOW TABLES IN `{}`", db);
+        let sql = format!("SHOW FULL TABLES IN `{}`", db);
         let mut rows = sqlx::query(&sql).fetch(&conn_pool);
         while let Some(row) = rows.try_next().await.unwrap() {
             let tb: String = row.try_get(0)?;
-            tbs.push(tb);
+            let tb_type: String = row.try_get(1)?;
+            if tb_type == "BASE TABLE" {
+                tbs.push(tb);
+            }
         }
         conn_pool.close().await;
         Ok(tbs)
@@ -321,7 +326,14 @@ impl TaskUtil {
 
     async fn list_mongo_tbs(url: &str, db: &str) -> anyhow::Result<Vec<String>> {
         let client = Self::create_mongo_client(url, "").await?;
-        let tbs = client.database(db).list_collection_names(None).await?;
+        // filter views and system tables
+        let tbs = client
+            .database(db)
+            .list_collection_names(Some(doc! { "type": "collection" }))
+            .await?
+            .into_iter()
+            .filter(|name| !name.starts_with("system."))
+            .collect();
         client.shutdown().await;
         Ok(tbs)
     }

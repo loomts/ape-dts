@@ -93,3 +93,6 @@ CREATE TABLE Upper_Case_DB.Upper_Case_TB (
 CREATE TABLE test_db_1.where_condition_1 ( f_0 int, f_1 int ); 
 CREATE TABLE test_db_1.where_condition_2 ( f_0 int, f_1 int, PRIMARY KEY (f_0) ); 
 CREATE TABLE test_db_1.where_condition_3 ( f_0 int, f_1 int ); 
+
+-- test view filtered
+CREATE VIEW test_db_1.default_table_view AS SELECT * FROM test_db_1.default_table;

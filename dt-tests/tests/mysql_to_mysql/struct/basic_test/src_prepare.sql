@@ -150,3 +150,6 @@ CREATE TABLE struct_it_mysql2mysql_1.constraint_table (
   CONSTRAINT chk_email CHECK (email LIKE '%@%.%')
 );
 ```
+
+-- test view filtered
+CREATE VIEW struct_it_mysql2mysql_1.full_column_type_view AS SELECT * FROM struct_it_mysql2mysql_1.full_column_type;

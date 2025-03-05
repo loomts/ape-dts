@@ -71,3 +71,6 @@ CREATE TABLE test_db_1.fk_tb_2 (f_0 int, f_1 int UNIQUE, f_2 int UNIQUE, f_3 int
 CREATE TABLE test_db_1.fk_tb_1 (f_0 int, f_1 int UNIQUE, f_2 int UNIQUE, f_3 int, PRIMARY KEY(f_0));
 ALTER TABLE test_db_1.fk_tb_1 ADD CONSTRAINT fk_tb_1_1 FOREIGN KEY (f_1) REFERENCES test_db_1.fk_tb_2 (f_1);
 ALTER TABLE test_db_1.fk_tb_1 ADD CONSTRAINT fk_tb_1_2 FOREIGN KEY (f_2) REFERENCES test_db_1.fk_tb_2 (f_2);
+
+-- test view filtered
+CREATE OR REPLACE VIEW test_db_1.one_pk_no_uk_view AS SELECT * FROM test_db_1.one_pk_no_uk;
