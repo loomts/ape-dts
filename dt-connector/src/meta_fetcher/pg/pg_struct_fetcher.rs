@@ -314,28 +314,32 @@ impl PgStructFetcher {
         let mut results: BTreeMap<String, Table> = BTreeMap::new();
 
         let tb_filter = if !tb.is_empty() {
-            format!("AND table_name = '{}'", tb)
+            format!("AND c.table_name = '{}'", tb)
         } else {
             String::new()
         };
 
         let sql = format!(
-            "SELECT table_schema,
-                table_name,
-                column_name,
-                data_type,
-                udt_name,
-                character_maximum_length,
-                is_nullable,
-                column_default,
-                numeric_precision,
-                numeric_scale,
-                is_identity,
-                identity_generation,
-                ordinal_position
+            "SELECT c.table_schema,
+                c.table_name,
+                c.column_name,
+                c.data_type,
+                c.udt_name,
+                c.character_maximum_length,
+                c.is_nullable,
+                c.column_default,
+                c.numeric_precision,
+                c.numeric_scale,
+                c.is_identity,
+                c.identity_generation,
+                c.ordinal_position
             FROM information_schema.columns c
-            WHERE table_schema ='{}' {} 
-            ORDER BY table_schema, table_name, ordinal_position",
+            JOIN information_schema.tables t 
+                ON c.table_schema = t.table_schema 
+                AND c.table_name = t.table_name
+            WHERE c.table_schema ='{}' {} 
+                AND t.table_type = 'BASE TABLE'
+            ORDER BY c.table_schema, c.table_name, c.ordinal_position",
             &self.schema, tb_filter
         );
 

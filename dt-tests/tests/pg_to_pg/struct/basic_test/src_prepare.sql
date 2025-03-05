@@ -172,3 +172,6 @@ CREATE SEQUENCE struct_it_pg2pg_1.sequence_test_4_seq_1;
 -- WHERE dep.deptype='a'
 --     AND seq.relkind='S'
 --     AND ns.nspname = 'struct_it_pg2pg_1';
+
+-- test view filtered
+CREATE VIEW struct_it_pg2pg_1.full_column_type_view AS SELECT * FROM struct_it_pg2pg_1.full_column_type;
