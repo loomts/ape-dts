@@ -382,7 +382,7 @@ impl MysqlSnapshotExtractor {
             position,
             data_origin_node: String::new(),
         };
-        log_debug!("extacted item: {}", json!(item));
+        log_debug!("extracted item: {}", json!(item));
         buffer.push(item).await
     }
 

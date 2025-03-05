@@ -73,7 +73,7 @@ impl BaseExtractor {
             position,
             data_origin_node,
         };
-        log_debug!("extacted item: {}", json!(item));
+        log_debug!("extracted item: {}", json!(item));
         self.buffer.push(item).await
     }
 
