@@ -66,11 +66,11 @@ impl Sinker for MysqlSinker {
     async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> anyhow::Result<()> {
         for ddl_data in data {
             let sql = ddl_data.to_sql();
-            log_info!("sink ddl: {}", &sql);
             let query = sqlx::query(&sql);
+            let (db, _tb) = ddl_data.get_schema_tb();
+            log_info!("sink ddl, db: {}, sql: {}", db, sql);
 
             // create a tmp connection with databse since sqlx conn pool does NOT support `USE db`
-            let (db, _tb) = ddl_data.get_schema_tb();
             let mut conn_options = MySqlConnectOptions::from_str(&self.url)?;
             if !db.is_empty() {
                 match ddl_data.ddl_type {

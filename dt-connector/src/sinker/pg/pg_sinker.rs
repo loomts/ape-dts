@@ -82,7 +82,7 @@ impl Sinker for PgSinker {
             }
 
             let sql = ddl_data.to_sql();
-            log_info!("sink ddl: {}", &sql);
+            log_info!("sink ddl, schema: {}, sql: {}", schema, sql);
 
             let conn_pool = pool_options.connect_with(conn_options).await?;
             let query = sqlx::query(&sql);
