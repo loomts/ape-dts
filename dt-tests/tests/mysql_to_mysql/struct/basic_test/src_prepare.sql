@@ -153,3 +153,14 @@ CREATE TABLE struct_it_mysql2mysql_1.constraint_table (
 
 -- test view filtered
 CREATE VIEW struct_it_mysql2mysql_1.full_column_type_view AS SELECT * FROM struct_it_mysql2mysql_1.full_column_type;
+
+-- case sensitive column name
+```
+CREATE TABLE struct_it_mysql2mysql_1.case_sensitive_column_name (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) NOT NULL DEFAULT 'jack',
+  `Age` int(11) NOT NULL DEFAULT '100',
+  `GRADE` int(11) NOT NULL DEFAULT '100',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8
+```

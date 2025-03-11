@@ -411,7 +411,7 @@ impl RdbQueryBuilder<'_> {
     pub fn build_extract_cols_str(&self) -> anyhow::Result<String> {
         let mut extract_cols = Vec::new();
         for col in self.rdb_tb_meta.cols.iter() {
-            if self.ignore_cols.map_or(false, |cols| cols.contains(col)) {
+            if self.ignore_cols.is_some_and(|cols| cols.contains(col)) {
                 continue;
             }
 

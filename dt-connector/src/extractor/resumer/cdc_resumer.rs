@@ -1,10 +1,15 @@
 use std::{
     fs::File,
     io::{BufRead, BufReader},
+    path::Path,
 };
 
+use anyhow::Context;
 use dt_common::{
-    config::resumer_config::ResumerConfig, meta::position::Position, utils::file_util::FileUtil,
+    config::{config_enums::ExtractType, task_config::TaskConfig},
+    log_warn,
+    meta::position::Position,
+    utils::file_util::FileUtil,
 };
 use serde_json::json;
 
@@ -17,22 +22,51 @@ pub struct CdcResumer {
 }
 
 impl CdcResumer {
-    pub fn from_config(config: &ResumerConfig) -> anyhow::Result<Self> {
+    pub fn from_config(task_config: &TaskConfig) -> anyhow::Result<Self> {
         let mut me = Self::default();
+        if !matches!(task_config.extractor_basic.extract_type, ExtractType::Cdc) {
+            return Ok(me);
+        }
 
-        if let Ok(file) = File::open(&config.resume_config_file) {
-            for line in BufReader::new(file).lines().map_while(Result::ok) {
-                me.load_resume_line(&line);
+        let config = &task_config.resumer;
+        if !config.resume_config_file.is_empty() {
+            if Path::new(&config.resume_config_file).exists() {
+                let file = File::open(&config.resume_config_file).with_context(|| {
+                    format!(
+                        "failed to open resume_config_file: [{}] while it exists",
+                        config.resume_config_file
+                    )
+                })?;
+                for line in BufReader::new(file).lines().map_while(Result::ok) {
+                    me.load_resume_line(&line);
+                }
+                me.current_position = me.checkpoint_position.clone();
+            } else {
+                log_warn!(
+                    "resume_config_file [{}] does not exist",
+                    config.resume_config_file
+                );
             }
-            me.current_position = me.checkpoint_position.clone();
         }
 
         if config.resume_from_log {
             let position_log = format!("{}/position.log", config.resume_log_dir);
-            if let Ok(lines) = FileUtil::tail(&position_log, TAIL_POSITION_COUNT) {
+            if Path::new(&position_log).exists() {
+                let lines =
+                    FileUtil::tail(&position_log, TAIL_POSITION_COUNT).with_context(|| {
+                        format!(
+                            "failed to open position.log: [{}] while it exists",
+                            position_log
+                        )
+                    })?;
                 for line in lines.iter() {
                     me.load_resume_line(line)
                 }
+            } else {
+                log_warn!(
+                    "resume_from_log is true, but [{}] does not exist",
+                    position_log
+                );
             }
         }
         Ok(me)
@@ -40,6 +74,8 @@ impl CdcResumer {
 
     fn load_resume_line(&mut self, line: &str) {
         let position = Position::from_log(line);
+        // ignore position log lines like:
+        // 2025-02-18 04:13:04.655541 | checkpoint_position | {"type":"None"}
         if position == Position::None {
             return;
         }

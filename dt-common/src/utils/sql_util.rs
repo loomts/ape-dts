@@ -32,10 +32,10 @@ impl SqlUtil {
         if !Self::is_escaped(token, escape_pair) {
             return token.to_string();
         }
-        return token
+        token
             .trim_start_matches(escape_pair.0)
             .trim_end_matches(escape_pair.1)
-            .to_string();
+            .to_string()
     }
 
     pub fn unescape_by_db_type(token: &str, db_type: &DbType) -> String {

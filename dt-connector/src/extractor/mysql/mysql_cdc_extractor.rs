@@ -93,6 +93,12 @@ impl Extractor for MysqlCdcExtractor {
             self.binlog_position = next_event_position.to_owned();
             self.gtid_set = gtid_set.to_owned();
             log_info!("resume from: {}", self.resumer.checkpoint_position);
+            self.base_extractor
+                .push_dt_data(
+                    DtData::Heartbeat {},
+                    self.resumer.checkpoint_position.clone(),
+                )
+                .await?;
         }
 
         log_info!(
@@ -330,7 +336,7 @@ impl MysqlCdcExtractor {
         let col_count = cmp::min(tb_meta.basic.cols.len(), included_columns.len());
         for i in (0..col_count).rev() {
             let col = tb_meta.basic.cols.get(i).unwrap();
-            if ignore_cols.map_or(false, |cols| cols.contains(col)) {
+            if ignore_cols.is_some_and(|cols| cols.contains(col)) {
                 continue;
             }
 

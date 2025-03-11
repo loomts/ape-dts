@@ -234,7 +234,7 @@ impl MysqlFetcher {
 
     fn get_system_databases() -> Vec<String> {
         let dbs = ["mysql", "performance_schema", "sys", "information_schema"];
-        return dbs.iter().map(|d| d.to_string()).collect();
+        dbs.iter().map(|d| d.to_string()).collect()
     }
 
     fn get_str_with_null(row: &MySqlRow, col_name: &str) -> anyhow::Result<String> {

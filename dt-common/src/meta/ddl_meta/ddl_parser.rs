@@ -76,7 +76,7 @@ impl DdlParser {
     }
 
     /// parse ddl sql and return: (ddl_type, schema, table)
-    fn sql_query<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DdlData> {
+    fn sql_query<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DdlData> {
         alt((
             |i| self.create_database(i),
             |i| self.drop_database(i),
@@ -94,7 +94,7 @@ impl DdlParser {
         ))(i)
     }
 
-    fn create_database<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DdlData> {
+    fn create_database<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DdlData> {
         let (remaining_input, (_, _, _, _, if_not_exists, database, _)) = tuple((
             tag_no_case("create"),
             multispace1,
@@ -119,7 +119,7 @@ impl DdlParser {
         Ok((remaining_input, ddl))
     }
 
-    fn drop_database<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DdlData> {
+    fn drop_database<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DdlData> {
         let (remaining_input, (_, _, _, _, if_exists, database, _)) = tuple((
             tag_no_case("drop"),
             multispace1,
@@ -144,7 +144,7 @@ impl DdlParser {
         Ok((remaining_input, ddl))
     }
 
-    fn alter_database<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DdlData> {
+    fn alter_database<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DdlData> {
         let (remaining_input, (_, _, _, _, database, _)) = tuple((
             tag_no_case("alter"),
             multispace1,
@@ -167,7 +167,7 @@ impl DdlParser {
         Ok((remaining_input, ddl))
     }
 
-    fn create_schema<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DdlData> {
+    fn create_schema<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DdlData> {
         let (remaining_input, (_, _, _, _, if_not_exists, schema, _)) = tuple((
             tag_no_case("create"),
             multispace1,
@@ -192,7 +192,7 @@ impl DdlParser {
         Ok((remaining_input, ddl))
     }
 
-    fn drop_schema<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DdlData> {
+    fn drop_schema<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DdlData> {
         let (remaining_input, (_, _, _, _, if_exists, schema, _)) = tuple((
             tag_no_case("drop"),
             multispace1,
@@ -217,7 +217,7 @@ impl DdlParser {
         Ok((remaining_input, ddl))
     }
 
-    fn alter_schema<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DdlData> {
+    fn alter_schema<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DdlData> {
         let (remaining_input, (_, _, _, _, schema, _)) = tuple((
             tag_no_case("alter"),
             multispace1,
@@ -240,7 +240,7 @@ impl DdlParser {
         Ok((remaining_input, ddl))
     }
 
-    fn create_table<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DdlData> {
+    fn create_table<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DdlData> {
         if self.db_type == DbType::Pg {
             self.pg_create_table(i)
         } else {
@@ -248,7 +248,7 @@ impl DdlParser {
         }
     }
 
-    fn mysql_create_table<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DdlData> {
+    fn mysql_create_table<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DdlData> {
         let (remaining_input, (_, _, _, _, _, if_not_exists, table, _)) = tuple((
             tag_no_case("create"),
             multispace1,
@@ -277,7 +277,7 @@ impl DdlParser {
         Ok((remaining_input, ddl))
     }
 
-    fn pg_create_table<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DdlData> {
+    fn pg_create_table<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DdlData> {
         // https://www.postgresql.org/docs/16/sql-createtable.html
         let temporary = |i: &'a [u8]| -> IResult<&'a [u8], String> {
             let (remaining_input, (temporary_type, temporary, _)) = tuple((
@@ -334,7 +334,7 @@ impl DdlParser {
         Ok((remaining_input, ddl))
     }
 
-    fn drop_table<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DdlData> {
+    fn drop_table<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DdlData> {
         let (remaining_input, (_, _, _, _, _, if_exists, table_list, _)) = tuple((
             tag_no_case("drop"),
             multispace1,
@@ -365,7 +365,7 @@ impl DdlParser {
         Ok((remaining_input, ddl))
     }
 
-    fn alter_table<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DdlData> {
+    fn alter_table<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DdlData> {
         if self.db_type == DbType::Pg {
             self.pg_alter_table(i)
         } else {
@@ -373,7 +373,7 @@ impl DdlParser {
         }
     }
 
-    fn mysql_alter_table<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DdlData> {
+    fn mysql_alter_table<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DdlData> {
         // https://dev.mysql.com/doc/refman/8.4/en/alter-table.html
         let rename_to = |i: &'a [u8]| -> IResult<&'a [u8], (String, String)> {
             let (remaining_input, (_, _, _, new_table, _)) = tuple((
@@ -430,7 +430,7 @@ impl DdlParser {
         Ok((remaining_input, ddl))
     }
 
-    fn pg_alter_table<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DdlData> {
+    fn pg_alter_table<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DdlData> {
         // https://www.postgresql.org/docs/16/sql-altertable.html
         let rename_to = |i: &'a [u8]| -> IResult<&'a [u8], (String, String)> {
             let (remaining_input, (_, _, _, _, new_table, _)) = tuple((
@@ -525,7 +525,7 @@ impl DdlParser {
         Ok((remaining_input, ddl))
     }
 
-    fn truncate_table<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DdlData> {
+    fn truncate_table<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DdlData> {
         if self.db_type == DbType::Pg {
             self.pg_truncate_table(i)
         } else {
@@ -533,7 +533,7 @@ impl DdlParser {
         }
     }
 
-    fn mysql_truncate_table<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DdlData> {
+    fn mysql_truncate_table<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DdlData> {
         let (remaining_input, (_, _, _, _, table, _)) = tuple((
             tag_no_case("truncate"),
             multispace1,
@@ -558,7 +558,7 @@ impl DdlParser {
         Ok((remaining_input, ddl))
     }
 
-    fn pg_truncate_table<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DdlData> {
+    fn pg_truncate_table<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DdlData> {
         // https://www.postgresql.org/docs/16/sql-truncate.html
         let (remaining_input, (_, _, _, _, only, table, _)) = tuple((
             tag_no_case("truncate"),
@@ -586,7 +586,7 @@ impl DdlParser {
         Ok((remaining_input, ddl))
     }
 
-    fn rename_table<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DdlData> {
+    fn rename_table<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DdlData> {
         let (remaining_input, (_, _, _, _, table_to_table_list, _)) = tuple((
             tag_no_case("rename"),
             multispace1,
@@ -619,7 +619,7 @@ impl DdlParser {
         Ok((remaining_input, ddl))
     }
 
-    fn create_index<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DdlData> {
+    fn create_index<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DdlData> {
         if self.db_type == DbType::Pg {
             self.pg_create_index(i)
         } else {
@@ -627,7 +627,7 @@ impl DdlParser {
         }
     }
 
-    fn mysql_create_index<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DdlData> {
+    fn mysql_create_index<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DdlData> {
         // https://dev.mysql.com/doc/refman/8.4/en/create-index.html
         let (remaining_input, (_, _, index_kind, _, _, index_name, _, index_type, _, _, table, _)) =
             tuple((
@@ -686,7 +686,7 @@ impl DdlParser {
         Ok((remaining_input, ddl))
     }
 
-    fn pg_create_index<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DdlData> {
+    fn pg_create_index<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DdlData> {
         // https://www.postgresql.org/docs/16/sql-createindex.html
         let (remaining_input, (_, _, unique, _, _, concurrently, name, _, _, only, table, _)) =
             tuple((
@@ -734,7 +734,7 @@ impl DdlParser {
         Ok((remaining_input, ddl))
     }
 
-    fn drop_index<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DdlData> {
+    fn drop_index<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DdlData> {
         if self.db_type == DbType::Pg {
             self.pg_drop_index(i)
         } else {
@@ -742,7 +742,7 @@ impl DdlParser {
         }
     }
 
-    fn mysql_drop_index<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DdlData> {
+    fn mysql_drop_index<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DdlData> {
         // https://dev.mysql.com/doc/refman/8.4/en/drop-index.html
         let (remaining_input, (_, _, _, _, index_name, _, _, _, table, _)) = tuple((
             tag_no_case("drop"),
@@ -773,7 +773,7 @@ impl DdlParser {
         Ok((remaining_input, ddl))
     }
 
-    fn pg_drop_index<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DdlData> {
+    fn pg_drop_index<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DdlData> {
         // https://www.postgresql.org/docs/current/sql-dropindex.html
         let (remaining_input, (_, _, _, _, concurrently, if_exists, index_name_list, _)) =
             tuple((
@@ -808,7 +808,7 @@ impl DdlParser {
     }
 
     // Parse a reference to a named schema.table, with an optional alias
-    fn schema_table<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], SchemaTable> {
+    fn schema_table<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], SchemaTable> {
         map(
             tuple((
                 opt(pair(
@@ -827,14 +827,14 @@ impl DdlParser {
         )(i)
     }
 
-    fn schema_table_list<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], Vec<SchemaTable>> {
+    fn schema_table_list<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], Vec<SchemaTable>> {
         many1(|i| self.schema_table(i))(i)
     }
 
     fn schema_table_to_schema_table<'a>(
         &'a self,
         i: &'a [u8],
-    ) -> IResult<&[u8], (SchemaTable, SchemaTable)> {
+    ) -> IResult<&'a [u8], (SchemaTable, SchemaTable)> {
         let (remaining_input, (from_table, _, _, _, to_table, _)) = tuple((
             |i| self.schema_table(i),
             multispace1,
@@ -849,11 +849,11 @@ impl DdlParser {
     fn schema_table_to_schema_table_list<'a>(
         &'a self,
         i: &'a [u8],
-    ) -> IResult<&[u8], Vec<(SchemaTable, SchemaTable)>> {
+    ) -> IResult<&'a [u8], Vec<(SchemaTable, SchemaTable)>> {
         many1(|i| self.schema_table_to_schema_table(i))(i)
     }
 
-    fn sql_identifier<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], &[u8]> {
+    fn sql_identifier<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], &'a [u8]> {
         if self.db_type == DbType::Pg {
             return alt((
                 preceded(
@@ -885,7 +885,7 @@ impl DdlParser {
         ))(i)
     }
 
-    fn sql_identifier_list<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], Vec<&[u8]>> {
+    fn sql_identifier_list<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], Vec<&'a [u8]>> {
         let (remaining_input, identifier_list) =
             many1(tuple((|i| self.sql_identifier(i), opt(ws_sep_comma))))(i)?;
         Ok((
@@ -898,7 +898,7 @@ impl DdlParser {
     }
 
     // Matches any SQL reserved keyword
-    fn sql_keyword<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], &[u8]> {
+    fn sql_keyword<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], &'a [u8]> {
         alt((
             keyword_a_to_c,
             keyword_c_to_e,

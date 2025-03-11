@@ -33,7 +33,7 @@ impl RdbReader<'_> {
 
             RDB_14_BIT_LEN => {
                 let next_byte = self.read_byte()?;
-                let len = (u64::from(first_byte) & 0x3f) << 8 | u64::from(next_byte);
+                let len = ((u64::from(first_byte) & 0x3f) << 8) | u64::from(next_byte);
                 Ok((len, false))
             }
 

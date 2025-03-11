@@ -238,13 +238,13 @@ impl MysqlStructFetcher {
         // such as NOW() or CURRENT_DATE. The exception is that, for TIMESTAMP and DATETIME columns,
         // you can specify CURRENT_TIMESTAMP as the default.
         // 8.0: function or expression will also cause EXTRA to be 'DEFAULT_GENERATED'
-        if str.to_uppercase().eq("CURRENT_TIMESTAMP") {
-            if matches!(
+        if str.to_uppercase().eq("CURRENT_TIMESTAMP")
+            && matches!(
                 col_type,
                 MysqlColType::DateTime { .. } | MysqlColType::Timestamp { .. }
-            ) {
-                return Ok(ColumnDefault::Expression(str));
-            }
+            )
+        {
+            return Ok(ColumnDefault::Expression(str));
         }
 
         Ok(ColumnDefault::Literal(str))

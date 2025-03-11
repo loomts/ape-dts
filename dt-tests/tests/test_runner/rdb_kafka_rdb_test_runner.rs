@@ -129,8 +129,8 @@ impl RdbKafkaRdbTestRunner {
 
     async fn prepare_kafka(&self) -> anyhow::Result<()> {
         let mut topics: Vec<&str> = vec![];
+        let re = Regex::new(r"create topic ([\w\W]+)").unwrap();
         for sql in self.src_to_kafka_runner.dst_prepare_sqls.iter() {
-            let re = Regex::new(r"create topic ([\w\W]+)").unwrap();
             let cap = re.captures(sql).unwrap();
             topics.push(cap.get(1).unwrap().as_str());
         }

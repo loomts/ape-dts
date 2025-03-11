@@ -90,8 +90,8 @@ impl TaskRunner {
 
         let db_type = &self.config.extractor_basic.db_type;
         let router = RdbRouter::from_config(&self.config.router, db_type)?;
-        let snapshot_resumer = SnapshotResumer::from_config(&self.config.resumer)?;
-        let cdc_resumer = CdcResumer::from_config(&self.config.resumer)?;
+        let snapshot_resumer = SnapshotResumer::from_config(&self.config)?;
+        let cdc_resumer = CdcResumer::from_config(&self.config)?;
 
         match &self.config.extractor {
             ExtractorConfig::MysqlStruct { url, .. }

@@ -8,6 +8,7 @@ pre-build = [                                  # additional commands to run prio
 
 [target.x86_64-unknown-linux-gnu]
 linker = "x86_64-linux-gnu-gcc"
+image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main"
 # disable target-feature=+crt-static since it causes failures in domain resolution
 # https://github.com/rust-lang/rust/issues/100711
 # https://stackoverflow.com/questions/73402445/rust-x86-64-unknown-linux-gnu-using-target-feature-crt-static-exits-with-seg
@@ -15,4 +16,5 @@ linker = "x86_64-linux-gnu-gcc"
 
 [target.aarch64-unknown-linux-gnu]
 linker = "aarch64-linux-gnu-gcc"
+image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main"
 # rustflags = ["-C", "target-feature=+crt-static"]

@@ -25,7 +25,7 @@ impl MysqlTbMeta {
     pub fn get_col_type(&self, col: &str) -> anyhow::Result<&MysqlColType> {
         let col_type = self
             .col_type_map
-            .get(col)
+            .get(&col.to_lowercase())
             .with_context(|| format!("col: [{}] not exists in tb_meta: [{}]", col, self))
             .unwrap();
         Ok(col_type)

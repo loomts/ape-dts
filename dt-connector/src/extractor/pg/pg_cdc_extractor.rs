@@ -80,6 +80,12 @@ impl Extractor for PgCdcExtractor {
         if let Position::PgCdc { lsn, .. } = &self.resumer.checkpoint_position {
             self.start_lsn = lsn.to_owned();
             log_info!("resume from: {}", self.resumer.checkpoint_position);
+            self.base_extractor
+                .push_dt_data(
+                    DtData::Heartbeat {},
+                    self.resumer.checkpoint_position.clone(),
+                )
+                .await?;
         };
 
         log_info!(
@@ -464,7 +470,7 @@ impl PgCdcExtractor {
         for i in 0..tuple_data.len() {
             let tuple_data = &tuple_data[i];
             let col = &tb_meta.basic.cols[i];
-            if ignore_cols.map_or(false, |cols| cols.contains(col)) {
+            if ignore_cols.is_some_and(|cols| cols.contains(col)) {
                 continue;
             }
 

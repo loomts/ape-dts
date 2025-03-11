@@ -85,7 +85,7 @@ impl RdbRouter {
             return topic;
         }
         // shoud always has a default topic map
-        return self.topic_map.get(&("*".into(), "*".into())).unwrap();
+        self.topic_map.get(&("*".into(), "*".into())).unwrap()
     }
 
     pub fn reverse(&self) -> Self {
