@@ -497,7 +497,7 @@ impl RdbTestRunner {
                 let dst_col_value = dst_col_values.get(dst_col).unwrap();
 
                 // ignored cols were NOT synced to target
-                if ignore_cols.map_or(false, |cols| cols.contains(src_col)) {
+                if ignore_cols.is_some_and(|cols| cols.contains(src_col)) {
                     assert_eq!(*dst_col_value, ColValue::None);
                     continue;
                 }

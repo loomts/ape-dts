@@ -29,7 +29,7 @@ impl RdbPartitioner {
         Ok(sub_datas)
     }
 
-    pub async fn can_be_partitioned<'a>(&mut self, row_data: &'a RowData) -> anyhow::Result<bool> {
+    pub async fn can_be_partitioned(&mut self, row_data: &RowData) -> anyhow::Result<bool> {
         if row_data.row_type != RowType::Update {
             return Ok(true);
         }

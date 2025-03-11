@@ -56,7 +56,7 @@ impl LuaProcessor {
         &'lua self,
         col_values: Option<HashMap<String, ColValue>>,
         lua: &'lua mlua::Lua,
-    ) -> anyhow::Result<(mlua::Table, HashMap<String, ColValue>)> {
+    ) -> anyhow::Result<(mlua::Table<'lua>, HashMap<String, ColValue>)> {
         let lua_table = lua.create_table()?;
         let mut blob_col_values = HashMap::new();
 
@@ -114,7 +114,7 @@ impl LuaProcessor {
         &'lua self,
         col_value: ColValue,
         lua: &'lua mlua::Lua,
-    ) -> anyhow::Result<mlua::Value> {
+    ) -> anyhow::Result<mlua::Value<'lua>> {
         let lua_value = match col_value {
             ColValue::Bool(v) => mlua::Value::Boolean(v),
             ColValue::Tiny(v) => mlua::Value::Integer(v as i64),

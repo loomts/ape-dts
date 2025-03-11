@@ -464,7 +464,7 @@ impl PgCdcExtractor {
         for i in 0..tuple_data.len() {
             let tuple_data = &tuple_data[i];
             let col = &tb_meta.basic.cols[i];
-            if ignore_cols.map_or(false, |cols| cols.contains(col)) {
+            if ignore_cols.is_some_and(|cols| cols.contains(col)) {
                 continue;
             }
 

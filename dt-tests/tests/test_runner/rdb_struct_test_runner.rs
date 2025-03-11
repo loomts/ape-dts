@@ -77,7 +77,7 @@ impl RdbStructTestRunner {
                 println!("dst_ddl_sql_line: {}", line);
                 if !expect_ddl_sql_lines.contains(line) {
                     println!("dst_ddl_sql_line NOT exists in expect_ddl_sql_lines");
-                    assert!(false);
+                    panic!();
                 }
             }
             assert_eq!(dst_ddl_sql_lines.len(), expect_ddl_sql_lines.len());

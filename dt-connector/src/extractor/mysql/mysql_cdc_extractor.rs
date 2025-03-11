@@ -330,7 +330,7 @@ impl MysqlCdcExtractor {
         let col_count = cmp::min(tb_meta.basic.cols.len(), included_columns.len());
         for i in (0..col_count).rev() {
             let col = tb_meta.basic.cols.get(i).unwrap();
-            if ignore_cols.map_or(false, |cols| cols.contains(col)) {
+            if ignore_cols.is_some_and(|cols| cols.contains(col)) {
                 continue;
             }
 
