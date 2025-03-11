@@ -122,3 +122,12 @@ CREATE TABLE `constraint_table` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8
+
+struct_it_mysql2mysql_1.case_sensitive_column_name
+CREATE TABLE `case_sensitive_column_name` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) NOT NULL DEFAULT 'jack',
+  `Age` int(11) NOT NULL DEFAULT '100',
+  `GRADE` int(11) NOT NULL DEFAULT '100',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8

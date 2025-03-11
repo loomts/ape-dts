@@ -129,3 +129,12 @@ CREATE TABLE `constraint_table` (
 -- if you created a table with a field: `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP 
 -- by show create in mysql 5.7: `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
 -- by show create in mysql 8.0: `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+
+struct_it_mysql2mysql_1.case_sensitive_column_name
+CREATE TABLE `case_sensitive_column_name` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci NOT NULL DEFAULT 'jack',
+  `Age` int NOT NULL DEFAULT '100',
+  `GRADE` int NOT NULL DEFAULT '100',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3
