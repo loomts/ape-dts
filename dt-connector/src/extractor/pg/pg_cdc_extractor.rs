@@ -80,6 +80,12 @@ impl Extractor for PgCdcExtractor {
         if let Position::PgCdc { lsn, .. } = &self.resumer.checkpoint_position {
             self.start_lsn = lsn.to_owned();
             log_info!("resume from: {}", self.resumer.checkpoint_position);
+            self.base_extractor
+                .push_dt_data(
+                    DtData::Heartbeat {},
+                    self.resumer.checkpoint_position.clone(),
+                )
+                .await?;
         };
 
         log_info!(

@@ -11,6 +11,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use dt_common::meta::{
     col_value::ColValue,
+    dt_data::DtData,
     mongo::{mongo_cdc_source::MongoCdcSource, mongo_constant::MongoConstants},
     position::Position,
     row_data::RowData,
@@ -62,6 +63,12 @@ impl Extractor for MongoCdcExtractor {
             self.resume_token = resume_token.to_owned();
             self.start_timestamp = operation_time.to_owned();
             log_info!("resume from: {}", self.resumer.current_position);
+            self.base_extractor
+                .push_dt_data(
+                    DtData::Heartbeat {},
+                    self.resumer.checkpoint_position.clone(),
+                )
+                .await?;
         };
 
         log_info!(

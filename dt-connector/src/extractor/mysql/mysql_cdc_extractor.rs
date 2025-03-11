@@ -93,6 +93,12 @@ impl Extractor for MysqlCdcExtractor {
             self.binlog_position = next_event_position.to_owned();
             self.gtid_set = gtid_set.to_owned();
             log_info!("resume from: {}", self.resumer.checkpoint_position);
+            self.base_extractor
+                .push_dt_data(
+                    DtData::Heartbeat {},
+                    self.resumer.checkpoint_position.clone(),
+                )
+                .await?;
         }
 
         log_info!(
