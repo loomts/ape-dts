@@ -5,10 +5,12 @@ pre-build = [                                  # additional commands to run prio
     "dpkg --add-architecture $CROSS_DEB_ARCH", 
     "apt-get update && apt-get -y install pkg-config libssl-dev:$CROSS_DEB_ARCH cmake libclang-dev",
 ]
+# https://github.com/cross-rs/cross/issues/1529
+env.passthrough = ["CMAKE_TOOLCHAIN_FILE_aarch64_unknown_linux_gnu"]
 
 [target.x86_64-unknown-linux-gnu]
 linker = "x86_64-linux-gnu-gcc"
-image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main"
+image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu@sha256:bf05360bb9d6d4947eed60532ac7a0d7e8fae8f214e9abb801d5941c8fe4918d"
 # disable target-feature=+crt-static since it causes failures in domain resolution
 # https://github.com/rust-lang/rust/issues/100711
 # https://stackoverflow.com/questions/73402445/rust-x86-64-unknown-linux-gnu-using-target-feature-crt-static-exits-with-seg
@@ -16,5 +18,5 @@ image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main"
 
 [target.aarch64-unknown-linux-gnu]
 linker = "aarch64-linux-gnu-gcc"
-image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main"
+image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu@sha256:1e2a0291f92a4372cbc22d8994e735473045383f1ce7fa44a16c234ba00187f4"
 # rustflags = ["-C", "target-feature=+crt-static"]
