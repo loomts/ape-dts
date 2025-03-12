@@ -9,7 +9,7 @@ For CDC tasks, we only guarantee eventual consistency between target and source,
 - current_position: position of synced data, may be in the middle of a large transaction binlog/wal.
 - checkpoint_position: position of the last synced transaction binlog/wal.
 
-If task interrupts, use checkpoint_position as the starting point for new task, refer to [CDC task resume](./cdc/resume.md), using current_position may cause errors when parsing binlog/wal.
+If task interrupts, use checkpoint_position as the starting point for new task, refer to [CDC task resume](../cdc/resume.md), using current_position may cause errors when parsing binlog/wal.
 
 ## MySQL
 
