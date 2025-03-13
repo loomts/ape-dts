@@ -147,6 +147,11 @@ impl TaskConfig {
                         "binlog_heartbeat_interval_secs",
                         10,
                     ),
+                    binlog_timeout_secs: loader.get_with_default(
+                        EXTRACTOR,
+                        "binlog_timeout_secs",
+                        60,
+                    ),
                     heartbeat_interval_secs,
                     heartbeat_tb,
                     start_time_utc: loader.get_optional(EXTRACTOR, "start_time_utc"),

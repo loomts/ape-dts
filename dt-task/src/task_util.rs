@@ -48,7 +48,7 @@ impl TaskUtil {
             .max_connections(max_connections)
             .after_connect(move |conn, _meta| {
                 Box::pin(async move {
-                    conn.execute(sqlx::query("SET FOREIGN_KEY_CHECKS = 0;"))
+                    conn.execute(sqlx::query("SET foreign_key_checks = 0;"))
                         .await?;
                     Ok(())
                 })
@@ -74,6 +74,14 @@ impl TaskUtil {
 
         let conn_pool = PgPoolOptions::new()
             .max_connections(max_connections)
+            .after_connect(|conn, _meta| {
+                Box::pin(async move {
+                    // disable foreign key checks
+                    conn.execute("SET session_replication_role = 'replica';")
+                        .await?;
+                    Ok(())
+                })
+            })
             .connect_with(conn_options)
             .await?;
         Ok(conn_pool)

@@ -32,6 +32,7 @@ pub enum ExtractorConfig {
         gtid_enabled: bool,
         gtid_set: String,
         binlog_heartbeat_interval_secs: u64,
+        binlog_timeout_secs: u64,
         heartbeat_interval_secs: u64,
         heartbeat_tb: String,
         start_time_utc: String,
