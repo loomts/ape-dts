@@ -82,8 +82,10 @@ impl PgMetaManager {
             let key_map = Self::parse_keys(&self.conn_pool, schema, tb).await?;
             let (order_col, partition_col, id_cols) =
                 RdbMetaManager::parse_rdb_cols(&key_map, &cols)?;
-            let (foreign_keys, ref_by_foreign_keys) =
-                Self::get_foreign_keys(&self.conn_pool, schema, tb).await?;
+            // disable get_foreign_keys since we don't support foreign key check
+            let (foreign_keys, ref_by_foreign_keys) = (vec![], vec![]);
+            // let (foreign_keys, ref_by_foreign_keys) =
+            //     Self::get_foreign_keys(&self.conn_pool, schema, tb).await?;
 
             let basic = RdbTbMeta {
                 schema: schema.to_string(),
@@ -240,6 +242,7 @@ impl PgMetaManager {
         ))}
     }
 
+    #[allow(dead_code)]
     async fn get_foreign_keys(
         conn_pool: &Pool<Postgres>,
         schema: &str,

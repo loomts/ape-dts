@@ -56,27 +56,7 @@ impl Parallelizer for MergeParallelizer {
         data: Vec<RowData>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
     ) -> anyhow::Result<()> {
-        let mut any_fk_tb = false;
-        if let Some(rdb_meta_manager) = self.meta_manager.as_mut() {
-            for row_data in data.iter() {
-                let tb_meta = rdb_meta_manager
-                    .get_tb_meta(&row_data.schema, &row_data.tb)
-                    .await?;
-                if !tb_meta.foreign_keys.is_empty() || !tb_meta.ref_by_foreign_keys.is_empty() {
-                    any_fk_tb = true;
-                    break;
-                }
-            }
-        }
-
-        // do serial sink if any row_data comes from a table with foreign keys
-        if any_fk_tb {
-            return self
-                .base_parallelizer
-                .sink_dml(vec![data], sinkers, 1, false)
-                .await;
-        }
-
+        // no need to check foreign key since foreign key checks were disabled in MySQL/Postgres connections
         let mut tb_merged_datas = self.merger.merge(data).await?;
         self.sink_dml_internal(&mut tb_merged_datas, sinkers, MergeType::Delete)
             .await?;

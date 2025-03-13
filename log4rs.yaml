@@ -173,6 +173,16 @@ appenders:
         pattern: "LOG_DIR_PLACEHODLER/sql{}.log"
 
 loggers:
+  mysql_binlog_connector_rust:  # crate: mysql-binlog-connector-rust
+    level: LOG_LEVEL_PLACEHODLER
+    appenders:
+      - default_appender
+
+  sqlx:  # crate: sqlx
+    level: LOG_LEVEL_PLACEHODLER
+    appenders:
+      - default_appender
+
   default_logger:
     level: LOG_LEVEL_PLACEHODLER
     appenders: 

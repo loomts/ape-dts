@@ -88,8 +88,11 @@ impl MysqlMetaFetcher {
             let key_map = Self::parse_keys(&self.conn_pool, schema, tb).await?;
             let (order_col, partition_col, id_cols) =
                 RdbMetaManager::parse_rdb_cols(&key_map, &cols)?;
-            let (foreign_keys, ref_by_foreign_keys) =
-                Self::get_foreign_keys(&self.conn_pool, &self.db_type, schema, tb).await?;
+            // disable get_foreign_keys since we don't support foreign key check,
+            // also quering them is very slow, which may casue terrible performance issue if there were many tables in a CDC task.
+            let (foreign_keys, ref_by_foreign_keys) = (vec![], vec![]);
+            // let (foreign_keys, ref_by_foreign_keys) =
+            //     Self::get_foreign_keys(&self.conn_pool, &self.db_type, schema, tb).await?;
 
             let basic = RdbTbMeta {
                 schema: schema.to_string(),
@@ -369,6 +372,7 @@ impl MysqlMetaFetcher {
         Ok(key_map)
     }
 
+    #[allow(dead_code)]
     async fn get_foreign_keys(
         conn_pool: &Pool<MySql>,
         db_type: &DbType,
@@ -381,6 +385,8 @@ impl MysqlMetaFetcher {
             return Ok((foreign_keys, ref_by_foreign_keys));
         }
 
+        // this will be a very slow query if NOT set "SET GLOBAL innodb_stats_on_metadata = OFF;"
+        // https://www.percona.com/blog/innodb_stats_on_metadata-slow-queries-information_schema/
         let sql = format!(
             "SELECT
                 kcu.CONSTRAINT_SCHEMA,

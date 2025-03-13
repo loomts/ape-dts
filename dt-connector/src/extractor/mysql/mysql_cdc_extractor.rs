@@ -55,6 +55,7 @@ pub struct MysqlCdcExtractor {
     pub gtid_enabled: bool,
     pub gtid_set: String,
     pub binlog_heartbeat_interval_secs: u64,
+    pub binlog_timeout_secs: u64,
     pub heartbeat_interval_secs: u64,
     pub heartbeat_tb: String,
     pub syncer: Arc<Mutex<Syncer>>,
@@ -130,6 +131,7 @@ impl MysqlCdcExtractor {
             gtid_enabled: self.gtid_enabled,
             gtid_set: self.gtid_set.clone(),
             heartbeat_interval_secs: self.binlog_heartbeat_interval_secs,
+            timeout_secs: self.binlog_timeout_secs,
         };
         let mut stream = client.connect().await?;
 
