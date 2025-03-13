@@ -100,10 +100,12 @@ impl DataMarker {
             DtData::Dml { row_data } => {
                 // refresh should be only called when dt_data is a data marker
                 // update data_origin_node
-                if let Some(col_value) = row_data.after.as_ref().unwrap().get(DATA_ORIGIN_NODE) {
-                    // mysql, ColValue::Blob
-                    // pg, ColValue::String
-                    self.data_origin_node = col_value.to_string();
+                if let Some(after) = &row_data.after {
+                    if let Some(col_value) = after.get(DATA_ORIGIN_NODE) {
+                        // mysql, ColValue::Blob
+                        // pg, ColValue::String
+                        self.data_origin_node = col_value.to_string();
+                    }
                 }
             }
 
