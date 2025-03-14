@@ -33,10 +33,10 @@ url=mysql://user1:abc%25%24%23%3F%40@127.0.0.1:3307?ssl-mode=disabled
 
 | 配置 | 作用 | 示例 | 默认 |
 | :-------- | :-------- | :-------- | :-------- |
-| do_dbs | 需同步的库 | db_1,db_2*,\`db*&#\` | - |
-| ignore_dbs | 需过滤的库 | db_1,db_2*,\`db*&#\` | - |
-| do_tbs | 需同步的表 | db_1.tb_1,db_2*.tb_2*,\`db*&#\`.\`tb*&#\` | - |
-| ignore_tbs | 需过滤的表 | db_1.tb_1,db_2*.tb_2*,\`db*&#\`.\`tb*&#\` | - |
+| do_dbs | 需同步的库，和 do_tbs 取并集 | db_1,db_2*,\`db*&#\` | - |
+| ignore_dbs | 需过滤的库，和 ignore_tbs 取并集 | db_1,db_2*,\`db*&#\` | - |
+| do_tbs | 需同步的表，和 do_dbs 取并集 | db_1.tb_1,db_2*.tb_2*,\`db*&#\`.\`tb*&#\` | - |
+| ignore_tbs | 需过滤的表，和 ignore_dbs 取并集 | db_1.tb_1,db_2*.tb_2*,\`db*&#\`.\`tb*&#\` | - |
 | ignore_cols | 某些表需过滤的列 | json:[{"db":"db_1","tb":"tb_1","ignore_cols":["f_2","f_3"]},{"db":"db_2","tb":"tb_2","ignore_cols":["f_3"]}] | - |
 | do_events | 需同步的事件 | insert、update、delete | - |
 | do_ddls | 需同步的 ddl，适用于 mysql cdc 任务 | create_database,drop_database,alter_database,create_table,drop_table,truncate_table,rename_table,alter_table,create_index,drop_index | - |
@@ -55,8 +55,9 @@ url=mysql://user1:abc%25%24%23%3F%40@127.0.0.1:3307?ssl-mode=disabled
 
 ## 优先级
 
-- ignore_tbs + ignore_tbs > do_tbs + do_dbs。
+- ignore_tbs + ignore_dbs > do_tbs + do_dbs。
 - 如果某张表既匹配了 ignore 项，又匹配了 do 项，则该表会被过滤。
+- 如果 do_tbs 和 do_dbs 都有配置，**则同步范围为二者并集**，如果 ignore_tbs 和 ignore_dbs 均有配置，**则过滤范围为二者并集**。
 
 ## 通配符
 

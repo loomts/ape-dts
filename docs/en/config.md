@@ -34,10 +34,10 @@ url=mysql://user1:abc%25%24%23%3F%40@127.0.0.1:3307?ssl-mode=disabled
 
 | Config | Description | Example | Default |
 | :-------- | :-------- | :-------- | :-------- |
-| do_dbs | databases to be synced | db_1,db_2*,\`db*&#\` | - |
-| ignore_dbs | databases to be filtered | db_1,db_2*,\`db*&#\` | - |
-| do_tbs | tables to be synced | db_1.tb_1,db_2*.tb_2*,\`db*&#\`.\`tb*&#\` | - |
-| ignore_tbs | tables to be filtered | db_1.tb_1,db_2*.tb_2*,\`db*&#\`.\`tb*&#\` | - |
+| do_dbs | databases to be synced, takes union with do_tbs | db_1,db_2*,\`db*&#\` | - |
+| ignore_dbs | databases to be filtered, takes union with ignore_tbs | db_1,db_2*,\`db*&#\` | - |
+| do_tbs | tables to be synced, takes union with do_dbs | db_1.tb_1,db_2*.tb_2*,\`db*&#\`.\`tb*&#\` | - |
+| ignore_tbs | tables to be filtered, takes union with ignore_dbs | db_1.tb_1,db_2*.tb_2*,\`db*&#\`.\`tb*&#\` | - |
 | ignore_cols | table columns to be filtered | json:[{"db":"db_1","tb":"tb_1","ignore_cols":["f_2","f_3"]},{"db":"db_2","tb":"tb_2","ignore_cols":["f_3"]}] | - |
 | do_events | events to be synced | insert,update,delete | - |
 | do_ddls | ddls to be synced, for mysql cdc tasks | create_database,drop_database,alter_database,create_table,drop_table,truncate_table,rename_table,alter_table,create_index,drop_index | - |
@@ -58,6 +58,7 @@ url=mysql://user1:abc%25%24%23%3F%40@127.0.0.1:3307?ssl-mode=disabled
 
 - ignore_tbs + ignore_tbs > do_tbs + do_dbs.
 - If a table matches both **ignore** configs and **do** configs, the table will be filtered.
+- If both do_tbs and do_dbs are configured, **the filter is the union of both**. If both ignore_tbs and ignore_dbs are configured, **the filter is the union of both**.
 
 ## Wildcard
 

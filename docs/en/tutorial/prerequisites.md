@@ -3,7 +3,7 @@
 
 - Set images
 ```
-export APE_DTS_IMAGE="docker.io/apecloud/ape-dts:2.0.21"
+export APE_DTS_IMAGE="docker.io/apecloud/ape-dts:2.0.22"
 export MYSQL_IMAGE="mysql:5.7.40"
 export POSTGRES_IMAGE="postgis/postgis:15-3.4"
 export REDIS_IMAGE="redis:7.0"
