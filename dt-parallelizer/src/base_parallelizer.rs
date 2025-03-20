@@ -102,19 +102,14 @@ impl BaseParallelizer {
         parallel_size: usize,
         batch: bool,
     ) -> anyhow::Result<()> {
-        let mut futures = Vec::new();
+        let mut join_set = tokio::task::JoinSet::new();
         for i in 0..sub_datas.len() {
             let data = sub_datas.remove(0);
             let sinker = sinkers[i % parallel_size].clone();
-            let future =
-                tokio::spawn(
-                    async move { sinker.lock().await.sink_dml(data, batch).await.unwrap() },
-                );
-            futures.push(future);
+            join_set.spawn(async move { sinker.lock().await.sink_dml(data, batch).await });
         }
-
-        for future in futures {
-            future.await.unwrap();
+        while let Some(result) = join_set.join_next().await {
+            result??;
         }
         Ok(())
     }
@@ -126,19 +121,14 @@ impl BaseParallelizer {
         parallel_size: usize,
         batch: bool,
     ) -> anyhow::Result<()> {
-        let mut futures = Vec::new();
+        let mut join_set = tokio::task::JoinSet::new();
         for i in 0..sub_datas.len() {
             let data = sub_datas.remove(0);
             let sinker = sinkers[i % parallel_size].clone();
-            let future =
-                tokio::spawn(
-                    async move { sinker.lock().await.sink_ddl(data, batch).await.unwrap() },
-                );
-            futures.push(future);
+            join_set.spawn(async move { sinker.lock().await.sink_ddl(data, batch).await });
         }
-
-        for future in futures {
-            future.await.unwrap();
+        while let Some(result) = join_set.join_next().await {
+            result??;
         }
         Ok(())
     }
@@ -150,19 +140,14 @@ impl BaseParallelizer {
         parallel_size: usize,
         batch: bool,
     ) -> anyhow::Result<()> {
-        let mut futures = Vec::new();
+        let mut join_set = tokio::task::JoinSet::new();
         for i in 0..sub_datas.len() {
             let data = sub_datas.remove(0);
             let sinker = sinkers[i % parallel_size].clone();
-            let future =
-                tokio::spawn(
-                    async move { sinker.lock().await.sink_raw(data, batch).await.unwrap() },
-                );
-            futures.push(future);
+            join_set.spawn(async move { sinker.lock().await.sink_raw(data, batch).await });
         }
-
-        for future in futures {
-            future.await.unwrap();
+        while let Some(result) = join_set.join_next().await {
+            result??;
         }
         Ok(())
     }

@@ -129,40 +129,19 @@ impl MysqlMetaFetcher {
         let mut col_origin_type_map = HashMap::new();
         let mut col_type_map = HashMap::new();
 
-        let sql = format!("DESC `{}`.`{}`", schema, tb);
-        let mut rows = sqlx::query(&sql).disable_arguments().fetch(conn_pool);
-        while let Some(row) = rows.try_next().await? {
-            // Column and index names are not case sensitive on any platform, nor are column aliases.
-            // But when table created with uppercase columns, DESC table will return uppercase fields
-            // CREATE TABLE Upper_Case_DB.Upper_Case_TB (
-            //     Id INT,
-            //     FIELD_1 INT,
-            //     field_2 INT,
-            //     PRIMARY KEY(Id),
-            //     UNIQUE KEY(FIELD_1, field_2)
-            // );
-            // mysql> DESC upper_case_db.upper_case_tb;
-            // +---------+---------+------+-----+---------+-------+
-            // | Field   | Type    | Null | Key | Default | Extra |
-            // +---------+---------+------+-----+---------+-------+
-            // | Id      | int(11) | NO   | PRI | NULL    |       |
-            // | FIELD_1 | int(11) | YES  | MUL | NULL    |       |
-            // | field_2 | int(11) | YES  |     | NULL    |       |
-            // +---------+---------+------+-----+---------+-------+
-            let col: String = row.try_get("Field")?;
-            cols.push(col.to_lowercase());
-        }
-
-        let sql = if db_type == &DbType::Mysql {
-            format!("SELECT {}, {}, {}, {}, {}, {}, {}, {} FROM information_schema.columns WHERE table_schema = ? AND table_name = ?", 
-                COLUMN_NAME, COLUMN_TYPE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_SET_NAME, NUMERIC_PRECISION, NUMERIC_SCALE, IS_NULLABLE)
+        let sql = if matches!(db_type, DbType::Mysql) {
+            "SELECT * FROM information_schema.columns
+             WHERE table_schema = ? AND table_name = ? ORDER BY ORDINAL_POSITION"
+                .to_string()
         } else {
-            // starrocks
-            format!("SELECT {}, {}, {}, {}, {}, {}, {}, {} FROM information_schema.columns WHERE table_schema = '{}' AND table_name = '{}'", 
-                COLUMN_NAME, COLUMN_TYPE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_SET_NAME, NUMERIC_PRECISION, NUMERIC_SCALE,IS_NULLABLE, &schema, &tb)
+            format!(
+                "SELECT * FROM information_schema.columns 
+                WHERE table_schema = '{}' AND table_name = '{}' ORDER BY ORDINAL_POSITION",
+                schema, tb
+            )
         };
 
-        let mut rows = if db_type == &DbType::Mysql {
+        let mut rows = if matches!(db_type, DbType::Mysql) {
             sqlx::query(&sql).bind(schema).bind(tb).fetch(conn_pool)
         } else {
             // for starrocks
@@ -171,7 +150,9 @@ impl MysqlMetaFetcher {
 
         while let Some(row) = rows.try_next().await? {
             let mut col: String = row.try_get(COLUMN_NAME)?;
+            // Column and index names are not case sensitive on any platform, nor are column aliases.
             col = col.to_lowercase();
+            cols.push(col.clone());
             let (origin_type, col_type) = Self::get_col_type(&row).await?;
             col_origin_type_map.insert(col.clone(), origin_type);
             col_type_map.insert(col, col_type);
