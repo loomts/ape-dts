@@ -234,9 +234,11 @@ impl TaskRunner {
                     }
                 }
                 Ok((single_task_id, Err(e))) => {
-                    log_error!("single task: [{}] failed, error: {}", single_task_id, e)
+                    bail!("single task: [{}] failed, error: {}", single_task_id, e)
                 }
-                Err(e) => log_error!("join error: {}", e),
+                Err(e) => {
+                    bail!("join error: {}", e)
+                }
             }
         }
 
@@ -470,7 +472,7 @@ impl TaskRunner {
             )
             .await
         });
-        try_join!(f1, f2, f3).unwrap();
+        try_join!(f1, f2, f3)?;
 
         // finished log
         let (schema, tb) = match extractor_config {

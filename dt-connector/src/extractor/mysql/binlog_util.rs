@@ -60,7 +60,7 @@ impl BinlogUtil {
                 &binlogs[0],
                 TimeUtil::timestamp_to_str(binlog_start_timestamp)?
             );
-            Ok(String::new())
+            Ok(binlogs[0].clone())
         } else {
             let binlog = binlogs[left - 1].to_owned();
             let binlog_start_timestamp =
