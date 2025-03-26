@@ -29,6 +29,7 @@ impl Prechecker for MongoPrechecker {
             self.is_source,
             DbType::Mongo,
             None,
+            None,
         ))
     }
 
@@ -49,6 +50,7 @@ impl Prechecker for MongoPrechecker {
             self.is_source,
             DbType::Mongo,
             check_error,
+            None,
         ))
     }
 
@@ -69,6 +71,7 @@ impl Prechecker for MongoPrechecker {
                 self.is_source,
                 DbType::Mongo,
                 check_error,
+                None,
             ));
         }
 
@@ -104,6 +107,7 @@ impl Prechecker for MongoPrechecker {
             self.is_source,
             DbType::Mongo,
             check_error,
+            None,
         ))
     }
 
@@ -112,6 +116,7 @@ impl Prechecker for MongoPrechecker {
             CheckItem::CheckIfStructExisted,
             self.is_source,
             DbType::Mongo,
+            None,
             None,
         ))
     }
@@ -134,6 +139,7 @@ impl Prechecker for MongoPrechecker {
             self.is_source,
             DbType::Mongo,
             check_error,
+            None,
         ))
     }
 }

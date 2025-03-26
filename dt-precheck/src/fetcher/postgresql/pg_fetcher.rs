@@ -109,7 +109,10 @@ impl Fetcher for PgFetcher {
 
     async fn fetch_tables(&mut self) -> anyhow::Result<Vec<Table>> {
         let mut tables: Vec<Table> = vec![];
-        let table_sql = "select distinct table_catalog, table_schema, table_name from information_schema.columns";
+        let table_sql = "SELECT table_catalog, table_schema, table_name 
+                         FROM information_schema.tables 
+                         WHERE table_type = 'BASE TABLE' 
+                         AND table_schema NOT IN ('pg_catalog', 'information_schema')";
 
         let rows_result = self.fetch_row(table_sql, "pg query table sql");
         match rows_result {

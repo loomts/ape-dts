@@ -31,6 +31,7 @@ impl Prechecker for MySqlPrechecker {
             self.is_source,
             DbType::Mysql,
             None,
+            None,
         ))
     }
 
@@ -61,6 +62,7 @@ impl Prechecker for MySqlPrechecker {
             self.is_source,
             DbType::Mysql,
             check_error,
+            None,
         ))
     }
 
@@ -81,6 +83,7 @@ impl Prechecker for MySqlPrechecker {
                 self.is_source,
                 DbType::Mysql,
                 check_error,
+                None,
             ));
         }
 
@@ -136,6 +139,7 @@ impl Prechecker for MySqlPrechecker {
             self.is_source,
             DbType::Mysql,
             check_error,
+            None,
         ))
     }
 
@@ -221,11 +225,12 @@ impl Prechecker for MySqlPrechecker {
             self.is_source,
             DbType::Mysql,
             check_error,
+            None,
         ))
     }
 
     async fn check_table_structs(&mut self) -> anyhow::Result<CheckResult> {
-        let mut check_error = None;
+        let (mut check_error, mut warn_error) = (None, None);
 
         if !self.is_source && self.precheck_config.do_struct_init {
             // do nothing when the database is a target
@@ -234,6 +239,7 @@ impl Prechecker for MySqlPrechecker {
                 self.is_source,
                 DbType::Mysql,
                 check_error,
+                warn_error,
             ));
         }
 
@@ -248,12 +254,25 @@ impl Prechecker for MySqlPrechecker {
         all_db_names.extend(&dbs);
         all_db_names.extend(&tb_dbs);
 
-        let (mut has_pkuk_tables, mut fkref_nonexists_tables, mut no_pkuk_tables, mut err_msgs): (
+        let (
+            mut has_pkuk_tables,
+            mut fkref_nonexists_tables,
+            mut no_pkuk_tables,
+            mut err_msgs,
+            mut warn_msgs,
+        ): (
             HashSet<String>,
             HashSet<String>,
             HashSet<String>,
             Vec<String>,
-        ) = (HashSet::new(), HashSet::new(), HashSet::new(), Vec::new());
+            Vec<String>,
+        ) = (
+            HashSet::new(),
+            HashSet::new(),
+            HashSet::new(),
+            Vec::new(),
+            Vec::new(),
+        );
 
         let constraints_result = self.fetcher.fetch_constraints().await;
         match constraints_result {
@@ -313,8 +332,8 @@ impl Prechecker for MySqlPrechecker {
         }
 
         if !no_pkuk_tables.is_empty() {
-            err_msgs.push(format!(
-                "primary key are needed, but these tables don't have a primary key:[{}]",
+            warn_msgs.push(format!(
+                "primary key or unique key are needed, but these tables don't have any:[{}]",
                 no_pkuk_tables
                     .iter()
                     .map(|e| e.to_string())
@@ -325,12 +344,16 @@ impl Prechecker for MySqlPrechecker {
         if !err_msgs.is_empty() {
             check_error = Some(anyhow::Error::msg(err_msgs.join(";")))
         }
+        if !warn_msgs.is_empty() {
+            warn_error = Some(anyhow::Error::msg(warn_msgs.join(";")))
+        }
 
         Ok(CheckResult::build_with_err(
             CheckItem::CheckIfTableStructSupported,
             self.is_source,
             DbType::Mysql,
             check_error,
+            warn_error,
         ))
     }
 }

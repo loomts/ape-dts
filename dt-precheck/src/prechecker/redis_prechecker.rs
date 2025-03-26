@@ -48,6 +48,7 @@ impl Prechecker for RedisPrechecker {
             self.is_source,
             DbType::Redis,
             None,
+            None,
         ))
     }
 
@@ -68,6 +69,7 @@ impl Prechecker for RedisPrechecker {
             self.is_source,
             DbType::Redis,
             check_error,
+            None,
         ))
     }
 
@@ -113,6 +115,7 @@ impl Prechecker for RedisPrechecker {
                 self.is_source,
                 DbType::Redis,
                 Some(error),
+                None,
             ));
         } else {
             Ok(CheckResult::build(
@@ -135,6 +138,7 @@ impl Prechecker for RedisPrechecker {
             self.is_source,
             DbType::Redis,
             None,
+            None,
         ))
     }
 
@@ -143,6 +147,7 @@ impl Prechecker for RedisPrechecker {
             CheckItem::CheckIfTableStructSupported,
             self.is_source,
             DbType::Redis,
+            None,
             None,
         ))
     }
