@@ -9,6 +9,7 @@ use crate::{
     config::precheck_config::PrecheckConfig,
     fetcher::{mysql::mysql_fetcher::MysqlFetcher, traits::Fetcher},
     meta::{check_item::CheckItem, check_result::CheckResult, db_table_model::DbTable},
+    prechecker::basic::BasicPrechecker,
 };
 
 use super::traits::Prechecker;
@@ -146,6 +147,31 @@ impl Prechecker for MySqlPrechecker {
     async fn check_struct_existed_or_not(&mut self) -> anyhow::Result<CheckResult> {
         let mut check_error = None;
 
+        if !self.is_source && self.precheck_config.do_struct_init {
+            // do nothing when the database is a target
+            return Ok(CheckResult::build_with_err(
+                CheckItem::CheckIfStructExisted,
+                self.is_source,
+                DbType::Mysql,
+                check_error,
+                None,
+            ));
+        }
+
+        let is_filter_pattern =
+            BasicPrechecker::is_filter_pattern(DbType::Mysql, &self.fetcher.filter);
+        if is_filter_pattern {
+            return Ok(CheckResult::build_with_err(
+                CheckItem::CheckIfStructExisted,
+                self.is_source,
+                DbType::Mysql,
+                check_error,
+                Some(anyhow::Error::msg(
+                    "CheckIfStructExisted with filter in pattern is not supported.",
+                )),
+            ));
+        }
+
         let (mut models, mut err_msgs): (Vec<DbTable>, Vec<String>) = (Vec::new(), Vec::new());
         if !self.filter_config.do_tbs.is_empty() {
             DbTable::from_str(&self.filter_config.do_tbs, &mut models)
@@ -158,61 +184,59 @@ impl Prechecker for MySqlPrechecker {
         all_db_names.extend(&dbs);
         all_db_names.extend(&tb_dbs);
 
-        if self.is_source || !self.precheck_config.do_struct_init {
-            // When a specific table to be migrated is specified and the following conditions are met, check the existence of the table
-            // 1. this check is for the source database
-            // 2. this check is for the sink database, and specified no structure initialization
-            if !tbs.is_empty() {
-                let mut not_existed_tbs: HashSet<String> = HashSet::new();
+        // When a specific table to be migrated is specified and the following conditions are met, check the existence of the table
+        // 1. this check is for the source database
+        // 2. this check is for the sink database, and specified no structure initialization
+        if !tbs.is_empty() {
+            let mut not_existed_tbs: HashSet<String> = HashSet::new();
 
-                let tables_result = self.fetcher.fetch_tables().await;
-                let current_tbs: HashSet<String> = match tables_result {
-                    Ok(tables) => tables
-                        .iter()
-                        .map(|t| format!("{}.{}", t.database_name, t.table_name))
-                        .collect(),
-                    Err(e) => bail! {e},
-                };
-                for tb in tbs {
-                    if !current_tbs.contains(&tb) {
-                        not_existed_tbs.insert(tb);
-                    }
-                }
-                if !not_existed_tbs.is_empty() {
-                    err_msgs.push(format!(
-                        "tables not existed: [{}]",
-                        not_existed_tbs
-                            .iter()
-                            .map(|e| e.to_string())
-                            .collect::<Vec<String>>()
-                            .join(";")
-                    ));
+            let tables_result = self.fetcher.fetch_tables().await;
+            let current_tbs: HashSet<String> = match tables_result {
+                Ok(tables) => tables
+                    .iter()
+                    .map(|t| format!("{}.{}", t.database_name, t.table_name))
+                    .collect(),
+                Err(e) => bail! {e},
+            };
+            for tb in tbs {
+                if !current_tbs.contains(&tb) {
+                    not_existed_tbs.insert(tb);
                 }
             }
+            if !not_existed_tbs.is_empty() {
+                err_msgs.push(format!(
+                    "tables not existed: [{}]",
+                    not_existed_tbs
+                        .iter()
+                        .map(|e| e.to_string())
+                        .collect::<Vec<String>>()
+                        .join(";")
+                ));
+            }
+        }
 
-            if !all_db_names.is_empty() {
-                let mut not_existed_dbs: HashSet<String> = HashSet::new();
+        if !all_db_names.is_empty() {
+            let mut not_existed_dbs: HashSet<String> = HashSet::new();
 
-                let dbs_result = self.fetcher.fetch_databases().await;
-                let current_dbs: HashSet<String> = match dbs_result {
-                    Ok(dbs) => dbs.iter().map(|d| d.database_name.clone()).collect(),
-                    Err(e) => bail! {e},
-                };
-                for db_name in all_db_names {
-                    if !current_dbs.contains(db_name) {
-                        not_existed_dbs.insert(db_name.clone());
-                    }
+            let dbs_result = self.fetcher.fetch_databases().await;
+            let current_dbs: HashSet<String> = match dbs_result {
+                Ok(dbs) => dbs.iter().map(|d| d.database_name.clone()).collect(),
+                Err(e) => bail! {e},
+            };
+            for db_name in all_db_names {
+                if !current_dbs.contains(db_name) {
+                    not_existed_dbs.insert(db_name.clone());
                 }
-                if !not_existed_dbs.is_empty() {
-                    err_msgs.push(format!(
-                        "databases not existed: [{}]",
-                        not_existed_dbs
-                            .iter()
-                            .map(|e| e.to_string())
-                            .collect::<Vec<String>>()
-                            .join(";")
-                    ));
-                }
+            }
+            if !not_existed_dbs.is_empty() {
+                err_msgs.push(format!(
+                    "databases not existed: [{}]",
+                    not_existed_dbs
+                        .iter()
+                        .map(|e| e.to_string())
+                        .collect::<Vec<String>>()
+                        .join(";")
+                ));
             }
         }
 
@@ -240,6 +264,20 @@ impl Prechecker for MySqlPrechecker {
                 DbType::Mysql,
                 check_error,
                 warn_error,
+            ));
+        }
+
+        let is_filter_pattern =
+            BasicPrechecker::is_filter_pattern(DbType::Mysql, &self.fetcher.filter);
+        if is_filter_pattern {
+            return Ok(CheckResult::build_with_err(
+                CheckItem::CheckIfTableStructSupported,
+                self.is_source,
+                DbType::Mysql,
+                check_error,
+                Some(anyhow::Error::msg(
+                    "CheckIfTableStructSupported with filter in pattern is not supported.",
+                )),
             ));
         }
 

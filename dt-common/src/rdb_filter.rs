@@ -148,6 +148,15 @@ impl RdbFilter {
             .get(&(schema.to_string(), tb.to_string()))
     }
 
+    pub fn is_pattern(pattern: &str, db_type: &DbType) -> bool {
+        for escape_pair in SqlUtil::get_escape_pairs(db_type).iter() {
+            if SqlUtil::is_escaped(pattern, escape_pair) {
+                return false;
+            }
+        }
+        pattern.contains("*") || pattern.contains("?")
+    }
+
     fn match_all(set: &HashSet<String>) -> bool {
         set.len() == 1 && set.contains("*")
     }
