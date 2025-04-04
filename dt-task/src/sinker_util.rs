@@ -91,7 +91,6 @@ impl SinkerUtil {
 
         let mut sub_sinkers: Sinkers = Vec::new();
         match task_config.sinker.clone() {
-            
             SinkerConfig::Dummy => {
                 for _ in 0..parallel_size {
                     let sinker = DummySinker {};
@@ -104,7 +103,7 @@ impl SinkerUtil {
                 batch_size,
                 replace,
             } => {
-                let router = create_router!(task_config,Mysql);
+                let router = create_router!(task_config, Mysql);
                 let conn_pool =
                     TaskUtil::create_mysql_conn_pool(&url, parallel_size * 2, enable_sqlx_log)
                         .await?;
@@ -131,8 +130,8 @@ impl SinkerUtil {
                 url, batch_size, ..
             } => {
                 // checker needs the reverse router
-                let reverse_router =create_router!(task_config,Mysql).reverse();
-                let filter = create_filter!(task_config,Mysql);
+                let reverse_router = create_router!(task_config, Mysql).reverse();
+                let filter = create_filter!(task_config, Mysql);
                 let extractor_meta_manager = ExtractorUtil::get_extractor_meta_manager(task_config)
                     .await?
                     .unwrap();
@@ -185,8 +184,8 @@ impl SinkerUtil {
                 url, batch_size, ..
             } => {
                 // checker needs the reverse router
-                let reverse_router =create_router!(task_config, Pg).reverse();
-                let filter = create_filter!(task_config,Pg);
+                let reverse_router = create_router!(task_config, Pg).reverse();
+                let filter = create_filter!(task_config, Pg);
                 let extractor_meta_manager = ExtractorUtil::get_extractor_meta_manager(task_config)
                     .await?
                     .unwrap();
@@ -294,8 +293,8 @@ impl SinkerUtil {
                 url,
                 conflict_policy,
             } => {
-                let filter = create_filter!(task_config,Mysql);
-                let router = create_router!(task_config,Mysql);
+                let filter = create_filter!(task_config, Mysql);
+                let router = create_router!(task_config, Mysql);
                 let conn_pool =
                     TaskUtil::create_mysql_conn_pool(&url, parallel_size * 2, enable_sqlx_log)
                         .await?;
@@ -312,8 +311,8 @@ impl SinkerUtil {
                 url,
                 conflict_policy,
             } => {
-                let filter = create_filter!(task_config,Pg);
-                let router = create_router!(task_config,Pg);
+                let filter = create_filter!(task_config, Pg);
+                let router = create_router!(task_config, Pg);
                 let conn_pool =
                     TaskUtil::create_pg_conn_pool(&url, parallel_size * 2, enable_sqlx_log).await?;
                 let sinker = PgStructSinker {
@@ -463,8 +462,8 @@ impl SinkerUtil {
                 conflict_policy,
             } => {
                 let conn_pool = TaskUtil::create_mysql_conn_pool(&url, 2, enable_sqlx_log).await?;
-                let filter = create_filter!(task_config,Mysql);
-                let router = create_router!(task_config,Mysql);
+                let filter = create_filter!(task_config, Mysql);
+                let router = create_router!(task_config, Mysql);
                 let extractor_meta_manager = ExtractorUtil::get_extractor_meta_manager(task_config)
                     .await?
                     .unwrap();
@@ -518,8 +517,8 @@ impl SinkerUtil {
                     .with_url(format!("http://{}:{}", host, port))
                     .with_user(url_info.username())
                     .with_password(url_info.password().unwrap_or(""));
-                let filter = create_filter!(task_config,Mysql);
-                let router = create_router!(task_config,Mysql);
+                let filter = create_filter!(task_config, Mysql);
+                let router = create_router!(task_config, Mysql);
                 let extractor_meta_manager = ExtractorUtil::get_extractor_meta_manager(task_config)
                     .await?
                     .unwrap();
@@ -561,7 +560,7 @@ impl SinkerUtil {
                 s3_config,
                 engine,
             } => {
-                let router = create_router!(task_config,Mysql);
+                let router = create_router!(task_config, Mysql);
                 let reverse_router = router.reverse();
                 let conn_pool =
                     TaskUtil::create_mysql_conn_pool(&url, parallel_size * 2, enable_sqlx_log)
@@ -628,8 +627,7 @@ impl SinkerUtil {
                     TaskUtil::create_mysql_conn_pool(&url, parallel_size * 2, enable_sqlx_log)
                         .await?;
                 let s3_client: S3Client = TaskUtil::create_s3_client(&s3_config);
-                let reverse_router =
-                    create_router!(task_config,Mysql).reverse();
+                let reverse_router = create_router!(task_config, Mysql).reverse();
                 let orc_sequencer = Arc::new(Mutex::new(OrcSequencer::new()));
 
                 for _ in 0..parallel_size {
@@ -688,8 +686,8 @@ impl SinkerUtil {
                 conflict_policy,
                 engine,
             } => {
-                let filter = create_filter!(task_config,Mysql);
-                let router = create_router!(task_config,Mysql);
+                let filter = create_filter!(task_config, Mysql);
+                let router = create_router!(task_config, Mysql);
                 let conn_pool =
                     TaskUtil::create_mysql_conn_pool(&url, parallel_size * 2, enable_sqlx_log)
                         .await?;
