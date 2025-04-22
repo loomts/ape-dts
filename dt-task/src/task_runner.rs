@@ -132,7 +132,9 @@ impl TaskRunner {
 
         let mut pending_tbs = VecDeque::new();
         let schemas = TaskUtil::list_schemas(url, db_type).await?;
-        for schema in schemas.iter() {
+        for (index, schema) in schemas.iter().enumerate() {
+            let do_global_structs = index == schemas.len() - 1;
+
             if filter.filter_schema(schema) {
                 log_info!("schema: {} filtered", schema);
                 continue;
@@ -148,6 +150,7 @@ impl TaskRunner {
                 ExtractorConfig::PgStruct { url, .. } => Some(ExtractorConfig::PgStruct {
                     url: url.clone(),
                     schema: schema.clone(),
+                    do_global_structs,
                 }),
 
                 _ => None,

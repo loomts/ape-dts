@@ -40,4 +40,14 @@ mod test {
     async fn struct_route_test() {
         TestBase::run_pg_struct_test("pg_to_pg/struct/route_test").await;
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn struct_rbac_test() {
+        let mut runner = RdbStructTestRunner::new("pg_to_pg/struct/rbac_test")
+            .await
+            .unwrap();
+        runner.run_struct_test_without_check().await.unwrap();
+        TestBase::run_dcl_check_test("pg_to_pg/struct/rbac_test").await;
+    }
 }

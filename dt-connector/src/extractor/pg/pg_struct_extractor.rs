@@ -3,6 +3,7 @@ use dt_common::meta::struct_meta::struct_data::StructData;
 use dt_common::{log_info, rdb_filter::RdbFilter};
 
 use dt_common::meta::struct_meta::statement::struct_statement::StructStatement;
+use dt_common::meta::struct_meta::structure::structure_type::StructureType;
 
 use sqlx::{Pool, Postgres};
 
@@ -16,6 +17,7 @@ pub struct PgStructExtractor {
     pub base_extractor: BaseExtractor,
     pub conn_pool: Pool<Postgres>,
     pub schema: String,
+    pub do_global_structs: bool,
     pub filter: RdbFilter,
 }
 
@@ -50,6 +52,16 @@ impl PgStructExtractor {
             self.push_dt_data(StructStatement::PgCreateTable(table_statement))
                 .await?;
         }
+
+        if self.do_global_structs && !self.filter.filter_structure(&StructureType::Rbac) {
+            // do rbac init
+            let rbac_statements = pg_fetcher.get_create_rbac_statements().await?;
+            for statement in rbac_statements {
+                self.push_dt_data(StructStatement::PgCreateRbac(statement))
+                    .await?;
+            }
+        }
+
         Ok(())
     }
 

@@ -327,4 +327,10 @@ impl TestBase {
             .unwrap();
         runner.close().await.unwrap();
     }
+
+    pub async fn run_dcl_check_test(test_dir: &str) {
+        let runner = RdbTestRunner::new(test_dir).await.unwrap();
+        runner.dcl_check_sql_execution().await.unwrap();
+        runner.close().await.unwrap();
+    }
 }
