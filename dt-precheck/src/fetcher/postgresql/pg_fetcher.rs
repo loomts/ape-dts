@@ -22,7 +22,7 @@ pub struct PgFetcher {
 #[async_trait]
 impl Fetcher for PgFetcher {
     async fn build_connection(&mut self) -> anyhow::Result<()> {
-        self.pool = Some(TaskUtil::create_pg_conn_pool(&self.url, 1, true).await?);
+        self.pool = Some(TaskUtil::create_pg_conn_pool(&self.url, 1, true, false).await?);
         Ok(())
     }
 

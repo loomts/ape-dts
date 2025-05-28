@@ -29,8 +29,9 @@ impl RdbRedisTestRunner {
         let base = BaseTestRunner::new(relative_test_dir).await.unwrap();
         let config = TaskConfig::new(&base.task_config_file).unwrap();
 
-        let mysql_conn_pool =
-            Some(TaskUtil::create_mysql_conn_pool(&config.extractor_basic.url, 1, false).await?);
+        let mysql_conn_pool = Some(
+            TaskUtil::create_mysql_conn_pool(&config.extractor_basic.url, 1, false, true).await?,
+        );
         let redis_conn = match config.sinker {
             SinkerConfig::Redis { url, .. } => RedisUtil::create_redis_conn(&url).await.unwrap(),
             _ => {

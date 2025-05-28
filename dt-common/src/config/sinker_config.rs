@@ -11,12 +11,14 @@ pub enum SinkerConfig {
         url: String,
         batch_size: usize,
         replace: bool,
+        disable_foreign_key_checks: bool,
     },
 
     Pg {
         url: String,
         batch_size: usize,
         replace: bool,
+        disable_foreign_key_checks: bool,
     },
 
     Mongo {

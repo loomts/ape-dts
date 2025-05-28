@@ -209,7 +209,7 @@ impl StarrocksStructSinker {
         };
 
         if !column.column_comment.is_empty() {
-            dst_col = format!("{} COMMENT='{}'", dst_col, column.column_comment);
+            dst_col = format!("{} COMMENT '{}'", dst_col, column.column_comment);
         }
 
         Ok(dst_col)
