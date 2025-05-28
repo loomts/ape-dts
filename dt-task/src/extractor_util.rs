@@ -99,7 +99,7 @@ impl ExtractorUtil {
                 // max_connections: 1 for extracting data from table, 1 for db-meta-manager
                 let max_connections = cmp::max(2, parallel_size as u32 + 1);
                 let conn_pool =
-                    TaskUtil::create_mysql_conn_pool(&url, max_connections, enable_sqlx_log)
+                    TaskUtil::create_mysql_conn_pool(&url, max_connections, enable_sqlx_log, false)
                         .await?;
                 let meta_manager = TaskUtil::create_mysql_meta_manager(
                     &url,
@@ -128,7 +128,8 @@ impl ExtractorUtil {
                 check_log_dir,
                 batch_size,
             } => {
-                let conn_pool = TaskUtil::create_mysql_conn_pool(&url, 2, enable_sqlx_log).await?;
+                let conn_pool =
+                    TaskUtil::create_mysql_conn_pool(&url, 2, enable_sqlx_log, false).await?;
                 let meta_manager = TaskUtil::create_mysql_meta_manager(
                     &url,
                     &config.runtime.log_level,
@@ -161,7 +162,8 @@ impl ExtractorUtil {
                 start_time_utc,
                 end_time_utc,
             } => {
-                let conn_pool = TaskUtil::create_mysql_conn_pool(&url, 2, enable_sqlx_log).await?;
+                let conn_pool =
+                    TaskUtil::create_mysql_conn_pool(&url, 2, enable_sqlx_log, false).await?;
                 let meta_manager = TaskUtil::create_mysql_meta_manager(
                     &url,
                     &config.runtime.log_level,
@@ -198,7 +200,8 @@ impl ExtractorUtil {
                 sample_interval,
                 batch_size,
             } => {
-                let conn_pool = TaskUtil::create_pg_conn_pool(&url, 2, enable_sqlx_log).await?;
+                let conn_pool =
+                    TaskUtil::create_pg_conn_pool(&url, 2, enable_sqlx_log, false).await?;
                 let meta_manager = PgMetaManager::new(conn_pool.clone()).await?;
                 let extractor = PgSnapshotExtractor {
                     conn_pool,
@@ -219,7 +222,8 @@ impl ExtractorUtil {
                 check_log_dir,
                 batch_size,
             } => {
-                let conn_pool = TaskUtil::create_pg_conn_pool(&url, 2, enable_sqlx_log).await?;
+                let conn_pool =
+                    TaskUtil::create_pg_conn_pool(&url, 2, enable_sqlx_log, false).await?;
                 let meta_manager = PgMetaManager::new(conn_pool.clone()).await?;
                 let extractor = PgCheckExtractor {
                     conn_pool,
@@ -245,7 +249,8 @@ impl ExtractorUtil {
                 start_time_utc,
                 end_time_utc,
             } => {
-                let conn_pool = TaskUtil::create_pg_conn_pool(&url, 2, enable_sqlx_log).await?;
+                let conn_pool =
+                    TaskUtil::create_pg_conn_pool(&url, 2, enable_sqlx_log, false).await?;
                 let meta_manager = PgMetaManager::new(conn_pool.clone()).await?;
                 base_extractor.time_filter = TimeFilter::new(&start_time_utc, &end_time_utc)?;
                 let extractor = PgCdcExtractor {
@@ -329,7 +334,8 @@ impl ExtractorUtil {
 
             ExtractorConfig::MysqlStruct { url, db } => {
                 // TODO, pass max_connections as parameter
-                let conn_pool = TaskUtil::create_mysql_conn_pool(&url, 2, enable_sqlx_log).await?;
+                let conn_pool =
+                    TaskUtil::create_mysql_conn_pool(&url, 2, enable_sqlx_log, false).await?;
                 let extractor = MysqlStructExtractor {
                     conn_pool,
                     db,
@@ -341,7 +347,8 @@ impl ExtractorUtil {
 
             ExtractorConfig::PgStruct { url, schema } => {
                 // TODO, pass max_connections as parameter
-                let conn_pool = TaskUtil::create_pg_conn_pool(&url, 2, enable_sqlx_log).await?;
+                let conn_pool =
+                    TaskUtil::create_pg_conn_pool(&url, 2, enable_sqlx_log, false).await?;
                 let extractor = PgStructExtractor {
                     conn_pool,
                     schema,
@@ -512,12 +519,14 @@ impl ExtractorUtil {
         let extractor_url = &task_config.extractor_basic.url;
         let meta_manager = match task_config.extractor_basic.db_type {
             DbType::Mysql => {
-                let conn_pool = TaskUtil::create_mysql_conn_pool(extractor_url, 1, true).await?;
+                let conn_pool =
+                    TaskUtil::create_mysql_conn_pool(extractor_url, 1, true, false).await?;
                 let meta_manager = MysqlMetaManager::new(conn_pool.clone()).await?;
                 Some(RdbMetaManager::from_mysql(meta_manager))
             }
             DbType::Pg => {
-                let conn_pool = TaskUtil::create_pg_conn_pool(extractor_url, 1, true).await?;
+                let conn_pool =
+                    TaskUtil::create_pg_conn_pool(extractor_url, 1, true, false).await?;
                 let meta_manager = PgMetaManager::new(conn_pool.clone()).await?;
                 Some(RdbMetaManager::from_pg(meta_manager))
             }

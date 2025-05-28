@@ -71,6 +71,7 @@ const REPL_PORT: &str = "repl_port";
 const PARALLEL_SIZE: &str = "parallel_size";
 const DDL_CONFLICT_POLICY: &str = "ddl_conflict_policy";
 const REPLACE: &str = "replace";
+const DISABLE_FOREIGN_KEY_CHECKS: &str = "disable_foreign_key_checks";
 // default values
 const APE_DTS: &str = "APE_DTS";
 const ASTRISK: &str = "*";
@@ -355,6 +356,11 @@ impl TaskConfig {
                     url,
                     batch_size,
                     replace: loader.get_with_default(SINKER, REPLACE, true),
+                    disable_foreign_key_checks: loader.get_with_default(
+                        SINKER,
+                        DISABLE_FOREIGN_KEY_CHECKS,
+                        true,
+                    ),
                 },
 
                 SinkType::Check => SinkerConfig::MysqlCheck {
@@ -380,6 +386,11 @@ impl TaskConfig {
                     url,
                     batch_size,
                     replace: loader.get_with_default(SINKER, REPLACE, true),
+                    disable_foreign_key_checks: loader.get_with_default(
+                        SINKER,
+                        DISABLE_FOREIGN_KEY_CHECKS,
+                        true,
+                    ),
                 },
 
                 SinkType::Check => SinkerConfig::PgCheck {

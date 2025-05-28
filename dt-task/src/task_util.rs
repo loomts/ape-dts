@@ -33,6 +33,7 @@ impl TaskUtil {
         url: &str,
         max_connections: u32,
         enable_sqlx_log: bool,
+        disable_foreign_key_checks: bool,
     ) -> anyhow::Result<Pool<MySql>> {
         let mut conn_options = MySqlConnectOptions::from_str(url)?;
         // The default character set is `utf8mb4`
@@ -48,8 +49,10 @@ impl TaskUtil {
             .max_connections(max_connections)
             .after_connect(move |conn, _meta| {
                 Box::pin(async move {
-                    conn.execute(sqlx::query("SET foreign_key_checks = 0;"))
-                        .await?;
+                    if disable_foreign_key_checks {
+                        conn.execute(sqlx::query("SET foreign_key_checks = 0;"))
+                            .await?;
+                    }
                     Ok(())
                 })
             })
@@ -62,6 +65,7 @@ impl TaskUtil {
         url: &str,
         max_connections: u32,
         enable_sqlx_log: bool,
+        disable_foreign_key_checks: bool,
     ) -> anyhow::Result<Pool<Postgres>> {
         let mut conn_options = PgConnectOptions::from_str(url)?;
         conn_options
@@ -74,11 +78,13 @@ impl TaskUtil {
 
         let conn_pool = PgPoolOptions::new()
             .max_connections(max_connections)
-            .after_connect(|conn, _meta| {
+            .after_connect(move |conn, _meta| {
                 Box::pin(async move {
-                    // disable foreign key checks
-                    conn.execute("SET session_replication_role = 'replica';")
-                        .await?;
+                    if disable_foreign_key_checks {
+                        // disable foreign key checks
+                        conn.execute("SET session_replication_role = 'replica';")
+                            .await?;
+                    }
                     Ok(())
                 })
             })
@@ -128,7 +134,7 @@ impl TaskUtil {
         meta_center_config: Option<MetaCenterConfig>,
     ) -> anyhow::Result<MysqlMetaManager> {
         let enable_sqlx_log = Self::check_enable_sqlx_log(log_level);
-        let conn_pool = Self::create_mysql_conn_pool(url, 1, enable_sqlx_log).await?;
+        let conn_pool = Self::create_mysql_conn_pool(url, 1, enable_sqlx_log, false).await?;
         let mut meta_manager = MysqlMetaManager::new_mysql_compatible(conn_pool, db_type).await?;
 
         if let Some(MetaCenterConfig::MySqlDbEngine {
@@ -138,7 +144,7 @@ impl TaskUtil {
         }) = &meta_center_config
         {
             let meta_center_conn_pool =
-                Self::create_mysql_conn_pool(url, 1, enable_sqlx_log).await?;
+                Self::create_mysql_conn_pool(url, 1, enable_sqlx_log, false).await?;
             let meta_center = MysqlDbEngineMetaCenter::new(
                 url.clone(),
                 meta_center_conn_pool,
@@ -155,7 +161,7 @@ impl TaskUtil {
         log_level: &str,
     ) -> anyhow::Result<PgMetaManager> {
         let enable_sqlx_log = Self::check_enable_sqlx_log(log_level);
-        let conn_pool = Self::create_pg_conn_pool(url, 1, enable_sqlx_log).await?;
+        let conn_pool = Self::create_pg_conn_pool(url, 1, enable_sqlx_log, false).await?;
         PgMetaManager::new(conn_pool.clone()).await
     }
 
@@ -233,14 +239,14 @@ impl TaskUtil {
 
         match db_type {
             DbType::Mysql => {
-                let conn_pool = Self::create_mysql_conn_pool(url, 1, true).await?;
+                let conn_pool = Self::create_mysql_conn_pool(url, 1, true, false).await?;
                 sqlx::query(schema_sql).execute(&conn_pool).await?;
                 sqlx::query(tb_sql).execute(&conn_pool).await?;
                 conn_pool.close().await
             }
 
             DbType::Pg => {
-                let conn_pool = Self::create_pg_conn_pool(url, 1, true).await?;
+                let conn_pool = Self::create_pg_conn_pool(url, 1, true, false).await?;
                 sqlx::query(schema_sql).execute(&conn_pool).await?;
                 sqlx::query(tb_sql).execute(&conn_pool).await?;
                 conn_pool.close().await
@@ -253,7 +259,7 @@ impl TaskUtil {
 
     async fn list_pg_schemas(url: &str) -> anyhow::Result<Vec<String>> {
         let mut schemas = Vec::new();
-        let conn_pool = TaskUtil::create_pg_conn_pool(url, 1, false).await?;
+        let conn_pool = TaskUtil::create_pg_conn_pool(url, 1, false, false).await?;
 
         let sql = "SELECT schema_name
             FROM information_schema.schemata
@@ -272,7 +278,7 @@ impl TaskUtil {
 
     async fn list_pg_tbs(url: &str, schema: &str) -> anyhow::Result<Vec<String>> {
         let mut tbs = Vec::new();
-        let conn_pool = TaskUtil::create_pg_conn_pool(url, 1, false).await?;
+        let conn_pool = TaskUtil::create_pg_conn_pool(url, 1, false, false).await?;
 
         let sql = format!(
             "SELECT table_name 
@@ -293,7 +299,7 @@ impl TaskUtil {
 
     async fn list_mysql_dbs(url: &str) -> anyhow::Result<Vec<String>> {
         let mut dbs = Vec::new();
-        let conn_pool = TaskUtil::create_mysql_conn_pool(url, 1, false).await?;
+        let conn_pool = TaskUtil::create_mysql_conn_pool(url, 1, false, false).await?;
 
         let sql = "SHOW DATABASES";
         let mut rows = sqlx::query(sql).fetch(&conn_pool);
@@ -310,7 +316,7 @@ impl TaskUtil {
 
     async fn list_mysql_tbs(url: &str, db: &str) -> anyhow::Result<Vec<String>> {
         let mut tbs = Vec::new();
-        let conn_pool = Self::create_mysql_conn_pool(url, 1, false).await?;
+        let conn_pool = Self::create_mysql_conn_pool(url, 1, false, false).await?;
 
         let sql = format!("SHOW FULL TABLES IN `{}`", db);
         let mut rows = sqlx::query(&sql).fetch(&conn_pool);

@@ -102,11 +102,16 @@ impl SinkerUtil {
                 url,
                 batch_size,
                 replace,
+                disable_foreign_key_checks,
             } => {
                 let router = create_router!(task_config, Mysql);
-                let conn_pool =
-                    TaskUtil::create_mysql_conn_pool(&url, parallel_size * 2, enable_sqlx_log)
-                        .await?;
+                let conn_pool = TaskUtil::create_mysql_conn_pool(
+                    &url,
+                    parallel_size * 2,
+                    enable_sqlx_log,
+                    disable_foreign_key_checks,
+                )
+                .await?;
                 let meta_manager = MysqlMetaManager::new(conn_pool.clone()).await?;
                 // to avoid contention for monitor write lock between sinker threads,
                 // create a monitor for each sinker instead of sharing a single monitor between sinkers,
@@ -136,9 +141,13 @@ impl SinkerUtil {
                     .await?
                     .unwrap();
 
-                let conn_pool =
-                    TaskUtil::create_mysql_conn_pool(&url, parallel_size * 2, enable_sqlx_log)
-                        .await?;
+                let conn_pool = TaskUtil::create_mysql_conn_pool(
+                    &url,
+                    parallel_size * 2,
+                    enable_sqlx_log,
+                    false,
+                )
+                .await?;
                 let meta_manager = MysqlMetaManager::new(conn_pool.clone()).await?;
 
                 for _ in 0..parallel_size {
@@ -159,10 +168,16 @@ impl SinkerUtil {
                 url,
                 batch_size,
                 replace,
+                disable_foreign_key_checks,
             } => {
                 let router = create_router!(task_config, Pg);
-                let conn_pool =
-                    TaskUtil::create_pg_conn_pool(&url, parallel_size * 2, enable_sqlx_log).await?;
+                let conn_pool = TaskUtil::create_pg_conn_pool(
+                    &url,
+                    parallel_size * 2,
+                    enable_sqlx_log,
+                    disable_foreign_key_checks,
+                )
+                .await?;
                 let meta_manager = PgMetaManager::new(conn_pool.clone()).await?;
 
                 for _ in 0..parallel_size {
@@ -191,7 +206,8 @@ impl SinkerUtil {
                     .unwrap();
 
                 let conn_pool =
-                    TaskUtil::create_pg_conn_pool(&url, parallel_size * 2, enable_sqlx_log).await?;
+                    TaskUtil::create_pg_conn_pool(&url, parallel_size * 2, enable_sqlx_log, false)
+                        .await?;
                 let meta_manager = PgMetaManager::new(conn_pool.clone()).await?;
 
                 for _ in 0..parallel_size {
@@ -295,9 +311,13 @@ impl SinkerUtil {
             } => {
                 let filter = create_filter!(task_config, Mysql);
                 let router = create_router!(task_config, Mysql);
-                let conn_pool =
-                    TaskUtil::create_mysql_conn_pool(&url, parallel_size * 2, enable_sqlx_log)
-                        .await?;
+                let conn_pool = TaskUtil::create_mysql_conn_pool(
+                    &url,
+                    parallel_size * 2,
+                    enable_sqlx_log,
+                    false,
+                )
+                .await?;
                 let sinker = MysqlStructSinker {
                     conn_pool: conn_pool.clone(),
                     conflict_policy: conflict_policy.clone(),
@@ -314,7 +334,8 @@ impl SinkerUtil {
                 let filter = create_filter!(task_config, Pg);
                 let router = create_router!(task_config, Pg);
                 let conn_pool =
-                    TaskUtil::create_pg_conn_pool(&url, parallel_size * 2, enable_sqlx_log).await?;
+                    TaskUtil::create_pg_conn_pool(&url, parallel_size * 2, enable_sqlx_log, false)
+                        .await?;
                 let sinker = PgStructSinker {
                     conn_pool: conn_pool.clone(),
                     conflict_policy: conflict_policy.clone(),
@@ -423,9 +444,13 @@ impl SinkerUtil {
                         .http1_title_case_headers()
                         .redirect(custom)
                         .build()?;
-                    let conn_pool =
-                        TaskUtil::create_mysql_conn_pool(&url, parallel_size * 2, enable_sqlx_log)
-                            .await?;
+                    let conn_pool = TaskUtil::create_mysql_conn_pool(
+                        &url,
+                        parallel_size * 2,
+                        enable_sqlx_log,
+                        false,
+                    )
+                    .await?;
                     let meta_manager = MysqlMetaManager::new_mysql_compatible(
                         conn_pool.clone(),
                         DbType::StarRocks,
@@ -461,7 +486,8 @@ impl SinkerUtil {
                 url,
                 conflict_policy,
             } => {
-                let conn_pool = TaskUtil::create_mysql_conn_pool(&url, 2, enable_sqlx_log).await?;
+                let conn_pool =
+                    TaskUtil::create_mysql_conn_pool(&url, 2, enable_sqlx_log, false).await?;
                 let filter = create_filter!(task_config, Mysql);
                 let router = create_router!(task_config, Mysql);
                 let extractor_meta_manager = ExtractorUtil::get_extractor_meta_manager(task_config)
@@ -562,9 +588,13 @@ impl SinkerUtil {
             } => {
                 let router = create_router!(task_config, Mysql);
                 let reverse_router = router.reverse();
-                let conn_pool =
-                    TaskUtil::create_mysql_conn_pool(&url, parallel_size * 2, enable_sqlx_log)
-                        .await?;
+                let conn_pool = TaskUtil::create_mysql_conn_pool(
+                    &url,
+                    parallel_size * 2,
+                    enable_sqlx_log,
+                    false,
+                )
+                .await?;
                 let s3_client = TaskUtil::create_s3_client(&s3_config);
                 let orc_sequencer = Arc::new(Mutex::new(OrcSequencer::new()));
 
@@ -623,9 +653,13 @@ impl SinkerUtil {
                 batch_memory_mb,
                 s3_config,
             } => {
-                let conn_pool =
-                    TaskUtil::create_mysql_conn_pool(&url, parallel_size * 2, enable_sqlx_log)
-                        .await?;
+                let conn_pool = TaskUtil::create_mysql_conn_pool(
+                    &url,
+                    parallel_size * 2,
+                    enable_sqlx_log,
+                    false,
+                )
+                .await?;
                 let s3_client: S3Client = TaskUtil::create_s3_client(&s3_config);
                 let reverse_router = create_router!(task_config, Mysql).reverse();
                 let orc_sequencer = Arc::new(Mutex::new(OrcSequencer::new()));
@@ -663,9 +697,13 @@ impl SinkerUtil {
                 batch_size,
                 s3_config,
             } => {
-                let conn_pool =
-                    TaskUtil::create_mysql_conn_pool(&url, parallel_size * 2, enable_sqlx_log)
-                        .await?;
+                let conn_pool = TaskUtil::create_mysql_conn_pool(
+                    &url,
+                    parallel_size * 2,
+                    enable_sqlx_log,
+                    false,
+                )
+                .await?;
                 let s3_client = TaskUtil::create_s3_client(&s3_config);
 
                 for _ in 0..parallel_size {
@@ -688,9 +726,13 @@ impl SinkerUtil {
             } => {
                 let filter = create_filter!(task_config, Mysql);
                 let router = create_router!(task_config, Mysql);
-                let conn_pool =
-                    TaskUtil::create_mysql_conn_pool(&url, parallel_size * 2, enable_sqlx_log)
-                        .await?;
+                let conn_pool = TaskUtil::create_mysql_conn_pool(
+                    &url,
+                    parallel_size * 2,
+                    enable_sqlx_log,
+                    false,
+                )
+                .await?;
                 let sinker = FoxlakeStructSinker {
                     conn_pool: conn_pool.clone(),
                     conflict_policy: conflict_policy.clone(),
