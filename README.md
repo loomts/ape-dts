@@ -148,10 +148,3 @@ Refer to [test docs](./dt-tests/README.md) for details.
 # Contact us
 
 [Slack Community](https://join.slack.com/t/kubeblocks/shared_invite/zt-22cx2f84x-BPZvnLRqBOGdZ_XSjELh4Q)
-
-WeChat Group 
-- The WeChat group has reached its limit of 200 members and cannot be scanned to join in. 
-- Please add this WeChat, and you will be manually pulled into the group. 
-- When adding the WeChat, please note: **ape-dts**.
-
-<img src="./docs/img/wechat_group.png" width="55%" style="display: block; margin-left: 0;"/>
