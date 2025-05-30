@@ -149,9 +149,8 @@ impl MysqlMetaFetcher {
         };
 
         while let Some(row) = rows.try_next().await? {
-            let mut col: String = row.try_get(COLUMN_NAME)?;
+            let col: String = row.try_get(COLUMN_NAME)?;
             // Column and index names are not case sensitive on any platform, nor are column aliases.
-            col = col.to_lowercase();
             cols.push(col.clone());
             let (origin_type, col_type) = Self::get_col_type(&row).await?;
             col_origin_type_map.insert(col.clone(), origin_type);
@@ -340,10 +339,8 @@ impl MysqlMetaFetcher {
             // | a     |          0 | PRIMARY      |            2 | value       | A         |           0 |     NULL | NULL   |      | BTREE      |         |               |
             // | a     |          0 | some_uk_name |            1 | value       | A         |           0 |     NULL | NULL   |      | BTREE      |         |               |
             // +-------+------------+--------------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
-            let mut key_name: String = row.try_get("Key_name")?;
-            let mut col_name: String = row.try_get("Column_name")?;
-            key_name = key_name.to_lowercase();
-            col_name = col_name.to_lowercase();
+            let key_name: String = row.try_get("Key_name")?;
+            let col_name: String = row.try_get("Column_name")?;
             if let Some(key_cols) = key_map.get_mut(&key_name) {
                 key_cols.push(col_name);
             } else {
@@ -402,10 +399,10 @@ impl MysqlMetaFetcher {
             let key = ForeignKey {
                 schema: my_schema,
                 tb: my_tb,
-                col: my_col.to_lowercase(),
+                col: my_col,
                 ref_schema,
                 ref_tb,
-                ref_col: ref_col.to_lowercase(),
+                ref_col: ref_col,
             };
 
             if key.schema == schema && key.tb == tb {
