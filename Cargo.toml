@@ -16,7 +16,7 @@ members = [
 assigning_clones = "allow"
 
 [workspace.dependencies]
-sqlx = {git = "https://github.com/qianyiwen2019/sqlx", features = ["runtime-async-std-rustls", "mysql", "postgres", "bigdecimal", "ipnetwork", "mac_address", "bit-vec", "time", "chrono", "json", "uuid"]}
+sqlx = {git = "https://github.com/apecloud/sqlx", features = ["runtime-async-std-rustls", "mysql", "postgres", "bigdecimal", "ipnetwork", "mac_address", "bit-vec", "time", "chrono", "json", "uuid"]}
 futures = "0.3.25"
 mysql-binlog-connector-rust = "0.3.2"
 serde = {version = "1", features = ["derive"]}
@@ -31,9 +31,9 @@ log4rs = "1.2.0"
 serial_test = "3.0.0"
 async-trait = "0.1.64"
 async-recursion = "1.0.2"
-tokio-postgres = {git = "https://github.com/qianyiwen2019/rust-postgres"}
-postgres-protocol = {git = "https://github.com/qianyiwen2019/rust-postgres"}
-postgres-types= {git = "https://github.com/qianyiwen2019/rust-postgres"}
+tokio-postgres = {git = "https://github.com/apecloud/rust-postgres"}
+postgres-protocol = {git = "https://github.com/apecloud/rust-postgres"}
+postgres-types= {git = "https://github.com/apecloud/rust-postgres"}
 tokio = { version = "1.25.0", features = ["full"] }
 bytes = "1.0"
 configparser = "3.0.2"
@@ -43,7 +43,7 @@ strum = { version = "0.25.0", features = ["derive"] }
 regex = "1.5.4"
 rdkafka = { version = "0.36.2", features = ["cmake-build", "libz-static"] }
 kafka = "0.10.0"
-reqwest = {git = "https://github.com/qianyiwen2019/reqwest", features = ["redirect-with-sensitive-headers"] }
+reqwest = {git = "https://github.com/apecloud/reqwest", features = ["redirect-with-sensitive-headers"] }
 rusoto_core = "0.48.0"
 rusoto_sqs = "0.48.0"
 rusoto_s3 = "0.48.0"
@@ -60,7 +60,7 @@ ratelimit = "0.7.1"
 mlua = { version = "0.9.7", features = ["lua54", "vendored"] }
 anyhow = {version = "1.0.83", features = ["backtrace"]}
 rust_decimal = "1.35.0"
-orc-format = {git = "https://github.com/qianyiwen2019/orc-format"}
+orc-format = {git = "https://github.com/apecloud/orc-format"}
 openssl = { version = "0.10", features = ["vendored"] }
 openssl-sys = { version = "0.9", features = ["vendored"]}
 actix-web = "4.9.0"
