@@ -1,3 +1,5 @@
+use std::cmp;
+
 use crate::{rdb_router::RdbRouter, Sinker};
 
 use anyhow::bail;
@@ -258,8 +260,14 @@ impl StarrocksStructSinker {
                 }
             }
 
-            MysqlColType::Char { length: v, .. } => format!("CHAR({})", v).leak(),
-            MysqlColType::Varchar { length: v, .. } => format!("VARCHAR({})", v).leak(),
+            // In MySQL, CHAR(30) can hold up to 30 characters
+            // In Doris/Starrocks, CHAR(30) can hold up to 30 bytes
+            MysqlColType::Char { length: v, .. } => {
+                format!("CHAR({})", cmp::min(v * 4, 255)).leak()
+            }
+            MysqlColType::Varchar { length: v, .. } => {
+                format!("VARCHAR({})", cmp::min(v * 4, 65533)).leak()
+            }
 
             MysqlColType::TinyText { .. }
             | MysqlColType::MediumText { .. }
