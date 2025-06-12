@@ -1,5 +1,6 @@
 use std::{str::FromStr, time::Duration};
 
+use dt_common::config::extractor_config::ExtractorConfig;
 use dt_common::config::s3_config::S3Config;
 use dt_common::config::{
     config_enums::DbType, meta_center_config::MetaCenterConfig, sinker_config::SinkerConfig,
@@ -104,15 +105,22 @@ impl TaskUtil {
                 RdbMetaManager::from_mysql(mysql_meta_manager)
             }
 
-            SinkerConfig::StarRocks { url, .. } | SinkerConfig::Doris { url, .. } => {
-                let mysql_meta_manager = Self::create_mysql_meta_manager(
-                    url,
-                    log_level,
-                    config.sinker_basic.db_type.clone(),
-                    None,
-                )
-                .await?;
-                RdbMetaManager::from_mysql(mysql_meta_manager)
+            // In Doris/Starrocks, you can NOT get UNIQUE KEY by "SHOW INDEXES" or from "information_schema.STATISTICS",
+            // as a workaround, for MySQL/Postgres -> Doris/Starrocks, we use extractor meta manager instead.
+            SinkerConfig::StarRocks { .. } | SinkerConfig::Doris { .. } => {
+                match &config.extractor {
+                    ExtractorConfig::MysqlCdc { url, .. } => {
+                        let mysql_meta_manager =
+                            Self::create_mysql_meta_manager(url, log_level, DbType::Mysql, None)
+                                .await?;
+                        RdbMetaManager::from_mysql(mysql_meta_manager)
+                    }
+                    ExtractorConfig::PgCdc { url, .. } => {
+                        let pg_meta_manager = Self::create_pg_meta_manager(url, log_level).await?;
+                        RdbMetaManager::from_pg(pg_meta_manager)
+                    }
+                    _ => return Ok(None),
+                }
             }
 
             SinkerConfig::Pg { url, .. } | SinkerConfig::PgCheck { url, .. } => {
