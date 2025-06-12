@@ -1,6 +1,6 @@
 use std::cmp;
 
-use crate::{rdb_router::RdbRouter, Sinker};
+use crate::{close_conn_pool, rdb_router::RdbRouter, Sinker};
 
 use anyhow::bail;
 use dt_common::{
@@ -93,6 +93,11 @@ impl Sinker for StarrocksStructSinker {
         }
 
         Ok(())
+    }
+
+    async fn close(&mut self) -> anyhow::Result<()> {
+        self.extractor_meta_manager.close().await?;
+        return close_conn_pool!(self);
     }
 }
 

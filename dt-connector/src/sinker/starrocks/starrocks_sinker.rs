@@ -59,6 +59,10 @@ impl Sinker for StarRocksSinker {
         }
         Ok(())
     }
+
+    async fn close(&mut self) -> anyhow::Result<()> {
+        self.meta_manager.close().await
+    }
 }
 
 impl StarRocksSinker {
