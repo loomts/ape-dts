@@ -85,6 +85,10 @@ impl Sinker for ClickhouseStructSinker {
 
         Ok(())
     }
+
+    async fn close(&mut self) -> anyhow::Result<()> {
+        self.extractor_meta_manager.close().await
+    }
 }
 
 impl ClickhouseStructSinker {
