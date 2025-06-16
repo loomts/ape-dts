@@ -10,6 +10,7 @@ Session.vim
 *.iml
 .vscode
 .project
+.dev.*
 .favorites.json
 .settings/
 

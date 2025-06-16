@@ -13,10 +13,10 @@ use crate::{
     },
 };
 
-use super::traits::Prechecker;
+use super::{basic::BasicPrechecker, traits::Prechecker};
 
 const PG_SUPPORT_DB_VERSION_NUM_MIN: i32 = 120000;
-const PG_SUPPORT_DB_VERSION_NUM_MAX: i32 = 149999;
+const PG_SUPPORT_DB_VERSION_NUM_MAX: i32 = 169999;
 
 pub struct PostgresqlPrechecker {
     pub fetcher: PgFetcher,
@@ -40,10 +40,10 @@ impl Prechecker for PostgresqlPrechecker {
             self.is_source,
             DbType::Pg,
             check_error,
+            None,
         ))
     }
 
-    // Supported PostgreSQL 14.*
     async fn check_database_version(&mut self) -> anyhow::Result<CheckResult> {
         let mut check_error = None;
 
@@ -72,6 +72,7 @@ impl Prechecker for PostgresqlPrechecker {
             self.is_source,
             DbType::Pg,
             check_error,
+            None,
         ))
     }
 
@@ -92,6 +93,7 @@ impl Prechecker for PostgresqlPrechecker {
                 self.is_source,
                 DbType::Pg,
                 check_error,
+                None,
             ));
         }
 
@@ -160,11 +162,36 @@ impl Prechecker for PostgresqlPrechecker {
             self.is_source,
             DbType::Pg,
             check_error,
+            None,
         ))
     }
 
     async fn check_struct_existed_or_not(&mut self) -> anyhow::Result<CheckResult> {
         let mut check_error = None;
+
+        if !self.is_source && self.precheck_config.do_struct_init {
+            return Ok(CheckResult::build_with_err(
+                CheckItem::CheckIfStructExisted,
+                self.is_source,
+                DbType::Pg,
+                check_error,
+                None,
+            ));
+        }
+
+        let is_filter_pattern =
+            BasicPrechecker::is_filter_pattern(DbType::Pg, &self.fetcher.filter);
+        if is_filter_pattern {
+            return Ok(CheckResult::build_with_err(
+                CheckItem::CheckIfStructExisted,
+                self.is_source,
+                DbType::Pg,
+                check_error,
+                Some(anyhow::Error::msg(
+                    "CheckIfStructExisted with filter in pattern is not supported.",
+                )),
+            ));
+        }
 
         let (mut db_tables, mut err_msgs): (Vec<DbTable>, Vec<String>) = (Vec::new(), Vec::new());
         if !self.filter_config.do_tbs.is_empty() {
@@ -178,61 +205,59 @@ impl Prechecker for PostgresqlPrechecker {
         all_schemas.extend(&schemas);
         all_schemas.extend(&tb_schemas);
 
-        if self.is_source || !self.precheck_config.do_struct_init {
-            // When a specific table to be migrated is specified and the following conditions are met, check the existence of the table
-            // 1. this check is for the source database
-            // 2. this check is for the sink database, and specified no structure initialization
-            if !tbs.is_empty() {
-                let mut not_existed_tbs: HashSet<String> = HashSet::new();
+        // When a specific table to be migrated is specified and the following conditions are met, check the existence of the table
+        // 1. this check is for the source database
+        // 2. this check is for the sink database, and specified no structure initialization
+        if !tbs.is_empty() {
+            let mut not_existed_tbs: HashSet<String> = HashSet::new();
 
-                let table_result = self.fetcher.fetch_tables().await;
-                let current_tbs: HashSet<String> = match table_result {
-                    Ok(tables) => tables
-                        .iter()
-                        .map(|t| format!("{}.{}", t.schema_name, t.table_name))
-                        .collect(),
-                    Err(e) => bail! {e},
-                };
-                for tb_key in tbs {
-                    if !current_tbs.contains(&tb_key) {
-                        not_existed_tbs.insert(tb_key);
-                    }
-                }
-                if !not_existed_tbs.is_empty() {
-                    err_msgs.push(format!(
-                        "tables not existed: [{}]",
-                        not_existed_tbs
-                            .iter()
-                            .map(|e| e.to_string())
-                            .collect::<Vec<String>>()
-                            .join(";")
-                    ));
+            let table_result = self.fetcher.fetch_tables().await;
+            let current_tbs: HashSet<String> = match table_result {
+                Ok(tables) => tables
+                    .iter()
+                    .map(|t| format!("{}.{}", t.schema_name, t.table_name))
+                    .collect(),
+                Err(e) => bail! {e},
+            };
+            for tb_key in tbs {
+                if !current_tbs.contains(&tb_key) {
+                    not_existed_tbs.insert(tb_key);
                 }
             }
+            if !not_existed_tbs.is_empty() {
+                err_msgs.push(format!(
+                    "tables not existed: [{}]",
+                    not_existed_tbs
+                        .iter()
+                        .map(|e| e.to_string())
+                        .collect::<Vec<String>>()
+                        .join(";")
+                ));
+            }
+        }
 
-            if !all_schemas.is_empty() {
-                let mut not_existed_schema: HashSet<String> = HashSet::new();
-                let schema_result = self.fetcher.fetch_schemas().await;
-                let current_schemas: HashSet<String> = match schema_result {
-                    Ok(schemas) => schemas.iter().map(|s| s.schema_name.clone()).collect(),
-                    Err(e) => bail! {e},
-                };
+        if !all_schemas.is_empty() {
+            let mut not_existed_schema: HashSet<String> = HashSet::new();
+            let schema_result = self.fetcher.fetch_schemas().await;
+            let current_schemas: HashSet<String> = match schema_result {
+                Ok(schemas) => schemas.iter().map(|s| s.schema_name.clone()).collect(),
+                Err(e) => bail! {e},
+            };
 
-                for schema in all_schemas {
-                    if !current_schemas.contains(schema) {
-                        not_existed_schema.insert(schema.clone());
-                    }
+            for schema in all_schemas {
+                if !current_schemas.contains(schema) {
+                    not_existed_schema.insert(schema.clone());
                 }
-                if !not_existed_schema.is_empty() {
-                    err_msgs.push(format!(
-                        "schemas not existed: [{}]",
-                        not_existed_schema
-                            .iter()
-                            .map(|e| e.to_string())
-                            .collect::<Vec<String>>()
-                            .join(";")
-                    ));
-                }
+            }
+            if !not_existed_schema.is_empty() {
+                err_msgs.push(format!(
+                    "schemas not existed: [{}]",
+                    not_existed_schema
+                        .iter()
+                        .map(|e| e.to_string())
+                        .collect::<Vec<String>>()
+                        .join(";")
+                ));
             }
         }
 
@@ -245,12 +270,13 @@ impl Prechecker for PostgresqlPrechecker {
             self.is_source,
             DbType::Pg,
             check_error,
+            None,
         ))
     }
 
     async fn check_table_structs(&mut self) -> anyhow::Result<CheckResult> {
         // all tables have a pk, and have no fk
-        let mut check_error = None;
+        let (mut check_error, mut warn_error) = (None, None);
 
         if !self.is_source && self.precheck_config.do_struct_init {
             // do nothing when the database is a target
@@ -259,10 +285,26 @@ impl Prechecker for PostgresqlPrechecker {
                 self.is_source,
                 DbType::Pg,
                 check_error,
+                None,
             ));
         }
 
-        let (mut db_tables, mut err_msgs): (Vec<DbTable>, Vec<String>) = (Vec::new(), Vec::new());
+        let is_filter_pattern =
+            BasicPrechecker::is_filter_pattern(DbType::Pg, &self.fetcher.filter);
+        if is_filter_pattern {
+            return Ok(CheckResult::build_with_err(
+                CheckItem::CheckIfTableStructSupported,
+                self.is_source,
+                DbType::Pg,
+                check_error,
+                Some(anyhow::Error::msg(
+                    "CheckIfTableStructSupported with filter in pattern is not supported.",
+                )),
+            ));
+        }
+
+        let (mut db_tables, mut err_msgs, mut warn_msgs): (Vec<DbTable>, Vec<String>, Vec<String>) =
+            (Vec::new(), Vec::new(), Vec::new());
         if !self.filter_config.do_tbs.is_empty() {
             DbTable::from_str(&self.filter_config.do_tbs, &mut db_tables)
         } else if !self.filter_config.do_schemas.is_empty() {
@@ -331,8 +373,8 @@ impl Prechecker for PostgresqlPrechecker {
             }
         }
         if !no_pkuk_tables.is_empty() {
-            err_msgs.push(format!(
-                "primary key are needed, but these tables don't have a primary key:[{}]",
+            warn_msgs.push(format!(
+                "primary key or unique key are needed, but these tables don't have any:[{}]",
                 no_pkuk_tables
                     .iter()
                     .map(|e| e.to_string())
@@ -343,12 +385,16 @@ impl Prechecker for PostgresqlPrechecker {
         if !err_msgs.is_empty() {
             check_error = Some(anyhow::Error::msg(err_msgs.join(";")))
         }
+        if !warn_msgs.is_empty() {
+            warn_error = Some(anyhow::Error::msg(warn_msgs.join(";")))
+        }
 
         Ok(CheckResult::build_with_err(
             CheckItem::CheckIfTableStructSupported,
             self.is_source,
             DbType::Pg,
             check_error,
+            warn_error,
         ))
     }
 }

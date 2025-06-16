@@ -23,6 +23,26 @@ mod test {
 
     #[tokio::test]
     #[serial]
+    async fn expression_filter_test() {
+        let test_dir = "pg_to_pg/precheck/expression_filter_test";
+
+        let mut src_expected_results = HashMap::new();
+        src_expected_results.insert(CheckItem::CheckIfStructExisted.to_string(), true);
+
+        let mut dst_expected_results = HashMap::new();
+        dst_expected_results.insert(CheckItem::CheckIfStructExisted.to_string(), true);
+
+        TestBase::run_precheck_test(
+            test_dir,
+            &HashSet::new(),
+            &src_expected_results,
+            &dst_expected_results,
+        )
+        .await
+    }
+
+    #[tokio::test]
+    #[serial]
     async fn db_not_exists_non_struct_test() {
         let test_dir = "pg_to_pg/precheck/db_not_exists_non_struct_test";
 
@@ -55,7 +75,7 @@ mod test {
         let test_dir = "pg_to_pg/precheck/struct_supported_no_pkuk_test";
 
         let mut src_expected_results = HashMap::new();
-        src_expected_results.insert(CheckItem::CheckIfTableStructSupported.to_string(), false);
+        src_expected_results.insert(CheckItem::CheckIfTableStructSupported.to_string(), true);
 
         let mut dst_expected_results = HashMap::new();
         dst_expected_results.insert(CheckItem::CheckIfTableStructSupported.to_string(), true);
@@ -114,7 +134,7 @@ mod test {
         src_expected_results.insert(CheckItem::CheckIfTableStructSupported.to_string(), false);
 
         let mut dst_expected_results = HashMap::new();
-        dst_expected_results.insert(CheckItem::CheckIfTableStructSupported.to_string(), false);
+        dst_expected_results.insert(CheckItem::CheckIfTableStructSupported.to_string(), true);
 
         run_precheck_test(test_dir, &src_expected_results, &dst_expected_results).await
     }

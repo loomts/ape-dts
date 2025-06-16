@@ -8,6 +8,7 @@ pub struct CheckResult {
     pub check_desc: String,
     pub is_validate: bool,
     pub error_msg: String,
+    pub warn_msg: String,
     pub is_source: bool,
     pub advise_msg: String,
 }
@@ -19,6 +20,7 @@ impl CheckResult {
             check_desc: String::from(""),
             is_validate: true,
             error_msg: String::from(""),
+            warn_msg: String::from(""),
             is_source,
             advise_msg: String::from(""),
         }
@@ -29,6 +31,7 @@ impl CheckResult {
         is_source: bool,
         db_type: DbType,
         err_option: Option<anyhow::Error>,
+        warn_option: Option<anyhow::Error>,
     ) -> Self {
         let check_desc;
         let mut advise_msg = String::new();
@@ -89,12 +92,18 @@ impl CheckResult {
                 advise_msg = format!("{} wait for the next release.", advise_version);
             }
         }
+        let mut warn_msg = String::new();
+        match warn_option {
+            Some(err) => warn_msg = err.to_string(),
+            None => {}
+        }
         match err_option {
             Some(err) => Self {
                 check_type_name: check_item.to_string(),
                 check_desc,
                 is_validate: false,
                 error_msg: err.to_string(),
+                warn_msg,
                 is_source,
                 advise_msg,
             },
@@ -103,6 +112,7 @@ impl CheckResult {
                 check_desc,
                 is_validate: true,
                 error_msg: String::from(""),
+                warn_msg,
                 is_source,
                 advise_msg: String::from(""),
             },
@@ -111,6 +121,6 @@ impl CheckResult {
 
     pub fn log(&self) {
         println!("======================================");
-        println!("[check_type_name]:{} \n[is_validate]:{} \n[check_desc]:{} \n[error_messaeg]:{} \n[advise_message]:{}\n", self.check_type_name, self.is_validate, self.check_desc, self.error_msg, self.advise_msg);
+        println!("[check_type_name]:{} \n[is_validate]:{} \n[check_desc]:{} \n[error_messaeg]:{} \n[warn_message]:{} \n[advise_message]:{}\n", self.check_type_name, self.is_validate, self.check_desc, self.error_msg, self.warn_msg, self.advise_msg);
     }
 }
