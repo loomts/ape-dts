@@ -1,0 +1,11 @@
+-- test_create/123456
+select version()
+
+-- test_grant/123456
+select * from dcl_test_1.tb1
+
+-- test_role1/123456
+select * from dcl_test_1.tb1
+
+-- test_revoke/123456
+select * from dcl_test_1.tb1

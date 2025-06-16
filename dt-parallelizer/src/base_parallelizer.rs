@@ -1,4 +1,5 @@
 use anyhow::bail;
+use dt_common::meta::dcl_meta::dcl_data::DclData;
 use dt_common::meta::ddl_meta::ddl_data::DdlData;
 use dt_common::meta::{dt_data::DtItem, dt_queue::DtQueue, row_data::RowData};
 use dt_common::monitor::counter::Counter;
@@ -129,6 +130,30 @@ impl BaseParallelizer {
         }
         while let Some(result) = join_set.join_next().await {
             result??;
+        }
+        Ok(())
+    }
+
+    pub async fn sink_dcl(
+        &self,
+        mut sub_datas: Vec<Vec<DclData>>,
+        sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
+        parallel_size: usize,
+        batch: bool,
+    ) -> anyhow::Result<()> {
+        let mut futures = Vec::new();
+        for i in 0..sub_datas.len() {
+            let data = sub_datas.remove(0);
+            let sinker = sinkers[i % parallel_size].clone();
+            let future =
+                tokio::spawn(
+                    async move { sinker.lock().await.sink_dcl(data, batch).await.unwrap() },
+                );
+            futures.push(future);
+        }
+
+        for future in futures {
+            future.await.unwrap();
         }
         Ok(())
     }

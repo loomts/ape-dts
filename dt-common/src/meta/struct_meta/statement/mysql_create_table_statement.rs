@@ -1,6 +1,7 @@
 use crate::meta::struct_meta::structure::column::ColumnDefault;
 use crate::{config::config_enums::DbType, rdb_filter::RdbFilter};
 
+use crate::meta::struct_meta::structure::index::IndexType;
 use crate::meta::struct_meta::structure::{
     column::Column,
     constraint::Constraint,
@@ -8,7 +9,6 @@ use crate::meta::struct_meta::structure::{
     structure_type::StructureType,
     table::Table,
 };
-use crate::meta::struct_meta::structure::index::IndexType;
 
 #[derive(Debug, Clone)]
 pub struct MysqlCreateTableStatement {
@@ -44,7 +44,7 @@ impl MysqlCreateTableStatement {
             sqls.push((key, Self::table_to_sql(&mut self.table)));
         }
 
-        if self.indexes.len() > 0 {
+        if !self.indexes.is_empty() {
             let mut idx_appends = Vec::new();
             for i in self.indexes.iter_mut() {
                 match i.index_kind {
@@ -52,7 +52,7 @@ impl MysqlCreateTableStatement {
                         if filter.filter_structure(&StructureType::Table) {
                             continue;
                         }
-                    },
+                    }
                     _ => {
                         if filter.filter_structure(&StructureType::Index) {
                             continue;
@@ -64,7 +64,7 @@ impl MysqlCreateTableStatement {
                     // join Btree index for same table
                     IndexType::Btree => {
                         idx_appends.push(Self::index_to_sql_appends(i));
-                    },
+                    }
                     _ => {
                         let standalone_key = format!(
                             "index.{}.{}.{}",
@@ -74,7 +74,7 @@ impl MysqlCreateTableStatement {
                     }
                 }
             }
-            if idx_appends.len() > 0 {
+            if !idx_appends.is_empty() {
                 let key = format!(
                     "index.{}.{}",
                     self.indexes[0].database_name, self.indexes[0].table_name

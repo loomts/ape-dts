@@ -14,7 +14,7 @@ pub mod sinker;
 use async_trait::async_trait;
 use check_log::check_log::CheckLog;
 use dt_common::meta::{
-    ddl_meta::ddl_data::DdlData, dt_data::DtItem, row_data::RowData,
+    dcl_meta::dcl_data::DclData, ddl_meta::ddl_data::DdlData, dt_data::DtItem, row_data::RowData,
     struct_meta::struct_data::StructData,
 };
 
@@ -25,6 +25,10 @@ pub trait Sinker {
     }
 
     async fn sink_ddl(&mut self, mut _data: Vec<DdlData>, _batch: bool) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn sink_dcl(&mut self, mut _data: Vec<DclData>, _batch: bool) -> anyhow::Result<()> {
         Ok(())
     }
 

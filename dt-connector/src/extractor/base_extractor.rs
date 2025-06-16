@@ -9,7 +9,12 @@ use dt_common::{
     config::{config_enums::DbType, config_token_parser::ConfigTokenParser},
     error::Error,
     log_debug, log_error, log_info, log_warn,
-    meta::{ddl_meta::ddl_data::DdlData, dt_queue::DtQueue, struct_meta::struct_data::StructData},
+    meta::{
+        dcl_meta::{dcl_data::DclData, dcl_parser::DclParser},
+        ddl_meta::ddl_data::DdlData,
+        dt_queue::DtQueue,
+        struct_meta::struct_data::StructData,
+    },
     rdb_filter::RdbFilter,
     utils::{sql_util::SqlUtil, time_util::TimeUtil},
 };
@@ -119,6 +124,11 @@ impl BaseExtractor {
         self.push_dt_data(DtData::Ddl { ddl_data }, position).await
     }
 
+    pub async fn push_dcl(&mut self, dcl_data: DclData, position: Position) -> anyhow::Result<()> {
+        // Todo: route dcl data
+        self.push_dt_data(DtData::Dcl { dcl_data }, position).await
+    }
+
     pub async fn push_struct(&mut self, struct_data: StructData) -> anyhow::Result<()> {
         let struct_data = self.router.route_struct(struct_data);
         self.push_dt_data(DtData::Struct { struct_data }, Position::None)
@@ -149,6 +159,27 @@ impl BaseExtractor {
         ddl_data.default_schema = schema.to_string();
         ddl_data.query = query.to_string();
         Ok(ddl_data)
+    }
+
+    pub async fn parse_dcl(
+        &self,
+        db_type: &DbType,
+        _schema: &str,
+        query: &str,
+    ) -> anyhow::Result<DclData> {
+        let parser = DclParser::new(db_type.to_owned());
+        let parse_result = parser.parse(query);
+
+        if let Err(err) = parse_result {
+            let error = format!(
+                "failed to parse dcl, will try ignore it, sql: {}, error: {}",
+                query, err
+            );
+            bail! {Error::Unexpected(error)}
+        }
+        let dcl_data = parse_result.unwrap();
+
+        Ok(dcl_data)
     }
 
     pub fn get_where_sql(filter: &RdbFilter, schema: &str, tb: &str, condition: &str) -> String {

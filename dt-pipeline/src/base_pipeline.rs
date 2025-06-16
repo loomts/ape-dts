@@ -10,6 +10,7 @@ use async_trait::async_trait;
 use dt_common::{
     config::sinker_config::SinkerConfig,
     meta::{
+        dcl_meta::dcl_data::DclData,
         ddl_meta::ddl_data::DdlData,
         dt_data::{DtData, DtItem},
         dt_queue::DtQueue,
@@ -45,6 +46,7 @@ pub struct BasePipeline {
 enum SinkMethod {
     Raw,
     Ddl,
+    Dcl,
     Dml,
     Struct,
 }
@@ -100,6 +102,7 @@ impl Pipeline for BasePipeline {
             // process all row_datas in buffer at a time
             let (count, last_received, last_commit) = match self.get_sink_method(&data) {
                 SinkMethod::Ddl => self.sink_ddl(data).await?,
+                SinkMethod::Dcl => self.sink_dcl(data).await?,
                 SinkMethod::Dml => self.sink_dml(data).await?,
                 SinkMethod::Raw => self.sink_raw(data).await?,
                 SinkMethod::Struct => self.sink_struct(data).await?,
@@ -196,6 +199,18 @@ impl BasePipeline {
         Ok((count, last_received_position, last_commit_position))
     }
 
+    async fn sink_dcl(
+        &mut self,
+        all_data: Vec<DtItem>,
+    ) -> anyhow::Result<(usize, Option<Position>, Option<Position>)> {
+        let (data, last_received_position, last_commit_position) = Self::fetch_dcl(all_data);
+        let count = data.len();
+        if count > 0 {
+            self.parallelizer.sink_dcl(data, &self.sinkers).await?;
+        }
+        Ok((count, last_received_position, last_commit_position))
+    }
+
     pub fn fetch_raw(data: &[DtItem]) -> (Option<Position>, Option<Position>) {
         let mut last_received_position = Option::None;
         let mut last_commit_position = Option::None;
@@ -274,11 +289,36 @@ impl BasePipeline {
         (result, last_received_position, last_commit_position)
     }
 
+    fn fetch_dcl(mut data: Vec<DtItem>) -> (Vec<DclData>, Option<Position>, Option<Position>) {
+        let mut result = Vec::new();
+        let mut last_received_position = Option::None;
+        let mut last_commit_position = Option::None;
+        for i in data.drain(..) {
+            match i.dt_data {
+                DtData::Commit { .. } | DtData::Heartbeat {} => {
+                    last_commit_position = Some(i.position);
+                    last_received_position = last_commit_position.clone();
+                }
+
+                DtData::Dcl { dcl_data } => {
+                    last_commit_position = Some(i.position);
+                    last_received_position = last_commit_position.clone();
+                    result.push(dcl_data);
+                }
+
+                _ => {}
+            }
+        }
+
+        (result, last_received_position, last_commit_position)
+    }
+
     fn get_sink_method(&self, data: &Vec<DtItem>) -> SinkMethod {
         for i in data {
             match i.dt_data {
                 DtData::Struct { .. } => return SinkMethod::Struct,
                 DtData::Ddl { .. } => return SinkMethod::Ddl,
+                DtData::Dcl { .. } => return SinkMethod::Dcl,
                 DtData::Dml { .. } => match self.sinker_config {
                     SinkerConfig::FoxlakePush { .. }
                     | SinkerConfig::FoxlakeMerge { .. }

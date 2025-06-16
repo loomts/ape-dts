@@ -166,4 +166,10 @@ mod test {
     async fn cdc_gtid_test() {
         TestBase::run_cdc_test("mysql_to_mysql/cdc/gtid_test", 3000, 2000).await;
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn cdc_dcl_test() {
+        TestBase::run_dcl_test("mysql_to_mysql/cdc/dcl_test", 3000, 5000).await;
+    }
 }

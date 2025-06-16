@@ -12,7 +12,10 @@ use crate::{
 use anyhow::Context;
 use dt_common::{
     log_error, log_info,
-    meta::ddl_meta::{ddl_data::DdlData, ddl_type::DdlType},
+    meta::{
+        dcl_meta::dcl_data::DclData,
+        ddl_meta::{ddl_data::DdlData, ddl_type::DdlType},
+    },
     monitor::monitor::Monitor,
 };
 
@@ -87,6 +90,16 @@ impl Sinker for MysqlSinker {
                 .await?;
             query.execute(&conn_pool).await?;
             conn_pool.close().await;
+        }
+        Ok(())
+    }
+
+    async fn sink_dcl(&mut self, data: Vec<DclData>, _batch: bool) -> anyhow::Result<()> {
+        for dcl_data in data {
+            let sql = dcl_data.to_sql();
+            log_info!("sink dcl: {}", &sql);
+            let query = sqlx::query(&sql).persistent(false).disable_arguments();
+            query.execute(&self.conn_pool).await?;
         }
         Ok(())
     }

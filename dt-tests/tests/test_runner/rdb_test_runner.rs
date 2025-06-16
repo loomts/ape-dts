@@ -35,6 +35,7 @@ pub struct RdbTestRunner {
     pub src_conn_pool_pg: Option<Pool<Postgres>>,
     pub dst_conn_pool_pg: Option<Pool<Postgres>>,
     pub meta_center_pool_mysql: Option<Pool<MySql>>,
+    pub config: TaskConfig,
     pub router: RdbRouter,
     pub filter: RdbFilter,
 }
@@ -110,6 +111,7 @@ impl RdbTestRunner {
             src_conn_pool_pg,
             dst_conn_pool_pg,
             meta_center_pool_mysql,
+            config,
             router,
             filter,
             base,
@@ -219,6 +221,101 @@ impl RdbTestRunner {
                 .await;
             assert_eq!(src_ddl_sql, meta_center_ddl_sql);
         }
+        Ok(())
+    }
+
+    pub async fn run_dcl_test(&self, start_millis: u64, parse_millis: u64) -> anyhow::Result<()> {
+        self.execute_prepare_sqls().await?;
+
+        self.update_cdc_task_config(start_millis, parse_millis)
+            .await?;
+        let task = self.base.spawn_task().await?;
+        TimeUtil::sleep_millis(start_millis).await;
+
+        self.execute_src_sqls(&self.base.src_test_sqls).await?;
+        self.base.wait_task_finish(&task).await?;
+
+        self.check_sql_execution("check_with_succeed.txt", true)
+            .await?;
+        self.check_sql_execution("check_with_failed.txt", false)
+            .await?;
+
+        Ok(())
+    }
+
+    async fn check_sql_execution(
+        &self,
+        filename: &str,
+        expect_success: bool,
+    ) -> anyhow::Result<()> {
+        let file_path = format!("{}/{}", &self.base.test_dir, filename);
+        if !BaseTestRunner::check_path_exists(&file_path) {
+            return Ok(());
+        }
+
+        let lines = BaseTestRunner::load_file(&file_path);
+        let mut pool: Option<Pool<MySql>> = None;
+
+        for line in lines {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+
+            if line.starts_with("--") {
+                let parts: Vec<&str> = line[2..].trim().split('/').collect();
+                let current_user = parts[0].trim().to_string();
+                let current_pwd = parts[1].trim().to_string();
+
+                if let Some(old_pool) = pool {
+                    old_pool.close().await;
+                }
+
+                let url = &self.config.extractor_basic.url;
+                let conn_str = url.replace(
+                    &url[url.find("://").unwrap() + 3..url.find('@').unwrap()],
+                    &format!("{}:{}", current_user, current_pwd),
+                );
+
+                let pool_connect = Pool::connect(&conn_str).await;
+                match pool_connect {
+                    Ok(p) => {
+                        pool = Some(p);
+                    }
+                    Err(_) => {
+                        if expect_success {
+                            assert!(false, "pool connect failed, but expect success");
+                        }
+                        pool = None;
+                    }
+                }
+                continue;
+            }
+
+            if let Some(ref pool) = pool {
+                let query = sqlx::query(line);
+                let result = query.execute(pool).await;
+
+                if expect_success {
+                    assert!(
+                        result.is_ok(),
+                        "Expected success but got error: {:?}",
+                        result.err()
+                    );
+                } else {
+                    assert!(
+                        result.is_err(),
+                        "Expected error but got success, sql: {}",
+                        line
+                    );
+                }
+            }
+        }
+
+        if let Some(pool) = pool {
+            pool.close().await;
+        }
+
         Ok(())
     }
 
