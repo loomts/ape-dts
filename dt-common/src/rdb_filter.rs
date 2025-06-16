@@ -11,6 +11,7 @@ use crate::{
     utils::sql_util::SqlUtil,
 };
 
+use crate::meta::dcl_meta::dcl_type::DclType;
 use anyhow::Context;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -31,6 +32,7 @@ pub struct RdbFilter {
     pub do_events: HashSet<String>,
     pub do_structures: HashSet<String>,
     pub do_ddls: HashSet<String>,
+    pub do_dcls: HashSet<String>,
     pub ignore_cmds: HashSet<String>,
     pub where_conditions: WhereConditions,
     pub cache: HashMap<(String, String), bool>,
@@ -48,6 +50,7 @@ impl RdbFilter {
             do_events: Self::parse_single_tokens(&config.do_events, db_type)?,
             do_structures: Self::parse_single_tokens(&config.do_structures, db_type)?,
             do_ddls: Self::parse_single_tokens(&config.do_ddls, db_type)?,
+            do_dcls: Self::parse_single_tokens(&config.do_dcls, db_type)?,
             ignore_cmds: Self::parse_single_tokens(&config.ignore_cmds, db_type)?,
             where_conditions: Self::parse_where_conditions(&config.where_conditions)?,
             cache: HashMap::new(),
@@ -109,6 +112,14 @@ impl RdbFilter {
         } else {
             self.filter_tb(schema, tb)
         }
+    }
+
+    pub fn filter_all_dcl(&self) -> bool {
+        self.do_dcls.is_empty()
+    }
+
+    pub fn filter_dcl(&mut self, dcl_type: &DclType) -> bool {
+        !Self::match_all(&self.do_dcls) && !self.do_dcls.contains(&dcl_type.to_string())
     }
 
     pub fn filter_structure(&self, structure_type: &StructureType) -> bool {
@@ -257,7 +268,6 @@ impl RdbFilter {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
 
     #[test]

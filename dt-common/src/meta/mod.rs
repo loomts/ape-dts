@@ -21,3 +21,4 @@ pub mod row_type;
 pub mod struct_meta;
 pub mod syncer;
 pub mod time;
+pub mod dcl_meta;

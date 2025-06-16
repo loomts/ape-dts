@@ -318,4 +318,13 @@ impl TestBase {
             .unwrap();
         runner.close().await.unwrap();
     }
+
+    pub async fn run_dcl_test(test_dir: &str, start_millis: u64, parse_millis: u64) {
+        let runner = RdbTestRunner::new(test_dir).await.unwrap();
+        runner
+            .run_dcl_test(start_millis, parse_millis)
+            .await
+            .unwrap();
+        runner.close().await.unwrap();
+    }
 }

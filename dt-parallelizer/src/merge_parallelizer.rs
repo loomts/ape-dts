@@ -2,6 +2,7 @@ use std::{cmp, sync::Arc};
 
 use async_trait::async_trait;
 use dt_common::config::sinker_config::BasicSinkerConfig;
+use dt_common::meta::dcl_meta::dcl_data::DclData;
 use dt_common::meta::ddl_meta::ddl_data::DdlData;
 use dt_common::meta::dt_queue::DtQueue;
 use dt_common::meta::{
@@ -74,6 +75,16 @@ impl Parallelizer for MergeParallelizer {
         // ddl should always be excuted serially
         self.base_parallelizer
             .sink_ddl(vec![data], sinkers, 1, false)
+            .await
+    }
+
+    async fn sink_dcl(
+        &mut self,
+        data: Vec<DclData>,
+        sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
+    ) -> anyhow::Result<()> {
+        self.base_parallelizer
+            .sink_dcl(vec![data], sinkers, 1, false)
             .await
     }
 }
