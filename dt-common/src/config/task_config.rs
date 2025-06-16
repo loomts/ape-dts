@@ -225,6 +225,7 @@ impl TaskConfig {
                 ExtractType::Struct => ExtractorConfig::PgStruct {
                     url,
                     schema: String::new(),
+                    do_global_structs: false,
                 },
 
                 _ => bail! { not_supported_err },

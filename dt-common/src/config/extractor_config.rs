@@ -13,6 +13,7 @@ pub enum ExtractorConfig {
     PgStruct {
         url: String,
         schema: String,
+        do_global_structs: bool,
     },
 
     MysqlSnapshot {

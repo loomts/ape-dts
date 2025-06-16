@@ -235,11 +235,16 @@ impl RdbTestRunner {
         self.execute_src_sqls(&self.base.src_test_sqls).await?;
         self.base.wait_task_finish(&task).await?;
 
+        self.dcl_check_sql_execution().await?;
+
+        Ok(())
+    }
+
+    pub async fn dcl_check_sql_execution(&self) -> anyhow::Result<()> {
         self.check_sql_execution("check_with_succeed.txt", true)
             .await?;
         self.check_sql_execution("check_with_failed.txt", false)
             .await?;
-
         Ok(())
     }
 
@@ -254,7 +259,9 @@ impl RdbTestRunner {
         }
 
         let lines = BaseTestRunner::load_file(&file_path);
-        let mut pool: Option<Pool<MySql>> = None;
+        let mut mysql_pool: Option<Pool<MySql>> = None;
+        let mut pg_pool: Option<Pool<Postgres>> = None;
+        let is_mysql = self.dst_conn_pool_mysql.is_some();
 
         for line in lines {
             let line = line.trim();
@@ -267,52 +274,100 @@ impl RdbTestRunner {
                 let current_user = parts[0].trim().to_string();
                 let current_pwd = parts[1].trim().to_string();
 
-                if let Some(old_pool) = pool {
+                if let Some(old_pool) = mysql_pool.take() {
+                    old_pool.close().await;
+                }
+                if let Some(old_pool) = pg_pool.take() {
                     old_pool.close().await;
                 }
 
-                let url = &self.config.extractor_basic.url;
+                let url = &self.config.sinker_basic.url;
                 let conn_str = url.replace(
                     &url[url.find("://").unwrap() + 3..url.find('@').unwrap()],
                     &format!("{}:{}", current_user, current_pwd),
                 );
 
-                let pool_connect = Pool::connect(&conn_str).await;
-                match pool_connect {
-                    Ok(p) => {
-                        pool = Some(p);
-                    }
-                    Err(_) => {
-                        if expect_success {
-                            assert!(false, "pool connect failed, but expect success");
+                if is_mysql {
+                    let pool_connect = Pool::<MySql>::connect(&conn_str).await;
+                    match pool_connect {
+                        Ok(p) => {
+                            mysql_pool = Some(p);
                         }
-                        pool = None;
+                        Err(e) => {
+                            if expect_success {
+                                assert!(
+                                    false,
+                                    "MySQL pool connect failed: {} with user={}, password={}, but expect success",
+                                    e, current_user, current_pwd
+                                );
+                            }
+                        }
+                    }
+                } else {
+                    let pool_connect = Pool::<Postgres>::connect(&conn_str).await;
+                    match pool_connect {
+                        Ok(p) => {
+                            pg_pool = Some(p);
+                        }
+                        Err(e) => {
+                            if expect_success {
+                                assert!(
+                                    false,
+                                    "PostgreSQL pool connect failed: {} with user={}, password={}, but expect success",
+                                    e, current_user, current_pwd
+                                );
+                            }
+                        }
                     }
                 }
                 continue;
             }
 
-            if let Some(ref pool) = pool {
-                let query = sqlx::query(line);
-                let result = query.execute(pool).await;
+            if is_mysql {
+                if let Some(ref pool) = mysql_pool {
+                    let query = sqlx::query(line);
+                    let result = query.execute(pool).await;
 
-                if expect_success {
-                    assert!(
-                        result.is_ok(),
-                        "Expected success but got error: {:?}",
-                        result.err()
-                    );
-                } else {
-                    assert!(
-                        result.is_err(),
-                        "Expected error but got success, sql: {}",
-                        line
-                    );
+                    if expect_success {
+                        assert!(
+                            result.is_ok(),
+                            "Expected success but got error: {:?}",
+                            result.err()
+                        );
+                    } else {
+                        assert!(
+                            result.is_err(),
+                            "Expected error but got success, sql: {}",
+                            line
+                        );
+                    }
+                }
+            } else {
+                if let Some(ref pool) = pg_pool {
+                    let query = sqlx::query(line);
+                    let result = query.execute(pool).await;
+
+                    if expect_success {
+                        assert!(
+                            result.is_ok(),
+                            "Expected success but got error: {:?}",
+                            result.err()
+                        );
+                    } else {
+                        assert!(
+                            result.is_err(),
+                            "Expected error but got success, sql: {}",
+                            line
+                        );
+                    }
                 }
             }
         }
 
-        if let Some(pool) = pool {
+        if let Some(pool) = mysql_pool {
+            pool.close().await;
+        }
+        if let Some(pool) = pg_pool {
             pool.close().await;
         }
 

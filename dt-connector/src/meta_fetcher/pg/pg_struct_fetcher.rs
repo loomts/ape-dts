@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use anyhow::bail;
 use dt_common::meta::struct_meta::{
     statement::{
+        pg_create_rbac_statement::PgCreateRbacStatement,
         pg_create_schema_statement::PgCreateSchemaStatement,
         pg_create_table_statement::PgCreateTableStatement,
     },
@@ -11,6 +12,7 @@ use dt_common::meta::struct_meta::{
         comment::{Comment, CommentType},
         constraint::{Constraint, ConstraintType},
         index::{Index, IndexKind},
+        rbac::{PgPrivilege, PgRole, PgRoleMember},
         schema::Schema,
         sequence::Sequence,
         sequence_owner::SequenceOwner,
@@ -74,6 +76,19 @@ impl PgStructFetcher {
             results.push(statement);
         }
         Ok(results)
+    }
+
+    pub async fn get_create_rbac_statements(
+        &mut self,
+    ) -> anyhow::Result<Vec<PgCreateRbacStatement>> {
+        let roles = self.get_roles().await?;
+        let members = self.get_role_members().await?;
+        let privileges = self.get_privileges().await?;
+        Ok(vec![PgCreateRbacStatement {
+            roles,
+            members,
+            privileges,
+        }])
     }
 
     async fn get_schema(&mut self) -> anyhow::Result<Schema> {
@@ -350,7 +365,7 @@ impl PgStructFetcher {
                 Self::get_str_with_null(&row, "table_name")?,
             );
 
-            if self.filter_tb(&table_name) {
+            if self.filter_tb(&self.schema.clone(), &table_name) {
                 continue;
             }
 
@@ -608,6 +623,350 @@ impl PgStructFetcher {
         Ok(results)
     }
 
+    // temporarily not migrating superuser role
+    async fn get_roles(&mut self) -> anyhow::Result<Vec<PgRole>> {
+        let sql = "SELECT a.rolname, a.rolpassword, a.rolsuper, a.rolinherit, a.rolcreaterole, 
+                a.rolcreatedb, a.rolcanlogin, a.rolreplication, a.rolbypassrls, a.rolconnlimit, 
+                a.rolvaliduntil, r.rolconfig 
+            FROM pg_authid a
+            JOIN pg_roles r ON a.oid = r.oid
+            WHERE a.rolname NOT LIKE 'pg_%' 
+            AND a.rolname NOT IN ('postgres') 
+            AND a.oid >= 16384
+            AND r.rolsuper = false
+        ";
+
+        let mut results = Vec::new();
+        let mut rows = sqlx::query(sql).fetch(&self.conn_pool);
+
+        while let Some(row) = rows.try_next().await? {
+            let name = Self::get_str_with_null(&row, "rolname")?;
+            let password = Self::get_str_with_null(&row, "rolpassword")?;
+
+            let rol_conn_limit: i32 = row.try_get("rolconnlimit").unwrap_or(-1);
+            let rol_valid_until: Option<String> = row.try_get("rolvaliduntil").unwrap_or(None);
+
+            let rol_configs: Vec<String> = match row.try_get::<Option<Vec<String>>, _>("rolconfig")
+            {
+                Ok(Some(configs)) => configs,
+                _ => Vec::new(),
+            };
+
+            let role = PgRole {
+                name,
+                password,
+                rol_super: row.try_get("rolsuper").unwrap_or(false),
+                rol_inherit: row.try_get("rolinherit").unwrap_or(false),
+                rol_createrole: row.try_get("rolcreaterole").unwrap_or(false),
+                rol_createdb: row.try_get("rolcreatedb").unwrap_or(false),
+                rol_can_login: row.try_get("rolcanlogin").unwrap_or(false),
+                rol_replication: row.try_get("rolreplication").unwrap_or(false),
+                rol_by_passrls: row.try_get("rolbypassrls").unwrap_or(false),
+                rol_conn_limit: rol_conn_limit.to_string(),
+                rol_valid_until: rol_valid_until.unwrap_or_default(),
+                rol_configs,
+            };
+
+            results.push(role);
+        }
+
+        Ok(results)
+    }
+
+    async fn get_role_members(&mut self) -> anyhow::Result<Vec<PgRoleMember>> {
+        let sql = "SELECT 
+            m.roleid::regrole::text AS group_name,
+            m.member::regrole::text AS member_name,
+            admin_option
+        FROM 
+            pg_auth_members m 
+        WHERE 
+            m.member >= 16384";
+
+        let mut results = Vec::new();
+        let mut rows = sqlx::query(sql).fetch(&self.conn_pool);
+
+        while let Some(row) = rows.try_next().await? {
+            let role = match row.try_get::<String, _>("group_name") {
+                Ok(name) => name,
+                Err(_) => continue,
+            };
+            let member = match row.try_get::<String, _>("member_name") {
+                Ok(name) => name,
+                Err(_) => continue,
+            };
+            let admin_option = row.try_get::<bool, _>("admin_option").unwrap_or(false);
+
+            results.push(PgRoleMember {
+                role,
+                member,
+                admin_option,
+            });
+        }
+
+        Ok(results)
+    }
+
+    async fn get_privileges(&mut self) -> anyhow::Result<Vec<PgPrivilege>> {
+        let mut results = Vec::new();
+        results.extend(self.get_schema_privilege().await?);
+        results.extend(self.get_table_privilege().await?);
+        results.extend(self.get_column_privilege().await?);
+        results.extend(self.get_sequence_privilege().await?);
+        Ok(results)
+    }
+
+    async fn get_schema_privilege(&mut self) -> anyhow::Result<Vec<PgPrivilege>> {
+        let sql = format!(
+            "SELECT
+              n.nspname AS schema_name,
+              'GRANT ' || 
+              string_agg(acl.privilege_type, ',') || 
+              ' ON SCHEMA ' || quote_ident(n.nspname) || 
+              ' TO ' || quote_ident(acl.grantee::regrole::text) AS grant_command
+            FROM 
+              pg_namespace n,
+              LATERAL aclexplode(n.nspacl) AS acl
+            WHERE 
+              n.nspacl IS NOT NULL AND
+              acl.grantee != 0 AND
+              acl.grantee::regrole::text NOT LIKE 'pg_%' AND 
+              acl.grantee::regrole::text NOT IN ('postgres', 'PUBLIC')
+            GROUP BY
+              n.nspname, acl.grantee::regrole::text",
+        );
+
+        let mut results = Vec::new();
+        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+        while let Some(row) = rows.try_next().await? {
+            let grant_command = row.get::<String, _>("grant_command");
+            let schema_name = Self::get_str_with_null(&row, "schema_name")?;
+
+            if self.filter_schema(schema_name.as_str()) {
+                continue;
+            }
+
+            results.push(PgPrivilege {
+                origin: grant_command,
+            });
+        }
+
+        Ok(results)
+    }
+
+    async fn get_table_privilege(&mut self) -> anyhow::Result<Vec<PgPrivilege>> {
+        let sql = format!(
+            "SELECT 
+                table_schema,
+                table_name,
+                'GRANT ' || 
+                array_to_string(array_agg(privilege_type), ',') || 
+                ' ON ' || quote_ident(table_schema) || '.' || quote_ident(table_name) || 
+                ' TO ' || quote_ident(grantee) ||
+                CASE 
+                    WHEN is_grantable = 'YES' THEN ' WITH GRANT OPTION'
+                    ELSE ''
+                END AS grant_command
+            FROM 
+                information_schema.role_table_grants 
+            WHERE 
+                grantee NOT LIKE 'pg_%' AND 
+                grantee NOT IN ('postgres', 'PUBLIC')
+            GROUP BY 
+                table_schema, table_name, grantee, is_grantable"
+        );
+
+        let mut results = Vec::new();
+        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+        while let Some(row) = rows.try_next().await? {
+            let schema_name = Self::get_str_with_null(&row, "table_schema")?;
+            let table_name = Self::get_str_with_null(&row, "table_name")?;
+            let grant_command = Self::get_str_with_null(&row, "grant_command")?;
+
+            if self.filter_tb(&schema_name, &table_name) {
+                continue;
+            }
+
+            results.push(PgPrivilege {
+                origin: grant_command,
+            });
+        }
+
+        Ok(results)
+    }
+
+    async fn get_column_privilege(&mut self) -> anyhow::Result<Vec<PgPrivilege>> {
+        let sql = format!(
+            "SELECT 
+                rcg.table_schema,
+                rcg.table_name,
+                rcg.column_name,
+                rcg.privilege_type,
+                rcg.grantee,
+                rcg.is_grantable
+            FROM 
+                information_schema.role_column_grants rcg
+            LEFT JOIN information_schema.role_table_grants rtg ON 
+                rtg.grantee = rcg.grantee AND 
+                rtg.table_name = rcg.table_name AND 
+                rtg.table_schema = rcg.table_schema AND
+                rtg.table_catalog = rcg.table_catalog AND
+                rtg.privilege_type = rcg.privilege_type
+            WHERE 
+                rcg.grantee NOT LIKE 'pg_%' AND 
+                rcg.grantee NOT IN ('postgres', 'PUBLIC') AND
+                rtg.grantee IS NULL
+            ORDER BY
+                rcg.table_schema, rcg.table_name, rcg.grantee
+            "
+        );
+
+        let mut results = Vec::new();
+        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+
+        // key: (schema, table, grantee, is_grantable)
+        // value: (privilege_type -> columns_set)
+        let mut privilege_data: HashMap<
+            (String, String, String, String),
+            HashMap<String, HashSet<String>>,
+        > = HashMap::new();
+
+        while let Some(row) = rows.try_next().await? {
+            let schema_name = Self::get_str_with_null(&row, "table_schema")?;
+            let table_name = Self::get_str_with_null(&row, "table_name")?;
+
+            if self.filter_tb(&schema_name, &table_name) {
+                continue;
+            }
+
+            let column_name = Self::get_str_with_null(&row, "column_name")?;
+            let privilege_type = Self::get_str_with_null(&row, "privilege_type")?;
+            let grantee = Self::get_str_with_null(&row, "grantee")?;
+            let is_grantable = Self::get_str_with_null(&row, "is_grantable")?;
+
+            let key = (schema_name, table_name, grantee, is_grantable);
+
+            let privilege_map = privilege_data.entry(key).or_insert_with(|| HashMap::new());
+
+            let columns = privilege_map
+                .entry(privilege_type)
+                .or_insert_with(|| HashSet::new());
+
+            columns.insert(column_name);
+        }
+
+        for ((schema, table, grantee, is_grantable), privilege_map) in privilege_data {
+            for (privilege_type, columns) in privilege_map {
+                let mut columns_vec: Vec<String> = columns.into_iter().collect();
+                columns_vec.sort();
+
+                let quoted_columns = columns_vec
+                    .iter()
+                    .map(|col| format!("\"{}\"", col))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                let grant_option = if is_grantable == "YES" {
+                    " WITH GRANT OPTION"
+                } else {
+                    ""
+                };
+
+                // Format: GRANT SELECT (column1, column2) ON table_name TO role_name [WITH GRANT OPTION]
+                let grant_command = format!(
+                    "GRANT {} ({}) ON \"{}\".\"{}\" TO \"{}\"{}",
+                    privilege_type, quoted_columns, schema, table, grantee, grant_option
+                );
+
+                results.push(PgPrivilege {
+                    origin: grant_command,
+                });
+            }
+        }
+
+        Ok(results)
+    }
+
+    async fn get_sequence_privilege(&mut self) -> anyhow::Result<Vec<PgPrivilege>> {
+        let mut results = Vec::new();
+
+        let tables = self.get_tables("").await?;
+        let mut sequence_map: HashMap<String, HashSet<String>> = HashMap::new();
+        for table in tables.values() {
+            for column in &table.columns {
+                if let Some(ColumnDefault::Literal(default_value)) = &column.column_default {
+                    let (schema, sequence_name) =
+                        Self::get_sequence_name_by_default_value(default_value);
+                    if schema.is_empty() {
+                        continue;
+                    }
+                    if !sequence_name.is_empty() {
+                        let sequences = sequence_map.entry(schema).or_insert_with(HashSet::new);
+                        sequences.insert(sequence_name);
+                    }
+                }
+            }
+        }
+        if sequence_map.is_empty() {
+            return Ok(results);
+        }
+
+        let sql = r#"
+            SELECT grantor, grantee, object_catalog, object_schema, object_name, 
+                   object_type, privilege_type, is_grantable
+            FROM information_schema.role_usage_grants 
+            WHERE object_type = 'SEQUENCE'
+              AND grantee NOT LIKE 'pg\_%' 
+              AND grantee <> 'postgres'
+        "#;
+
+        let rows = sqlx::query(sql).fetch_all(&self.conn_pool).await?;
+        let mut privilege_data: HashMap<(String, String, String, String), HashSet<String>> =
+            HashMap::new();
+
+        for row in rows {
+            let grantee = Self::get_str_with_null(&row, "grantee")?;
+            let schema_name = Self::get_str_with_null(&row, "object_schema")?;
+            let sequence_name = Self::get_str_with_null(&row, "object_name")?;
+            let privilege_type = Self::get_str_with_null(&row, "privilege_type")?;
+            let is_grantable = Self::get_str_with_null(&row, "is_grantable")?;
+
+            if !sequence_map.contains_key(&schema_name) {
+                continue;
+            }
+
+            let key = (schema_name, sequence_name, grantee, is_grantable);
+
+            let privileges = privilege_data.entry(key).or_insert_with(HashSet::new);
+            privileges.insert(privilege_type);
+        }
+
+        for ((schema, sequence, grantee, is_grantable), privileges) in privilege_data {
+            let mut privileges_vec: Vec<String> = privileges.into_iter().collect();
+            privileges_vec.sort();
+
+            let privileges_str = privileges_vec.join(", ");
+
+            let grant_option = if is_grantable == "YES" {
+                " WITH GRANT OPTION"
+            } else {
+                ""
+            };
+
+            // format: GRANT USAGE, SELECT ON SEQUENCE schema.sequence_name TO role_name [WITH GRANT OPTION]
+            let grant_command = format!(
+                "GRANT {} ON SEQUENCE \"{}\".\"{}\" TO \"{}\"{}",
+                privileges_str, schema, sequence, grantee, grant_option
+            );
+
+            results.push(PgPrivilege {
+                origin: grant_command,
+            });
+        }
+
+        Ok(results)
+    }
+
     fn get_index_kind(&self, definition: &str) -> IndexKind {
         if definition.starts_with("CREATE UNIQUE INDEX") {
             IndexKind::Unique
@@ -691,9 +1050,16 @@ impl PgStructFetcher {
         (String::new(), String::new())
     }
 
-    fn filter_tb(&mut self, tb: &str) -> bool {
+    fn filter_tb(&mut self, schema: &str, tb: &str) -> bool {
         if let Some(filter) = &mut self.filter {
-            return filter.filter_tb(&self.schema, tb);
+            return filter.filter_tb(schema, tb);
+        }
+        false
+    }
+
+    fn filter_schema(&mut self, schema: &str) -> bool {
+        if let Some(filter) = &mut self.filter {
+            return filter.filter_schema(schema);
         }
         false
     }
@@ -704,7 +1070,7 @@ impl PgStructFetcher {
         table_name: &str,
         item: T,
     ) {
-        if self.filter_tb(table_name) {
+        if self.filter_tb(&self.schema.clone(), table_name) {
             return;
         }
 
