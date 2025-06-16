@@ -8,6 +8,7 @@ use crate::meta::struct_meta::structure::{
     structure_type::StructureType,
     table::Table,
 };
+use crate::meta::struct_meta::structure::index::IndexType;
 
 #[derive(Debug, Clone)]
 pub struct MysqlCreateTableStatement {
@@ -43,25 +44,51 @@ impl MysqlCreateTableStatement {
             sqls.push((key, Self::table_to_sql(&mut self.table)));
         }
 
-        for i in self.indexes.iter_mut() {
-            match i.index_kind {
-                IndexKind::Unique => {
-                    if filter.filter_structure(&StructureType::Table) {
-                        continue;
+        if self.indexes.len() > 0 {
+            let mut idx_appends = Vec::new();
+            for i in self.indexes.iter_mut() {
+                match i.index_kind {
+                    IndexKind::Unique => {
+                        if filter.filter_structure(&StructureType::Table) {
+                            continue;
+                        }
+                    },
+                    _ => {
+                        if filter.filter_structure(&StructureType::Index) {
+                            continue;
+                        }
                     }
                 }
-                _ => {
-                    if filter.filter_structure(&StructureType::Index) {
-                        continue;
+
+                match i.index_type {
+                    // join Btree index for same table
+                    IndexType::Btree => {
+                        idx_appends.push(Self::index_to_sql_appends(i));
+                    },
+                    _ => {
+                        let standalone_key = format!(
+                            "index.{}.{}.{}",
+                            i.database_name, i.table_name, i.index_name
+                        );
+                        sqls.push((standalone_key, Self::index_to_sql(i)))
                     }
                 }
             }
-
-            let key = format!(
-                "index.{}.{}.{}",
-                i.database_name, i.table_name, i.index_name
-            );
-            sqls.push((key, Self::index_to_sql(i)));
+            if idx_appends.len() > 0 {
+                let key = format!(
+                    "index.{}.{}",
+                    self.indexes[0].database_name, self.indexes[0].table_name
+                );
+                sqls.push((
+                    key,
+                    format!(
+                        "ALTER TABLE `{}`.`{}` {}",
+                        self.table.database_name,
+                        self.table.table_name,
+                        idx_appends.join(",")
+                    ),
+                ))
+            }
         }
 
         if !filter.filter_structure(&StructureType::Constraint) {
@@ -177,21 +204,12 @@ impl MysqlCreateTableStatement {
     }
 
     fn index_to_sql(index: &mut Index) -> String {
-        index
-            .columns
-            .sort_by(|a, b| a.seq_in_index.cmp(&b.seq_in_index));
-        let columns_sql = index
-            .columns
-            .iter()
-            .filter(|x| !x.column_name.is_empty())
-            .map(|x| format!("`{}`", x.column_name))
-            .collect::<Vec<String>>()
-            .join(",");
+        let columns_sql = Self::build_cols_for_index(index);
 
-        let mut sql = format!(
-            // no need index_type in "CREATE {} INDEX `{}` USING {IndexType}"
-            // since only BETREE supported in both InnoDB and MyISAM
-            // refer: https://dev.mysql.com/doc/refman/8.0/en/create-index.html
+        // no need index_type in "CREATE {} INDEX `{}` USING {IndexType}"
+        // since only BETREE supported in both InnoDB and MyISAM
+        // refer: https://dev.mysql.com/doc/refman/8.0/en/create-index.html
+        let mut sql: String = format!(
             "CREATE {} INDEX `{}` ON `{}`.`{}` ({}) ",
             index.index_kind, index.index_name, index.database_name, index.table_name, columns_sql
         );
@@ -201,6 +219,37 @@ impl MysqlCreateTableStatement {
         }
 
         sql
+    }
+
+    fn index_to_sql_appends(index: &mut Index) -> String {
+        let columns_sql = Self::build_cols_for_index(index);
+
+        // no need index_type in "CREATE {} INDEX `{}` USING {IndexType}"
+        // since only BETREE supported in both InnoDB and MyISAM
+        // refer: https://dev.mysql.com/doc/refman/8.0/en/create-index.html
+        let mut sql: String = format!(
+            "ADD {} INDEX `{}` ({}) ",
+            index.index_kind, index.index_name, columns_sql
+        );
+
+        if !index.comment.is_empty() {
+            sql.push_str(&format!("COMMENT '{}' ", index.comment));
+        }
+
+        sql
+    }
+
+    fn build_cols_for_index(index: &mut Index) -> String {
+        index
+            .columns
+            .sort_by(|a, b| a.seq_in_index.cmp(&b.seq_in_index));
+        index
+            .columns
+            .iter()
+            .filter(|x| !x.column_name.is_empty())
+            .map(|x| format!("`{}`", x.column_name))
+            .collect::<Vec<String>>()
+            .join(",")
     }
 
     fn constraint_to_sql(constraint: &Constraint) -> String {
