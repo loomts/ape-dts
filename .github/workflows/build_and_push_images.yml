@@ -3,10 +3,6 @@ name: Build and push images
 on:
   workflow_dispatch:
     inputs:
-      branch:
-        required: true
-        type: string
-        default: main
       docker_repository:
         required: true
         type: string
@@ -27,8 +23,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.branch }}
 
       - name: Set up rust
         uses: dtolnay/rust-toolchain@stable

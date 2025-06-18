@@ -3,10 +3,6 @@ name: Build and release
 on:
   workflow_dispatch:
     inputs:
-      branch:
-        required: true
-        type: string
-        default: main
       tag_name:
         required: true
         type: string
@@ -29,8 +25,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.branch }}
 
       - name: Get Release Upload URL
         id: get_upload_url
