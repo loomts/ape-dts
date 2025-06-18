@@ -31,10 +31,7 @@ jobs:
           ref: ${{ inputs.branch }}
 
       - name: Set up rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Install cross
         run: cargo install cross

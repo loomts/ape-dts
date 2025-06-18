@@ -1,3 +1,7 @@
+## Unstable Features
+
+> ⚠️ **Stability Warning**: Unstable features may change or be removed without notice. They are not subject to semantic versioning guarantees.
+
 # 启动 ape_dts 为 HTTP server 并提供数据给消费者
 
 参考 [教程](/docs/en/tutorial/mysql_to_http_server_consumer.md)
@@ -9,11 +13,13 @@ ape_dts 启动为 HTTP server，根据用户配置，拉取 MySQL/Postgres 的�
 # Api
 
 ## info
+
 获取 server 当前信息。
 
 curl "http://127.0.0.1:10231/info"
 
 ### 返回值
+
 ```
 {"acked_batch_id":0,"sent_batch_id":0}
 ```
@@ -23,17 +29,18 @@ curl "http://127.0.0.1:10231/info"
 - acked_batch_id：客户端已确认消费的最大 batch_id，确认过的数据将从 ape_dts 的缓存中清除。
 
 ## fetch_new
+
 从 server 获取新数据。
 
 curl "http://127.0.0.1:10231/fetch_new?batch_size=2&ack_batch_id=1"
 
 ### 参数
+
 - batch_size：一次最多拉取数据条数，如果 ape_dts 缓存不足，则返回全部数据。
 - ack_batch_id：可选。
-    - 如果设置，表示在拉取新数据时，通知 ape_dts 将 ack_batch_id 及之前的数据标为消费完成。
-    - ack_batch_id 必须 >= info 返回的 acked_batch_id。
-    - ack_batch_id 必须 <= info 返回的 sent_batch_id。
-
+  - 如果设置，表示在拉取新数据时，通知 ape_dts 将 ack_batch_id 及之前的数据标为消费完成。
+  - ack_batch_id 必须 >= info 返回的 acked_batch_id。
+  - ack_batch_id 必须 <= info 返回的 sent_batch_id。
 
 ### 返回值
 
@@ -53,8 +60,8 @@ curl "http://127.0.0.1:10232/fetch_old?old_batch_id=1"
 ### 参数
 
 - old_batch_id：要获取的旧数据的 batch_id。
-    - old_batch_id 必须 <= info 返回的 sent_batch_id。
-    - old_batch_id 必须 > info 返回的 acked_batch_id，因为小于 acked_batch_id 的数据已被 ape_dts 从缓存中清除。
+  - old_batch_id 必须 <= info 返回的 sent_batch_id。
+  - old_batch_id 必须 > info 返回的 acked_batch_id，因为小于 acked_batch_id 的数据已被 ape_dts 从缓存中清除。
 
 ### 返回值
 
@@ -75,12 +82,12 @@ curl -X POST "http://127.0.0.1:10232/ack" -H "Content-Type: application/json" -d
 - ack_batch_id：和 fetch_new 的参数 ack_batch_id 相同。
 
 ### 返回值
+
 ```
 {"acked_batch_id":1}
 ```
 
 - acked_batch_id：和 info 返回值 acked_batch_id 相同。
-
 
 # 解析及消费
 

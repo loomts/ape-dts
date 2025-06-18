@@ -1,4 +1,4 @@
-name: Build and release 
+name: Build and release
 
 on:
   workflow_dispatch:
@@ -7,10 +7,10 @@ on:
         required: true
         type: string
         default: main
-      tag_name: 
+      tag_name:
         required: true
         type: string
-        default: 
+        default:
       targets:
         description: 'JSON array of target platforms to build [{"os": "ubuntu-latest", "target": "x86_64-unknown-linux-gnu"}, ...]'
         required: true
@@ -23,7 +23,7 @@ jobs:
 
     strategy:
       fail-fast: false
-      matrix: 
+      matrix:
         include: ${{ fromJson(inputs.targets) }}
 
     steps:
@@ -57,7 +57,7 @@ jobs:
         run: |
           cargo install cross
           cross build --release --target=${{ matrix.target }}
-      
+
       - name: Local build
         if: matrix.target == 'x86_64-apple-darwin'
         run: |
