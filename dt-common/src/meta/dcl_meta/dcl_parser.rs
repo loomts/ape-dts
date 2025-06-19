@@ -49,7 +49,7 @@ impl DclParser {
         regex.replace_all(sql, "")
     }
 
-    fn sql_query<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DclData> {
+    fn sql_query<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DclData> {
         alt((
             |i| self.create_user(i),
             |i| self.alter_user(i),
@@ -62,7 +62,7 @@ impl DclParser {
         ))(i)
     }
 
-    fn create_user<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DclData> {
+    fn create_user<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DclData> {
         let _ = tuple((
             tag_no_case("create"),
             multispace1,
@@ -82,7 +82,7 @@ impl DclParser {
         Ok((&[], dcl))
     }
 
-    fn alter_user<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DclData> {
+    fn alter_user<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DclData> {
         let _ = tuple((
             tag_no_case("alter"),
             multispace1,
@@ -102,7 +102,7 @@ impl DclParser {
         Ok((&[], dcl))
     }
 
-    fn create_role<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DclData> {
+    fn create_role<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DclData> {
         let _ = tuple((
             tag_no_case("create"),
             multispace1,
@@ -122,7 +122,7 @@ impl DclParser {
         Ok((&[], dcl))
     }
 
-    fn drop_user<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DclData> {
+    fn drop_user<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DclData> {
         let _ = tuple((
             tag_no_case("drop"),
             multispace1,
@@ -142,7 +142,7 @@ impl DclParser {
         Ok((&[], dcl))
     }
 
-    fn drop_role<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DclData> {
+    fn drop_role<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DclData> {
         let _ = tuple((
             tag_no_case("drop"),
             multispace1,
@@ -162,7 +162,7 @@ impl DclParser {
         Ok((&[], dcl))
     }
 
-    fn grant<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DclData> {
+    fn grant<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DclData> {
         let (remaining_input, _) = tuple((tag_no_case("grant"), multispace1))(i)?;
 
         let statement = OriginStatement {
@@ -178,7 +178,7 @@ impl DclParser {
         Ok((remaining_input, dcl))
     }
 
-    fn revoke<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DclData> {
+    fn revoke<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DclData> {
         let (remaining_input, _) = tuple((tag_no_case("revoke"), multispace1))(i)?;
 
         let statement = OriginStatement {
@@ -194,7 +194,7 @@ impl DclParser {
         Ok((remaining_input, dcl))
     }
 
-    fn set_role<'a>(&'a self, i: &'a [u8]) -> IResult<&[u8], DclData> {
+    fn set_role<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DclData> {
         let _ = tuple((
             tag_no_case("set"),
             multispace1,

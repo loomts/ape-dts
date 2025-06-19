@@ -143,7 +143,7 @@
 ## 编译
 
 - Minimum supported Rust version (MSRV)
-  当前支持的最低 Rust 版本 (MSRV) 是 1.82.0。
+  当前支持的最低 Rust 版本 (MSRV) 是 1.85.0。
 - cargo build
 - [生成镜像](./docs/en/build_images.md)
 
