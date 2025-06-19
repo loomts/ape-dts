@@ -3,10 +3,6 @@ name: Build and upload to S3
 on:
   workflow_dispatch:
     inputs:
-      branch:
-        required: true
-        type: string
-        default: main
       aws_endpoint:
         required: true
         type: string
@@ -27,17 +23,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.branch }}
 
       - name: Set up rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
+        uses: dtolnay/rust-toolchain@1.85.0
 
       - name: Install cross
-        run: cargo install cross
+        run: cargo install cross --version 0.2.5
 
       - name: Build for x86_64
         run: cross build --target x86_64-unknown-linux-gnu --release

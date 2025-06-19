@@ -1,16 +1,12 @@
-name: Build and release 
+name: Build and release
 
 on:
   workflow_dispatch:
     inputs:
-      branch:
+      tag_name:
         required: true
         type: string
-        default: main
-      tag_name: 
-        required: true
-        type: string
-        default: 
+        default:
       targets:
         description: 'JSON array of target platforms to build [{"os": "ubuntu-latest", "target": "x86_64-unknown-linux-gnu"}, ...]'
         required: true
@@ -23,14 +19,12 @@ jobs:
 
     strategy:
       fail-fast: false
-      matrix: 
+      matrix:
         include: ${{ fromJson(inputs.targets) }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.branch }}
 
       - name: Get Release Upload URL
         id: get_upload_url
@@ -47,7 +41,7 @@ jobs:
           echo "UPLOAD_URL=${upload_url}" >> $GITHUB_ENV
 
       - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.85.0
 
       # Build linux targets by cross, otherwise there may be runtime errors when running on other linux versions:
       # ./ape-dts: /lib/x86_64-linux-gnu/libm.so.6: version `GLIBC_2.38' not found (required by ./ape-dts)
@@ -55,9 +49,9 @@ jobs:
       - name: Cross build
         if: matrix.target == 'x86_64-unknown-linux-gnu' || matrix.target == 'aarch64-unknown-linux-gnu' || matrix.target == 'x86_64-pc-windows-gnu'
         run: |
-          cargo install cross
+          cargo install cross --version 0.2.5
           cross build --release --target=${{ matrix.target }}
-      
+
       - name: Local build
         if: matrix.target == 'x86_64-apple-darwin'
         run: |

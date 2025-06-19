@@ -129,6 +129,10 @@ else
 	$(DOCKER) buildx build --platform ${PLATFORMS} --tag $(IMG):$(IMG_TAG) $(DOCKER_BUILD_ARGS) .
 endif
 
+.PHONY: docker-build-local
+docker-build-local: ## Build docker image locally without buildx
+	docker build --tag $(IMG):$(IMG_TAG) --build-arg MODULE_NAME=$(MODULE_NAME) --build-arg APT_MIRROR=$(APT_MIRROR) .
+
 .PHONY: docker-push
 docker-push: docker-build ## Push docker image.
 ifneq ($(BUILDX_ENABLED), true)
