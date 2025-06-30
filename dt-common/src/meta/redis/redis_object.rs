@@ -55,7 +55,7 @@ impl RedisObject {
 #[derive(Debug, Clone)]
 pub struct HashObject {
     pub key: RedisString,
-    pub value: HashMap<RedisString, RedisString>,
+    pub value: HashMap<RedisString, (RedisString, Option<RedisString>)>,
 }
 
 impl HashObject {
@@ -303,7 +303,11 @@ impl RedisObject {
             RedisObject::Hash(v) => {
                 let mut size = 0;
                 for (key, value) in v.value.iter() {
-                    size += key.bytes.len() + value.bytes.len();
+                    let (hash_value, expire) = value;
+                    size += key.bytes.len() + hash_value.bytes.len() + 8;
+                    if expire.is_some() {
+                        size += 8;
+                    }
                 }
                 size + v.key.bytes.len()
             }

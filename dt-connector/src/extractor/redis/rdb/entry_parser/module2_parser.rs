@@ -1,5 +1,6 @@
 use anyhow::bail;
 use dt_common::error::Error;
+use dt_common::log_info;
 use dt_common::meta::redis::redis_object::{ModuleObject, RedisString};
 
 use crate::extractor::redis::rdb::reader::rdb_reader::RdbReader;
@@ -24,11 +25,11 @@ impl ModuleParser {
 
         let module_id = reader.read_length()?;
         let module_name = Self::module_type_name_by_id(module_id);
-        // Not supported
-        bail! {Error::RedisRdbError(format!(
-            "unsupported module type: [{}]",
-            module_name
-        ))}
+
+        log_info!("load module2 type: [{}] with raw", module_name);
+        Self::skip_module_data(reader)?;
+
+        return Ok(ModuleObject::new());
     }
 
     pub fn module_type_name_by_id(module_id: u64) -> String {
@@ -41,5 +42,32 @@ impl ModuleParser {
             module_id >>= 6;
         }
         String::from_utf8(name_list).unwrap()
+    }
+
+    fn skip_module_data(reader: &mut RdbReader) -> anyhow::Result<()> {
+        let mut opcode = reader.read_length()?;
+        while opcode != 0 {
+            match opcode {
+                1 | 2 => {
+                    reader.read_length()?;
+                }
+                3 => {
+                    reader.read_float()?;
+                }
+                4 => {
+                    reader.read_double()?;
+                }
+                5 => {
+                    reader.read_string()?;
+                }
+                _ => {
+                    bail! {Error::RedisRdbError(format!(
+                        "unknown module opcode: {}", opcode
+                    ))}
+                }
+            }
+            opcode = reader.read_length()?;
+        }
+        Ok(())
     }
 }

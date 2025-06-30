@@ -42,7 +42,11 @@ impl EntryParser {
             super::RDB_TYPE_HASH
             | super::RDB_TYPE_HASH_ZIPMAP
             | super::RDB_TYPE_HASH_ZIPLIST
-            | super::RDB_TYPE_HASH_LISTPACK => {
+            | super::RDB_TYPE_HASH_LISTPACK
+            | super::RDB_TYPE_HASH_METADATA_PRE_GA
+            | super::RDB_TYPE_HASH_LISTPACK_EX_PRE_GA
+            | super::RDB_TYPE_HASH_METADATA
+            | super::RDB_TYPE_HASH_LISTPACK_EX => {
                 RedisObject::Hash(HashParser::load_from_buffer(reader, key, type_byte)?)
             }
 
