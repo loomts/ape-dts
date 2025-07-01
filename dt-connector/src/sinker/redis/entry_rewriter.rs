@@ -272,12 +272,23 @@ impl EntryRewriter {
     pub fn rewrite_hash(obj: &mut HashObject) -> anyhow::Result<Vec<RedisCmd>> {
         let mut cmds = vec![];
         for (k, v) in &obj.value {
+            let (value, expire) = v;
             let mut cmd = RedisCmd::new();
             cmd.add_str_arg("hset");
             cmd.add_redis_arg(&obj.key);
             cmd.add_redis_arg(k);
-            cmd.add_redis_arg(v);
+            cmd.add_redis_arg(value);
             cmds.push(cmd);
+            if let Some(expire) = expire {
+                let mut expire_cmd = RedisCmd::new();
+                expire_cmd.add_str_arg("hpexpireat");
+                expire_cmd.add_redis_arg(&obj.key);
+                expire_cmd.add_str_arg(&expire.to_string());
+                expire_cmd.add_str_arg("fields");
+                expire_cmd.add_str_arg("1");
+                expire_cmd.add_redis_arg(k);
+                cmds.push(expire_cmd);
+            }
         }
         Ok(cmds)
     }

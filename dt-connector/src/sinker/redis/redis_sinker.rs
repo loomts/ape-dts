@@ -148,6 +148,7 @@ impl RedisSinker {
                         RedisObject::Zset(ref mut obj) => EntryRewriter::rewrite_zset(obj),
                         RedisObject::Stream(ref mut obj) => Ok(obj.cmds.drain(..).collect()),
                         RedisObject::Module(_) => {
+                            // TODO: support rewrite some 8.0+ major module2 types, such as: JSON, Bloom, CountMinSketch, TDigest, TopK, TimeSeries
                             let cmd = EntryRewriter::rewrite_as_restore(entry, self.version)?;
                             Ok(vec![cmd])
                         }

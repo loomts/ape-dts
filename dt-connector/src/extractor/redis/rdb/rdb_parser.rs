@@ -1,23 +1,23 @@
 use anyhow::bail;
-use dt_common::meta::redis::{redis_entry::RedisEntry, redis_object::RedisCmd};
-use dt_common::{error::Error, log_debug, log_info};
 use sqlx::types::chrono;
 
-use crate::extractor::redis::{rdb::entry_parser::module2_parser::ModuleParser, StreamReader};
-
 use super::{entry_parser::entry_parser::EntryParser, reader::rdb_reader::RdbReader};
+use crate::extractor::redis::{rdb::entry_parser::module2_parser::ModuleParser, StreamReader};
+use dt_common::meta::redis::{redis_entry::RedisEntry, redis_object::RedisCmd};
+use dt_common::{error::Error, log_debug, log_info};
 
-const _K_FLAG_FUNCTION2: u8 = 245; // function library data
-const _K_FLAG_FUNCTION: u8 = 246; // old function library data for 7.0 rc1 and rc2
-const K_FLAG_MODULE_AUX: u8 = 247; // Module auxiliary data.
-const K_FLAG_IDLE: u8 = 0xf8; // LRU idle time.
-const K_FLAG_FREQ: u8 = 0xf9; // LFU frequency.
-const K_FLAG_AUX: u8 = 0xfa; // RDB aux field.
-const K_FLAG_RESIZE_DB: u8 = 0xfb; // Hash table resize hint.
-const K_FLAG_EXPIRE_MS: u8 = 0xfc; // Expire time in milliseconds.
-const K_FLAG_EXPIRE: u8 = 0xfd; // Old expire time in seconds.
-const K_FLAG_SELECT: u8 = 0xfe; // DB number of the following keys.
-const K_EOF: u8 = 0xff; // End of the RDB file.
+const K_FLAG_SLOT_INFO: u8 = 0xf4; // (244) (Redis 7.4+) RDB_OPCODE_SLOT_INFO: slot info
+const _K_FLAG_FUNCTION2: u8 = 0xf5; // (245) function library data
+const _K_FLAG_FUNCTION: u8 = 0xf6; // (246) old function library data for 7.0 rc1 and rc2
+const K_FLAG_MODULE_AUX: u8 = 0xf7; // (247) Module auxiliary data.
+const K_FLAG_IDLE: u8 = 0xf8; // (248) LRU idle time.
+const K_FLAG_FREQ: u8 = 0xf9; // (249) LFU frequency.
+const K_FLAG_AUX: u8 = 0xfa; // (250) RDB aux field.
+const K_FLAG_RESIZE_DB: u8 = 0xfb; // (251) Hash table resize hint.
+const K_FLAG_EXPIRE_MS: u8 = 0xfc; // (252) Expire time in milliseconds.
+const K_FLAG_EXPIRE: u8 = 0xfd; // (253) Old expire time in seconds.
+const K_FLAG_SELECT: u8 = 0xfe; // (254) DB number of the following keys.
+const K_EOF: u8 = 0xff; // (255) End of the RDB file.
 
 const RDB_MODULE_OPCODE_EOF: u64 = 0; // End of module value.
 const RDB_MODULE_OPCODE_SINT: u64 = 1; // Signed integer.
@@ -57,6 +57,11 @@ impl RdbParser<'_> {
         log_debug!("rdb type_byte: {}", type_byte);
 
         match type_byte {
+            K_FLAG_SLOT_INFO => {
+                self.reader.read_length()?; // slot id
+                self.reader.read_length()?; // slot size
+                self.reader.read_length()?; // expires slot size
+            }
             K_FLAG_MODULE_AUX => {
                 let module_id = self.reader.read_length()?; // module id
                 let module_name = ModuleParser::module_type_name_by_id(module_id);

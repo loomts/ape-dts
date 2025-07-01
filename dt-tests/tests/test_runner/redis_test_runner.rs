@@ -178,9 +178,20 @@ impl RedisTestRunner {
         let mut set_keys = Vec::new();
         let mut zset_keys = Vec::new();
 
+        // json
         let mut json_keys = Vec::new();
+        // bloom filter
         let mut bf_bloom_keys = Vec::new();
+        // cuckoo filter
         let mut cf_bloom_keys = Vec::new();
+        // count min sketch
+        let mut cmsk_keys = Vec::new();
+        // tdigest
+        let mut tdigest_keys = Vec::new();
+        // topk
+        let mut topk_keys = Vec::new();
+        // time series
+        let mut tsdb_keys = Vec::new();
 
         let keys = self.redis_util.list_keys(&mut self.src_conn, "*");
         for i in keys.iter() {
@@ -201,6 +212,10 @@ impl RedisTestRunner {
                 "rejson-rl" => json_keys.push(key),
                 "mbbloom--" => bf_bloom_keys.push(key),
                 "mbbloomcf" => cf_bloom_keys.push(key),
+                "cmsk-type" => cmsk_keys.push(key),
+                "tdis-type" => tdigest_keys.push(key),
+                "topk-type" => topk_keys.push(key),
+                "tsdb-type" => tsdb_keys.push(key),
                 _ => {
                     println!("unknown type: {} for key: {}", key_type, key);
                     string_keys.push(key)
@@ -217,6 +232,10 @@ impl RedisTestRunner {
         self.compare_rejson_entries(db, &json_keys);
         self.compare_bf_bloom_entries(db, &bf_bloom_keys);
         self.compare_cf_bloom_entries(db, &cf_bloom_keys);
+        self.compare_cmsk_entries(db, &cmsk_keys);
+        self.compare_tdigest_entries(db, &tdigest_keys);
+        self.compare_topk_entries(db, &topk_keys);
+        self.compare_tsdb_entries(db, &tsdb_keys);
         self.check_expire(&keys);
         Ok(())
     }
@@ -324,6 +343,37 @@ impl RedisTestRunner {
     fn compare_cf_bloom_entries(&mut self, db: &str, keys: &Vec<String>) {
         for key in keys {
             let cmd = format!("CF.DEBUG {}", self.redis_util.escape_key(key));
+            self.compare_cmd_results(&cmd, db, key);
+        }
+    }
+
+    fn compare_cmsk_entries(&mut self, db: &str, keys: &Vec<String>) {
+        for key in keys {
+            let cmd = format!("CMS.INFO {}", self.redis_util.escape_key(key));
+            self.compare_cmd_results(&cmd, db, key);
+        }
+    }
+
+    fn compare_tdigest_entries(&mut self, db: &str, keys: &Vec<String>) {
+        for key in keys {
+            let cmd = format!(
+                "TDIGEST.QUANTILE {} 0.1 0.25 0.5 0.75 0.9 0.95 0.99",
+                self.redis_util.escape_key(key)
+            );
+            self.compare_cmd_results(&cmd, db, key);
+        }
+    }
+
+    fn compare_topk_entries(&mut self, db: &str, keys: &Vec<String>) {
+        for key in keys {
+            let cmd = format!("TOPK.LIST {} WITHCOUNT", self.redis_util.escape_key(key));
+            self.compare_cmd_results(&cmd, db, key);
+        }
+    }
+
+    fn compare_tsdb_entries(&mut self, db: &str, keys: &Vec<String>) {
+        for key in keys {
+            let cmd = format!("TS.RANGE {} - +", self.redis_util.escape_key(key));
             self.compare_cmd_results(&cmd, db, key);
         }
     }

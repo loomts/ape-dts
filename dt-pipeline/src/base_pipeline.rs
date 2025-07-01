@@ -352,6 +352,7 @@ impl BasePipeline {
         if !matches!(last_commit_position, Position::None) {
             self.syncer.lock().unwrap().committed_position = last_commit_position.to_owned();
         }
+
         Instant::now()
     }
 }

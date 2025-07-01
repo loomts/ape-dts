@@ -1,5 +1,18 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
+
+use super::redis_client::RedisClient;
 use anyhow::bail;
 use async_trait::async_trait;
+
+use crate::extractor::base_extractor::BaseExtractor;
+use crate::extractor::redis::rdb::rdb_parser::RdbParser;
+use crate::extractor::redis::rdb::reader::rdb_reader::RdbReader;
+use crate::extractor::redis::redis_resp_types::Value;
+use crate::extractor::redis::StreamReader;
+use crate::extractor::resumer::cdc_resumer::CdcResumer;
+use crate::Extractor;
 use dt_common::config::config_enums::{DbType, ExtractType};
 use dt_common::config::config_token_parser::ConfigTokenParser;
 use dt_common::meta::dt_data::DtData;
@@ -12,20 +25,6 @@ use dt_common::utils::sql_util::SqlUtil;
 use dt_common::utils::time_util::TimeUtil;
 use dt_common::{error::Error, log_info};
 use dt_common::{log_debug, log_error, log_position, log_warn};
-
-use crate::extractor::base_extractor::BaseExtractor;
-use crate::extractor::redis::rdb::rdb_parser::RdbParser;
-use crate::extractor::redis::rdb::reader::rdb_reader::RdbReader;
-use crate::extractor::redis::redis_resp_types::Value;
-
-use crate::extractor::redis::StreamReader;
-use crate::extractor::resumer::cdc_resumer::CdcResumer;
-use crate::Extractor;
-
-use super::redis_client::RedisClient;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 pub struct RedisPsyncExtractor {
     pub base_extractor: BaseExtractor,
@@ -209,11 +208,11 @@ impl RedisPsyncExtractor {
         let position = Position::Redis {
             repl_id: self.repl_id.clone(),
             repl_port: self.repl_port,
-            repl_offset: self.repl_offset,
+            repl_offset: self.repl_offset + 1,
             now_db_id: parser.now_db_id,
             timestamp: String::new(),
         };
-        log_position!("current_position | {}", position.to_string());
+        log_position!("start_aof_position | {}", position.to_string());
         Ok(())
     }
 
