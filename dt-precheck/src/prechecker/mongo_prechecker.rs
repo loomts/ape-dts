@@ -11,7 +11,7 @@ use crate::{
 
 use super::traits::Prechecker;
 
-const MONGO_SUPPORTED_VERSION_REGEX: &str = r"5.*|6.0.*";
+const MONGO_SUPPORTED_VERSION_REGEX: &str = r"4.*|5.0.*|6.0.*|7.0.*";
 
 pub struct MongoPrechecker {
     pub fetcher: MongoFetcher,

@@ -16,7 +16,6 @@ use crate::{
 use super::{basic::BasicPrechecker, traits::Prechecker};
 
 const PG_SUPPORT_DB_VERSION_NUM_MIN: i32 = 120000;
-const PG_SUPPORT_DB_VERSION_NUM_MAX: i32 = 169999;
 
 pub struct PostgresqlPrechecker {
     pub fetcher: PgFetcher,
@@ -54,9 +53,7 @@ impl Prechecker for PostgresqlPrechecker {
                     check_error = Some(anyhow::Error::msg("found no version info"));
                 } else {
                     let version_i32: i32 = version.parse().unwrap();
-                    if !(PG_SUPPORT_DB_VERSION_NUM_MIN..=PG_SUPPORT_DB_VERSION_NUM_MAX)
-                        .contains(&version_i32)
-                    {
+                    if version_i32 < PG_SUPPORT_DB_VERSION_NUM_MIN {
                         check_error = Some(anyhow::Error::msg(format!(
                             "version:{} is not supported yet",
                             version_i32
