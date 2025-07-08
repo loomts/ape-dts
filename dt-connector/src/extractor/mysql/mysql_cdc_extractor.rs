@@ -1,38 +1,17 @@
-use anyhow::bail;
-use async_recursion::async_recursion;
-use async_trait::async_trait;
-use sqlx::{mysql::MySqlArguments, query::Query, MySql, Pool};
 use std::{
     cmp,
     collections::HashMap,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
-    },
-    time::Instant,
-};
-
-use dt_common::{
-    log_debug, log_warn,
-    meta::{
-        adaptor::mysql_col_value_convertor::MysqlColValueConvertor, col_value::ColValue,
-        dt_data::DtData, mysql::mysql_meta_manager::MysqlMetaManager, position::Position,
-        row_data::RowData, row_type::RowType, syncer::Syncer,
-    },
-};
-use mysql_binlog_connector_rust::{
-    binlog_client::BinlogClient,
-    command::gtid_set::GtidSet,
-    event::{
-        event_data::EventData, event_header::EventHeader, query_event::QueryEvent,
-        row_event::RowEvent, table_map_event::TableMapEvent,
+        Arc,
     },
 };
 
-use dt_common::{
-    config::config_enums::DbType, error::Error, log_error, log_info, rdb_filter::RdbFilter,
-    utils::time_util::TimeUtil,
-};
+use anyhow::bail;
+use async_recursion::async_recursion;
+use async_trait::async_trait;
+use sqlx::{mysql::MySqlArguments, query::Query, MySql, Pool};
+use tokio::{sync::Mutex, time::Instant};
 
 use crate::{
     close_conn_pool,
@@ -41,6 +20,26 @@ use crate::{
         resumer::cdc_resumer::CdcResumer,
     },
     Extractor,
+};
+use dt_common::{
+    config::config_enums::DbType,
+    error::Error,
+    log_debug, log_error, log_info, log_warn,
+    meta::{
+        adaptor::mysql_col_value_convertor::MysqlColValueConvertor, col_value::ColValue,
+        dt_data::DtData, mysql::mysql_meta_manager::MysqlMetaManager, position::Position,
+        row_data::RowData, row_type::RowType, syncer::Syncer,
+    },
+    rdb_filter::RdbFilter,
+    utils::time_util::TimeUtil,
+};
+use mysql_binlog_connector_rust::{
+    binlog_client::BinlogClient,
+    command::gtid_set::GtidSet,
+    event::{
+        event_data::EventData, event_header::EventHeader, query_event::QueryEvent,
+        row_event::RowEvent, table_map_event::TableMapEvent,
+    },
 };
 
 pub struct MysqlCdcExtractor {
@@ -371,48 +370,42 @@ impl MysqlCdcExtractor {
         }
 
         if !self.filter.filter_all_dcl() {
-            match self
+            if let Ok(dcl_data) = self
                 .base_extractor
                 .parse_dcl(&DbType::Mysql, &query.schema, &query.query)
                 .await
             {
-                Ok(dcl_data) => {
-                    if !self.filter.filter_dcl(&dcl_data.dcl_type) {
-                        self.base_extractor
-                            .push_dcl(dcl_data.clone(), position.clone())
-                            .await?;
-                    }
-                    return Ok(());
+                if !self.filter.filter_dcl(&dcl_data.dcl_type) {
+                    self.base_extractor
+                        .push_dcl(dcl_data.clone(), position.clone())
+                        .await?;
                 }
-                Err(_) => {}
+                return Ok(());
             }
         }
 
         if !self.filter.filter_all_ddl() {
-            match self
+            if let Ok(ddl_data) = self
                 .base_extractor
                 .parse_ddl(&DbType::Mysql, &query.schema, &query.query)
                 .await
             {
-                Ok(ddl_data) => {
-                    for sub_ddl_data in ddl_data.clone().split_to_multi() {
-                        let (db, tb) = sub_ddl_data.get_schema_tb();
-                        // invalidate metadata cache
-                        self.meta_manager.invalidate_cache(&db, &tb);
-                        if !self.filter.filter_ddl(&db, &tb, &sub_ddl_data.ddl_type) {
-                            self.base_extractor
-                                .push_ddl(sub_ddl_data.clone(), position.clone())
-                                .await?;
-                        }
+                for sub_ddl_data in ddl_data.clone().split_to_multi() {
+                    let (db, tb) = sub_ddl_data.get_schema_tb();
+                    // invalidate metadata cache
+                    self.meta_manager.invalidate_cache(&db, &tb);
+                    if !self.filter.filter_ddl(&db, &tb, &sub_ddl_data.ddl_type) {
+                        self.base_extractor
+                            .push_ddl(sub_ddl_data.clone(), position.clone())
+                            .await?;
                     }
-
-                    if let Some(meta_center) = &mut self.meta_manager.meta_center {
-                        meta_center.sync_from_ddl(&ddl_data).await?;
-                    }
-
-                    return Ok(());
                 }
-                Err(_) => {}
+
+                if let Some(meta_center) = &mut self.meta_manager.meta_center {
+                    meta_center.sync_from_ddl(&ddl_data).await?;
+                }
+
+                return Ok(());
             }
         }
 
@@ -482,7 +475,7 @@ impl MysqlCdcExtractor {
                 next_event_position,
                 timestamp,
                 ..
-            } = &syncer.lock().unwrap().received_position
+            } = &syncer.lock().await.received_position
             {
                 (
                     binlog_filename.to_owned(),
@@ -499,7 +492,7 @@ impl MysqlCdcExtractor {
                 next_event_position,
                 timestamp,
                 ..
-            } = &syncer.lock().unwrap().committed_position
+            } = &syncer.lock().await.committed_position
             {
                 (
                     binlog_filename.to_owned(),

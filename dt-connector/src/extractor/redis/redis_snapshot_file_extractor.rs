@@ -1,5 +1,5 @@
-use std::fs::{self, File};
-use std::io::Read;
+use async_trait::async_trait;
+use tokio::{fs::metadata, fs::File, io::AsyncReadExt};
 
 use super::StreamReader;
 use crate::extractor::base_extractor::BaseExtractor;
@@ -7,7 +7,6 @@ use crate::extractor::redis::rdb::rdb_parser::RdbParser;
 use crate::extractor::redis::rdb::reader::rdb_reader::RdbReader;
 use crate::extractor::redis::redis_psync_extractor::RedisPsyncExtractor;
 use crate::Extractor;
-use async_trait::async_trait;
 use dt_common::log_info;
 use dt_common::meta::position::Position;
 use dt_common::rdb_filter::RdbFilter;
@@ -25,8 +24,12 @@ struct RdbFileReader {
 #[async_trait]
 impl Extractor for RedisSnapshotFileExtractor {
     async fn extract(&mut self) -> anyhow::Result<()> {
-        let file = File::open(&self.file_path).expect("rdb file not found");
-        let metadata = fs::metadata(&self.file_path).expect("rdb file with wrong meta");
+        let file = File::open(&self.file_path)
+            .await
+            .expect("rdb file not found");
+        let metadata = metadata(&self.file_path)
+            .await
+            .expect("rdb file with wrong meta");
         let mut file_reader = RdbFileReader { file };
         let mut stream_reader: Box<&mut (dyn StreamReader + Send)> = Box::new(&mut file_reader);
 
@@ -48,11 +51,11 @@ impl Extractor for RedisSnapshotFileExtractor {
             is_end: false,
         };
 
-        let version = parser.load_meta()?;
+        let version = parser.load_meta().await?;
         log_info!("source redis version: {:?}", version);
 
         loop {
-            if let Some(entry) = parser.load_entry()? {
+            if let Some(entry) = parser.load_entry().await? {
                 RedisPsyncExtractor::push_to_buf(
                     &mut self.base_extractor,
                     &mut self.filter,
@@ -74,10 +77,11 @@ impl Extractor for RedisSnapshotFileExtractor {
     }
 }
 
+#[async_trait]
 impl StreamReader for RdbFileReader {
-    fn read_bytes(&mut self, size: usize) -> anyhow::Result<Vec<u8>> {
+    async fn read_bytes(&mut self, size: usize) -> anyhow::Result<Vec<u8>> {
         let mut buf = vec![0; size];
-        self.file.read_exact(&mut buf)?;
+        self.file.read_exact(&mut buf).await?;
         Ok(buf)
     }
 }

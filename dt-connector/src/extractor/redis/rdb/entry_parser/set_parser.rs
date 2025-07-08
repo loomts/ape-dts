@@ -10,8 +10,8 @@ use crate::extractor::redis::{rdb::reader::rdb_reader::RdbReader, StreamReader};
 pub struct SetParser {}
 
 impl SetParser {
-    pub fn load_from_buffer(
-        reader: &mut RdbReader,
+    pub async fn load_from_buffer(
+        reader: &mut RdbReader<'_>,
         key: RedisString,
         type_byte: u8,
     ) -> anyhow::Result<SetObject> {
@@ -19,9 +19,9 @@ impl SetParser {
         obj.key = key;
 
         match type_byte {
-            super::RDB_TYPE_SET => Self::read_str_set(&mut obj, reader)?,
-            super::RDB_TYPE_SET_INTSET => Self::read_int_set(&mut obj, reader)?,
-            super::RDB_TYPE_SET_LISTPACK => obj.elements = reader.read_list_pack()?,
+            super::RDB_TYPE_SET => Self::read_str_set(&mut obj, reader).await?,
+            super::RDB_TYPE_SET_INTSET => Self::read_int_set(&mut obj, reader).await?,
+            super::RDB_TYPE_SET_LISTPACK => obj.elements = reader.read_list_pack().await?,
             _ => {
                 bail! {Error::RedisRdbError(format!(
                     "unknown set type. type_byte=[{}]",
@@ -32,22 +32,28 @@ impl SetParser {
         Ok(obj)
     }
 
-    pub fn read_str_set(obj: &mut SetObject, reader: &mut RdbReader) -> anyhow::Result<()> {
-        let size = reader.read_length()? as usize;
+    pub async fn read_str_set(
+        obj: &mut SetObject,
+        reader: &mut RdbReader<'_>,
+    ) -> anyhow::Result<()> {
+        let size = reader.read_length().await? as usize;
         for _i in 0..size {
-            obj.elements.push(reader.read_string()?);
+            obj.elements.push(reader.read_string().await?);
         }
         Ok(())
     }
 
-    pub fn read_int_set(obj: &mut SetObject, reader: &mut RdbReader) -> anyhow::Result<()> {
-        let buf = reader.read_string()?;
+    pub async fn read_int_set(
+        obj: &mut SetObject,
+        reader: &mut RdbReader<'_>,
+    ) -> anyhow::Result<()> {
+        let buf = reader.read_string().await?;
         let mut reader = Cursor::new(buf.as_bytes());
 
         let encoding_type = reader.read_u32::<LittleEndian>()? as usize;
         let size = reader.read_u32::<LittleEndian>()?;
         for _ in 0..size {
-            let buf = reader.read_bytes(encoding_type)?;
+            let buf = reader.read_bytes(encoding_type).await?;
             let int_str = match encoding_type {
                 2 => LittleEndian::read_i16(&buf).to_string(),
                 4 => LittleEndian::read_i32(&buf).to_string(),

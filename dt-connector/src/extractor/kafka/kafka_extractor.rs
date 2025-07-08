@@ -1,15 +1,18 @@
-use crate::extractor::resumer::cdc_resumer::CdcResumer;
-use crate::{extractor::base_extractor::BaseExtractor, Extractor};
+use std::sync::Arc;
+
 use anyhow::Context;
 use async_trait::async_trait;
-use std::sync::{Arc, Mutex};
+use tokio::sync::Mutex;
 
-use dt_common::log_info;
-use dt_common::meta::{avro::avro_converter::AvroConverter, position::Position, syncer::Syncer};
 use rdkafka::{
     consumer::{Consumer, StreamConsumer},
     ClientConfig, Message, Offset, TopicPartitionList,
 };
+
+use crate::extractor::resumer::cdc_resumer::CdcResumer;
+use crate::{extractor::base_extractor::BaseExtractor, Extractor};
+use dt_common::log_info;
+use dt_common::meta::{avro::avro_converter::AvroConverter, position::Position, syncer::Syncer};
 
 pub struct KafkaExtractor {
     pub base_extractor: BaseExtractor,

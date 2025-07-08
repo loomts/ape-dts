@@ -2,12 +2,18 @@ use std::{
     collections::HashMap,
     sync::{
         atomic::{AtomicU64, Ordering},
-        Arc, Mutex,
+        Arc,
     },
 };
 
+use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use anyhow::bail;
 use async_trait::async_trait;
+use futures::executor::block_on;
+use serde::{Deserialize, Serialize};
+use tokio::sync::Mutex;
+
+use crate::{base_pipeline::BasePipeline, Pipeline};
 use dt_common::{
     log_position,
     meta::{
@@ -17,12 +23,6 @@ use dt_common::{
     monitor::{counter_type::CounterType, monitor::Monitor},
 };
 use dt_parallelizer::base_parallelizer::BaseParallelizer;
-use futures::executor::block_on;
-
-use crate::{base_pipeline::BasePipeline, Pipeline};
-
-use actix_web::{web, App, HttpResponse, HttpServer, Responder};
-use serde::{Deserialize, Serialize};
 
 type PositionInfo = (Option<Position>, Option<Position>);
 
@@ -193,7 +193,7 @@ async fn fetch_new(
     }
 
     // update monitor
-    let mut monitor = pipeline.monitor.lock().unwrap();
+    let mut monitor = pipeline.monitor.lock().await;
     monitor.add_counter(CounterType::BufferSize, pipeline.buffer.len());
     monitor.add_counter(CounterType::SinkedCount, response.data.len());
 

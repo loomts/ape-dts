@@ -1,10 +1,11 @@
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::redis_client::RedisClient;
 use anyhow::bail;
 use async_trait::async_trait;
+use tokio::{sync::Mutex, time::Instant};
 
 use crate::extractor::base_extractor::BaseExtractor;
 use crate::extractor::redis::rdb::rdb_parser::RdbParser;
@@ -128,7 +129,7 @@ impl RedisPsyncExtractor {
         let mut stream_reader: Box<&mut (dyn StreamReader + Send)> = Box::new(&mut self.conn);
         // format: \n\n\n$<length>\r\n<rdb>
         loop {
-            let buf = stream_reader.read_bytes(1)?;
+            let buf = stream_reader.read_bytes(1).await?;
             if buf[0] == b'\n' {
                 continue;
             }
@@ -141,7 +142,7 @@ impl RedisPsyncExtractor {
         // length of rdb data
         let mut rdb_length_str = String::new();
         loop {
-            let buf = stream_reader.read_bytes(1)?;
+            let buf = stream_reader.read_bytes(1).await?;
             if buf[0] == b'\n' {
                 break;
             }
@@ -169,11 +170,11 @@ impl RedisPsyncExtractor {
             is_end: false,
         };
 
-        let version = parser.load_meta()?;
+        let version = parser.load_meta().await?;
         log_info!("source redis version: {:?}", version);
 
         loop {
-            if let Some(entry) = parser.load_entry()? {
+            if let Some(entry) = parser.load_entry().await? {
                 self.now_db_id = entry.db_id;
                 if matches!(
                     self.extract_type,
@@ -360,8 +361,7 @@ impl RedisPsyncExtractor {
     async fn keep_alive_ack(&mut self) -> anyhow::Result<()> {
         // send replconf ack to keep the connection alive
         let mut position_repl_offset = self.repl_offset;
-        if let Position::Redis { repl_offset, .. } = self.syncer.lock().unwrap().committed_position
-        {
+        if let Position::Redis { repl_offset, .. } = self.syncer.lock().await.committed_position {
             if repl_offset >= self.repl_offset {
                 position_repl_offset = repl_offset
             }

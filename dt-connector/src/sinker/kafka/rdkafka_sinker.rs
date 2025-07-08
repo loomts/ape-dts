@@ -1,17 +1,14 @@
-use std::{
-    sync::{Arc, Mutex},
-    time::{Duration, Instant},
-};
+use std::sync::Arc;
 
 use anyhow::bail;
 use async_trait::async_trait;
 use rdkafka::producer::{FutureProducer, FutureRecord};
+use tokio::{sync::Mutex, time::Duration, time::Instant};
 
 use crate::{rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker};
-
-use dt_common::monitor::monitor::Monitor;
-
-use dt_common::meta::{avro::avro_converter::AvroConverter, row_data::RowData};
+use dt_common::{
+    meta::avro::avro_converter::AvroConverter, meta::row_data::RowData, monitor::monitor::Monitor,
+};
 
 pub struct RdkafkaSinker {
     pub batch_size: usize,
@@ -72,6 +69,6 @@ impl RdkafkaSinker {
             }
         }
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time)
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
 }

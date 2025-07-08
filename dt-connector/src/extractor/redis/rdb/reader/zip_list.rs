@@ -22,11 +22,11 @@ const ZIP_INT_32B: u8 = 0xd0;
 const ZIP_INT_64B: u8 = 0xe0;
 
 impl RdbReader<'_> {
-    pub fn read_zip_list(&mut self) -> anyhow::Result<Vec<RedisString>> {
+    pub async fn read_zip_list(&mut self) -> anyhow::Result<Vec<RedisString>> {
         // The general layout of the ziplist is as follows:
         // <zlbytes> <zltail> <zllen> <entry> <entry> ... <entry> <zlend>
 
-        let buf = self.read_string()?;
+        let buf = self.read_string().await?;
         let mut reader = Cursor::new(buf.as_bytes());
 
         let _ = reader.read_u32::<LittleEndian>()?; // zlbytes
@@ -41,13 +41,13 @@ impl RdbReader<'_> {
                 if first_byte == 0xFE {
                     break;
                 }
-                let ele = Self::read_zip_list_entry(&mut reader, first_byte)?;
+                let ele = Self::read_zip_list_entry(&mut reader, first_byte).await?;
                 elements.push(ele);
             }
         } else {
             for _ in 0..size {
                 let first_byte = reader.read_u8()?;
-                let ele = Self::read_zip_list_entry(&mut reader, first_byte)?;
+                let ele = Self::read_zip_list_entry(&mut reader, first_byte).await?;
                 elements.push(ele);
             }
 
@@ -63,7 +63,7 @@ impl RdbReader<'_> {
         Ok(elements)
     }
 
-    fn read_zip_list_entry(
+    async fn read_zip_list_entry(
         reader: &mut Cursor<&[u8]>,
         first_byte: u8,
     ) -> anyhow::Result<RedisString> {
@@ -73,26 +73,26 @@ impl RdbReader<'_> {
         }
 
         // read encoding
-        let first_byte = reader.read_bytes(1)?[0];
+        let first_byte = reader.read_bytes(1).await?[0];
         let first_2_bits = (first_byte & 0xc0) >> 6; // first 2 bits of encoding
         match first_2_bits {
             ZIP_STR_06B => {
                 let length = (first_byte & 0x3f) as usize; // 0x3f = 00111111
-                let buf = reader.read_bytes(length)?;
+                let buf = reader.read_bytes(length).await?;
                 return Ok(RedisString::from(buf));
             }
 
             ZIP_STR_14B => {
                 let second_byte = reader.read_u8()?;
                 let length = (((first_byte & 0x3f) as u16) << 8) | second_byte as u16;
-                let buf = reader.read_bytes(length as usize)?;
+                let buf = reader.read_bytes(length as usize).await?;
                 return Ok(RedisString::from(buf));
             }
 
             ZIP_STR_32B => {
-                let mut buf = reader.read_bytes(4)?;
+                let mut buf = reader.read_bytes(4).await?;
                 let length = BigEndian::read_u32(&buf);
-                buf = reader.read_bytes(length as usize)?;
+                buf = reader.read_bytes(length as usize).await?;
                 return Ok(RedisString::from(buf));
             }
 

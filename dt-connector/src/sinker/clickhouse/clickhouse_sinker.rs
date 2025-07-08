@@ -1,13 +1,13 @@
-use std::{
-    cmp,
-    collections::HashMap,
-    sync::{Arc, Mutex},
-    time::Instant,
-};
+use std::{cmp, collections::HashMap, sync::Arc};
 
 use anyhow::bail;
 use async_trait::async_trait;
 use chrono::Utc;
+use reqwest::{Client, Method, Response, StatusCode};
+use serde_json::json;
+use tokio::{sync::Mutex, time::Instant};
+
+use crate::{call_batch_fn, sinker::base_sinker::BaseSinker, Sinker};
 use dt_common::{
     config::config_enums::DbType,
     error::Error,
@@ -15,10 +15,6 @@ use dt_common::{
     monitor::monitor::Monitor,
     utils::sql_util::SqlUtil,
 };
-use reqwest::{Client, Method, Response, StatusCode};
-use serde_json::json;
-
-use crate::{call_batch_fn, sinker::base_sinker::BaseSinker, Sinker};
 
 const SIGN_COL_NAME: &str = "_ape_dts_is_deleted";
 const TIMESTAMP_COL_NAME: &str = "_ape_dts_timestamp";
@@ -58,7 +54,7 @@ impl ClickhouseSinker {
 
         let data_size = self.send_data(data, start_index, batch_size).await?;
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time)
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
 
     async fn send_data(

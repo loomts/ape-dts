@@ -93,9 +93,8 @@ impl CheckResult {
             }
         }
         let mut warn_msg = String::new();
-        match warn_option {
-            Some(err) => warn_msg = err.to_string(),
-            None => {}
+        if let Some(err) = warn_option {
+            warn_msg = err.to_string();
         }
         match err_option {
             Some(err) => Self {

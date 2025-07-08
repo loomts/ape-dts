@@ -1,14 +1,15 @@
-use std::{
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Mutex, RwLock,
-    },
-    time::Instant,
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
 };
 
 use async_trait::async_trait;
+use tokio::{sync::Mutex, sync::RwLock, time::Instant};
+
+use crate::{lua_processor::LuaProcessor, Pipeline};
 use dt_common::{
     config::sinker_config::SinkerConfig,
+    log_info, log_position,
     meta::{
         dcl_meta::dcl_data::DclData,
         ddl_meta::ddl_data::DdlData,
@@ -18,20 +19,15 @@ use dt_common::{
         row_data::RowData,
         syncer::Syncer,
     },
-};
-use dt_common::{
-    log_info, log_position,
     monitor::{counter_type::CounterType, monitor::Monitor},
     utils::time_util::TimeUtil,
 };
 use dt_connector::{data_marker::DataMarker, Sinker};
 use dt_parallelizer::Parallelizer;
 
-use crate::{lua_processor::LuaProcessor, Pipeline};
-
 pub struct BasePipeline {
     pub buffer: Arc<DtQueue>,
-    pub parallelizer: Box<dyn Parallelizer + Send>,
+    pub parallelizer: Box<dyn Parallelizer + Send + Sync>,
     pub sinker_config: SinkerConfig,
     pub sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
     pub shut_down: Arc<AtomicBool>,
@@ -78,7 +74,7 @@ impl Pipeline for BasePipeline {
             if !self.buffer.is_empty() {
                 self.monitor
                     .lock()
-                    .unwrap()
+                    .await
                     .add_counter(CounterType::BufferSize, self.buffer.len());
             }
 
@@ -94,8 +90,7 @@ impl Pipeline for BasePipeline {
 
             if let Some(data_marker) = &mut self.data_marker {
                 if !data.is_empty() {
-                    data_marker.write().unwrap().data_origin_node =
-                        data[0].data_origin_node.clone();
+                    data_marker.write().await.data_origin_node = data[0].data_origin_node.clone();
                 }
             }
 
@@ -109,29 +104,32 @@ impl Pipeline for BasePipeline {
             };
 
             if let Some(position) = &last_received {
-                self.syncer.lock().unwrap().received_position = position.to_owned();
+                self.syncer.lock().await.received_position = position.to_owned();
                 last_received_position = position.to_owned();
             }
             if let Some(position) = &last_commit {
                 last_commit_position = position.to_owned();
             }
 
-            last_checkpoint_time = self.record_checkpoint(
-                Some(last_checkpoint_time),
-                &last_received_position,
-                &last_commit_position,
-            );
+            last_checkpoint_time = self
+                .record_checkpoint(
+                    Some(last_checkpoint_time),
+                    &last_received_position,
+                    &last_commit_position,
+                )
+                .await;
 
             self.monitor
                 .lock()
-                .unwrap()
+                .await
                 .add_counter(CounterType::SinkedCount, count);
 
             // sleep 1 millis for data preparing
             TimeUtil::sleep_millis(1).await;
         }
 
-        self.record_checkpoint(None, &last_received_position, &last_commit_position);
+        self.record_checkpoint(None, &last_received_position, &last_commit_position)
+            .await;
         Ok(())
     }
 }
@@ -334,7 +332,7 @@ impl BasePipeline {
         SinkMethod::Raw
     }
 
-    fn record_checkpoint(
+    async fn record_checkpoint(
         &self,
         last_checkpoint_time: Option<Instant>,
         last_received_position: &Position,
@@ -350,7 +348,7 @@ impl BasePipeline {
         log_position!("checkpoint_position | {}", last_commit_position.to_string());
 
         if !matches!(last_commit_position, Position::None) {
-            self.syncer.lock().unwrap().committed_position = last_commit_position.to_owned();
+            self.syncer.lock().await.committed_position = last_commit_position.to_owned();
         }
 
         Instant::now()

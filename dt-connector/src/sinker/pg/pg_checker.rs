@@ -1,19 +1,9 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-    time::Instant,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
-use dt_common::meta::{
-    pg::pg_meta_manager::PgMetaManager,
-    rdb_meta_manager::RdbMetaManager,
-    row_data::RowData,
-    struct_meta::{statement::struct_statement::StructStatement, struct_data::StructData},
-};
-use dt_common::{monitor::monitor::Monitor, rdb_filter::RdbFilter};
 use futures::TryStreamExt;
 use sqlx::{Pool, Postgres};
+use tokio::{sync::Mutex, time::Instant};
 
 use crate::{
     call_batch_fn, close_conn_pool,
@@ -22,6 +12,14 @@ use crate::{
     rdb_router::RdbRouter,
     sinker::{base_checker::BaseChecker, base_sinker::BaseSinker},
     Sinker,
+};
+use dt_common::{
+    meta::pg::pg_meta_manager::PgMetaManager,
+    meta::rdb_meta_manager::RdbMetaManager,
+    meta::row_data::RowData,
+    meta::struct_meta::{statement::struct_statement::StructStatement, struct_data::StructData},
+    monitor::monitor::Monitor,
+    rdb_filter::RdbFilter,
 };
 
 #[derive(Clone)]
@@ -108,7 +106,7 @@ impl PgChecker {
         }
         BaseChecker::log_dml(miss, diff);
 
-        BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), 0, start_time)
+        BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), 0, start_time).await
     }
 
     async fn batch_check(
@@ -147,7 +145,7 @@ impl PgChecker {
         .await?;
         BaseChecker::log_dml(miss, diff);
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, 0, start_time)
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, 0, start_time).await
     }
 
     async fn serial_check_struct(&mut self, mut data: Vec<StructData>) -> anyhow::Result<()> {

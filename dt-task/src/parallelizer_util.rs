@@ -1,17 +1,22 @@
 use std::{
     collections::{HashMap, VecDeque},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
+use ratelimit::Ratelimiter;
+use tokio::sync::Mutex;
+
+use super::task_util::TaskUtil;
 use dt_common::{
     config::{
         config_enums::{DbType, ParallelType},
         sinker_config::SinkerConfig,
         task_config::TaskConfig,
     },
+    meta::redis::command::key_parser::KeyParser,
     monitor::monitor::Monitor,
+    utils::redis_util::RedisUtil,
 };
-use dt_common::{meta::redis::command::key_parser::KeyParser, utils::redis_util::RedisUtil};
 use dt_parallelizer::{
     base_parallelizer::BaseParallelizer, check_parallelizer::CheckParallelizer,
     foxlake_parallelizer::FoxlakeParallelizer, merge_parallelizer::MergeParallelizer,
@@ -20,9 +25,6 @@ use dt_parallelizer::{
     serial_parallelizer::SerialParallelizer, snapshot_parallelizer::SnapshotParallelizer,
     table_parallelizer::TableParallelizer, Merger, Parallelizer,
 };
-use ratelimit::Ratelimiter;
-
-use super::task_util::TaskUtil;
 
 pub struct ParallelizerUtil {}
 
@@ -31,7 +33,7 @@ impl ParallelizerUtil {
         config: &TaskConfig,
         monitor: Arc<Mutex<Monitor>>,
         rps_limiter: Option<Ratelimiter>,
-    ) -> anyhow::Result<Box<dyn Parallelizer + Send>> {
+    ) -> anyhow::Result<Box<dyn Parallelizer + Send + Sync>> {
         let parallel_size = config.parallelizer.parallel_size;
         let parallel_type = &config.parallelizer.parallel_type;
         let base_parallelizer = BaseParallelizer {
@@ -40,7 +42,7 @@ impl ParallelizerUtil {
             rps_limiter,
         };
 
-        let parallelizer: Box<dyn Parallelizer + Send> = match parallel_type {
+        let parallelizer: Box<dyn Parallelizer + Send + Sync> = match parallel_type {
             ParallelType::Snapshot => Box::new(SnapshotParallelizer {
                 base_parallelizer,
                 parallel_size,

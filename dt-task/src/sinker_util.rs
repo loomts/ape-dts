@@ -1,28 +1,31 @@
-use std::{
-    str::FromStr,
-    sync::{Arc, Mutex, RwLock},
-};
+use std::{str::FromStr, sync::Arc};
 
 use anyhow::Context;
+use kafka::producer::{Producer, RequiredAcks};
+use reqwest::{redirect::Policy, Url};
+use rusoto_s3::S3Client;
+use sqlx::types::chrono::Utc;
+use tokio::sync::{Mutex, RwLock};
+
 use dt_common::{
     config::{
         config_enums::DbType, extractor_config::ExtractorConfig, sinker_config::SinkerConfig,
         task_config::TaskConfig,
     },
     meta::redis::command::key_parser::KeyParser,
-    monitor::monitor::Monitor,
-    rdb_filter::RdbFilter,
-};
-use dt_common::{
     meta::{
         avro::avro_converter::AvroConverter,
         mysql::mysql_meta_manager::MysqlMetaManager,
         pg::pg_meta_manager::PgMetaManager,
         redis::{redis_statistic_type::RedisStatisticType, redis_write_method::RedisWriteMethod},
     },
+    monitor::monitor::Monitor,
+    rdb_filter::RdbFilter,
     utils::redis_util::RedisUtil,
 };
 
+use super::task_util::TaskUtil;
+use crate::extractor_util::ExtractorUtil;
 use dt_connector::{
     data_marker::DataMarker,
     rdb_router::RdbRouter,
@@ -51,14 +54,6 @@ use dt_connector::{
     },
     Sinker,
 };
-use kafka::producer::{Producer, RequiredAcks};
-use reqwest::{redirect::Policy, Url};
-use rusoto_s3::S3Client;
-use sqlx::types::chrono::Utc;
-
-use crate::extractor_util::ExtractorUtil;
-
-use super::task_util::TaskUtil;
 
 type Sinkers = Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>;
 

@@ -1,34 +1,28 @@
-use std::{
-    str::FromStr,
-    sync::{Arc, Mutex, RwLock},
-    time::Instant,
+use std::{str::FromStr, sync::Arc};
+
+use anyhow::Context;
+use async_trait::async_trait;
+use sqlx::{
+    mysql::{MySqlConnectOptions, MySqlPoolOptions},
+    MySql, Pool,
 };
+use tokio::{sync::Mutex, sync::RwLock, time::Instant};
 
 use crate::{
     call_batch_fn, close_conn_pool, data_marker::DataMarker, rdb_query_builder::RdbQueryBuilder,
     rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker,
 };
-
-use anyhow::Context;
 use dt_common::{
     log_error, log_info,
     meta::{
         dcl_meta::dcl_data::DclData,
         ddl_meta::{ddl_data::DdlData, ddl_type::DdlType},
+        mysql::mysql_meta_manager::MysqlMetaManager,
+        row_data::RowData,
+        row_type::RowType,
     },
     monitor::monitor::Monitor,
 };
-
-use dt_common::meta::{
-    mysql::mysql_meta_manager::MysqlMetaManager, row_data::RowData, row_type::RowType,
-};
-
-use sqlx::{
-    mysql::{MySqlConnectOptions, MySqlPoolOptions},
-    MySql, Pool,
-};
-
-use async_trait::async_trait;
 
 #[derive(Clone)]
 pub struct MysqlSinker {
@@ -123,7 +117,7 @@ impl MysqlSinker {
         let mut data_size = 0;
 
         let mut tx = self.conn_pool.begin().await?;
-        if let Some(sql) = self.get_data_marker_sql() {
+        if let Some(sql) = self.get_data_marker_sql().await {
             sqlx::query(&sql)
                 .execute(&mut tx)
                 .await
@@ -144,6 +138,7 @@ impl MysqlSinker {
         tx.commit().await?;
 
         BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
+            .await
     }
 
     async fn batch_delete(
@@ -164,7 +159,7 @@ impl MysqlSinker {
             query_builder.get_batch_delete_query(data, start_index, batch_size)?;
         let query = query_builder.create_mysql_query(&query_info);
 
-        if let Some(sql) = self.get_data_marker_sql() {
+        if let Some(sql) = self.get_data_marker_sql().await {
             let mut tx = self.conn_pool.begin().await?;
             sqlx::query(&sql).execute(&mut tx).await?;
             query.execute(&mut tx).await?;
@@ -173,7 +168,7 @@ impl MysqlSinker {
             query.execute(&self.conn_pool).await?;
         }
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time)
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
 
     async fn batch_insert(
@@ -195,7 +190,7 @@ impl MysqlSinker {
             query_builder.get_batch_insert_query(data, start_index, batch_size, self.replace)?;
         let query = query_builder.create_mysql_query(&query_info);
 
-        let exec_error = if let Some(sql) = self.get_data_marker_sql() {
+        let exec_error = if let Some(sql) = self.get_data_marker_sql().await {
             let mut tx = self.conn_pool.begin().await?;
             sqlx::query(&sql).execute(&mut tx).await?;
             query.execute(&mut tx).await?;
@@ -222,12 +217,12 @@ impl MysqlSinker {
             self.serial_sink(sub_data).await?;
         }
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time)
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
 
-    fn get_data_marker_sql(&self) -> Option<String> {
+    async fn get_data_marker_sql(&self) -> Option<String> {
         if let Some(data_marker) = &self.data_marker {
-            let data_marker = data_marker.read().unwrap();
+            let data_marker = data_marker.read().await;
             // CREATE TABLE `ape_trans_mysql`.`topo1` (
             //     `data_origin_node` varchar(255) NOT NULL,
             //     `src_node` varchar(255) NOT NULL,

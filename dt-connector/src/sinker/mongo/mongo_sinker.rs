@@ -1,7 +1,4 @@
-use std::{
-    sync::{Arc, Mutex},
-    time::Instant,
-};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use mongodb::{
@@ -9,15 +6,13 @@ use mongodb::{
     options::UpdateOptions,
     Client, Collection,
 };
-
-use dt_common::{log_error, monitor::monitor::Monitor};
-
-use dt_common::meta::{
-    col_value::ColValue, mongo::mongo_constant::MongoConstants, row_data::RowData,
-    row_type::RowType,
-};
+use tokio::{sync::Mutex, time::Instant};
 
 use crate::{call_batch_fn, rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker};
+use dt_common::{
+    log_error, meta::col_value::ColValue, meta::mongo::mongo_constant::MongoConstants,
+    meta::row_data::RowData, meta::row_type::RowType, monitor::monitor::Monitor,
+};
 
 #[derive(Clone)]
 pub struct MongoSinker {
@@ -121,6 +116,7 @@ impl MongoSinker {
         }
 
         BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
+            .await
     }
 
     async fn batch_delete(
@@ -154,7 +150,7 @@ impl MongoSinker {
         };
         collection.delete_many(query, None).await?;
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time)
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
 
     async fn batch_insert(
@@ -191,7 +187,7 @@ impl MongoSinker {
             self.serial_sink(sub_data.to_vec()).await?;
         }
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time)
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
 
     async fn upsert(

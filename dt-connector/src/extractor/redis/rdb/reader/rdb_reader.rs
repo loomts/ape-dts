@@ -1,3 +1,5 @@
+use async_trait::async_trait;
+
 use crate::extractor::redis::StreamReader;
 
 pub struct RdbReader<'a> {
@@ -14,9 +16,10 @@ impl RdbReader<'_> {
     }
 }
 
+#[async_trait]
 impl StreamReader for RdbReader<'_> {
-    fn read_bytes(&mut self, length: usize) -> anyhow::Result<Vec<u8>> {
-        let buf = self.conn.read_bytes(length)?;
+    async fn read_bytes(&mut self, length: usize) -> anyhow::Result<Vec<u8>> {
+        let buf = self.conn.read_bytes(length).await?;
         self.position += length;
         if self.copy_raw {
             self.raw_bytes.extend_from_slice(&buf);

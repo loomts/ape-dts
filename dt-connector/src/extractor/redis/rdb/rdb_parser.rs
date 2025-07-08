@@ -38,32 +38,32 @@ pub struct RdbParser<'a> {
 }
 
 impl RdbParser<'_> {
-    pub fn load_meta(&mut self) -> anyhow::Result<String> {
+    pub async fn load_meta(&mut self) -> anyhow::Result<String> {
         // magic
-        let mut buf = self.reader.read_bytes(5)?;
+        let mut buf = self.reader.read_bytes(5).await?;
         let magic = String::from_utf8(buf)?;
         if magic != "REDIS" {
             bail! {Error::RedisRdbError("invalid rdb format".to_string())}
         }
 
         // version
-        buf = self.reader.read_bytes(4)?;
+        buf = self.reader.read_bytes(4).await?;
         let version = String::from_utf8(buf)?;
         Ok(version)
     }
 
-    pub fn load_entry(&mut self) -> anyhow::Result<Option<RedisEntry>> {
-        let type_byte = self.reader.read_byte()?;
+    pub async fn load_entry(&mut self) -> anyhow::Result<Option<RedisEntry>> {
+        let type_byte = self.reader.read_byte().await?;
         log_debug!("rdb type_byte: {}", type_byte);
 
         match type_byte {
             K_FLAG_SLOT_INFO => {
-                self.reader.read_length()?; // slot id
-                self.reader.read_length()?; // slot size
-                self.reader.read_length()?; // expires slot size
+                self.reader.read_length().await?; // slot id
+                self.reader.read_length().await?; // slot size
+                self.reader.read_length().await?; // expires slot size
             }
             K_FLAG_MODULE_AUX => {
-                let module_id = self.reader.read_length()?; // module id
+                let module_id = self.reader.read_length().await?; // module id
                 let module_name = ModuleParser::module_type_name_by_id(module_id);
                 log_info!(
                     "RDB module aux: module_id=[{}], module_name=[{}]",
@@ -71,22 +71,22 @@ impl RdbParser<'_> {
                     module_name
                 );
                 // refer: https://github.com/redis/redis/blob/unstable/src/rdb.c#L3183
-                let _when_opcode = self.reader.read_length()?;
-                let _when = self.reader.read_length()?;
-                let mut opcode = self.reader.read_length()?;
+                let _when_opcode = self.reader.read_length().await?;
+                let _when = self.reader.read_length().await?;
+                let mut opcode = self.reader.read_length().await?;
                 while opcode != RDB_MODULE_OPCODE_EOF {
                     match opcode {
                         RDB_MODULE_OPCODE_SINT | RDB_MODULE_OPCODE_UINT => {
-                            self.reader.read_length()?;
+                            self.reader.read_length().await?;
                         }
                         RDB_MODULE_OPCODE_FLOAT => {
-                            self.reader.read_float()?;
+                            self.reader.read_float().await?;
                         }
                         RDB_MODULE_OPCODE_DOUBLE => {
-                            self.reader.read_double()?;
+                            self.reader.read_double().await?;
                         }
                         RDB_MODULE_OPCODE_STRING => {
-                            self.reader.read_string()?;
+                            self.reader.read_string().await?;
                         }
                         _ => {
                             bail! {Error::RedisRdbError(format!(
@@ -95,23 +95,23 @@ impl RdbParser<'_> {
                             ))}
                         }
                     }
-                    opcode = self.reader.read_length()?;
+                    opcode = self.reader.read_length().await?;
                 }
             }
 
             K_FLAG_IDLE => {
                 // OBJECT IDELTIME NOT captured in rdb snapshot
-                self.idle = self.reader.read_length()? as i64;
+                self.idle = self.reader.read_length().await? as i64;
             }
 
             K_FLAG_FREQ => {
                 // OBJECT FREQ NOT captured in rdb snapshot
-                self.freq = self.reader.read_u8()? as i64;
+                self.freq = self.reader.read_u8().await? as i64;
             }
 
             K_FLAG_AUX => {
-                let key = String::from(self.reader.read_string()?);
-                let value = self.reader.read_string()?;
+                let key = String::from(self.reader.read_string().await?);
+                let value = self.reader.read_string().await?;
                 match key.as_str() {
                     "repl-stream-db" => {
                         let value = String::from(value);
@@ -140,8 +140,8 @@ impl RdbParser<'_> {
             }
 
             K_FLAG_RESIZE_DB => {
-                let db_size = self.reader.read_length()?;
-                let expire_size = self.reader.read_length()?;
+                let db_size = self.reader.read_length().await?;
+                let expire_size = self.reader.read_length().await?;
                 log_info!(
                     "RDB resize db. db_size=[{}], expire_size=[{}]",
                     db_size,
@@ -150,7 +150,7 @@ impl RdbParser<'_> {
             }
 
             K_FLAG_EXPIRE_MS => {
-                let mut expire_ms = self.reader.read_u64()? as i64;
+                let mut expire_ms = self.reader.read_u64().await? as i64;
                 expire_ms -= chrono::Utc::now().timestamp_millis();
                 if expire_ms < 0 {
                     expire_ms = 1
@@ -159,7 +159,7 @@ impl RdbParser<'_> {
             }
 
             K_FLAG_EXPIRE => {
-                let mut expire_ms = self.reader.read_u32()? as i64 * 1000;
+                let mut expire_ms = self.reader.read_u32().await? as i64 * 1000;
                 expire_ms -= chrono::Utc::now().timestamp_millis();
                 if expire_ms < 0 {
                     expire_ms = 1
@@ -168,19 +168,21 @@ impl RdbParser<'_> {
             }
 
             K_FLAG_SELECT => {
-                self.now_db_id = self.reader.read_length()? as i64;
+                self.now_db_id = self.reader.read_length().await? as i64;
             }
 
             K_EOF => {
                 self.is_end = true;
                 self.reader
-                    .read_bytes(self.reader.rdb_length - self.reader.position)?;
+                    .read_bytes(self.reader.rdb_length - self.reader.position)
+                    .await?;
             }
 
             _ => {
-                let key = self.reader.read_string()?;
+                let key = self.reader.read_string().await?;
                 self.reader.copy_raw = true;
-                let value = EntryParser::parse_object(&mut self.reader, type_byte, key.clone());
+                let value =
+                    EntryParser::parse_object(&mut self.reader, type_byte, key.clone()).await;
                 self.reader.copy_raw = false;
 
                 if let Err(error) = value {

@@ -2,24 +2,30 @@ use std::{
     collections::HashMap,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
+        Arc,
     },
-    time::Instant,
 };
 
 use async_trait::async_trait;
 use chrono::Utc;
-use dt_common::meta::{
-    col_value::ColValue,
-    dt_data::DtData,
-    mongo::{mongo_cdc_source::MongoCdcSource, mongo_constant::MongoConstants},
-    position::Position,
-    row_data::RowData,
-    row_type::RowType,
-    syncer::Syncer,
+use serde_json::json;
+use tokio::{sync::Mutex, time::Instant};
+
+use crate::{
+    extractor::{base_extractor::BaseExtractor, resumer::cdc_resumer::CdcResumer},
+    Extractor,
 };
 use dt_common::{
-    config::config_enums::DbType, log_error, log_info, rdb_filter::RdbFilter,
+    config::config_enums::DbType,
+    log_error, log_info,
+    meta::col_value::ColValue,
+    meta::dt_data::DtData,
+    meta::mongo::{mongo_cdc_source::MongoCdcSource, mongo_constant::MongoConstants},
+    meta::position::Position,
+    meta::row_data::RowData,
+    meta::row_type::RowType,
+    meta::syncer::Syncer,
+    rdb_filter::RdbFilter,
     utils::time_util::TimeUtil,
 };
 use mongodb::{
@@ -27,12 +33,6 @@ use mongodb::{
     change_stream::event::{OperationType, ResumeToken},
     options::{ChangeStreamOptions, FullDocumentBeforeChangeType, FullDocumentType, UpdateOptions},
     Client,
-};
-use serde_json::json;
-
-use crate::{
-    extractor::{base_extractor::BaseExtractor, resumer::cdc_resumer::CdcResumer},
-    Extractor,
 };
 
 const SYSTEM_DBS: [&str; 3] = ["admin", "config", "local"];
@@ -494,7 +494,7 @@ impl MongoCdcExtractor {
                 resume_token,
                 operation_time,
                 timestamp,
-            } = &syncer.lock().unwrap().received_position
+            } = &syncer.lock().await.received_position
             {
                 (
                     resume_token.to_owned(),
@@ -509,7 +509,7 @@ impl MongoCdcExtractor {
                 resume_token,
                 operation_time,
                 timestamp,
-            } = &syncer.lock().unwrap().committed_position
+            } = &syncer.lock().await.committed_position
             {
                 (
                     resume_token.to_owned(),

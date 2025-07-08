@@ -1,6 +1,14 @@
-use std::sync::{atomic::AtomicBool, Arc, Mutex};
+use std::{sync::atomic::AtomicBool, sync::Arc};
 
 use async_trait::async_trait;
+use tokio::sync::Mutex;
+
+use super::traits::Prechecker;
+use crate::{
+    config::precheck_config::PrecheckConfig,
+    fetcher::{redis::redis_fetcher::RedisFetcher, traits::Fetcher},
+    meta::{check_item::CheckItem, check_result::CheckResult},
+};
 use dt_common::{
     config::{
         config_enums::{DbType, ExtractType},
@@ -21,14 +29,6 @@ use dt_connector::{
     },
     rdb_router::RdbRouter,
 };
-
-use crate::{
-    config::precheck_config::PrecheckConfig,
-    fetcher::{redis::redis_fetcher::RedisFetcher, traits::Fetcher},
-    meta::{check_item::CheckItem, check_result::CheckResult},
-};
-
-use super::traits::Prechecker;
 
 pub struct RedisPrechecker {
     pub fetcher: RedisFetcher,
@@ -88,7 +88,7 @@ impl Prechecker for RedisPrechecker {
             buffer,
             router: RdbRouter::from_config(&self.task_config.router, &DbType::Redis)?,
             shut_down: Arc::new(AtomicBool::new(false)),
-            monitor: ExtractorMonitor::new(monitor),
+            monitor: ExtractorMonitor::new(monitor).await,
             data_marker: None,
             time_filter: TimeFilter::default(),
         };

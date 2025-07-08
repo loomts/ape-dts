@@ -1,13 +1,15 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::Arc;
 
-use crate::monitor::counter_type::AggregateType;
-use crate::{log_error, log_monitor};
+use async_trait::async_trait;
+use tokio::{sync::Mutex, sync::MutexGuard};
 
 use super::counter_type::CounterType;
 use super::monitor::Monitor;
 use super::time_window_counter::WindowCounterStatistics;
 use super::FlushableMonitor;
+use crate::log_monitor;
+use crate::monitor::counter_type::AggregateType;
 
 #[derive(Clone, Default)]
 pub struct GroupMonitor {
@@ -17,9 +19,10 @@ pub struct GroupMonitor {
     no_window_counter_statistics_map: HashMap<CounterType, HashMap<AggregateType, usize>>,
 }
 
+#[async_trait]
 impl FlushableMonitor for GroupMonitor {
-    fn flush(&mut self) {
-        self.flush();
+    async fn flush(&mut self) {
+        self.flush().await;
     }
 }
 
@@ -37,28 +40,21 @@ impl GroupMonitor {
         self.monitors.insert(id.to_string(), monitor);
     }
 
-    pub fn remove_monitor(&mut self, id: &str) {
+    pub async fn remove_monitor(&mut self, id: &str) {
         // keep statistics of no_window counters before removing:
         // eg. 2025-02-18 05:43:37.028889 | pipeline | global | sinked_count | latest=4199364
         if let Some(monitor) = self.monitors.remove(id) {
-            match monitor.lock().as_mut() {
-                Ok(guard) => {
-                    Self::refresh_no_window_counter_statistics_map(
-                        &mut self.no_window_counter_statistics_map,
-                        guard,
-                    );
-                }
-
-                Err(e) => {
-                    log_error!("failed to acquire lock for monitor {}: {}", id, e);
-                }
-            }
+            let guard = monitor.lock().await;
+            Self::refresh_no_window_counter_statistics_map(
+                &mut self.no_window_counter_statistics_map,
+                &guard,
+            );
         }
     }
 
     fn refresh_no_window_counter_statistics_map(
         no_window_counter_statistics_map: &mut HashMap<CounterType, HashMap<AggregateType, usize>>,
-        guard: &mut MutexGuard<'_, Monitor>,
+        guard: &MutexGuard<'_, Monitor>,
     ) {
         for (counter_type, counter) in guard.no_window_counters.iter() {
             // let mut aggregate_value_map = HashMap::new();
@@ -79,33 +75,24 @@ impl GroupMonitor {
         }
     }
 
-    pub fn flush(&mut self) {
+    pub async fn flush(&mut self) {
         let mut window_counter_statistics_map: HashMap<CounterType, Vec<WindowCounterStatistics>> =
             HashMap::new();
         let mut no_window_counter_statistics_map = self.no_window_counter_statistics_map.clone();
 
-        for (id, monitor) in self.monitors.iter() {
-            match monitor.lock().as_mut() {
-                Ok(guard) => {
-                    for (counter_type, counter) in guard.time_window_counters.iter_mut() {
-                        let statistics = counter.statistics();
-                        window_counter_statistics_map
-                            .entry(counter_type.to_owned())
-                            .or_default()
-                            .push(statistics);
-                    }
-
-                    Self::refresh_no_window_counter_statistics_map(
-                        &mut no_window_counter_statistics_map,
-                        guard,
-                    );
-                }
-
-                Err(e) => {
-                    log_error!("failed to acquire lock for monitor {}: {}", id, e);
-                    continue;
-                }
+        for (_, monitor) in self.monitors.iter() {
+            let mut guard = monitor.lock().await;
+            for (counter_type, counter) in guard.time_window_counters.iter_mut() {
+                let statistics = counter.statistics();
+                window_counter_statistics_map
+                    .entry(counter_type.to_owned())
+                    .or_default()
+                    .push(statistics);
             }
+            Self::refresh_no_window_counter_statistics_map(
+                &mut no_window_counter_statistics_map,
+                &guard,
+            );
         }
 
         for (counter_type, statistics_vec) in window_counter_statistics_map {

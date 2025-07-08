@@ -1,7 +1,6 @@
-use std::time::Duration;
-
 use anyhow::{bail, Context};
 use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
+use tokio::{time::sleep, time::Duration};
 
 pub struct TimeUtil {}
 
@@ -10,7 +9,7 @@ const UTC_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%z";
 impl TimeUtil {
     #[inline(always)]
     pub async fn sleep_millis(millis: u64) {
-        tokio::time::sleep(Duration::from_millis(millis)).await;
+        sleep(Duration::from_millis(millis)).await;
     }
 
     #[inline(always)]

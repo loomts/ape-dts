@@ -11,32 +11,32 @@ use super::{
 pub struct EntryParser {}
 
 impl EntryParser {
-    pub fn parse_object(
-        reader: &mut RdbReader,
+    pub async fn parse_object(
+        reader: &mut RdbReader<'_>,
         type_byte: u8,
         key: RedisString,
     ) -> anyhow::Result<RedisObject> {
         let obj = match type_byte {
             super::RDB_TYPE_STRING => {
-                RedisObject::String(StringParser::load_from_buffer(reader, key, type_byte)?)
+                RedisObject::String(StringParser::load_from_buffer(reader, key, type_byte).await?)
             }
 
             super::RDB_TYPE_LIST
             | super::RDB_TYPE_LIST_ZIPLIST
             | super::RDB_TYPE_LIST_QUICKLIST
             | super::RDB_TYPE_LIST_QUICKLIST_2 => {
-                RedisObject::List(ListParser::load_from_buffer(reader, key, type_byte)?)
+                RedisObject::List(ListParser::load_from_buffer(reader, key, type_byte).await?)
             }
 
             super::RDB_TYPE_SET | super::RDB_TYPE_SET_INTSET | super::RDB_TYPE_SET_LISTPACK => {
-                RedisObject::Set(SetParser::load_from_buffer(reader, key, type_byte)?)
+                RedisObject::Set(SetParser::load_from_buffer(reader, key, type_byte).await?)
             }
 
             super::RDB_TYPE_ZSET
             | super::RDB_TYPE_ZSET_2
             | super::RDB_TYPE_ZSET_ZIPLIST
             | super::RDB_TYPE_ZSET_LISTPACK => {
-                RedisObject::Zset(ZsetParser::load_from_buffer(reader, key, type_byte)?)
+                RedisObject::Zset(ZsetParser::load_from_buffer(reader, key, type_byte).await?)
             }
 
             super::RDB_TYPE_HASH
@@ -47,17 +47,17 @@ impl EntryParser {
             | super::RDB_TYPE_HASH_LISTPACK_EX_PRE_GA
             | super::RDB_TYPE_HASH_METADATA
             | super::RDB_TYPE_HASH_LISTPACK_EX => {
-                RedisObject::Hash(HashParser::load_from_buffer(reader, key, type_byte)?)
+                RedisObject::Hash(HashParser::load_from_buffer(reader, key, type_byte).await?)
             }
 
             super::RDB_TYPE_STREAM_LISTPACKS
             | super::RDB_TYPE_STREAM_LISTPACKS_2
             | super::RDB_TYPE_STREAM_LISTPACKS_3 => {
-                RedisObject::Stream(StreamParser::load_from_buffer(reader, key, type_byte)?)
+                RedisObject::Stream(StreamParser::load_from_buffer(reader, key, type_byte).await?)
             }
 
             super::RDB_TYPE_MODULE | super::RDB_TYPE_MODULE_2 => {
-                RedisObject::Module(ModuleParser::load_from_buffer(reader, key, type_byte)?)
+                RedisObject::Module(ModuleParser::load_from_buffer(reader, key, type_byte).await?)
             }
 
             _ => {

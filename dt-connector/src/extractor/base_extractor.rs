@@ -65,7 +65,7 @@ impl BaseExtractor {
 
         self.monitor.counters.record_count += 1;
         self.monitor.counters.data_size += dt_data.get_data_size();
-        self.monitor.try_flush(false);
+        self.monitor.try_flush(false).await;
 
         let data_origin_node = if let Some(data_marker) = &mut self.data_marker {
             data_marker.data_origin_node.clone()
@@ -248,7 +248,7 @@ impl BaseExtractor {
             TimeUtil::sleep_millis(1).await;
         }
 
-        self.monitor.try_flush(true);
+        self.monitor.try_flush(true).await;
         self.shut_down.store(true, Ordering::Release);
         Ok(())
     }

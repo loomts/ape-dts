@@ -1,5 +1,15 @@
+use std::{str::FromStr, sync::Arc};
+
 use anyhow::Ok;
 use async_trait::async_trait;
+use sqlx::{
+    mysql::{MySqlConnectOptions, MySqlPoolOptions},
+    MySql, Pool,
+};
+use tokio::{sync::Mutex, time::Instant};
+
+use super::{foxlake_merger::FoxlakeMerger, foxlake_pusher::FoxlakePusher};
+use crate::{close_conn_pool, rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker};
 use dt_common::{
     log_info,
     meta::{
@@ -10,19 +20,6 @@ use dt_common::{
     },
     monitor::monitor::Monitor,
 };
-use sqlx::{
-    mysql::{MySqlConnectOptions, MySqlPoolOptions},
-    MySql, Pool,
-};
-use std::{
-    str::FromStr,
-    sync::{Arc, Mutex},
-    time::Instant,
-};
-
-use crate::{close_conn_pool, rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker};
-
-use super::{foxlake_merger::FoxlakeMerger, foxlake_pusher::FoxlakePusher};
 
 pub struct FoxlakeSinker {
     pub url: String,
@@ -126,5 +123,6 @@ impl FoxlakeSinker {
             all_data_size,
             start_time,
         )
+        .await
     }
 }

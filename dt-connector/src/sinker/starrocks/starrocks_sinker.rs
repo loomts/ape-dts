@@ -1,15 +1,13 @@
-use std::{
-    cmp,
-    collections::HashMap,
-    str::FromStr,
-    sync::{Arc, Mutex},
-    time::Instant,
-};
+use std::{cmp, collections::HashMap, str::FromStr, sync::Arc};
 
 use crate::{call_batch_fn, sinker::base_sinker::BaseSinker, Sinker};
 use anyhow::bail;
 use async_trait::async_trait;
 use chrono::Utc;
+use reqwest::{header, Client, Method, Response, StatusCode};
+use serde_json::{json, Value};
+use tokio::{sync::Mutex, time::Instant};
+
 use dt_common::{
     config::config_enums::DbType,
     error::Error,
@@ -18,14 +16,10 @@ use dt_common::{
         mysql_col_type::MysqlColType, mysql_meta_manager::MysqlMetaManager,
         mysql_tb_meta::MysqlTbMeta,
     },
-    monitor::monitor::Monitor,
-};
-use dt_common::{
     meta::{col_value::ColValue, row_data::RowData, row_type::RowType},
+    monitor::monitor::Monitor,
     utils::sql_util::SqlUtil,
 };
-use reqwest::{header, Client, Method, Response, StatusCode};
-use serde_json::{json, Value};
 
 const SIGN_COL_NAME: &str = "_ape_dts_is_deleted";
 const TIMESTAMP_COL_NAME: &str = "_ape_dts_timestamp";
@@ -77,6 +71,7 @@ impl StarRocksSinker {
         }
 
         BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
+            .await
     }
 
     async fn batch_sink(
@@ -89,7 +84,7 @@ impl StarRocksSinker {
 
         let data_size = self.send_data(data, start_index, batch_size).await?;
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time)
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
 
     async fn send_data(

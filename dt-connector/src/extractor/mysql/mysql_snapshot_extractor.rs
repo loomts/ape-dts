@@ -2,13 +2,26 @@ use std::{
     cmp,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
-        Arc, Mutex,
+        Arc,
     },
 };
 
 use async_trait::async_trait;
+use futures::TryStreamExt;
+use serde_json::json;
+use sqlx::{MySql, Pool};
+use tokio::{sync::Mutex, task::JoinHandle};
+
+use crate::{
+    close_conn_pool,
+    extractor::{base_extractor::BaseExtractor, resumer::snapshot_resumer::SnapshotResumer},
+    rdb_query_builder::RdbQueryBuilder,
+    rdb_router::RdbRouter,
+    Extractor,
+};
 use dt_common::{
-    log_debug,
+    config::config_enums::DbType,
+    log_debug, log_info,
     meta::{
         adaptor::{mysql_col_value_convertor::MysqlColValueConvertor, sqlx_ext::SqlxMysqlExt},
         col_value::ColValue,
@@ -22,21 +35,6 @@ use dt_common::{
         row_data::RowData,
     },
     rdb_filter::RdbFilter,
-};
-use futures::TryStreamExt;
-
-use serde_json::json;
-use sqlx::{MySql, Pool};
-
-use dt_common::{config::config_enums::DbType, log_info};
-use tokio::task::JoinHandle;
-
-use crate::{
-    close_conn_pool,
-    extractor::{base_extractor::BaseExtractor, resumer::snapshot_resumer::SnapshotResumer},
-    rdb_query_builder::RdbQueryBuilder,
-    rdb_router::RdbRouter,
-    Extractor,
 };
 
 pub struct MysqlSnapshotExtractor {
@@ -347,7 +345,7 @@ impl MysqlSnapshotExtractor {
 
                         all_extracted_count.fetch_add(slice_count, Ordering::Release);
                         if i == parallel_size - 1 {
-                            last_order_col_value.lock().unwrap().value = order_col_value;
+                            last_order_col_value.lock().await.value = order_col_value;
                             all_finished.store(slice_count < batch_size, Ordering::Release);
                         }
                         Ok(())
@@ -359,7 +357,7 @@ impl MysqlSnapshotExtractor {
                     let _ = future.await.unwrap();
                 }
 
-                start_value = last_order_col_value.lock().unwrap().value.clone();
+                start_value = last_order_col_value.lock().await.value.clone();
                 if all_finished.load(Ordering::Acquire) {
                     break;
                 }

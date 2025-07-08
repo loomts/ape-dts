@@ -1,10 +1,17 @@
 use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::RwLock;
-use std::time::Instant;
 
 use anyhow::bail;
 use async_trait::async_trait;
+use redis::Connection;
+use redis::ConnectionLike;
+use redis::Value;
+use tokio::{sync::Mutex, sync::RwLock, time::Instant};
+
+use super::entry_rewriter::EntryRewriter;
+use crate::call_batch_fn;
+use crate::data_marker::DataMarker;
+use crate::sinker::base_sinker::BaseSinker;
+use crate::Sinker;
 use dt_common::error::Error;
 use dt_common::log_debug;
 use dt_common::meta::dt_data::DtData;
@@ -19,16 +26,6 @@ use dt_common::meta::redis::redis_write_method::RedisWriteMethod;
 use dt_common::meta::row_data::RowData;
 use dt_common::meta::row_type::RowType;
 use dt_common::monitor::monitor::Monitor;
-use redis::Connection;
-use redis::ConnectionLike;
-use redis::Value;
-
-use crate::call_batch_fn;
-use crate::data_marker::DataMarker;
-use crate::sinker::base_sinker::BaseSinker;
-use crate::Sinker;
-
-use super::entry_rewriter::EntryRewriter;
 
 pub struct RedisSinker {
     pub cluster_node: Option<ClusterNode>,
@@ -100,7 +97,7 @@ impl RedisSinker {
 
         self.batch_sink(&cmds).await?;
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, cmds.len(), data_size, start_time)
+        BaseSinker::update_batch_monitor(&mut self.monitor, cmds.len(), data_size, start_time).await
     }
 
     async fn serial_sink_raw(&mut self, data: &mut [DtItem]) -> anyhow::Result<()> {
@@ -116,6 +113,7 @@ impl RedisSinker {
         }
 
         BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
+            .await
     }
 
     fn rewrite_entry(&mut self, dt_data: &mut DtData) -> anyhow::Result<Vec<RedisCmd>> {
@@ -185,7 +183,7 @@ impl RedisSinker {
         }
         self.batch_sink(&cmds).await?;
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, cmds.len(), data_size, start_time)
+        BaseSinker::update_batch_monitor(&mut self.monitor, cmds.len(), data_size, start_time).await
     }
 
     async fn serial_sink_dml(&mut self, data: &mut [RowData]) -> anyhow::Result<()> {
@@ -200,6 +198,7 @@ impl RedisSinker {
         }
 
         BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
+            .await
     }
 
     async fn dml_to_redis_cmd(&mut self, row_data: &RowData) -> anyhow::Result<Option<RedisCmd>> {
@@ -270,7 +269,7 @@ impl RedisSinker {
         let mut packed_cmds = Vec::new();
         let mut is_tx = false;
         let mut tx_wrapper_cmds = Vec::new();
-        if let Some(data_marker_cmd) = self.get_data_marker_cmd(cmds[0].clone())? {
+        if let Some(data_marker_cmd) = self.get_data_marker_cmd(cmds[0].clone()).await? {
             let multi_cmd = RedisCmd::from_str_args(&["MULTI"]);
             packed_cmds.extend_from_slice(&CmdEncoder::encode(&multi_cmd));
             packed_cmds.extend_from_slice(&CmdEncoder::encode(&data_marker_cmd));
@@ -333,9 +332,9 @@ impl RedisSinker {
         Ok(())
     }
 
-    fn get_data_marker_cmd(&self, mut cmd: RedisCmd) -> anyhow::Result<Option<RedisCmd>> {
+    async fn get_data_marker_cmd(&self, mut cmd: RedisCmd) -> anyhow::Result<Option<RedisCmd>> {
         if let Some(data_marker) = &self.data_marker {
-            let data_marker = data_marker.read().unwrap();
+            let data_marker = data_marker.read().await;
             let key = if let Some(node) = &self.cluster_node {
                 // the target Redis is a cluster node.
                 cmd.parse_keys(&self.key_parser)?;
