@@ -113,9 +113,9 @@ Refer to [test docs](./dt-tests/README.md) for details.
 
 - Image size
 
-| ape_dts:2.0.14 | debezium/connect:2.7 |
-| :------------- | :------------------- |
-| 86.4 MB        | 1.38 GB              |
+| ape_dts:2.0.25-alpha.1 | debezium/connect:2.7 |
+| :--------------------- | :------------------- |
+| 71.4 MB                | 1.38 GB              |
 
 - more benchmark [details](./docs/en/benchmark.md)
 
