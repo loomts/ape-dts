@@ -1,13 +1,14 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use async_trait::async_trait;
+use tokio::sync::Mutex;
+
+use crate::{rdb_query_builder::RdbQueryBuilder, rdb_router::RdbRouter, Sinker};
 use dt_common::{
     log_sql,
     meta::{rdb_meta_manager::RdbMetaManager, row_data::RowData},
     monitor::monitor::Monitor,
 };
-
-use crate::{rdb_query_builder::RdbQueryBuilder, rdb_router::RdbRouter, Sinker};
 
 #[derive(Clone)]
 pub struct SqlSinker {

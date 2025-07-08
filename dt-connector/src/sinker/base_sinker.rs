@@ -1,14 +1,13 @@
-use std::{
-    sync::{Arc, Mutex},
-    time::Instant,
-};
+use std::sync::Arc;
+
+use tokio::{sync::Mutex, time::Instant};
 
 use dt_common::monitor::{counter_type::CounterType, monitor::Monitor};
 
 pub struct BaseSinker {}
 
 impl BaseSinker {
-    pub fn update_batch_monitor(
+    pub async fn update_batch_monitor(
         monitor: &mut Arc<Mutex<Monitor>>,
         batch_size: usize,
         data_size: usize,
@@ -16,7 +15,7 @@ impl BaseSinker {
     ) -> anyhow::Result<()> {
         monitor
             .lock()
-            .unwrap()
+            .await
             .add_counter(CounterType::RecordsPerQuery, batch_size)
             .add_counter(CounterType::RecordCount, batch_size)
             .add_counter(CounterType::DataBytes, data_size)
@@ -27,7 +26,7 @@ impl BaseSinker {
         Ok(())
     }
 
-    pub fn update_serial_monitor(
+    pub async fn update_serial_monitor(
         monitor: &mut Arc<Mutex<Monitor>>,
         record_count: usize,
         data_size: usize,
@@ -35,7 +34,7 @@ impl BaseSinker {
     ) -> anyhow::Result<()> {
         monitor
             .lock()
-            .unwrap()
+            .await
             .add_batch_counter(CounterType::RecordsPerQuery, record_count, record_count)
             .add_counter(CounterType::RecordCount, record_count)
             .add_counter(CounterType::SerialWrites, record_count)

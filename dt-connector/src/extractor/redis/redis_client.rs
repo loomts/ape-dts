@@ -1,23 +1,26 @@
-use super::redis_resp_reader::RedisRespReader;
-use super::redis_resp_types::Value;
-use super::StreamReader;
 use anyhow::bail;
 use async_std::io::BufReader;
 use async_std::net::TcpStream;
 use async_std::prelude::*;
+use async_trait::async_trait;
+use futures::executor::block_on;
+use url::Url;
+
+use super::redis_resp_reader::RedisRespReader;
+use super::redis_resp_types::Value;
+use super::StreamReader;
 use dt_common::error::Error;
 use dt_common::meta::redis::command::cmd_encoder::CmdEncoder;
 use dt_common::meta::redis::redis_object::RedisCmd;
-use futures::executor::block_on;
-use url::Url;
 
 pub struct RedisClient {
     pub url: String,
     stream: BufReader<TcpStream>,
 }
 
+#[async_trait]
 impl StreamReader for RedisClient {
-    fn read_bytes(&mut self, size: usize) -> anyhow::Result<Vec<u8>> {
+    async fn read_bytes(&mut self, size: usize) -> anyhow::Result<Vec<u8>> {
         block_on(self.read_bytes(size))
     }
 }

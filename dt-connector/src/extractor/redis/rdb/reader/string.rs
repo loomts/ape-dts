@@ -1,10 +1,9 @@
 use anyhow::bail;
-use dt_common::error::Error;
-use dt_common::meta::redis::redis_object::RedisString;
-
-use crate::extractor::redis::StreamReader;
 
 use super::rdb_reader::RdbReader;
+use crate::extractor::redis::StreamReader;
+use dt_common::error::Error;
+use dt_common::meta::redis::redis_object::RedisString;
 
 const RDB_ENC_INT8: u8 = 0;
 const RDB_ENC_INT16: u8 = 1;
@@ -12,20 +11,20 @@ const RDB_ENC_INT32: u8 = 2;
 const RDB_ENC_LZF: u8 = 3;
 
 impl RdbReader<'_> {
-    pub fn read_string(&mut self) -> anyhow::Result<RedisString> {
-        let (len, special) = self.read_encoded_length()?;
+    pub async fn read_string(&mut self) -> anyhow::Result<RedisString> {
+        let (len, special) = self.read_encoded_length().await?;
         let bytes = if special {
             match len as u8 {
-                RDB_ENC_INT8 => self.read_i8()?.to_string().as_bytes().to_vec(),
+                RDB_ENC_INT8 => self.read_i8().await?.to_string().as_bytes().to_vec(),
 
-                RDB_ENC_INT16 => self.read_i16()?.to_string().as_bytes().to_vec(),
+                RDB_ENC_INT16 => self.read_i16().await?.to_string().as_bytes().to_vec(),
 
-                RDB_ENC_INT32 => self.read_i32()?.to_string().as_bytes().to_vec(),
+                RDB_ENC_INT32 => self.read_i32().await?.to_string().as_bytes().to_vec(),
 
                 RDB_ENC_LZF => {
-                    let in_len = self.read_length()?;
-                    let out_len = self.read_length()?;
-                    let in_buf = self.read_bytes(in_len as usize)?;
+                    let in_len = self.read_length().await?;
+                    let out_len = self.read_length().await?;
+                    let in_buf = self.read_bytes(in_len as usize).await?;
                     self.lzf_decompress(&in_buf, out_len as usize)?
                 }
 
@@ -37,7 +36,7 @@ impl RdbReader<'_> {
                 }
             }
         } else {
-            self.read_bytes(len as usize)?
+            self.read_bytes(len as usize).await?
         };
         Ok(RedisString { bytes })
     }

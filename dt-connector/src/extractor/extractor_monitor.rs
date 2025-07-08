@@ -1,7 +1,6 @@
-use std::{
-    sync::{Arc, Mutex},
-    time::Instant,
-};
+use std::sync::Arc;
+
+use tokio::{sync::Mutex, time::Instant};
 
 use dt_common::monitor::{counter_type::CounterType, monitor::Monitor};
 
@@ -30,9 +29,9 @@ pub struct ExtractorMonitor {
 }
 
 impl ExtractorMonitor {
-    pub fn new(monitor: Arc<Mutex<Monitor>>) -> Self {
-        let count_window = monitor.lock().unwrap().count_window;
-        let time_window_secs = monitor.lock().unwrap().time_window_secs;
+    pub async fn new(monitor: Arc<Mutex<Monitor>>) -> Self {
+        let count_window = monitor.lock().await.count_window;
+        let time_window_secs = monitor.lock().await.time_window_secs;
         Self {
             monitor,
             last_flush_time: Instant::now(),
@@ -43,7 +42,7 @@ impl ExtractorMonitor {
         }
     }
 
-    pub fn try_flush(&mut self, force: bool) {
+    pub async fn try_flush(&mut self, force: bool) {
         let record_count = self.counters.record_count - self.flushed_counters.record_count;
         let record_size = self.counters.data_size - self.flushed_counters.data_size;
         // to avoid too many sub counters, add counter by batch
@@ -53,7 +52,7 @@ impl ExtractorMonitor {
         {
             self.monitor
                 .lock()
-                .unwrap()
+                .await
                 .add_counter(CounterType::RecordCount, record_count)
                 .add_counter(CounterType::DataBytes, record_size);
             self.last_flush_time = Instant::now();

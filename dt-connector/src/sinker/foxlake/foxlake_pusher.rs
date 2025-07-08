@@ -1,6 +1,24 @@
+use std::{str::FromStr, sync::Arc};
+
 use anyhow::{Context, Ok};
 use async_trait::async_trait;
 use chrono::{DateTime, Datelike, Timelike, Utc};
+use orc_format::{
+    schema::{Field, Schema},
+    writer::{data::GenericData, Config, Writer},
+};
+use rusoto_core::ByteStream;
+use rusoto_s3::{PutObjectRequest, S3Client, S3};
+use rust_decimal::Decimal;
+use tokio::{sync::Mutex, time::Instant};
+use uuid::Uuid;
+
+use super::{
+    decimal_util::DecimalUtil,
+    orc_sequencer::{OrcSequenceInfo, OrcSequencer},
+    unicode_util::UnicodeUtil,
+};
+use crate::{rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker};
 use dt_common::{
     config::{config_enums::ExtractType, s3_config::S3Config},
     log_info,
@@ -19,27 +37,6 @@ use dt_common::{
     },
     monitor::monitor::Monitor,
     utils::time_util::TimeUtil,
-};
-use orc_format::{
-    schema::{Field, Schema},
-    writer::{data::GenericData, Config, Writer},
-};
-use rusoto_core::ByteStream;
-use rusoto_s3::{PutObjectRequest, S3Client, S3};
-use rust_decimal::Decimal;
-use std::{
-    str::FromStr,
-    sync::{Arc, Mutex},
-    time::Instant,
-};
-use uuid::Uuid;
-
-use crate::{rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker};
-
-use super::{
-    decimal_util::DecimalUtil,
-    orc_sequencer::{OrcSequenceInfo, OrcSequencer},
-    unicode_util::UnicodeUtil,
 };
 
 pub struct FoxlakePusher {
@@ -89,7 +86,7 @@ impl Sinker for FoxlakePusher {
     }
 
     async fn refresh_meta(&mut self, _data: Vec<DdlData>) -> anyhow::Result<()> {
-        self.orc_sequencer.lock().unwrap().update_epoch();
+        self.orc_sequencer.lock().await.update_epoch();
         Ok(())
     }
 }
@@ -102,6 +99,7 @@ impl FoxlakePusher {
         let (_, all_data_size) = self.batch_push(items, false).await?;
 
         BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, all_data_size, start_time)
+            .await
     }
 
     pub async fn batch_push(
@@ -168,7 +166,7 @@ impl FoxlakePusher {
                 .reverse_router
                 .get_tb_map(&tb_meta.basic.schema, &tb_meta.basic.tb);
             let (data_file_name, meta_file_name, sequence_info) =
-                self.get_s3_file_info(src_schema, src_tb);
+                self.get_s3_file_info(src_schema, src_tb).await;
 
             let s3_file_meta = S3FileMeta {
                 schema: tb_meta.basic.schema.clone(),
@@ -512,14 +510,14 @@ impl FoxlakePusher {
 
 // s3 functions
 impl FoxlakePusher {
-    fn get_s3_file_info(&self, schema: &str, tb: &str) -> (String, String, OrcSequenceInfo) {
+    async fn get_s3_file_info(&self, schema: &str, tb: &str) -> (String, String, OrcSequenceInfo) {
         let dir = self.get_s3_file_dir(schema, tb);
         // currently we do not get sequence from position
         let log_sequence = "0_0";
         let uuid = Uuid::new_v4();
         let data_file_name = format!("log_dml_{}_{}.orc", log_sequence, uuid);
 
-        let sequence_info = self.orc_sequencer.lock().unwrap().get_sequence();
+        let sequence_info = self.orc_sequencer.lock().await.get_sequence();
         let width = 10;
         let orc_sequence = format!(
             "{:0>width$}_{:0>width$}",

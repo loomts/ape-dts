@@ -402,7 +402,7 @@ impl MysqlMetaFetcher {
                 col: my_col,
                 ref_schema,
                 ref_tb,
-                ref_col: ref_col,
+                ref_col,
             };
 
             if key.schema == schema && key.tb == tb {

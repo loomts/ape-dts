@@ -1,6 +1,7 @@
 # Migrate data from Postgres to Postgres
 
 # Prerequisites
+
 - [prerequisites](./prerequisites.md)
 
 - This article is for quick start, refer to [templates](/docs/templates/pg_to_pg.md) and [common configs](/docs/en/config.md) for more details.
@@ -8,6 +9,7 @@
 # Prepare Postgres instances
 
 ## Source
+
 ```
 docker run --name some-postgres-1 \
 -p 5433:5432 \
@@ -40,6 +42,7 @@ docker run --name some-postgres-2 \
 # Migrate structures
 
 ## Prepare data
+
 ```
 psql -h 127.0.0.1 -U postgres -d postgres -p 5433 -W
 
@@ -48,6 +51,7 @@ CREATE TABLE test_db.tb_1(id int, value int, primary key(id));
 ```
 
 ## Start task
+
 ```
 rm -rf /tmp/ape_dts
 mkdir -p /tmp/ape_dts
@@ -78,10 +82,11 @@ EOL
 ```
 docker run --rm --network host \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
-"$APE_DTS_IMAGE" /task_config.ini 
+"$APE_DTS_IMAGE" /task_config.ini
 ```
 
 ## Check results
+
 ```
 psql -h 127.0.0.1 -U postgres -d postgres -p 5434 -W
 
@@ -91,13 +96,15 @@ SET search_path TO test_db;
 
 ```
          List of relations
- Schema  | Name | Type  |  Owner   
+ Schema  | Name | Type  |  Owner
 ---------+------+-------+----------
  test_db | tb_1 | table | postgres
 ```
 
 # Migrate snapshot data
+
 ## Prepare data
+
 ```
 psql -h 127.0.0.1 -U postgres -d postgres -p 5433 -W
 
@@ -105,6 +112,7 @@ INSERT INTO test_db.tb_1 VALUES(1,1),(2,2),(3,3),(4,4);
 ```
 
 ## Start task
+
 ```
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
@@ -134,10 +142,11 @@ EOL
 ```
 docker run --rm --network host \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
-"$APE_DTS_IMAGE" /task_config.ini 
+"$APE_DTS_IMAGE" /task_config.ini
 ```
 
 ## Check results
+
 ```
 psql -h 127.0.0.1 -U postgres -d postgres -p 5434 -W
 
@@ -145,7 +154,7 @@ SELECT * FROM test_db.tb_1 ORDER BY id;
 ```
 
 ```
- id | value 
+ id | value
 ----+-------
   1 |     1
   2 |     2
@@ -154,10 +163,13 @@ SELECT * FROM test_db.tb_1 ORDER BY id;
 ```
 
 # Check data
+
 - check the differences between target data and source data
 
 ## Prepare data
+
 - change target table records
+
 ```
 psql -h 127.0.0.1 -U postgres -d postgres -p 5434 -W
 
@@ -166,6 +178,7 @@ UPDATE test_db.tb_1 SET value=1 WHERE id=2;
 ```
 
 ## Start task
+
 ```
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
@@ -196,23 +209,29 @@ EOL
 docker run --rm --network host \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
 -v "/tmp/ape_dts/check_data_task_log/:/logs/" \
-"$APE_DTS_IMAGE" /task_config.ini 
+"$APE_DTS_IMAGE" /task_config.ini
 ```
 
 ## Check results
+
 - cat /tmp/ape_dts/check_data_task_log/check/miss.log
+
 ```
 {"log_type":"Miss","schema":"test_db","tb":"tb_1","id_col_values":{"id":"1"},"diff_col_values":{}}
 ```
+
 - cat /tmp/ape_dts/check_data_task_log/check/diff.log
+
 ```
 {"log_type":"Diff","schema":"test_db","tb":"tb_1","id_col_values":{"id":"2"},"diff_col_values":{"value":{"src":"2","dst":"1"}}}
 ```
 
 # Revise data
+
 - revise target data based on "check data" task results
 
 ## Start task
+
 ```
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
@@ -243,10 +262,11 @@ EOL
 docker run --rm --network host \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
 -v "/tmp/ape_dts/check_data_task_log/check/:/check_data_task_log/" \
-"$APE_DTS_IMAGE" /task_config.ini 
+"$APE_DTS_IMAGE" /task_config.ini
 ```
 
 ## Check results
+
 ```
 psql -h 127.0.0.1 -U postgres -d postgres -p 5434 -W
 
@@ -254,7 +274,7 @@ SELECT * FROM test_db.tb_1 ORDER BY id;
 ```
 
 ```
- id | value 
+ id | value
 ----+-------
   1 |     1
   2 |     2
@@ -263,9 +283,11 @@ SELECT * FROM test_db.tb_1 ORDER BY id;
 ```
 
 # Review data
+
 - check if target data revised based on "check data" task results
 
 ## Start task
+
 ```
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
@@ -297,15 +319,17 @@ docker run --rm --network host \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
 -v "/tmp/ape_dts/check_data_task_log/check/:/check_data_task_log/" \
 -v "/tmp/ape_dts/review_data_task_log/:/logs/" \
-"$APE_DTS_IMAGE" /task_config.ini 
+"$APE_DTS_IMAGE" /task_config.ini
 ```
 
 ## Check results
+
 - /tmp/ape_dts/review_data_task_log/check/miss.log and /tmp/ape_dts/review_data_task_log/check/diff.log should be empty
 
 # CDC task
 
 ## Drop replication slot if exists
+
 ```
 psql -h 127.0.0.1 -U postgres -d postgres -p 5433 -W
 
@@ -347,10 +371,11 @@ EOL
 ```
 docker run --rm --network host \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
-"$APE_DTS_IMAGE" /task_config.ini 
+"$APE_DTS_IMAGE" /task_config.ini
 ```
 
 ## Change source data
+
 ```
 psql -h 127.0.0.1 -U postgres -d postgres -p 5433 -W
 
@@ -360,6 +385,7 @@ INSERT INTO test_db.tb_1 VALUES(5,5);
 ```
 
 ## Check results
+
 ```
 psql -h 127.0.0.1 -U postgres -d postgres -p 5434 -W
 
@@ -367,7 +393,7 @@ SELECT * FROM test_db.tb_1 ORDER BY id;
 ```
 
 ```
- id |  value  
+ id |  value
 ----+---------
   2 | 2000000
   3 |       3
@@ -380,6 +406,7 @@ SELECT * FROM test_db.tb_1 ORDER BY id;
 ## Enable ddl capture in source
 
 - Create a meta table to store ddl info
+
 ```
 CREATE TABLE public.ape_dts_ddl_command
 (
@@ -401,6 +428,7 @@ CREATE TABLE public.ape_dts_ddl_command
 ```
 
 - Create a function to capture ddl and record it into ddl meta table
+
 ```
 CREATE FUNCTION public.ape_dts_capture_ddl()
   RETURNS event_trigger
@@ -460,17 +488,20 @@ $BODY$;
 ```
 
 - Alter the function owner to your account
+
 ```
 ALTER FUNCTION public.ape_dts_capture_ddl() OWNER TO postgres;
 ```
 
 - Create an event trigger on ddl_command_end and execute the capture function
+
 ```
 CREATE EVENT TRIGGER ape_dts_intercept_ddl ON ddl_command_end
 EXECUTE PROCEDURE public.ape_dts_capture_ddl();
 ```
 
 ## Start task
+
 ```
 cat <<EOL > /tmp/ape_dts/task_config.ini
 [extractor]
@@ -504,10 +535,11 @@ EOL
 ```
 docker run --rm --network host \
 -v "/tmp/ape_dts/task_config.ini:/task_config.ini" \
-"$APE_DTS_IMAGE" /task_config.ini 
+"$APE_DTS_IMAGE" /task_config.ini
 ```
 
 ## Do ddls in source
+
 ```
 psql -h 127.0.0.1 -U postgres -d postgres -p 5433 -W
 
@@ -516,6 +548,7 @@ INSERT INTO test_db.tb_2 VALUES(1,1);
 ```
 
 ## Check results
+
 ```
 psql -h 127.0.0.1 -U postgres -d postgres -p 5434 -W
 
@@ -523,7 +556,7 @@ SELECT * FROM test_db.tb_2 ORDER BY id;
 ```
 
 ```
- id | value 
+ id | value
 ----+-------
   1 |     1
 ```

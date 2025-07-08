@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 
-use crate::log_monitor;
-use crate::monitor::counter_type::AggregateType;
+use async_trait::async_trait;
 
 use super::counter::Counter;
 use super::counter_type::{CounterType, WindowType};
 use super::time_window_counter::TimeWindowCounter;
 use super::FlushableMonitor;
+use crate::log_monitor;
+use crate::monitor::counter_type::AggregateType;
 
 #[derive(Clone, Default)]
 pub struct Monitor {
@@ -19,9 +20,10 @@ pub struct Monitor {
     pub count_window: usize,
 }
 
+#[async_trait]
 impl FlushableMonitor for Monitor {
-    fn flush(&mut self) {
-        self.flush();
+    async fn flush(&mut self) {
+        self.flush().await;
     }
 }
 
@@ -44,7 +46,7 @@ impl Monitor {
         }
     }
 
-    pub fn flush(&mut self) {
+    pub async fn flush(&mut self) {
         for (counter_type, counter) in self.time_window_counters.iter_mut() {
             let statistics = counter.statistics();
             let mut log = format!("{} | {} | {}", self.name, self.description, counter_type);

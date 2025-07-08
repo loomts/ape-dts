@@ -3,8 +3,8 @@ use crate::extractor::redis::StreamReader;
 use super::rdb_reader::RdbReader;
 
 impl RdbReader<'_> {
-    pub fn read_byte(&mut self) -> anyhow::Result<u8> {
-        let buf = self.read_bytes(1).unwrap();
+    pub async fn read_byte(&mut self) -> anyhow::Result<u8> {
+        let buf = self.read_bytes(1).await.unwrap();
         Ok(buf[0])
     }
 }

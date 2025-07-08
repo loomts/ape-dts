@@ -1,28 +1,25 @@
-use std::{
-    str::FromStr,
-    sync::{Arc, Mutex, RwLock},
-    time::Instant,
+use std::{str::FromStr, sync::Arc};
+
+use anyhow::Context;
+use async_trait::async_trait;
+use sqlx::{
+    postgres::{PgConnectOptions, PgPoolOptions},
+    Executor, Pool, Postgres,
 };
+use tokio::{sync::Mutex, sync::RwLock, time::Instant};
 
 use crate::{
     call_batch_fn, close_conn_pool, data_marker::DataMarker, rdb_query_builder::RdbQueryBuilder,
     rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker,
 };
-
-use anyhow::Context;
 use dt_common::{
     log_error, log_info,
-    meta::ddl_meta::{ddl_data::DdlData, ddl_type::DdlType},
+    meta::{
+        ddl_meta::ddl_data::DdlData, ddl_meta::ddl_type::DdlType,
+        pg::pg_meta_manager::PgMetaManager, row_data::RowData, row_type::RowType,
+    },
     monitor::monitor::Monitor,
 };
-use sqlx::{
-    postgres::{PgConnectOptions, PgPoolOptions},
-    Executor, Pool, Postgres,
-};
-
-use dt_common::meta::{pg::pg_meta_manager::PgMetaManager, row_data::RowData, row_type::RowType};
-
-use async_trait::async_trait;
 
 #[derive(Clone)]
 pub struct PgSinker {
@@ -111,7 +108,7 @@ impl PgSinker {
         let mut data_size = 0;
 
         let mut tx = self.conn_pool.begin().await?;
-        if let Some(sql) = self.get_data_marker_sql() {
+        if let Some(sql) = self.get_data_marker_sql().await {
             sqlx::query(&sql)
                 .execute(&mut tx)
                 .await
@@ -133,6 +130,7 @@ impl PgSinker {
         tx.commit().await?;
 
         BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
+            .await
     }
 
     async fn batch_delete(
@@ -150,7 +148,7 @@ impl PgSinker {
             query_builder.get_batch_delete_query(data, start_index, batch_size)?;
         let query = query_builder.create_pg_query(&query_info);
 
-        if let Some(sql) = self.get_data_marker_sql() {
+        if let Some(sql) = self.get_data_marker_sql().await {
             let mut tx = self.conn_pool.begin().await?;
             sqlx::query(&sql).execute(&mut tx).await?;
             query.execute(&mut tx).await?;
@@ -159,7 +157,7 @@ impl PgSinker {
             query.execute(&self.conn_pool).await?;
         }
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time)
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
 
     async fn batch_insert(
@@ -181,7 +179,7 @@ impl PgSinker {
             query_builder.get_batch_insert_query(data, start_index, batch_size, self.replace)?;
         let query = query_builder.create_pg_query(&query_info);
 
-        let exec_error = if let Some(sql) = self.get_data_marker_sql() {
+        let exec_error = if let Some(sql) = self.get_data_marker_sql().await {
             let mut tx = self.conn_pool.begin().await?;
             sqlx::query(&sql).execute(&mut tx).await?;
             query.execute(&mut tx).await?;
@@ -204,12 +202,12 @@ impl PgSinker {
             self.serial_sink(sub_data).await?;
         }
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time)
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
     }
 
-    fn get_data_marker_sql(&self) -> Option<String> {
+    async fn get_data_marker_sql(&self) -> Option<String> {
         if let Some(data_marker) = &self.data_marker {
-            let data_marker = data_marker.read().unwrap();
+            let data_marker = data_marker.read().await;
             // CREATE TABLE ape_trans_pg.topo1 (
             //     data_origin_node varchar(255) NOT NULL,
             //     src_node varchar(255) NOT NULL,

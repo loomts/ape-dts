@@ -1,30 +1,26 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-    time::Instant,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use mongodb::{
     bson::{doc, Document},
     Client,
 };
-
-use dt_common::{log_error, monitor::monitor::Monitor};
-
-use dt_common::meta::{
-    col_value::ColValue,
-    mongo::{mongo_constant::MongoConstants, mongo_key::MongoKey},
-    rdb_tb_meta::RdbTbMeta,
-    row_data::RowData,
-    row_type::RowType,
-};
+use tokio::{sync::Mutex, time::Instant};
 
 use crate::{
     call_batch_fn,
     rdb_router::RdbRouter,
     sinker::{base_checker::BaseChecker, base_sinker::BaseSinker},
     Sinker,
+};
+use dt_common::{
+    log_error,
+    meta::col_value::ColValue,
+    meta::mongo::{mongo_constant::MongoConstants, mongo_key::MongoKey},
+    meta::rdb_tb_meta::RdbTbMeta,
+    meta::row_data::RowData,
+    meta::row_type::RowType,
+    monitor::monitor::Monitor,
 };
 
 #[derive(Clone)]
@@ -126,7 +122,7 @@ impl MongoChecker {
         }
         BaseChecker::log_dml(miss, diff);
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, 0, start_time)
+        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, 0, start_time).await
     }
 
     fn mock_tb_meta(schema: &str, tb: &str) -> RdbTbMeta {

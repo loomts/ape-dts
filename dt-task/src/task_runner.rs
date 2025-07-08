@@ -1,16 +1,20 @@
 use std::{
     collections::VecDeque,
-    fs::{self, File},
-    io::Read,
     panic,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex, RwLock,
+        Arc,
     },
-    time::Duration,
 };
 
 use anyhow::{bail, Context};
+use log4rs::config::RawConfig;
+use ratelimit::Ratelimiter;
+use tokio::{
+    fs::metadata, fs::File, io::AsyncReadExt, sync::Mutex, sync::RwLock, task::JoinSet,
+    time::Duration, try_join,
+};
+
 use dt_common::{
     config::{
         config_enums::{DbType, PipelineType},
@@ -40,10 +44,6 @@ use dt_pipeline::{
     base_pipeline::BasePipeline, http_server_pipeline::HttpServerPipeline,
     lua_processor::LuaProcessor, Pipeline,
 };
-
-use log4rs::config::RawConfig;
-use ratelimit::Ratelimiter;
-use tokio::{task::JoinSet, try_join};
 
 use crate::task_util::TaskUtil;
 
@@ -80,7 +80,7 @@ impl TaskRunner {
 
     pub async fn start_task(&self, enable_log4rs: bool) -> anyhow::Result<()> {
         if enable_log4rs {
-            self.init_log4rs()?;
+            self.init_log4rs().await?;
         }
 
         panic::set_hook(Box::new(|panic_info| {
@@ -132,9 +132,8 @@ impl TaskRunner {
 
         let mut pending_tbs = VecDeque::new();
         let schemas = TaskUtil::list_schemas(url, db_type).await?;
-        for (index, schema) in schemas.iter().enumerate() {
-            let do_global_structs = index == schemas.len() - 1;
-
+        let mut flag = 0;
+        for schema in schemas.iter() {
             if filter.filter_schema(schema) {
                 log_info!("schema: {} filtered", schema);
                 continue;
@@ -150,11 +149,13 @@ impl TaskRunner {
                 ExtractorConfig::PgStruct { url, .. } => Some(ExtractorConfig::PgStruct {
                     url: url.clone(),
                     schema: schema.clone(),
-                    do_global_structs,
+                    do_global_structs: flag == 0,
                 }),
 
                 _ => None,
             };
+
+            flag += 1;
 
             if let Some(extractor_config) = schema_extractor_config {
                 self.clone()
@@ -440,15 +441,26 @@ impl TaskRunner {
             .await?;
 
         // add monitors to global monitors
-        if let Ok(guard) = self.extractor_monitor.lock().as_mut() {
-            guard.add_monitor(&single_task_id, extractor_monitor.clone());
-        }
-        if let Ok(guard) = self.pipeline_monitor.lock().as_mut() {
-            guard.add_monitor(&single_task_id, pipeline_monitor.clone());
-        }
-        if let Ok(guard) = self.sinker_monitor.lock().as_mut() {
-            guard.add_monitor(&single_task_id, sinker_monitor.clone());
-        }
+        tokio::join!(
+            async {
+                self.extractor_monitor
+                    .lock()
+                    .await
+                    .add_monitor(&single_task_id, extractor_monitor.clone());
+            },
+            async {
+                self.pipeline_monitor
+                    .lock()
+                    .await
+                    .add_monitor(&single_task_id, pipeline_monitor.clone());
+            },
+            async {
+                self.sinker_monitor
+                    .lock()
+                    .await
+                    .add_monitor(&single_task_id, sinker_monitor.clone());
+            }
+        );
 
         // do pre operations before task starts
         self.pre_single_task(sinker_data_marker).await?;
@@ -498,15 +510,20 @@ impl TaskRunner {
         }
 
         // remove monitors from global monitors
-        if let Ok(guard) = self.extractor_monitor.lock().as_mut() {
-            guard.remove_monitor(&single_task_id);
-        }
-        if let Ok(guard) = self.pipeline_monitor.lock().as_mut() {
-            guard.remove_monitor(&single_task_id);
-        }
-        if let Ok(guard) = self.sinker_monitor.lock().as_mut() {
-            guard.remove_monitor(&single_task_id);
-        }
+        tokio::join!(
+            async {
+                let mut guard = self.extractor_monitor.lock().await;
+                guard.remove_monitor(&single_task_id).await;
+            },
+            async {
+                let mut guard = self.pipeline_monitor.lock().await;
+                guard.remove_monitor(&single_task_id).await;
+            },
+            async {
+                let mut guard = self.sinker_monitor.lock().await;
+                guard.remove_monitor(&single_task_id).await;
+            }
+        );
 
         Ok(())
     }
@@ -583,14 +600,15 @@ impl TaskRunner {
         }
     }
 
-    fn init_log4rs(&self) -> anyhow::Result<()> {
+    async fn init_log4rs(&self) -> anyhow::Result<()> {
         let log4rs_file = &self.config.runtime.log4rs_file;
-        if fs::metadata(log4rs_file).is_err() {
+        if metadata(log4rs_file).await.is_err() {
             return Ok(());
         }
 
         let mut config_str = String::new();
-        File::open(log4rs_file)?.read_to_string(&mut config_str)?;
+        let mut file = File::open(log4rs_file).await?;
+        file.read_to_string(&mut config_str).await?;
 
         match &self.config.sinker {
             SinkerConfig::MysqlCheck { check_log_dir, .. }
@@ -676,9 +694,17 @@ impl TaskRunner {
                 TimeUtil::sleep_millis(interval_secs * 1000).await;
             }
 
-            extractor_monitor.lock().unwrap().flush();
-            pipeline_monitor.lock().unwrap().flush();
-            sinker_monitor.lock().unwrap().flush();
+            tokio::join!(
+                async {
+                    extractor_monitor.lock().await.flush().await;
+                },
+                async {
+                    pipeline_monitor.lock().await.flush().await;
+                },
+                async {
+                    sinker_monitor.lock().await.flush().await;
+                }
+            );
 
             if finished {
                 break;

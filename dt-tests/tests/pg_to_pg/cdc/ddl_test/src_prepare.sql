@@ -1,4 +1,4 @@
-DROP TRIGGER IF EXISTS ape_dts_intercept_ddl ON ddl_command_end;
+DROP EVENT TRIGGER IF EXISTS ape_dts_intercept_ddl;
 
 DROP FUNCTION IF EXISTS public.ape_dts_capture_ddl() CASCADE;
 
@@ -88,6 +88,9 @@ ALTER FUNCTION public.ape_dts_capture_ddl() OWNER TO postgres;
 CREATE EVENT TRIGGER ape_dts_intercept_ddl ON ddl_command_end
 EXECUTE PROCEDURE public.ape_dts_capture_ddl();
 ```
+
+ALTER EVENT TRIGGER ape_dts_intercept_ddl ENABLE ALWAYS;
+
 
 -- create test schemas and tables
 DROP SCHEMA IF EXISTS test_db_1 CASCADE;

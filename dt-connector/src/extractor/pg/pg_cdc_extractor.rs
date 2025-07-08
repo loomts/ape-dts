@@ -3,15 +3,14 @@ use std::{
     pin::Pin,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
+        Arc,
     },
-    time::{Duration, Instant, UNIX_EPOCH},
+    time::UNIX_EPOCH,
 };
 
 use anyhow::bail;
 use async_trait::async_trait;
 use futures::StreamExt;
-
 use postgres_protocol::message::backend::{
     DeleteBody, InsertBody,
     LogicalReplicationMessage::{
@@ -21,18 +20,10 @@ use postgres_protocol::message::backend::{
     ReplicationMessage::*,
     TupleData, UpdateBody,
 };
-
 use postgres_types::PgLsn;
 use sqlx::{postgres::PgArguments, query::Query, Pool, Postgres};
+use tokio::{sync::Mutex, time::Duration, time::Instant};
 use tokio_postgres::replication::LogicalReplicationStream;
-
-use dt_common::{
-    config::{config_enums::DbType, config_token_parser::ConfigTokenParser},
-    error::Error,
-    log_error, log_info,
-    rdb_filter::RdbFilter,
-    utils::time_util::TimeUtil,
-};
 
 use crate::{
     close_conn_pool,
@@ -42,16 +33,21 @@ use crate::{
     },
     Extractor,
 };
-use dt_common::meta::{
-    adaptor::pg_col_value_convertor::PgColValueConvertor,
-    col_value::ColValue,
-    dt_data::DtData,
-    pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
-    position::Position,
-    rdb_tb_meta::RdbTbMeta,
-    row_data::RowData,
-    row_type::RowType,
-    syncer::Syncer,
+use dt_common::{
+    config::{config_enums::DbType, config_token_parser::ConfigTokenParser},
+    error::Error,
+    log_error, log_info,
+    meta::adaptor::pg_col_value_convertor::PgColValueConvertor,
+    meta::col_value::ColValue,
+    meta::dt_data::DtData,
+    meta::pg::{pg_meta_manager::PgMetaManager, pg_tb_meta::PgTbMeta},
+    meta::position::Position,
+    meta::rdb_tb_meta::RdbTbMeta,
+    meta::row_data::RowData,
+    meta::row_type::RowType,
+    meta::syncer::Syncer,
+    rdb_filter::RdbFilter,
+    utils::time_util::TimeUtil,
 };
 
 pub struct PgCdcExtractor {
@@ -237,7 +233,7 @@ impl PgCdcExtractor {
         start_lsn: &str,
     ) -> anyhow::Result<()> {
         let lsn: PgLsn =
-            if let Position::PgCdc { lsn, .. } = &self.syncer.lock().unwrap().committed_position {
+            if let Position::PgCdc { lsn, .. } = &self.syncer.lock().await.committed_position {
                 if lsn.is_empty() {
                     start_lsn.parse().unwrap()
                 } else {
@@ -574,19 +570,18 @@ impl PgCdcExtractor {
         conn_pool: &Pool<Postgres>,
     ) -> anyhow::Result<()> {
         let (received_lsn, received_timestamp) =
-            if let Position::PgCdc { lsn, timestamp } = &syncer.lock().unwrap().received_position {
+            if let Position::PgCdc { lsn, timestamp } = &syncer.lock().await.received_position {
                 (lsn.clone(), timestamp.clone())
             } else {
                 (String::new(), String::new())
             };
 
-        let (flushed_lsn, flushed_timetimestamp) = if let Position::PgCdc { lsn, timestamp } =
-            &syncer.lock().unwrap().committed_position
-        {
-            (lsn.clone(), timestamp.clone())
-        } else {
-            (String::new(), String::new())
-        };
+        let (flushed_lsn, flushed_timetimestamp) =
+            if let Position::PgCdc { lsn, timestamp } = &syncer.lock().await.committed_position {
+                (lsn.clone(), timestamp.clone())
+            } else {
+                (String::new(), String::new())
+            };
 
         // create table ape_dts_heartbeat(
         //     slot_name character varying(64) not null,

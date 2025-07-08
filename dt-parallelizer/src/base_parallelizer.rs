@@ -1,4 +1,10 @@
+use std::collections::VecDeque;
+use std::sync::Arc;
+
 use anyhow::bail;
+use ratelimit::Ratelimiter;
+use tokio::sync::Mutex;
+
 use dt_common::meta::dcl_meta::dcl_data::DclData;
 use dt_common::meta::ddl_meta::ddl_data::DdlData;
 use dt_common::meta::{dt_data::DtItem, dt_queue::DtQueue, row_data::RowData};
@@ -6,9 +12,6 @@ use dt_common::monitor::counter::Counter;
 use dt_common::monitor::counter_type::CounterType;
 use dt_common::{error::Error, monitor::monitor::Monitor};
 use dt_connector::Sinker;
-use ratelimit::Ratelimiter;
-use std::collections::VecDeque;
-use std::sync::{Arc, Mutex};
 
 #[derive(Default)]
 pub struct BaseParallelizer {
@@ -66,7 +69,7 @@ impl BaseParallelizer {
     ) -> anyhow::Result<DtItem> {
         // rps limit
         if let Some(rps_limiter) = &self.rps_limiter {
-            // refer: https://docs.rs/ratelimit/0.7.1/ratelimit
+            // refer: https://docs.rs/ratelimit/0.10.0/ratelimit/
             if let Err(_sleep) = rps_limiter.try_wait() {
                 bail! {Error::PipelineError(format!(
                     "reach rps limit: {}",
@@ -88,7 +91,7 @@ impl BaseParallelizer {
 
     pub async fn update_monitor(&self, record_size_counter: &Counter) {
         if record_size_counter.value > 0 {
-            self.monitor.lock().unwrap().add_batch_counter(
+            self.monitor.lock().await.add_batch_counter(
                 CounterType::RecordSize,
                 record_size_counter.value,
                 record_size_counter.count,

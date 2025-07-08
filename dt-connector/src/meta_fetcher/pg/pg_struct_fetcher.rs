@@ -717,8 +717,7 @@ impl PgStructFetcher {
     }
 
     async fn get_schema_privilege(&mut self) -> anyhow::Result<Vec<PgPrivilege>> {
-        let sql = format!(
-            "SELECT
+        let sql = "SELECT
               n.nspname AS schema_name,
               'GRANT ' || 
               string_agg(acl.privilege_type, ',') || 
@@ -733,11 +732,10 @@ impl PgStructFetcher {
               acl.grantee::regrole::text NOT LIKE 'pg_%' AND 
               acl.grantee::regrole::text NOT IN ('postgres', 'PUBLIC')
             GROUP BY
-              n.nspname, acl.grantee::regrole::text",
-        );
+              n.nspname, acl.grantee::regrole::text";
 
         let mut results = Vec::new();
-        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+        let mut rows = sqlx::query(sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await? {
             let grant_command = row.get::<String, _>("grant_command");
             let schema_name = Self::get_str_with_null(&row, "schema_name")?;
@@ -755,8 +753,7 @@ impl PgStructFetcher {
     }
 
     async fn get_table_privilege(&mut self) -> anyhow::Result<Vec<PgPrivilege>> {
-        let sql = format!(
-            "SELECT 
+        let sql = "SELECT 
                 table_schema,
                 table_name,
                 'GRANT ' || 
@@ -773,11 +770,10 @@ impl PgStructFetcher {
                 grantee NOT LIKE 'pg_%' AND 
                 grantee NOT IN ('postgres', 'PUBLIC')
             GROUP BY 
-                table_schema, table_name, grantee, is_grantable"
-        );
+                table_schema, table_name, grantee, is_grantable";
 
         let mut results = Vec::new();
-        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+        let mut rows = sqlx::query(sql).fetch(&self.conn_pool);
         while let Some(row) = rows.try_next().await? {
             let schema_name = Self::get_str_with_null(&row, "table_schema")?;
             let table_name = Self::get_str_with_null(&row, "table_name")?;
@@ -795,9 +791,9 @@ impl PgStructFetcher {
         Ok(results)
     }
 
+    #[allow(clippy::type_complexity)]
     async fn get_column_privilege(&mut self) -> anyhow::Result<Vec<PgPrivilege>> {
-        let sql = format!(
-            "SELECT 
+        let sql = "SELECT 
                 rcg.table_schema,
                 rcg.table_name,
                 rcg.column_name,
@@ -818,11 +814,10 @@ impl PgStructFetcher {
                 rtg.grantee IS NULL
             ORDER BY
                 rcg.table_schema, rcg.table_name, rcg.grantee
-            "
-        );
+            ";
 
         let mut results = Vec::new();
-        let mut rows = sqlx::query(&sql).fetch(&self.conn_pool);
+        let mut rows = sqlx::query(sql).fetch(&self.conn_pool);
 
         // key: (schema, table, grantee, is_grantable)
         // value: (privilege_type -> columns_set)
@@ -846,11 +841,9 @@ impl PgStructFetcher {
 
             let key = (schema_name, table_name, grantee, is_grantable);
 
-            let privilege_map = privilege_data.entry(key).or_insert_with(|| HashMap::new());
+            let privilege_map = privilege_data.entry(key).or_default();
 
-            let columns = privilege_map
-                .entry(privilege_type)
-                .or_insert_with(|| HashSet::new());
+            let columns = privilege_map.entry(privilege_type).or_default();
 
             columns.insert(column_name);
         }
@@ -901,7 +894,7 @@ impl PgStructFetcher {
                         continue;
                     }
                     if !sequence_name.is_empty() {
-                        let sequences = sequence_map.entry(schema).or_insert_with(HashSet::new);
+                        let sequences = sequence_map.entry(schema).or_default();
                         sequences.insert(sequence_name);
                     }
                 }
@@ -937,7 +930,7 @@ impl PgStructFetcher {
 
             let key = (schema_name, sequence_name, grantee, is_grantable);
 
-            let privileges = privilege_data.entry(key).or_insert_with(HashSet::new);
+            let privileges = privilege_data.entry(key).or_default();
             privileges.insert(privilege_type);
         }
 

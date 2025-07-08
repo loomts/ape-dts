@@ -1,20 +1,18 @@
-use std::{
-    sync::{Arc, Mutex},
-    time::Instant,
-};
+use std::sync::Arc;
 
 use anyhow::Context;
 use async_trait::async_trait;
+use rusoto_s3::S3Client;
+use sqlx::{MySql, Pool};
+use tokio::{sync::Mutex, time::Instant};
+
+use crate::{close_conn_pool, sinker::base_sinker::BaseSinker, Sinker};
 use dt_common::{
     config::{config_enums::ExtractType, s3_config::S3Config},
     log_debug, log_info,
     meta::dt_data::{DtData, DtItem},
     monitor::monitor::Monitor,
 };
-use rusoto_s3::S3Client;
-use sqlx::{MySql, Pool};
-
-use crate::{close_conn_pool, sinker::base_sinker::BaseSinker, Sinker};
 
 pub struct FoxlakeMerger {
     pub batch_size: usize,
@@ -52,6 +50,7 @@ impl FoxlakeMerger {
             all_data_size,
             start_time,
         )
+        .await
     }
 
     pub async fn batch_merge(&mut self, data: Vec<DtItem>) -> anyhow::Result<(usize, usize)> {

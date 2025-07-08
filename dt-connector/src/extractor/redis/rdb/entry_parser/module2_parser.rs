@@ -11,8 +11,8 @@ const MODULE_TYPE_NAME_CHAR_SET: &str =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
 impl ModuleParser {
-    pub fn load_from_buffer(
-        reader: &mut RdbReader,
+    pub async fn load_from_buffer(
+        reader: &mut RdbReader<'_>,
         key: RedisString,
         type_byte: u8,
     ) -> anyhow::Result<ModuleObject> {
@@ -23,13 +23,13 @@ impl ModuleParser {
             ))}
         }
 
-        let module_id = reader.read_length()?;
+        let module_id = reader.read_length().await?;
         let module_name = Self::module_type_name_by_id(module_id);
 
         log_info!("load module2 type: [{}] with raw", module_name);
-        Self::skip_module_data(reader)?;
+        Self::skip_module_data(reader).await?;
 
-        return Ok(ModuleObject::new());
+        Ok(ModuleObject::new())
     }
 
     pub fn module_type_name_by_id(module_id: u64) -> String {
@@ -44,21 +44,21 @@ impl ModuleParser {
         String::from_utf8(name_list).unwrap()
     }
 
-    fn skip_module_data(reader: &mut RdbReader) -> anyhow::Result<()> {
-        let mut opcode = reader.read_length()?;
+    async fn skip_module_data(reader: &mut RdbReader<'_>) -> anyhow::Result<()> {
+        let mut opcode = reader.read_length().await?;
         while opcode != 0 {
             match opcode {
                 1 | 2 => {
-                    reader.read_length()?;
+                    reader.read_length().await?;
                 }
                 3 => {
-                    reader.read_float()?;
+                    reader.read_float().await?;
                 }
                 4 => {
-                    reader.read_double()?;
+                    reader.read_double().await?;
                 }
                 5 => {
-                    reader.read_string()?;
+                    reader.read_string().await?;
                 }
                 _ => {
                     bail! {Error::RedisRdbError(format!(
@@ -66,7 +66,7 @@ impl ModuleParser {
                     ))}
                 }
             }
-            opcode = reader.read_length()?;
+            opcode = reader.read_length().await?;
         }
         Ok(())
     }

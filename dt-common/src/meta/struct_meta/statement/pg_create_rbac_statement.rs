@@ -78,7 +78,7 @@ impl PgCreateRbacStatement {
                     if let Some(pos) = config.find('=') {
                         let param = &config[..pos].trim();
                         let value = &config[pos + 1..].trim();
-                        if param.len() == 0 || value.len() == 0 {
+                        if param.is_empty() || value.is_empty() {
                             continue;
                         }
                         let alter_sql =

@@ -1,8 +1,10 @@
 use std::{
     cmp,
     str::FromStr,
-    sync::{atomic::AtomicBool, Arc, Mutex},
+    sync::{atomic::AtomicBool, Arc},
 };
+
+use tokio::sync::Mutex;
 
 use dt_common::{
     config::{
@@ -11,19 +13,17 @@ use dt_common::{
         task_config::TaskConfig,
     },
     meta::{
+        avro::avro_converter::AvroConverter, mongo::mongo_cdc_source::MongoCdcSource,
+        pg::pg_meta_manager::PgMetaManager, redis::redis_statistic_type::RedisStatisticType,
+        syncer::Syncer,
+    },
+    meta::{
         dt_queue::DtQueue, mysql::mysql_meta_manager::MysqlMetaManager,
         rdb_meta_manager::RdbMetaManager,
     },
     monitor::monitor::Monitor,
     rdb_filter::RdbFilter,
     time_filter::TimeFilter,
-};
-use dt_common::{
-    meta::{
-        avro::avro_converter::AvroConverter, mongo::mongo_cdc_source::MongoCdcSource,
-        pg::pg_meta_manager::PgMetaManager, redis::redis_statistic_type::RedisStatisticType,
-        syncer::Syncer,
-    },
     utils::redis_util::RedisUtil,
 };
 use dt_connector::{
@@ -79,7 +79,7 @@ impl ExtractorUtil {
             buffer,
             router,
             shut_down,
-            monitor: ExtractorMonitor::new(monitor),
+            monitor: ExtractorMonitor::new(monitor).await,
             data_marker,
             time_filter: TimeFilter::default(),
         };
