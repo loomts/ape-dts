@@ -101,7 +101,7 @@ test: CARGO_INCREMENTAL=0
 test: RUSTFLAGS='-Cinstrument-coverage'
 test: LLVM_PROFILE_FILE='cargo-test-%p-%m.profraw'
 test: ## Run tests.
-	cargo test
+	cargo test --workspace --lib
 
 .PHONY: test-cover
 test-cover: grcov test  ## Run tests with coverage report

@@ -1,3 +1,5 @@
+#[cfg(feature = "metrics")]
+use std::collections::HashMap;
 use std::{
     fs::{self, File},
     io::Read,
@@ -5,6 +7,8 @@ use std::{
 
 use anyhow::{bail, Ok};
 
+#[cfg(feature = "metrics")]
+use crate::config::metrics_config::MetricsConfig;
 use crate::error::Error;
 
 use super::{
@@ -42,6 +46,8 @@ pub struct TaskConfig {
     pub meta_center: Option<MetaCenterConfig>,
     pub data_marker: Option<DataMarkerConfig>,
     pub processor: Option<ProcessorConfig>,
+    #[cfg(feature = "metrics")]
+    pub metrics: MetricsConfig,
 }
 
 // sections
@@ -99,6 +105,8 @@ impl TaskConfig {
             data_marker: Self::load_data_marker_config(&loader)?,
             processor: Self::load_processor_config(&loader)?,
             meta_center: Self::load_meta_center_config(&loader)?,
+            #[cfg(feature = "metrics")]
+            metrics: Self::load_metrics_config(&loader)?,
         })
     }
 
@@ -340,6 +348,7 @@ impl TaskConfig {
         let batch_size: usize = loader.get_with_default(SINKER, BATCH_SIZE, 200);
 
         let basic = BasicSinkerConfig {
+            sink_type: sink_type.clone(),
             db_type: db_type.clone(),
             url: url.clone(),
             batch_size,
@@ -700,5 +709,25 @@ impl TaskConfig {
             }
         }
         Ok(Some(config))
+    }
+
+    #[cfg(feature = "metrics")]
+    fn load_metrics_config(loader: &IniLoader) -> anyhow::Result<MetricsConfig> {
+        let metrics_section = "metrics";
+        let labels_str: String = loader.get_optional(metrics_section, "labels");
+        let mut metrics_labels = HashMap::new();
+        if !labels_str.is_empty() {
+            for label_pair in labels_str.split(',') {
+                if let Some((key, value)) = label_pair.trim().split_once('=') {
+                    metrics_labels.insert(key.trim().to_string(), value.trim().to_string());
+                }
+            }
+        }
+        Ok(MetricsConfig {
+            http_host: loader.get_with_default(metrics_section, "http_host", "0.0.0.0".to_string()),
+            http_port: loader.get_with_default(metrics_section, "http_port", 9090),
+            workers: loader.get_with_default(metrics_section, "workers", 2),
+            metrics_labels,
+        })
     }
 }

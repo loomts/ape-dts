@@ -303,7 +303,7 @@ dependencies = [
  "serde_json",
  "strum",
  "strum_macros",
- "thiserror",
+ "thiserror 1.0.69",
  "typed-builder 0.16.2",
  "uuid",
 ]
@@ -898,7 +898,7 @@ dependencies = [
  "sealed",
  "serde",
  "static_assertions",
- "thiserror",
+ "thiserror 1.0.69",
  "time",
  "tokio",
  "url",
@@ -1178,6 +1178,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04d2cd9c18b9f454ed67da600630b021a8a80bf33f8c95896ab33aaf1c26b728"
 
 [[package]]
+name = "dashmap"
+version = "6.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5041cc499144891f3790297212f32a74fb938e5136a14943f338ef9e0ae276cf"
+dependencies = [
+ "cfg-if",
+ "crossbeam-utils",
+ "hashbrown 0.14.5",
+ "lock_api",
+ "once_cell",
+ "parking_lot_core 0.9.11",
+]
+
+[[package]]
 name = "data-encoding"
 version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1342,6 +1356,7 @@ checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 name = "dt-common"
 version = "0.1.0"
 dependencies = [
+ "actix-web",
  "anyhow",
  "apache-avro",
  "async-trait",
@@ -1350,6 +1365,7 @@ dependencies = [
  "chrono",
  "concurrent-queue",
  "configparser",
+ "dashmap",
  "dotenv",
  "futures",
  "hex",
@@ -1362,6 +1378,7 @@ dependencies = [
  "openssl",
  "openssl-sys",
  "project-root",
+ "prometheus",
  "redis",
  "regex",
  "serde",
@@ -1369,7 +1386,7 @@ dependencies = [
  "serde_yaml",
  "sqlx",
  "strum",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "url",
 ]
@@ -1413,7 +1430,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "strum",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "tokio-postgres",
  "url",
@@ -1508,6 +1525,7 @@ dependencies = [
  "log4rs",
  "mongodb",
  "project-root",
+ "prometheus",
  "ratelimit",
  "rdkafka",
  "redis",
@@ -2491,7 +2509,7 @@ dependencies = [
  "openssl-sys",
  "ref_slice",
  "snap 1.1.1",
- "thiserror",
+ "thiserror 1.0.69",
  "tracing",
  "twox-hash",
 ]
@@ -2677,7 +2695,7 @@ dependencies = [
  "serde-value",
  "serde_json",
  "serde_yaml",
- "thiserror",
+ "thiserror 1.0.69",
  "thread-id",
  "typemap-ors",
  "winapi",
@@ -2864,7 +2882,7 @@ dependencies = [
  "stringprep",
  "strsim 0.10.0",
  "take_mut",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "tokio-rustls 0.24.1",
  "tokio-util 0.7.15",
@@ -2896,7 +2914,7 @@ dependencies = [
  "serial_test",
  "sha1",
  "sha2 0.10.9",
- "thiserror",
+ "thiserror 1.0.69",
  "url",
  "zstd 0.13.3",
 ]
@@ -2916,7 +2934,7 @@ dependencies = [
  "quote",
  "syn 2.0.103",
  "termcolor",
- "thiserror",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -2952,7 +2970,7 @@ dependencies = [
  "sha2 0.10.9",
  "smallvec",
  "subprocess",
- "thiserror",
+ "thiserror 1.0.69",
  "time",
  "uuid",
  "zstd 0.13.3",
@@ -3163,7 +3181,7 @@ version = "0.1.0"
 source = "git+https://github.com/apecloud/orc-format#4fb40f9d94b00286d09396a1f3e520aa9cdcb7be"
 dependencies = [
  "byteorder",
- "protobuf",
+ "protobuf 2.28.0",
  "protoc-rust",
  "snap 0.2.5",
  "zstd 0.12.4",
@@ -3445,10 +3463,36 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8bccbff07d5ed689c4087d20d7307a52ab6141edeedf487c3876a55b86cf63df"
 
 [[package]]
+name = "prometheus"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ca5326d8d0b950a9acd87e6a3f94745394f62e4dae1b1ee22b2bc0c394af43a"
+dependencies = [
+ "cfg-if",
+ "fnv",
+ "lazy_static",
+ "memchr",
+ "parking_lot 0.12.4",
+ "protobuf 3.7.2",
+ "thiserror 2.0.12",
+]
+
+[[package]]
 name = "protobuf"
 version = "2.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
+
+[[package]]
+name = "protobuf"
+version = "3.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d65a1d4ddae7d8b5de68153b48f6aa3bba8cb002b243dbdbc55a5afbc98f99f4"
+dependencies = [
+ "once_cell",
+ "protobuf-support",
+ "thiserror 1.0.69",
+]
 
 [[package]]
 name = "protobuf-codegen"
@@ -3456,7 +3500,16 @@ version = "2.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "033460afb75cf755fcfc16dfaed20b86468082a2ea24e05ac35ab4a099a017d6"
 dependencies = [
- "protobuf",
+ "protobuf 2.28.0",
+]
+
+[[package]]
+name = "protobuf-support"
+version = "3.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e36c2f31e0a47f9280fb347ef5e461ffcd2c52dd520d8e216b52f93b0b0d7d6"
+dependencies = [
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -3475,7 +3528,7 @@ version = "2.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22f8a182bb17c485f20bdc4274a8c39000a61024cfe461c799b50fec77267838"
 dependencies = [
- "protobuf",
+ "protobuf 2.28.0",
  "protobuf-codegen",
  "protoc",
  "tempfile",
@@ -3595,7 +3648,7 @@ checksum = "36ea961700fd7260e7fa3701c8287d901b2172c51f9c1421fa0f21d7f7e184b7"
 dependencies = [
  "clocksource",
  "parking_lot 0.12.4",
- "thiserror",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -3622,7 +3675,6 @@ version = "4.8.0+2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ced38182dc436b3d9df0c77976f37a67134df26b050df1f0006688e46fc4c8be"
 dependencies = [
- "cmake",
  "libc",
  "libz-sys",
  "num_enum",
@@ -3679,7 +3731,7 @@ checksum = "ba009ff324d1fc1b900bd1fdb31564febe58a8ccc8a6fdbb93b543d33b13ca43"
 dependencies = [
  "getrandom 0.2.16",
  "libredox",
- "thiserror",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -4574,7 +4626,7 @@ dependencies = [
  "sqlformat",
  "sqlx-rt",
  "stringprep",
- "thiserror",
+ "thiserror 1.0.69",
  "time",
  "url",
  "uuid",
@@ -4777,7 +4829,16 @@ version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6aaf5339b578ea85b50e080feb250a3e8ae8cfcdff9a461c9ec2904bc923f52"
 dependencies = [
- "thiserror-impl",
+ "thiserror-impl 1.0.69",
+]
+
+[[package]]
+name = "thiserror"
+version = "2.0.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "567b8a2dae586314f7be2a752ec7474332959c6460e02bde30d702a66d488708"
+dependencies = [
+ "thiserror-impl 2.0.12",
 ]
 
 [[package]]
@@ -4785,6 +4846,17 @@ name = "thiserror-impl"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.103",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "2.0.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f7cf42b4507d8ea322120659672cf1b9dbb93f8f2d4ecfd6e51350ff5b17a1d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5041,7 +5113,7 @@ dependencies = [
  "log",
  "rand 0.8.5",
  "smallvec",
- "thiserror",
+ "thiserror 1.0.69",
  "tinyvec",
  "tokio",
  "url",
@@ -5062,7 +5134,7 @@ dependencies = [
  "parking_lot 0.12.4",
  "resolv-conf",
  "smallvec",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "trust-dns-proto",
 ]

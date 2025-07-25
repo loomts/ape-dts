@@ -428,14 +428,19 @@ impl MongoCdcExtractor {
         row_data: RowData,
         position: Position,
     ) -> anyhow::Result<()> {
-        if SYSTEM_DBS.contains(&row_data.schema.as_str())
-            || self
-                .filter
-                .filter_event(&row_data.schema, &row_data.tb, &row_data.row_type)
-        {
+        if SYSTEM_DBS.contains(&row_data.schema.as_str()) {
             return Ok(());
         }
-        self.base_extractor.push_row(row_data, position).await
+        if self
+            .filter
+            .filter_event(&row_data.schema, &row_data.tb, &row_data.row_type)
+        {
+            self.base_extractor
+                .push_dt_data(DtData::Heartbeat {}, position)
+                .await
+        } else {
+            self.base_extractor.push_row(row_data, position).await
+        }
     }
 
     fn parse_start_timestamp(&mut self) -> Timestamp {

@@ -1,4 +1,4 @@
-use std::{str::FromStr, sync::Arc};
+use std::{cmp, str::FromStr, sync::Arc};
 
 use anyhow::{Context, Ok};
 use async_trait::async_trait;
@@ -36,14 +36,14 @@ use dt_common::{
         time::dt_utc_time::DtNaiveTime,
     },
     monitor::monitor::Monitor,
-    utils::time_util::TimeUtil,
+    utils::{limit_queue::LimitedQueue, time_util::TimeUtil},
 };
 
 pub struct FoxlakePusher {
     pub url: String,
     pub batch_size: usize,
     pub meta_manager: MysqlMetaManager,
-    pub monitor: Arc<Mutex<Monitor>>,
+    pub monitor: Arc<Monitor>,
     pub s3_client: S3Client,
     pub s3_config: S3Config,
     pub extract_type: ExtractType,
@@ -93,12 +93,10 @@ impl Sinker for FoxlakePusher {
 
 impl FoxlakePusher {
     async fn batch_sink(&mut self, items: Vec<DtItem>) -> anyhow::Result<()> {
-        let start_time = Instant::now();
-
         let batch_size = items.len();
         let (_, all_data_size) = self.batch_push(items, false).await?;
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, all_data_size, start_time)
+        BaseSinker::update_batch_monitor(&self.monitor, batch_size as u64, all_data_size as u64)
             .await
     }
 
@@ -120,6 +118,7 @@ impl FoxlakePusher {
         let mut batch_row_count = 0;
         let mut batch_data_size = 0;
 
+        let mut rts = LimitedQueue::new(cmp::min(100, items.len()));
         for item in items {
             item_index += 1;
             batch_last_position = item.position;
@@ -194,7 +193,9 @@ impl FoxlakePusher {
                 });
                 futures.push(future);
             } else {
+                let start_time = Instant::now();
                 Self::push(&self.s3_client, &bucket, &s3_file_meta, orc_data).await?;
+                rts.push((start_time.elapsed().as_millis() as u64, 1));
             }
 
             s3_file_metas.push(s3_file_meta);
@@ -207,8 +208,12 @@ impl FoxlakePusher {
         }
 
         for future in futures {
+            let start_time = Instant::now();
             future.await.unwrap();
+            rts.push((start_time.elapsed().as_millis() as u64, 1));
         }
+        BaseSinker::update_monitor_rt(&self.monitor, &rts).await?;
+
         Ok((s3_file_metas, all_data_size))
     }
 

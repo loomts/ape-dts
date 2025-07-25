@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::Parallelizer;
+use crate::{DataSize, Parallelizer};
 use async_trait::async_trait;
 use dt_common::meta::{
     ddl_meta::ddl_data::DdlData,
@@ -31,32 +31,53 @@ impl Parallelizer for TableParallelizer {
         &mut self,
         data: Vec<RowData>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<DataSize> {
+        let data_size = DataSize {
+            count: data.len() as u64,
+            bytes: data.iter().map(|v| v.data_size as u64).sum(),
+        };
+
         let sub_datas = Self::partition_dml(data)?;
         self.base_parallelizer
             .sink_dml(sub_datas, sinkers, self.parallel_size, false)
-            .await
+            .await?;
+
+        Ok(data_size)
     }
 
     async fn sink_raw(
         &mut self,
         data: Vec<DtItem>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<DataSize> {
+        let data_size = DataSize {
+            count: data.len() as u64,
+            bytes: data.iter().map(|v| v.get_data_size()).sum(),
+        };
+
         let sub_datas = Self::partition_raw(data)?;
         self.base_parallelizer
             .sink_raw(sub_datas, sinkers, self.parallel_size, false)
-            .await
+            .await?;
+
+        Ok(data_size)
     }
 
     async fn sink_ddl(
         &mut self,
         data: Vec<DdlData>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<DataSize> {
+        let data_size = DataSize {
+            count: data.len() as u64,
+            bytes: data.iter().map(|v| v.get_data_size()).sum(),
+        };
+
         self.base_parallelizer
             .sink_ddl(vec![data], sinkers, 1, false)
-            .await
+            .await?;
+
+        Ok(data_size)
     }
 }
 

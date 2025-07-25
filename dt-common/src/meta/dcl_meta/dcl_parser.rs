@@ -23,13 +23,18 @@ impl DclParser {
         Self { db_type }
     }
 
-    pub fn parse(&self, sql: &str) -> anyhow::Result<DclData> {
+    pub fn parse(&self, sql: &str) -> anyhow::Result<Option<DclData>> {
         let sql = Self::remove_comments(sql);
+
+        if !Self::dcl_simple_judgment(&sql) {
+            return Ok(None);
+        }
+
         let input = sql.trim().as_bytes();
         match self.sql_query(input) {
             Ok((_, mut dcl)) => {
                 dcl.db_type = self.db_type.clone();
-                Ok(dcl)
+                Ok(Some(dcl))
             }
             Err(err) => {
                 let error = match err {
@@ -47,6 +52,14 @@ impl DclParser {
         // "create /*some comments,*/table/*some comments*/ `aaa`.`bbb`"
         let regex = Regex::new(r"(/\*([^*]|\*+[^*/*])*\*+/)|(--[^\n]*\n)").unwrap();
         regex.replace_all(sql, "")
+    }
+
+    fn dcl_simple_judgment(sql: &str) -> bool {
+        let sql_lowercase = sql.to_lowercase();
+        !sql_lowercase.trim_start().starts_with("insert into ")
+            && !sql_lowercase.trim_start().starts_with("update ")
+            && !sql_lowercase.trim_start().starts_with("delete ")
+            && !sql_lowercase.trim_start().starts_with("replace into ")
     }
 
     fn sql_query<'a>(&'a self, i: &'a [u8]) -> IResult<&'a [u8], DclData> {
@@ -232,13 +245,16 @@ mod tests {
     fn check_internal(expect_sqls: Vec<&str>, not_expect_sqls: Vec<&str>, dcl_type: DclType) {
         let parser = create_mysql_parser();
         for sql in expect_sqls {
-            let result = parser.parse(sql).unwrap();
+            let result = parser.parse(sql).unwrap().unwrap();
             assert_eq!(result.dcl_type, dcl_type);
         }
         for sql in not_expect_sqls {
             match parser.parse(sql) {
-                Ok(dcl_data) => {
+                Ok(Some(dcl_data)) => {
                     assert_ne!(dcl_data.dcl_type, dcl_type);
+                }
+                Ok(None) => {
+                    assert!(false);
                 }
                 Err(_) => {}
             };

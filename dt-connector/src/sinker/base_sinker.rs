@@ -1,49 +1,43 @@
 use std::sync::Arc;
 
-use tokio::{sync::Mutex, time::Instant};
-
-use dt_common::monitor::{counter_type::CounterType, monitor::Monitor};
+use dt_common::{
+    monitor::{counter_type::CounterType, monitor::Monitor},
+    utils::limit_queue::LimitedQueue,
+};
 
 pub struct BaseSinker {}
 
 impl BaseSinker {
     pub async fn update_batch_monitor(
-        monitor: &mut Arc<Mutex<Monitor>>,
-        batch_size: usize,
-        data_size: usize,
-        start_time: Instant,
+        monitor: &Arc<Monitor>,
+        batch_size: u64,
+        data_size: u64,
     ) -> anyhow::Result<()> {
         monitor
-            .lock()
-            .await
             .add_counter(CounterType::RecordsPerQuery, batch_size)
             .add_counter(CounterType::RecordCount, batch_size)
-            .add_counter(CounterType::DataBytes, data_size)
-            .add_counter(
-                CounterType::RtPerQuery,
-                start_time.elapsed().as_micros() as usize,
-            );
+            .add_counter(CounterType::DataBytes, data_size);
         Ok(())
     }
 
     pub async fn update_serial_monitor(
-        monitor: &mut Arc<Mutex<Monitor>>,
-        record_count: usize,
-        data_size: usize,
-        start_time: Instant,
+        monitor: &Arc<Monitor>,
+        record_count: u64,
+        data_size: u64,
     ) -> anyhow::Result<()> {
         monitor
-            .lock()
-            .await
             .add_batch_counter(CounterType::RecordsPerQuery, record_count, record_count)
             .add_counter(CounterType::RecordCount, record_count)
             .add_counter(CounterType::SerialWrites, record_count)
-            .add_batch_counter(CounterType::DataBytes, data_size, record_count)
-            .add_batch_counter(
-                CounterType::RtPerQuery,
-                start_time.elapsed().as_micros() as usize,
-                record_count,
-            );
+            .add_batch_counter(CounterType::DataBytes, data_size, record_count);
+        Ok(())
+    }
+
+    pub async fn update_monitor_rt(
+        monitor: &Arc<Monitor>,
+        rts: &LimitedQueue<(u64, u64)>,
+    ) -> anyhow::Result<()> {
+        monitor.add_multi_counter(CounterType::RtPerQuery, rts);
         Ok(())
     }
 }

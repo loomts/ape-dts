@@ -5,7 +5,7 @@ use mongodb::{
     bson::{doc, Document},
     Client,
 };
-use tokio::{sync::Mutex, time::Instant};
+use tokio::time::Instant;
 
 use crate::{
     call_batch_fn,
@@ -15,12 +15,15 @@ use crate::{
 };
 use dt_common::{
     log_error,
-    meta::col_value::ColValue,
-    meta::mongo::{mongo_constant::MongoConstants, mongo_key::MongoKey},
-    meta::rdb_tb_meta::RdbTbMeta,
-    meta::row_data::RowData,
-    meta::row_type::RowType,
+    meta::{
+        col_value::ColValue,
+        mongo::{mongo_constant::MongoConstants, mongo_key::MongoKey},
+        rdb_tb_meta::RdbTbMeta,
+        row_data::RowData,
+        row_type::RowType,
+    },
     monitor::monitor::Monitor,
+    utils::limit_queue::LimitedQueue,
 };
 
 #[derive(Clone)]
@@ -28,7 +31,7 @@ pub struct MongoChecker {
     pub reverse_router: RdbRouter,
     pub batch_size: usize,
     pub mongo_client: Client,
-    pub monitor: Arc<Mutex<Monitor>>,
+    pub monitor: Arc<Monitor>,
 }
 
 #[async_trait]
@@ -55,8 +58,6 @@ impl MongoChecker {
         start_index: usize,
         batch_size: usize,
     ) -> anyhow::Result<()> {
-        let start_time = Instant::now();
-
         let schema = &data[0].schema;
         let tb = &data[0].tb;
         let tb_meta = Self::mock_tb_meta(schema, tb);
@@ -90,7 +91,12 @@ impl MongoChecker {
 
         // batch fetch dst
         let mut dst_row_data_map = HashMap::new();
+        let start_time = Instant::now();
+        let mut rts = LimitedQueue::new(1);
         let mut cursor = collection.find(filter, None).await?;
+        rts.push((start_time.elapsed().as_millis() as u64, 1));
+        BaseSinker::update_monitor_rt(&self.monitor, &rts).await?;
+
         while cursor.advance().await? {
             let doc = cursor.deserialize_current()?;
             // key should not be none since we have filtered in ids,
@@ -122,7 +128,7 @@ impl MongoChecker {
         }
         BaseChecker::log_dml(miss, diff);
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, 0, start_time).await
+        BaseSinker::update_batch_monitor(&self.monitor, batch_size as u64, 0).await
     }
 
     fn mock_tb_meta(schema: &str, tb: &str) -> RdbTbMeta {

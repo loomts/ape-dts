@@ -181,7 +181,7 @@ impl PgCreateTableStatement {
 
     fn index_to_sql(index: &Index) -> anyhow::Result<String> {
         let parser = DdlParser::new(DbType::Pg);
-        if let Ok(mut ddl_data) = parser.parse(&index.definition) {
+        if let Ok(Some(mut ddl_data)) = parser.parse(&index.definition) {
             if let DdlStatement::PgCreateIndex(s) = &mut ddl_data.statement {
                 s.schema = index.schema_name.clone();
                 s.tb = index.table_name.clone();

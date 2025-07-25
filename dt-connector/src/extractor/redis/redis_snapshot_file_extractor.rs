@@ -68,7 +68,7 @@ impl Extractor for RedisSnapshotFileExtractor {
             if parser.is_end {
                 log_info!(
                     "end extracting data from rdb, all count: {}",
-                    self.base_extractor.monitor.counters.record_count
+                    self.base_extractor.monitor.counters.pushed_record_count
                 );
                 break;
             }

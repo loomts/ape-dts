@@ -1,5 +1,7 @@
 use std::{cmp, sync::Arc};
 
+use super::base_parallelizer::BaseParallelizer;
+use crate::{DataSize, Merger, Parallelizer};
 use async_trait::async_trait;
 use dt_common::config::sinker_config::BasicSinkerConfig;
 use dt_common::meta::dcl_meta::dcl_data::DclData;
@@ -9,10 +11,6 @@ use dt_common::meta::{
     dt_data::DtItem, rdb_meta_manager::RdbMetaManager, row_data::RowData, row_type::RowType,
 };
 use dt_connector::Sinker;
-
-use crate::{Merger, Parallelizer};
-
-use super::base_parallelizer::BaseParallelizer;
 
 pub struct MergeParallelizer {
     pub base_parallelizer: BaseParallelizer,
@@ -56,36 +54,58 @@ impl Parallelizer for MergeParallelizer {
         &mut self,
         data: Vec<RowData>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<DataSize> {
+        let mut data_size = DataSize::default();
         // no need to check foreign key since foreign key checks were disabled in MySQL/Postgres connections
         let mut tb_merged_datas = self.merger.merge(data).await?;
-        self.sink_dml_internal(&mut tb_merged_datas, sinkers, MergeType::Delete)
-            .await?;
-        self.sink_dml_internal(&mut tb_merged_datas, sinkers, MergeType::Insert)
-            .await?;
-        self.sink_dml_internal(&mut tb_merged_datas, sinkers, MergeType::Unmerged)
-            .await
+        data_size.add(
+            self.sink_dml_internal(&mut tb_merged_datas, sinkers, MergeType::Delete)
+                .await?,
+        );
+        data_size.add(
+            self.sink_dml_internal(&mut tb_merged_datas, sinkers, MergeType::Insert)
+                .await?,
+        );
+        data_size.add(
+            self.sink_dml_internal(&mut tb_merged_datas, sinkers, MergeType::Unmerged)
+                .await?,
+        );
+        Ok(data_size)
     }
 
     async fn sink_ddl(
         &mut self,
         data: Vec<DdlData>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<DataSize> {
+        let data_size = DataSize {
+            count: data.len() as u64,
+            bytes: data.iter().map(|v| v.get_data_size()).sum(),
+        };
+
         // ddl should always be excuted serially
         self.base_parallelizer
             .sink_ddl(vec![data], sinkers, 1, false)
-            .await
+            .await?;
+
+        Ok(data_size)
     }
 
     async fn sink_dcl(
         &mut self,
         data: Vec<DclData>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<DataSize> {
+        let data_size = DataSize {
+            count: data.len() as u64,
+            bytes: data.iter().map(|v| v.get_data_size()).sum(),
+        };
+
         self.base_parallelizer
             .sink_dcl(vec![data], sinkers, 1, false)
-            .await
+            .await?;
+
+        Ok(data_size)
     }
 }
 
@@ -95,8 +115,9 @@ impl MergeParallelizer {
         tb_merged_datas: &mut [TbMergedData],
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
         merge_type: MergeType,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<DataSize> {
         let mut futures = Vec::new();
+        let mut data_size = DataSize::default();
         for tb_merged_data in tb_merged_datas.iter_mut() {
             let data: Vec<RowData> = match merge_type {
                 MergeType::Delete => tb_merged_data.delete_rows.drain(..).collect(),
@@ -106,6 +127,10 @@ impl MergeParallelizer {
             if data.is_empty() {
                 continue;
             }
+
+            data_size
+                .add_count(data.len() as u64)
+                .add_bytes(data.iter().map(|v| v.get_data_size()).sum());
 
             // make sure NO too much threads generated
             let batch_size = cmp::max(
@@ -142,7 +167,7 @@ impl MergeParallelizer {
         for future in futures {
             future.await.unwrap();
         }
-        Ok(())
+        Ok(data_size)
     }
 
     async fn sink_unmerged_rows(

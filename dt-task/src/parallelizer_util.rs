@@ -4,7 +4,6 @@ use std::{
 };
 
 use ratelimit::Ratelimiter;
-use tokio::sync::Mutex;
 
 use super::task_util::TaskUtil;
 use dt_common::{
@@ -31,14 +30,14 @@ pub struct ParallelizerUtil {}
 impl ParallelizerUtil {
     pub async fn create_parallelizer(
         config: &TaskConfig,
-        monitor: Arc<Mutex<Monitor>>,
+        monitor: Arc<Monitor>,
         rps_limiter: Option<Ratelimiter>,
     ) -> anyhow::Result<Box<dyn Parallelizer + Send + Sync>> {
         let parallel_size = config.parallelizer.parallel_size;
         let parallel_type = &config.parallelizer.parallel_type;
         let base_parallelizer = BaseParallelizer {
             poped_data: VecDeque::new(),
-            monitor: monitor.clone(),
+            monitor,
             rps_limiter,
         };
 
@@ -124,7 +123,7 @@ impl ParallelizerUtil {
                 };
                 Box::new(FoxlakeParallelizer {
                     task_config: config.clone(),
-                    base_parallelizer: snapshot_parallelizer,
+                    snapshot_parallelizer,
                 })
             }
         };

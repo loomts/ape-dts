@@ -3,7 +3,6 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde::Serialize;
 use serde_json::json;
-use tokio::sync::Mutex;
 
 use dt_common::log_statistic;
 use dt_common::meta::dt_data::DtData;
@@ -15,7 +14,7 @@ use crate::Sinker;
 
 pub struct RedisStatisticSinker {
     pub statistic_type: RedisStatisticType,
-    pub monitor: Arc<Mutex<Monitor>>,
+    pub monitor: Arc<Monitor>,
     pub data_size_threshold: usize,
     pub freq_threshold: i64,
 }

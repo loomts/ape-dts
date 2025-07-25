@@ -24,7 +24,7 @@ use crate::{
 use dt_common::{
     config::config_enums::DbType,
     error::Error,
-    log_debug, log_error, log_info, log_warn,
+    log_debug, log_error, log_info,
     meta::{
         adaptor::mysql_col_value_convertor::MysqlColValueConvertor, col_value::ColValue,
         dt_data::DtData, mysql::mysql_meta_manager::MysqlMetaManager, position::Position,
@@ -370,7 +370,7 @@ impl MysqlCdcExtractor {
         }
 
         if !self.filter.filter_all_dcl() {
-            if let Ok(dcl_data) = self
+            if let Ok(Some(dcl_data)) = self
                 .base_extractor
                 .parse_dcl(&DbType::Mysql, &query.schema, &query.query)
                 .await
@@ -385,7 +385,7 @@ impl MysqlCdcExtractor {
         }
 
         if !self.filter.filter_all_ddl() {
-            if let Ok(ddl_data) = self
+            if let Ok(Some(ddl_data)) = self
                 .base_extractor
                 .parse_ddl(&DbType::Mysql, &query.schema, &query.query)
                 .await
@@ -408,11 +408,6 @@ impl MysqlCdcExtractor {
                 return Ok(());
             }
         }
-
-        log_warn!(
-                "received query event, but not dcl or ddl, sql: {}, maybe should execute it manually in target",
-                query.query
-            );
 
         Ok(())
     }

@@ -1,14 +1,13 @@
 use std::{
     cmp,
     sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc,
     },
 };
 
 use async_trait::async_trait;
 use futures::TryStreamExt;
-use serde_json::json;
 use sqlx::{MySql, Pool};
 use tokio::{sync::Mutex, task::JoinHandle};
 
@@ -131,7 +130,7 @@ impl MysqlSnapshotExtractor {
         Ok(())
     }
 
-    async fn extract_all(&mut self, tb_meta: &MysqlTbMeta) -> anyhow::Result<usize> {
+    async fn extract_all(&mut self, tb_meta: &MysqlTbMeta) -> anyhow::Result<u64> {
         log_info!(
             "start extracting data from `{}`.`{}` without batch",
             self.db,
@@ -153,7 +152,7 @@ impl MysqlSnapshotExtractor {
                 .push_row(row_data, Position::None)
                 .await?;
         }
-        Ok(self.base_extractor.monitor.counters.record_count)
+        Ok(self.base_extractor.monitor.counters.pushed_record_count)
     }
 
     async fn extract_by_batch(
@@ -162,7 +161,7 @@ impl MysqlSnapshotExtractor {
         order_col: &str,
         order_col_type: &MysqlColType,
         resume_value: ColValue,
-    ) -> anyhow::Result<usize> {
+    ) -> anyhow::Result<u64> {
         let mut extracted_count = 0;
         let mut start_value = resume_value;
         let ignore_cols = self.filter.get_ignore_cols(&self.db, &self.tb);
@@ -224,7 +223,7 @@ impl MysqlSnapshotExtractor {
             }
         }
 
-        Ok(extracted_count)
+        Ok(extracted_count as u64)
     }
 
     async fn parallel_extract_by_batch(
@@ -233,8 +232,8 @@ impl MysqlSnapshotExtractor {
         order_col: &str,
         order_col_type: &MysqlColType,
         resume_value: ColValue,
-    ) -> anyhow::Result<usize> {
-        let all_extracted_count = Arc::new(AtomicUsize::new(0));
+    ) -> anyhow::Result<u64> {
+        let all_extracted_count = Arc::new(AtomicU64::new(0));
         let parallel_size = self.parallel_size;
         let batch_size = cmp::max(self.batch_size / parallel_size, 1);
         let router = Arc::new(self.base_extractor.router.clone());
@@ -291,7 +290,7 @@ impl MysqlSnapshotExtractor {
                 }
 
                 all_extracted_count.fetch_add(slice_count, Ordering::Release);
-                all_finished.store(slice_count < batch_size, Ordering::Release);
+                all_finished.store(slice_count < batch_size as u64, Ordering::Release);
             } else {
                 let mut futures = Vec::new();
                 for i in 0..parallel_size {
@@ -346,7 +345,7 @@ impl MysqlSnapshotExtractor {
                         all_extracted_count.fetch_add(slice_count, Ordering::Release);
                         if i == parallel_size - 1 {
                             last_order_col_value.lock().await.value = order_col_value;
-                            all_finished.store(slice_count < batch_size, Ordering::Release);
+                            all_finished.store(slice_count < batch_size as u64, Ordering::Release);
                         }
                         Ok(())
                     });
@@ -380,7 +379,7 @@ impl MysqlSnapshotExtractor {
             position,
             data_origin_node: String::new(),
         };
-        log_debug!("extracted item: {}", json!(item));
+        log_debug!("extracted item: {:?}", item);
         buffer.push(item).await
     }
 

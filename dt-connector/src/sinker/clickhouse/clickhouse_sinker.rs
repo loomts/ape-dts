@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use reqwest::{Client, Method, Response, StatusCode};
 use serde_json::json;
-use tokio::{sync::Mutex, time::Instant};
+use tokio::time::Instant;
 
 use crate::{call_batch_fn, sinker::base_sinker::BaseSinker, Sinker};
 use dt_common::{
@@ -13,7 +13,7 @@ use dt_common::{
     error::Error,
     meta::{col_value::ColValue, row_data::RowData, row_type::RowType},
     monitor::monitor::Monitor,
-    utils::sql_util::SqlUtil,
+    utils::{limit_queue::LimitedQueue, sql_util::SqlUtil},
 };
 
 const SIGN_COL_NAME: &str = "_ape_dts_is_deleted";
@@ -27,7 +27,7 @@ pub struct ClickhouseSinker {
     pub port: String,
     pub username: String,
     pub password: String,
-    pub monitor: Arc<Mutex<Monitor>>,
+    pub monitor: Arc<Monitor>,
     pub sync_timestamp: i64,
 }
 
@@ -50,11 +50,8 @@ impl ClickhouseSinker {
         start_index: usize,
         batch_size: usize,
     ) -> anyhow::Result<()> {
-        let start_time = Instant::now();
-
         let data_size = self.send_data(data, start_index, batch_size).await?;
-
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
+        BaseSinker::update_batch_monitor(&self.monitor, batch_size as u64, data_size as u64).await
     }
 
     async fn send_data(
@@ -98,7 +95,13 @@ impl ClickhouseSinker {
             self.host, self.port, db, tb
         );
         let request = self.build_request(&url, &body)?;
+
+        let start_time = Instant::now();
+        let mut rts = LimitedQueue::new(1);
         let response = self.http_client.execute(request).await?;
+        rts.push((start_time.elapsed().as_millis() as u64, 1));
+        BaseSinker::update_monitor_rt(&self.monitor, &rts).await?;
+
         Self::check_response(response).await?;
 
         Ok(data_size)

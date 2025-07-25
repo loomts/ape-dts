@@ -8,6 +8,9 @@ edition = "2021"
 [lints]
 workspace = true
 
+[features]
+metrics = ["prometheus"]
+
 [dependencies]
 dotenv = { workspace = true }
 sqlx = { workspace = true }
@@ -41,3 +44,6 @@ openssl = { workspace = true }
 openssl-sys = { workspace = true }
 hex = { workspace = true }
 async-trait = { workspace = true }
+dashmap = {workspace = true}
+actix-web = {workspace = true}
+prometheus = {version = "0.14.0", optional = true}

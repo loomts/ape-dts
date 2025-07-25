@@ -19,6 +19,14 @@ impl DtItem {
     pub fn is_ddl(&self) -> bool {
         self.dt_data.is_ddl()
     }
+
+    pub fn is_dcl(&self) -> bool {
+        self.dt_data.is_dcl()
+    }
+
+    pub fn get_data_size(&self) -> u64 {
+        self.dt_data.get_data_size()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,11 +70,17 @@ impl DtData {
         matches!(self, DtData::Ddl { .. })
     }
 
-    pub fn get_data_size(&self) -> usize {
+    pub fn is_dcl(&self) -> bool {
+        matches!(self, DtData::Dcl { .. })
+    }
+
+    pub fn get_data_size(&self) -> u64 {
         match &self {
-            DtData::Dml { row_data } => row_data.data_size,
-            DtData::Redis { entry } => entry.data_size,
-            DtData::Foxlake { file_meta } => file_meta.data_size,
+            DtData::Dml { row_data } => row_data.data_size as u64,
+            DtData::Dcl { dcl_data } => dcl_data.get_malloc_size(),
+            DtData::Ddl { ddl_data } => ddl_data.get_malloc_size(),
+            DtData::Redis { entry } => entry.get_data_malloc_size() as u64,
+            DtData::Foxlake { file_meta } => file_meta.data_size as u64,
             // ignore other item types
             _ => 0,
         }

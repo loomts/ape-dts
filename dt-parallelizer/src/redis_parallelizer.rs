@@ -2,6 +2,9 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::bail;
 use async_trait::async_trait;
+
+use super::base_parallelizer::BaseParallelizer;
+use crate::{DataSize, Parallelizer};
 use dt_common::meta::{
     dt_data::{DtData, DtItem},
     dt_queue::DtQueue,
@@ -9,10 +12,6 @@ use dt_common::meta::{
 };
 use dt_common::{error::Error, log_warn};
 use dt_connector::Sinker;
-
-use crate::Parallelizer;
-
-use super::base_parallelizer::BaseParallelizer;
 
 pub struct RedisParallelizer {
     pub base_parallelizer: BaseParallelizer,
@@ -37,12 +36,17 @@ impl Parallelizer for RedisParallelizer {
         &mut self,
         data: Vec<DtItem>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<DataSize> {
+        let data_size = DataSize {
+            count: data.len() as u64,
+            bytes: data.iter().map(|v| v.get_data_size()).sum(),
+        };
+
         if self.slot_node_map.is_empty() {
-            return self
-                .base_parallelizer
+            self.base_parallelizer
                 .sink_raw(vec![data], sinkers, 1, false)
-                .await;
+                .await?;
+            return Ok(data_size);
         }
 
         if self.node_sinker_index_map.is_empty() {
@@ -113,6 +117,7 @@ impl Parallelizer for RedisParallelizer {
         for future in futures {
             future.await.unwrap();
         }
-        Ok(())
+
+        Ok(data_size)
     }
 }

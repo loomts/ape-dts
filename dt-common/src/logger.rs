@@ -57,3 +57,8 @@ macro_rules! log_warn {
 macro_rules! log_debug {
     ($($arg:tt)+) => (log::log!(target: "default_logger", log::Level::Debug, $($arg)+))
 }
+
+#[macro_export(local_inner_macros)]
+macro_rules! log_task {
+    ($($arg:tt)+) => (log::log!(target: "task_logger", log::Level::Info, $($arg)+));
+}

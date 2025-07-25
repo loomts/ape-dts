@@ -23,7 +23,7 @@ use dt_common::{
     utils::time_util::TimeUtil,
 };
 use dt_connector::{data_marker::DataMarker, Sinker};
-use dt_parallelizer::Parallelizer;
+use dt_parallelizer::{DataSize, Parallelizer};
 
 pub struct BasePipeline {
     pub buffer: Arc<DtQueue>,
@@ -34,7 +34,7 @@ pub struct BasePipeline {
     pub checkpoint_interval_secs: u64,
     pub batch_sink_interval_secs: u64,
     pub syncer: Arc<Mutex<Syncer>>,
-    pub monitor: Arc<Mutex<Monitor>>,
+    pub monitor: Arc<Monitor>,
     pub data_marker: Option<Arc<RwLock<DataMarker>>>,
     pub lua_processor: Option<LuaProcessor>,
 }
@@ -68,14 +68,22 @@ impl Pipeline for BasePipeline {
         let mut last_checkpoint_time = Instant::now();
         let mut last_received_position = Position::None;
         let mut last_commit_position = Position::None;
+        let mut record_time = Instant::now();
 
         while !self.shut_down.load(Ordering::Acquire) || !self.buffer.is_empty() {
             // to avoid too many sub counters, only add counter when buffer is not empty
             if !self.buffer.is_empty() {
                 self.monitor
-                    .lock()
-                    .await
-                    .add_counter(CounterType::BufferSize, self.buffer.len());
+                    .add_counter(CounterType::BufferSize, self.buffer.len() as u64);
+            }
+            if record_time.elapsed().as_secs() > 1 {
+                let len = self.buffer.len() as u64;
+                let size = self.buffer.get_curr_size();
+                self.monitor
+                    .set_counter(CounterType::QueuedRecordCurrent, len);
+                self.monitor
+                    .set_counter(CounterType::QueuedByteCurrent, size);
+                record_time = Instant::now();
             }
 
             // some sinkers (foxlake) need to accumulate data to a big batch and sink
@@ -95,7 +103,7 @@ impl Pipeline for BasePipeline {
             }
 
             // process all row_datas in buffer at a time
-            let (count, last_received, last_commit) = match self.get_sink_method(&data) {
+            let (data_size, last_received, last_commit) = match self.get_sink_method(&data) {
                 SinkMethod::Ddl => self.sink_ddl(data).await?,
                 SinkMethod::Dcl => self.sink_dcl(data).await?,
                 SinkMethod::Dml => self.sink_dml(data).await?,
@@ -120,9 +128,8 @@ impl Pipeline for BasePipeline {
                 .await;
 
             self.monitor
-                .lock()
-                .await
-                .add_counter(CounterType::SinkedCount, count);
+                .add_counter(CounterType::SinkedRecordTotal, data_size.count)
+                .add_counter(CounterType::SinkedByteTotal, data_size.bytes);
 
             // sleep 1 millis for data preparing
             TimeUtil::sleep_millis(1).await;
@@ -138,78 +145,99 @@ impl BasePipeline {
     async fn sink_raw(
         &mut self,
         all_data: Vec<DtItem>,
-    ) -> anyhow::Result<(usize, Option<Position>, Option<Position>)> {
-        let (last_received_position, last_commit_position) = Self::fetch_raw(&all_data);
-        let count = all_data.len();
-        if count > 0 {
-            self.parallelizer.sink_raw(all_data, &self.sinkers).await?
+    ) -> anyhow::Result<(DataSize, Option<Position>, Option<Position>)> {
+        let (data_count, last_received_position, last_commit_position) = Self::fetch_raw(&all_data);
+        if data_count > 0 {
+            let data_size = self.parallelizer.sink_raw(all_data, &self.sinkers).await?;
+            Ok((data_size, last_received_position, last_commit_position))
+        } else {
+            Ok((
+                DataSize::default(),
+                last_received_position,
+                last_commit_position,
+            ))
         }
-        Ok((count, last_received_position, last_commit_position))
     }
 
     async fn sink_struct(
         &mut self,
         mut all_data: Vec<DtItem>,
-    ) -> anyhow::Result<(usize, Option<Position>, Option<Position>)> {
+    ) -> anyhow::Result<(DataSize, Option<Position>, Option<Position>)> {
         let mut data = Vec::new();
         for i in all_data.drain(..) {
             if let DtData::Struct { struct_data } = i.dt_data {
                 data.push(struct_data);
             }
         }
-        let count = all_data.len();
-        self.parallelizer.sink_struct(data, &self.sinkers).await?;
-        Ok((count, None, None))
+        let data_size = self.parallelizer.sink_struct(data, &self.sinkers).await?;
+        Ok((data_size, None, None))
     }
 
     async fn sink_dml(
         &mut self,
         all_data: Vec<DtItem>,
-    ) -> anyhow::Result<(usize, Option<Position>, Option<Position>)> {
+    ) -> anyhow::Result<(DataSize, Option<Position>, Option<Position>)> {
         let (mut data, last_received_position, last_commit_position) = Self::fetch_dml(all_data);
-        let count = data.len();
-        if count > 0 {
+        if !data.is_empty() {
             // execute lua processor
             if let Some(lua_processor) = &self.lua_processor {
                 data = lua_processor.process(data)?;
             }
 
-            self.parallelizer.sink_dml(data, &self.sinkers).await?
+            let data_size = self.parallelizer.sink_dml(data, &self.sinkers).await?;
+            Ok((data_size, last_received_position, last_commit_position))
+        } else {
+            Ok((
+                DataSize::default(),
+                last_received_position,
+                last_commit_position,
+            ))
         }
-        Ok((count, last_received_position, last_commit_position))
     }
 
     async fn sink_ddl(
         &mut self,
         all_data: Vec<DtItem>,
-    ) -> anyhow::Result<(usize, Option<Position>, Option<Position>)> {
+    ) -> anyhow::Result<(DataSize, Option<Position>, Option<Position>)> {
         let (data, last_received_position, last_commit_position) = Self::fetch_ddl(all_data);
-        let count = data.len();
-        if count > 0 {
-            self.parallelizer
+        if !data.is_empty() {
+            let data_size = self
+                .parallelizer
                 .sink_ddl(data.clone(), &self.sinkers)
                 .await?;
             // only part of sinkers will execute sink_ddl, but all sinkers should refresh metadata
             for sinker in self.sinkers.iter_mut() {
                 sinker.lock().await.refresh_meta(data.clone()).await?;
             }
+            self.monitor
+                .add_counter(CounterType::DDLRecordTotal, data_size.count);
+            Ok((data_size, last_received_position, last_commit_position))
+        } else {
+            Ok((
+                DataSize::default(),
+                last_received_position,
+                last_commit_position,
+            ))
         }
-        Ok((count, last_received_position, last_commit_position))
     }
 
     async fn sink_dcl(
         &mut self,
         all_data: Vec<DtItem>,
-    ) -> anyhow::Result<(usize, Option<Position>, Option<Position>)> {
+    ) -> anyhow::Result<(DataSize, Option<Position>, Option<Position>)> {
         let (data, last_received_position, last_commit_position) = Self::fetch_dcl(all_data);
-        let count = data.len();
-        if count > 0 {
+        let data_size = DataSize {
+            count: data.len() as u64,
+            bytes: 0,
+        };
+        if data_size.count > 0 {
             self.parallelizer.sink_dcl(data, &self.sinkers).await?;
         }
-        Ok((count, last_received_position, last_commit_position))
+        Ok((data_size, last_received_position, last_commit_position))
     }
 
-    pub fn fetch_raw(data: &[DtItem]) -> (Option<Position>, Option<Position>) {
+    pub fn fetch_raw(data: &[DtItem]) -> (u64, Option<Position>, Option<Position>) {
+        let mut data_count = 0;
         let mut last_received_position = Option::None;
         let mut last_commit_position = Option::None;
         for i in data.iter() {
@@ -219,23 +247,24 @@ impl BasePipeline {
                     last_received_position = last_commit_position.clone();
                     continue;
                 }
-
-                DtData::Redis { .. } => {
-                    last_received_position = Some(i.position.clone());
-                    last_commit_position = last_received_position.clone();
-                }
-
                 DtData::Begin {} => {
                     continue;
                 }
 
+                DtData::Redis { .. } => {
+                    last_received_position = Some(i.position.clone());
+                    last_commit_position = last_received_position.clone();
+                    data_count += 1;
+                }
+
                 _ => {
                     last_received_position = Some(i.position.clone());
+                    data_count += 1;
                 }
             }
         }
 
-        (last_received_position, last_commit_position)
+        (data_count, last_received_position, last_commit_position)
     }
 
     fn fetch_dml(mut data: Vec<DtItem>) -> (Vec<RowData>, Option<Position>, Option<Position>) {
@@ -320,7 +349,8 @@ impl BasePipeline {
                 DtData::Dml { .. } => match self.sinker_config {
                     SinkerConfig::FoxlakePush { .. }
                     | SinkerConfig::FoxlakeMerge { .. }
-                    | SinkerConfig::Foxlake { .. } => return SinkMethod::Raw,
+                    | SinkerConfig::Foxlake { .. }
+                    | SinkerConfig::Redis { .. } => return SinkMethod::Raw,
                     _ => return SinkMethod::Dml,
                 },
                 DtData::Redis { .. } | DtData::Foxlake { .. } => return SinkMethod::Raw,
@@ -350,6 +380,11 @@ impl BasePipeline {
         if !matches!(last_commit_position, Position::None) {
             self.syncer.lock().await.committed_position = last_commit_position.to_owned();
         }
+
+        self.monitor.set_counter(
+            CounterType::Timestamp,
+            last_received_position.to_timestamp(),
+        );
 
         Instant::now()
     }

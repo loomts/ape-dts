@@ -28,6 +28,29 @@
 | 数据校验/订正/复查 | &#10004;       | &#10004; | &#10004;       |                |                |             |                    |                     | &#10004;      |                 |                  |                |             |
 | 库表结构迁移       | &#10004;       | &#10004; |                |                |                |             | &#10004;           | &#10004;            | &#10004;      | &#10004;        | &#10004;         | &#10004;       | &#10004;    |
 
+# 高级选项
+
+## Crate features
+
+dt-main crate 提供了几个可选组件，可以通过 `Cargo [features]` 启用：
+
+- `metrics`: 启用 Prometheus 格式的任务指标 HTTP 服务接口。
+  启用此功能后，您可以通过以下配置自定义指标服务：
+
+  ```
+  [metrics]
+  # http服务host
+  http_host=127.0.0.1
+  # http服务port
+  http_port=9090
+  # http服务工作节点数量
+  workers=2
+  # prometheus指标静态标签
+  labels=your_label1:your_value1,your_label2:your_value2
+  ```
+
+- TBD
+
 # 快速上手
 
 ## 教程

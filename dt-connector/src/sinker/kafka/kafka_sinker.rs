@@ -2,12 +2,13 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use kafka::producer::{Producer, Record};
-use tokio::{sync::Mutex, time::Instant};
+use tokio::time::Instant;
 
 use crate::{call_batch_fn, rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker};
 use dt_common::{
-    meta::avro::avro_converter::AvroConverter, meta::ddl_meta::ddl_data::DdlData,
-    meta::row_data::RowData, monitor::monitor::Monitor,
+    meta::{avro::avro_converter::AvroConverter, ddl_meta::ddl_data::DdlData, row_data::RowData},
+    monitor::monitor::Monitor,
+    utils::limit_queue::LimitedQueue,
 };
 
 pub struct KafkaSinker {
@@ -15,7 +16,7 @@ pub struct KafkaSinker {
     pub router: RdbRouter,
     pub producer: Producer,
     pub avro_converter: AvroConverter,
-    pub monitor: Arc<Mutex<Monitor>>,
+    pub monitor: Arc<Monitor>,
 }
 
 #[async_trait]
@@ -58,7 +59,6 @@ impl KafkaSinker {
         sinked_count: usize,
         batch_size: usize,
     ) -> anyhow::Result<()> {
-        let start_time = Instant::now();
         let mut data_size = 0;
 
         let mut messages = Vec::new();
@@ -80,8 +80,19 @@ impl KafkaSinker {
             });
         }
 
+        let start_time = Instant::now();
+        let mut rts = LimitedQueue::new(1);
         self.producer.send_all(&messages)?;
+        // TODO: Currently measuring RT for the entire message batch,
+        //       as kafka producer involves internal per-broker merging logic,
+        //       making it impossible to see individual broker RT. This can be optimized in the future.
+        rts.push((
+            start_time.elapsed().as_millis() as u64,
+            messages.len() as u64,
+        ));
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
+        BaseSinker::update_batch_monitor(&self.monitor, batch_size as u64, data_size as u64)
+            .await?;
+        BaseSinker::update_monitor_rt(&self.monitor, &rts).await
     }
 }

@@ -1,21 +1,24 @@
-use std::sync::Arc;
+use std::{cmp, sync::Arc};
 
 use anyhow::bail;
 use async_trait::async_trait;
 use rdkafka::producer::{FutureProducer, FutureRecord};
-use tokio::{sync::Mutex, time::Duration, time::Instant};
+use tokio::{time::Duration, time::Instant};
 
 use crate::{rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker};
 use dt_common::{
-    meta::avro::avro_converter::AvroConverter, meta::row_data::RowData, monitor::monitor::Monitor,
+    meta::{avro::avro_converter::AvroConverter, row_data::RowData},
+    monitor::monitor::Monitor,
+    utils::limit_queue::LimitedQueue,
 };
 
+// Deprecated: use KafkaSinker instead
 pub struct RdkafkaSinker {
     pub batch_size: usize,
     pub router: RdbRouter,
     pub producer: FutureProducer,
     pub avro_converter: AvroConverter,
-    pub monitor: Arc<Mutex<Monitor>>,
+    pub monitor: Arc<Monitor>,
     pub queue_timeout_secs: u64,
 }
 
@@ -32,7 +35,6 @@ impl Sinker for RdkafkaSinker {
 
 impl RdkafkaSinker {
     async fn send_avro(&mut self, data: Vec<RowData>) -> anyhow::Result<()> {
-        let start_time = Instant::now();
         let batch_size = data.len();
         let mut data_size = 0;
 
@@ -63,12 +65,17 @@ impl RdkafkaSinker {
         }
 
         // This loop will wait until all delivery statuses have been received.
+        let mut rts = LimitedQueue::new(cmp::min(100, futures.len()));
         for future in futures {
+            let start_time = Instant::now();
             if let Err(err) = future.await {
                 bail!(format!("failed in kafka producer, error: {:?}", err));
             }
+            rts.push((start_time.elapsed().as_millis() as u64, 1));
         }
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
+        BaseSinker::update_batch_monitor(&self.monitor, batch_size as u64, data_size as u64)
+            .await?;
+        BaseSinker::update_monitor_rt(&self.monitor, &rts).await
     }
 }

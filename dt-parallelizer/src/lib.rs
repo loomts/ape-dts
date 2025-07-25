@@ -33,40 +33,40 @@ pub trait Parallelizer {
         &mut self,
         _data: Vec<DdlData>,
         _sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> anyhow::Result<()> {
-        Ok(())
+    ) -> anyhow::Result<DataSize> {
+        Ok(DataSize::default())
     }
 
     async fn sink_dml(
         &mut self,
         _data: Vec<RowData>,
         _sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> anyhow::Result<()> {
-        Ok(())
+    ) -> anyhow::Result<DataSize> {
+        Ok(DataSize::default())
     }
 
     async fn sink_dcl(
         &mut self,
         _data: Vec<DclData>,
         _sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> anyhow::Result<()> {
-        Ok(())
+    ) -> anyhow::Result<DataSize> {
+        Ok(DataSize::default())
     }
 
     async fn sink_raw(
         &mut self,
         _data: Vec<DtItem>,
         _sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> anyhow::Result<()> {
-        Ok(())
+    ) -> anyhow::Result<DataSize> {
+        Ok(DataSize::default())
     }
 
     async fn sink_struct(
         &mut self,
         _data: Vec<StructData>,
         _sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> anyhow::Result<()> {
-        Ok(())
+    ) -> anyhow::Result<DataSize> {
+        Ok(DataSize::default())
     }
 
     async fn close(&mut self) -> anyhow::Result<()> {
@@ -80,5 +80,28 @@ pub trait Merger {
 
     async fn close(&mut self) -> anyhow::Result<()> {
         Ok(())
+    }
+}
+
+#[derive(Default)]
+pub struct DataSize {
+    pub count: u64,
+    pub bytes: u64,
+}
+
+impl DataSize {
+    pub fn add(&mut self, other: DataSize) {
+        self.count += other.count;
+        self.bytes += other.bytes;
+    }
+
+    pub fn add_count(&mut self, count: u64) -> &mut Self {
+        self.count += count;
+        self
+    }
+
+    pub fn add_bytes(&mut self, bytes: u64) -> &mut Self {
+        self.bytes += bytes;
+        self
     }
 }

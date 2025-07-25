@@ -13,8 +13,6 @@ pub enum CounterType {
     RecordCount,
 
     // time window counter, aggregate by: avg by count
-    #[strum(serialize = "bytes_per_query")]
-    BytesPerQuery,
     #[strum(serialize = "records_per_query")]
     RecordsPerQuery,
     #[strum(serialize = "rt_per_query")]
@@ -26,9 +24,28 @@ pub enum CounterType {
     #[strum(serialize = "record_size")]
     RecordSize,
 
+    // TODO:
+    #[strum(serialize = "extracted_records")]
+    ExtractedRecords,
+    #[strum(serialize = "extracted_bytes")]
+    ExtractedBytes,
+
     // no window counter
-    #[strum(serialize = "sinked_count")]
-    SinkedCount,
+    #[strum(serialize = "plan_records")]
+    PlanRecordTotal,
+    #[strum(serialize = "queued_records")]
+    QueuedRecordCurrent,
+    #[strum(serialize = "queued_bytes")]
+    QueuedByteCurrent,
+
+    #[strum(serialize = "sinked_records")]
+    SinkedRecordTotal,
+    #[strum(serialize = "sinked_bytes")]
+    SinkedByteTotal,
+    #[strum(serialize = "ddl_records")]
+    DDLRecordTotal,
+    #[strum(serialize = "timestamp")]
+    Timestamp,
 }
 
 #[derive(EnumString, IntoStaticStr, Display, PartialEq, Eq, Hash, Clone)]
@@ -37,12 +54,16 @@ pub enum AggregateType {
     Latest,
     #[strum(serialize = "avg_by_sec")]
     AvgBySec,
-    #[strum(serialize = "avg")]
-    AvgByCount,
     #[strum(serialize = "max_by_sec")]
     MaxBySec,
+    #[strum(serialize = "min_by_sec")]
+    MinBySec,
     #[strum(serialize = "max")]
     MaxByCount,
+    #[strum(serialize = "avg")]
+    AvgByCount,
+    #[strum(serialize = "min")]
+    MinByCount,
     #[strum(serialize = "sum")]
     Sum,
     #[strum(serialize = "count")]
@@ -60,13 +81,21 @@ impl CounterType {
             Self::BatchWriteFailures
             | Self::SerialWrites
             | Self::RecordCount
-            | Self::BytesPerQuery
             | Self::RecordsPerQuery
             | Self::RtPerQuery
             | Self::BufferSize
             | Self::DataBytes
-            | Self::RecordSize => WindowType::TimeWindow,
-            Self::SinkedCount => WindowType::NoWindow,
+            | Self::RecordSize
+            | Self::ExtractedRecords
+            | Self::ExtractedBytes => WindowType::TimeWindow,
+
+            Self::PlanRecordTotal
+            | Self::SinkedRecordTotal
+            | Self::SinkedByteTotal
+            | Self::QueuedRecordCurrent
+            | Self::QueuedByteCurrent
+            | Self::DDLRecordTotal
+            | Self::Timestamp => WindowType::NoWindow,
         }
     }
 
@@ -75,14 +104,12 @@ impl CounterType {
             WindowType::NoWindow => vec![AggregateType::Latest],
 
             WindowType::TimeWindow => match self {
-                Self::BytesPerQuery
-                | Self::RecordsPerQuery
-                | Self::RtPerQuery
-                | Self::BufferSize => {
+                Self::RecordsPerQuery | Self::RtPerQuery | Self::BufferSize => {
                     vec![
-                        AggregateType::AvgByCount,
                         AggregateType::Sum,
+                        AggregateType::AvgByCount,
                         AggregateType::MaxByCount,
+                        AggregateType::MinByCount,
                     ]
                 }
 
@@ -93,11 +120,14 @@ impl CounterType {
                 Self::BatchWriteFailures
                 | Self::SerialWrites
                 | Self::RecordCount
-                | Self::DataBytes => {
+                | Self::DataBytes
+                | Self::ExtractedRecords
+                | Self::ExtractedBytes => {
                     vec![
-                        AggregateType::AvgBySec,
                         AggregateType::Sum,
+                        AggregateType::AvgBySec,
                         AggregateType::MaxBySec,
+                        AggregateType::MinBySec,
                     ]
                 }
 

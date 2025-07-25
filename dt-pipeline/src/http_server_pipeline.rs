@@ -30,7 +30,7 @@ type PositionInfo = (Option<Position>, Option<Position>);
 pub struct HttpServerPipeline {
     pub buffer: Arc<DtQueue>,
     pub syncer: Arc<Mutex<Syncer>>,
-    pub monitor: Arc<Mutex<Monitor>>,
+    pub monitor: Arc<Monitor>,
     pub avro_converter: AvroConverter,
     pub checkpoint_interval_secs: u64,
     pub batch_sink_interval_secs: u64,
@@ -81,7 +81,7 @@ impl HttpServerPipeline {
     pub fn new(
         buffer: Arc<DtQueue>,
         syncer: Arc<Mutex<Syncer>>,
-        monitor: Arc<Mutex<Monitor>>,
+        monitor: Arc<Monitor>,
         avro_converter: AvroConverter,
         checkpoint_interval_secs: u64,
         batch_sink_interval_secs: u64,
@@ -161,7 +161,7 @@ async fn fetch_new(
         .drain_by_count(&pipeline.buffer, query.batch_size)
         .await
         .unwrap();
-    let (last_received_position, last_commit_position) = BasePipeline::fetch_raw(&data);
+    let (_, last_received_position, last_commit_position) = BasePipeline::fetch_raw(&data);
 
     // data -> avro response
     let mut response = FetchResp {
@@ -193,9 +193,10 @@ async fn fetch_new(
     }
 
     // update monitor
-    let mut monitor = pipeline.monitor.lock().await;
-    monitor.add_counter(CounterType::BufferSize, pipeline.buffer.len());
-    monitor.add_counter(CounterType::SinkedCount, response.data.len());
+    pipeline
+        .monitor
+        .add_counter(CounterType::BufferSize, pipeline.buffer.len() as u64)
+        .add_counter(CounterType::SinkedRecordTotal, response.data.len() as u64);
 
     // update pending_ack_data & pending_ack_positions
     let batch_id = response.batch_id;

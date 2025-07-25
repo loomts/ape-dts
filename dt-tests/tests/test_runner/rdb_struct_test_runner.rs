@@ -161,8 +161,8 @@ impl RdbStructTestRunner {
 
                 let src_indexdef = src_indexdef.unwrap();
                 let dst_indexdef = dst_index.get(PG_GET_INDEXDEF).unwrap();
-                let src_ddl_data = parser.parse(src_indexdef).unwrap();
-                let dst_ddl_data = parser.parse(dst_indexdef).unwrap();
+                let src_ddl_data = parser.parse(src_indexdef).unwrap().unwrap();
+                let dst_ddl_data = parser.parse(dst_indexdef).unwrap().unwrap();
 
                 if let DdlStatement::PgCreateIndex(src) = src_ddl_data.statement {
                     assert_eq!(src.schema, src_db_tb.0);

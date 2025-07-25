@@ -49,13 +49,19 @@ impl DdlParser {
         Self { db_type }
     }
 
-    pub fn parse(&self, sql: &str) -> anyhow::Result<DdlData> {
+    pub fn parse(&self, sql: &str) -> anyhow::Result<Option<DdlData>> {
         let sql = Self::remove_comments(sql);
+
+        // In some cases, non-ddl statements may also enter this parse logic, such as heartbeat connections when mysql binlog_format=mix
+        if !Self::ddl_simple_judgment(&sql) {
+            return Ok(None);
+        }
+
         let input = sql.trim().as_bytes();
         match self.sql_query(input) {
             Ok((_, mut ddl)) => {
                 ddl.db_type = self.db_type.clone();
-                Ok(ddl)
+                Ok(Some(ddl))
             }
             Err(err) => {
                 let error = match err {
@@ -73,6 +79,14 @@ impl DdlParser {
         // "create /*some comments,*/table/*some comments*/ `aaa`.`bbb`"
         let regex = Regex::new(r"(/\*([^*]|\*+[^*/*])*\*+/)|(--[^\n]*\n)").unwrap();
         regex.replace_all(sql, "")
+    }
+
+    fn ddl_simple_judgment(sql: &str) -> bool {
+        let sql_lowercase = sql.to_lowercase();
+        !sql_lowercase.trim_start().starts_with("insert into ")
+            && !sql_lowercase.trim_start().starts_with("update ")
+            && !sql_lowercase.trim_start().starts_with("delete ")
+            && !sql_lowercase.trim_start().starts_with("replace into ")
     }
 
     /// parse ddl sql and return: (ddl_type, schema, table)
@@ -1019,7 +1033,7 @@ mod test_mysql {
 
         let parser = DdlParser::new(DbType::Mysql);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::CreateTable);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1039,7 +1053,7 @@ mod test_mysql {
 
         let parser = DdlParser::new(DbType::Mysql);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::CreateTable);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1076,7 +1090,7 @@ mod test_mysql {
 
         let parser = DdlParser::new(DbType::Mysql);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::CreateTable);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1113,7 +1127,7 @@ mod test_mysql {
 
         let parser = DdlParser::new(DbType::Mysql);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::DropTable);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1150,7 +1164,7 @@ mod test_mysql {
 
         let parser = DdlParser::new(DbType::Mysql);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::DropTable);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1193,7 +1207,7 @@ mod test_mysql {
 
         let parser = DdlParser::new(DbType::Mysql);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::AlterTable);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1233,7 +1247,7 @@ mod test_mysql {
 
         let parser = DdlParser::new(DbType::Mysql);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::AlterTable);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1261,7 +1275,7 @@ mod test_mysql {
 
         let parser = DdlParser::new(DbType::Mysql);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::AlterTable);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1303,7 +1317,7 @@ mod test_mysql {
 
         let parser = DdlParser::new(DbType::Mysql);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::CreateDatabase);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1323,7 +1337,7 @@ mod test_mysql {
 
         let parser = DdlParser::new(DbType::Mysql);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::CreateDatabase);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1365,7 +1379,7 @@ mod test_mysql {
 
         let parser = DdlParser::new(DbType::Mysql);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::DropDatabase);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1403,7 +1417,7 @@ mod test_mysql {
 
         let parser = DdlParser::new(DbType::Mysql);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::AlterDatabase);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1449,7 +1463,7 @@ mod test_mysql {
 
         let parser = DdlParser::new(DbType::Mysql);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::TruncateTable);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1489,7 +1503,7 @@ mod test_mysql {
 
         let parser = DdlParser::new(DbType::Mysql);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::TruncateTable);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1548,7 +1562,7 @@ mod test_mysql {
 
         let parser = DdlParser::new(DbType::Mysql);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::RenameTable);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1568,7 +1582,7 @@ mod test_mysql {
 
         let parser = DdlParser::new(DbType::Mysql);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::CreateIndex);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1589,7 +1603,7 @@ mod test_mysql {
 
         let parser = DdlParser::new(DbType::Mysql);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::DropIndex);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1616,7 +1630,7 @@ mod test_pg {
 
         let parser = DdlParser::new(DbType::Pg);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::CreateTable);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1638,7 +1652,7 @@ mod test_pg {
 
         let parser = DdlParser::new(DbType::Pg);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::CreateTable);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1658,7 +1672,7 @@ mod test_pg {
 
         let parser = DdlParser::new(DbType::Pg);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::CreateTable);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1684,7 +1698,7 @@ mod test_pg {
 
         let parser = DdlParser::new(DbType::Pg);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::CreateTable);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1714,7 +1728,7 @@ mod test_pg {
 
         let parser = DdlParser::new(DbType::Pg);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::AlterTable);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1754,7 +1768,7 @@ mod test_pg {
 
         let parser = DdlParser::new(DbType::Mysql);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::AlterTable);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1782,7 +1796,7 @@ mod test_pg {
 
         let parser = DdlParser::new(DbType::Pg);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::AlterTable);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1824,7 +1838,7 @@ mod test_pg {
 
         let parser = DdlParser::new(DbType::Pg);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::CreateSchema);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1844,7 +1858,7 @@ mod test_pg {
 
         let parser = DdlParser::new(DbType::Pg);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::CreateSchema);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1886,7 +1900,7 @@ mod test_pg {
 
         let parser = DdlParser::new(DbType::Pg);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::DropSchema);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1924,7 +1938,7 @@ mod test_pg {
 
         let parser = DdlParser::new(DbType::Pg);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::AlterSchema);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1954,7 +1968,7 @@ mod test_pg {
 
         let parser = DdlParser::new(DbType::Pg);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::TruncateTable);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -1987,7 +2001,7 @@ mod test_pg {
 
         let parser = DdlParser::new(DbType::Pg);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::CreateIndex);
             assert_eq!(r.to_sql(), expect_sqls[i]);
         }
@@ -2009,9 +2023,30 @@ mod test_pg {
 
         let parser = DdlParser::new(DbType::Pg);
         for i in 0..sqls.len() {
-            let r = parser.parse(sqls[i]).unwrap();
+            let r = parser.parse(sqls[i]).unwrap().unwrap();
             assert_eq!(r.ddl_type, DdlType::DropIndex);
             assert_eq!(r.to_sql(), expect_sqls[i]);
+        }
+    }
+}
+
+#[cfg(test)]
+mod test_common {
+    use crate::{config::config_enums::DbType, meta::ddl_meta::ddl_parser::DdlParser};
+
+    #[test]
+    fn test_ddl_simple_judgment() {
+        let sqls = [
+            "INSERT INTO kubeblocks.kb_health_check VALUES(1, UNIX_TIMESTAMP()) ON DUPLICATE KEY UPDATE check_ts = UNIX_TIMESTAMP()",
+            "REPLACE INTO kubeblocks.kb_health_check VALUES(1, UNIX_TIMESTAMP())",
+            "UPDATE kubeblocks.kb_health_check SET check_ts = UNIX_TIMESTAMP() WHERE id = 1",
+            "DELETE FROM kubeblocks.kb_health_check WHERE id = 1",
+        ];
+
+        let parser = DdlParser::new(DbType::Mysql);
+        for sql in sqls {
+            assert!(!DdlParser::ddl_simple_judgment(sql));
+            assert!(parser.parse(sql).unwrap().is_none());
         }
     }
 }

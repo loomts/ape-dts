@@ -6,7 +6,6 @@ use sqlx::{
     mysql::{MySqlConnectOptions, MySqlPoolOptions},
     MySql, Pool,
 };
-use tokio::{sync::Mutex, time::Instant};
 
 use super::{foxlake_merger::FoxlakeMerger, foxlake_pusher::FoxlakePusher};
 use crate::{close_conn_pool, rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker};
@@ -25,7 +24,7 @@ pub struct FoxlakeSinker {
     pub url: String,
     pub batch_size: usize,
     pub meta_manager: MysqlMetaManager,
-    pub monitor: Arc<Mutex<Monitor>>,
+    pub monitor: Arc<Monitor>,
     pub conn_pool: Pool<MySql>,
     pub router: RdbRouter,
     pub pusher: FoxlakePusher,
@@ -100,8 +99,6 @@ impl Sinker for FoxlakeSinker {
 
 impl FoxlakeSinker {
     async fn batch_sink(&mut self, data: Vec<DtItem>) -> anyhow::Result<()> {
-        let start_time = Instant::now();
-
         // push to s3
         let (s3_file_metas, _) = self.pusher.batch_push(data, true).await?;
 
@@ -117,12 +114,7 @@ impl FoxlakeSinker {
         }
         let (all_data_size, all_row_count) = self.merger.batch_merge(dt_items).await?;
 
-        BaseSinker::update_batch_monitor(
-            &mut self.monitor,
-            all_row_count,
-            all_data_size,
-            start_time,
-        )
-        .await
+        BaseSinker::update_batch_monitor(&self.monitor, all_row_count as u64, all_data_size as u64)
+            .await
     }
 }

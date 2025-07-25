@@ -25,6 +25,29 @@
 | Data check/revise/review | &#10004;       | &#10004; | &#10004;       |                |                |             |                    |                     | &#10004;      |                 |                  |                |             |
 | Structure migration      | &#10004;       | &#10004; |                |                |                |             | &#10004;           | &#10004;            | &#10004;      | &#10004;        | &#10004;         | &#10004;       | &#10004;    |
 
+# Advanced
+
+## Crate features
+
+The dt-main crate provides several optional components which can be enabled via `Cargo [features]`:
+
+- `metrics`: Enable Prometheus format task metrics HTTP service interface.
+  After enabling this feature, you can customize the metrics service with the following configuration:
+
+  ```
+  [metrics]
+  # http service host
+  http_host=127.0.0.1
+  # http service port
+  http_port=9090
+  # http service worker count
+  workers=2
+  # prometheus metrics const labels
+  labels=your_label1:your_value1,your_label2:your_value2
+  ```
+
+- TBD
+
 # Quick starts
 
 ## Tutorial

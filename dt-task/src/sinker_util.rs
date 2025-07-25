@@ -77,7 +77,7 @@ impl SinkerUtil {
     pub async fn create_sinkers(
         task_config: &TaskConfig,
         extractor_config: &ExtractorConfig,
-        monitor: Arc<Mutex<Monitor>>,
+        monitor: Arc<Monitor>,
         data_marker: Option<Arc<RwLock<DataMarker>>>,
     ) -> anyhow::Result<Sinkers> {
         let log_level = &task_config.runtime.log_level;
