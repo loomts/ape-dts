@@ -56,7 +56,7 @@ jobs:
         if: matrix.target == 'x86_64-apple-darwin'
         run: |
           rustup target add ${{ matrix.target }}
-          cargo build --release --target=${{ matrix.target }}
+          cargo build --release --features metrics --target=${{ matrix.target }}
 
       - name: Create release artifact
         run: |

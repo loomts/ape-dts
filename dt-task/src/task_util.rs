@@ -1,5 +1,6 @@
 use std::{str::FromStr, time::Duration};
 
+use dt_common::config::config_enums::TaskType;
 use dt_common::config::extractor_config::ExtractorConfig;
 use dt_common::config::s3_config::S3Config;
 use dt_common::config::{
@@ -12,6 +13,7 @@ use dt_common::meta::{
     mysql::mysql_meta_manager::MysqlMetaManager, pg::pg_meta_manager::PgMetaManager,
     rdb_meta_manager::RdbMetaManager,
 };
+use dt_common::rdb_filter::RdbFilter;
 use futures::TryStreamExt;
 use mongodb::bson::doc;
 use mongodb::options::ClientOptions;
@@ -209,6 +211,113 @@ impl TaskUtil {
         };
         tbs.sort();
         Ok(tbs)
+    }
+
+    pub async fn estimate_record_count(
+        task_type: &TaskType,
+        url: &str,
+        db_type: &DbType,
+        schemas: &[String],
+        filter: &RdbFilter,
+    ) -> anyhow::Result<u64> {
+        match task_type {
+            TaskType::Snapshot => match db_type {
+                DbType::Mysql => Self::estimate_mysql_snapshot(url, schemas, filter).await,
+                DbType::Pg => Self::estimate_pg_snapshot(url, schemas, filter).await,
+                _ => Ok(0),
+            },
+            _ => Ok(0),
+        }
+    }
+
+    async fn estimate_mysql_snapshot(
+        url: &str,
+        schemas: &[String],
+        filter: &RdbFilter,
+    ) -> anyhow::Result<u64> {
+        let conn_pool = Self::create_mysql_conn_pool(url, 1, false, false).await?;
+
+        let mut sql = String::from("select table_schema, table_name, TABLE_ROWS from information_schema.TABLES where table_type = 'BASE TABLE'");
+        if schemas.len() <= 100 {
+            let sql_with_filter = format!(
+                "{} and table_schema in ({})",
+                sql,
+                schemas
+                    .iter()
+                    .filter(|s| !MYSQL_SYS_DBS.contains(&s.as_str()))
+                    .map(|s| format!("'{}'", s))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            );
+            sql = sql_with_filter;
+        }
+
+        let mut total_records = 0;
+        let mut rows = sqlx::query(&sql).fetch(&conn_pool);
+        while let Some(row) = rows.try_next().await.unwrap() {
+            let schema: String = row.try_get(0)?;
+            let tb: String = row.try_get(1)?;
+            let records: i64 = row.try_get(2)?;
+            if filter.filter_tb(&schema, &tb) {
+                continue;
+            }
+            total_records += if records < 0 { 0 } else { records as u64 };
+        }
+        conn_pool.close().await;
+
+        Ok(total_records)
+    }
+
+    async fn estimate_pg_snapshot(
+        url: &str,
+        schemas: &[String],
+        filter: &RdbFilter,
+    ) -> anyhow::Result<u64> {
+        let conn_pool = TaskUtil::create_pg_conn_pool(url, 1, false, false).await?;
+
+        let mut sql = String::from(
+            "SELECT
+    n.nspname AS schemaname,
+    c.relname AS tablename,
+    c.reltuples::bigint AS row_count
+FROM
+    pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE
+    c.relkind = 'r'
+    AND n.nspname NOT IN ('information_schema', 'pg_catalog')",
+        );
+
+        if schemas.len() <= 100 {
+            let sql_with_filter = format!(
+                "{} AND n.nspname IN ({})",
+                sql,
+                schemas
+                    .iter()
+                    .filter(|s| !PG_SYS_SCHEMAS.contains(&s.as_str()))
+                    .map(|s| format!("'{}'", s))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            );
+            sql = sql_with_filter;
+        }
+
+        let mut total_length = 0;
+        let mut rows = sqlx::query(&sql).fetch(&conn_pool);
+        while let Some(row) = rows.try_next().await.unwrap() {
+            let schema: String = row.try_get(0)?;
+            let table_name: String = row.try_get(1)?;
+            let row_count: i64 = row.try_get(2)?;
+            if filter.filter_tb(&schema, &table_name) {
+                continue;
+            }
+            // Convert to u64, handling negative values (which shouldn't happen but just in case)
+            let row_count_u64 = if row_count < 0 { 0 } else { row_count as u64 };
+            total_length += row_count_u64;
+        }
+        conn_pool.close().await;
+
+        Ok(total_length)
     }
 
     pub async fn check_tb_exist(

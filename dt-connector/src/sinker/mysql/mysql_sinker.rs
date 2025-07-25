@@ -1,4 +1,4 @@
-use std::{str::FromStr, sync::Arc};
+use std::{cmp, str::FromStr, sync::Arc};
 
 use anyhow::Context;
 use async_trait::async_trait;
@@ -6,7 +6,7 @@ use sqlx::{
     mysql::{MySqlConnectOptions, MySqlPoolOptions},
     MySql, Pool,
 };
-use tokio::{sync::Mutex, sync::RwLock, time::Instant};
+use tokio::{sync::RwLock, time::Instant};
 
 use crate::{
     call_batch_fn, close_conn_pool, data_marker::DataMarker, rdb_query_builder::RdbQueryBuilder,
@@ -22,6 +22,7 @@ use dt_common::{
         row_type::RowType,
     },
     monitor::monitor::Monitor,
+    utils::limit_queue::LimitedQueue,
 };
 
 #[derive(Clone)]
@@ -31,7 +32,7 @@ pub struct MysqlSinker {
     pub meta_manager: MysqlMetaManager,
     pub router: RdbRouter,
     pub batch_size: usize,
-    pub monitor: Arc<Mutex<Monitor>>,
+    pub monitor: Arc<Monitor>,
     pub data_marker: Option<Arc<RwLock<DataMarker>>>,
     pub replace: bool,
 }
@@ -61,8 +62,12 @@ impl Sinker for MysqlSinker {
     }
 
     async fn sink_ddl(&mut self, data: Vec<DdlData>, _batch: bool) -> anyhow::Result<()> {
-        for ddl_data in data {
+        let mut rts = LimitedQueue::new(cmp::min(100, data.len()));
+        let mut data_size = 0;
+
+        for ddl_data in data.iter() {
             let sql = ddl_data.to_sql();
+            data_size += ddl_data.get_data_size();
             let query = sqlx::query(&sql);
             let (db, _tb) = ddl_data.get_schema_tb();
             log_info!("sink ddl, db: {}, sql: {}", db, sql);
@@ -82,20 +87,32 @@ impl Sinker for MysqlSinker {
                 .max_connections(1)
                 .connect_with(conn_options)
                 .await?;
+            let start_time = Instant::now();
             query.execute(&conn_pool).await?;
+            rts.push((start_time.elapsed().as_millis() as u64, 1));
             conn_pool.close().await;
         }
-        Ok(())
+
+        BaseSinker::update_serial_monitor(&self.monitor, data.len() as u64, data_size).await?;
+        BaseSinker::update_monitor_rt(&self.monitor, &rts).await
     }
 
     async fn sink_dcl(&mut self, data: Vec<DclData>, _batch: bool) -> anyhow::Result<()> {
-        for dcl_data in data {
+        let mut rts = LimitedQueue::new(cmp::min(100, data.len()));
+        let mut data_size = 0;
+
+        for dcl_data in data.iter() {
             let sql = dcl_data.to_sql();
+            data_size += dcl_data.get_data_size();
             log_info!("sink dcl: {}", &sql);
             let query = sqlx::query(&sql).persistent(false).disable_arguments();
+            let start_time = Instant::now();
             query.execute(&self.conn_pool).await?;
+            rts.push((start_time.elapsed().as_millis() as u64, 1));
         }
-        Ok(())
+
+        BaseSinker::update_serial_monitor(&self.monitor, data.len() as u64, data_size).await?;
+        BaseSinker::update_monitor_rt(&self.monitor, &rts).await
     }
 
     async fn close(&mut self) -> anyhow::Result<()> {
@@ -113,9 +130,6 @@ impl Sinker for MysqlSinker {
 
 impl MysqlSinker {
     async fn serial_sink(&mut self, data: &[RowData]) -> anyhow::Result<()> {
-        let start_time = Instant::now();
-        let mut data_size = 0;
-
         let mut tx = self.conn_pool.begin().await?;
         if let Some(sql) = self.get_data_marker_sql().await {
             sqlx::query(&sql)
@@ -123,22 +137,28 @@ impl MysqlSinker {
                 .await
                 .with_context(|| format!("failed to execute data marker sql: [{}]", sql))?;
         }
+
+        let mut data_size = 0;
+        let mut rts = LimitedQueue::new(cmp::min(100, data.len()));
         for row_data in data.iter() {
             data_size += row_data.data_size;
             let tb_meta = self.meta_manager.get_tb_meta_by_row_data(row_data).await?;
             let query_builder = RdbQueryBuilder::new_for_mysql(tb_meta, None);
-
             let query_info = query_builder.get_query_info(row_data, self.replace)?;
             let query = query_builder.create_mysql_query(&query_info);
+
+            let start_time = Instant::now();
             query
                 .execute(&mut tx)
                 .await
                 .with_context(|| format!("serial sink failed, row_data: [{}]", row_data))?;
+            rts.push((start_time.elapsed().as_millis() as u64, 1));
         }
         tx.commit().await?;
 
-        BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
-            .await
+        BaseSinker::update_serial_monitor(&self.monitor, data.len() as u64, data_size as u64)
+            .await?;
+        BaseSinker::update_monitor_rt(&self.monitor, &rts).await
     }
 
     async fn batch_delete(
@@ -147,8 +167,6 @@ impl MysqlSinker {
         start_index: usize,
         batch_size: usize,
     ) -> anyhow::Result<()> {
-        let start_time = Instant::now();
-
         let tb_meta = self
             .meta_manager
             .get_tb_meta_by_row_data(&data[0])
@@ -159,6 +177,8 @@ impl MysqlSinker {
             query_builder.get_batch_delete_query(data, start_index, batch_size)?;
         let query = query_builder.create_mysql_query(&query_info);
 
+        let start_time = Instant::now();
+        let mut rts = LimitedQueue::new(1);
         if let Some(sql) = self.get_data_marker_sql().await {
             let mut tx = self.conn_pool.begin().await?;
             sqlx::query(&sql).execute(&mut tx).await?;
@@ -167,8 +187,11 @@ impl MysqlSinker {
         } else {
             query.execute(&self.conn_pool).await?;
         }
+        rts.push((start_time.elapsed().as_millis() as u64, 1));
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
+        BaseSinker::update_batch_monitor(&self.monitor, batch_size as u64, data_size as u64)
+            .await?;
+        BaseSinker::update_monitor_rt(&self.monitor, &rts).await
     }
 
     async fn batch_insert(
@@ -177,8 +200,6 @@ impl MysqlSinker {
         start_index: usize,
         batch_size: usize,
     ) -> anyhow::Result<()> {
-        let start_time = Instant::now();
-
         let tb_meta = self
             .meta_manager
             .get_tb_meta_by_row_data(&data[0])
@@ -190,6 +211,8 @@ impl MysqlSinker {
             query_builder.get_batch_insert_query(data, start_index, batch_size, self.replace)?;
         let query = query_builder.create_mysql_query(&query_info);
 
+        let start_time = Instant::now();
+        let mut rts = LimitedQueue::new(1);
         let exec_error = if let Some(sql) = self.get_data_marker_sql().await {
             let mut tx = self.conn_pool.begin().await?;
             sqlx::query(&sql).execute(&mut tx).await?;
@@ -204,6 +227,7 @@ impl MysqlSinker {
                 _ => None,
             }
         };
+        rts.push((start_time.elapsed().as_millis() as u64, 1));
 
         if let Some(error) = exec_error {
             log_error!(
@@ -215,9 +239,11 @@ impl MysqlSinker {
             // insert one by one
             let sub_data = &data[start_index..start_index + batch_size];
             self.serial_sink(sub_data).await?;
+        } else {
+            BaseSinker::update_monitor_rt(&self.monitor, &rts).await?;
         }
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
+        BaseSinker::update_batch_monitor(&self.monitor, batch_size as u64, data_size as u64).await
     }
 
     async fn get_data_marker_sql(&self) -> Option<String> {

@@ -172,6 +172,36 @@ appenders:
         count: 10
         pattern: "LOG_DIR_PLACEHODLER/sql{}.log"
 
+  task_appender:
+    kind: rolling_file
+    path: "LOG_DIR_PLACEHODLER/task.log"
+    encoder:
+      pattern: "{m}{n}"   
+    policy:
+      kind: compound
+      trigger:
+        kind: size
+        limit: 100kb
+      roller:
+        kind: delete    
+
+  http_appender:
+    kind: rolling_file
+    append: true
+    path: "LOG_DIR_PLACEHODLER/http.log"
+    encoder:
+      pattern: "{d(%Y-%m-%d %H:%M:%S.%6f)(utc)} - {level} - [{i}] - {m}{n}"
+    policy:
+      kind: compound
+      trigger:
+        kind: size
+        limit: 100mb
+      roller:
+        kind: fixed_window
+        base: 1
+        count: 10
+        pattern: "LOG_DIR_PLACEHODLER/http{}.log"
+
 loggers:
   mysql_binlog_connector_rust:  # crate: mysql-binlog-connector-rust
     level: LOG_LEVEL_PLACEHODLER
@@ -232,6 +262,32 @@ loggers:
     level: LOG_LEVEL_PLACEHODLER
     appenders: 
       - sql_appender
+
+  task_logger: 
+    level: LOG_LEVEL_PLACEHODLER
+    appenders: 
+      - task_appender
+    additive: false  
+
+  http_logger:
+    level: info
+    appenders:
+      - http_appender
+    additive: false
+
+  actix_web:
+    level: info
+    appenders:
+      - http_appender
+      - stdout
+    additive: false
+      
+  actix_server:
+    level: info  
+    appenders:
+      - http_appender
+      - stdout
+    additive: false  
 
 root:
   level: LOG_LEVEL_PLACEHODLER

@@ -110,6 +110,8 @@ impl PgCreateRbacStatement {
 
 #[cfg(test)]
 mod tests {
+    use dashmap::DashMap;
+
     use super::*;
     use crate::config::config_enums::DbType;
     use crate::meta::struct_meta::structure::rbac::{PgPrivilege, PgRole, PgRoleMember};
@@ -120,7 +122,7 @@ mod tests {
         let mut filter = RdbFilter {
             db_type: DbType::Pg,
             do_structures: HashSet::new(),
-            cache: HashMap::new(),
+            cache: DashMap::new(),
             do_schemas: HashSet::new(),
             ignore_schemas: HashSet::new(),
             do_tbs: HashSet::new(),

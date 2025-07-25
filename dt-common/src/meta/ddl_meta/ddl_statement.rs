@@ -695,6 +695,193 @@ impl DdlStatement {
             _ => String::new(),
         }
     }
+
+    pub fn get_malloc_size(&self) -> u64 {
+        let mut size = 0;
+        match &self {
+            DdlStatement::CreateDatabase(create_database_statement) => {
+                size += create_database_statement.db.len() as u64;
+                size += create_database_statement.unparsed.len() as u64;
+                size += 1;
+            }
+            DdlStatement::DropDatabase(drop_database_statement) => {
+                size += drop_database_statement.db.len() as u64;
+                size += drop_database_statement.unparsed.len() as u64;
+                size += 1;
+            }
+            DdlStatement::AlterDatabase(alter_database_statement) => {
+                size += alter_database_statement.db.len() as u64;
+                size += alter_database_statement.unparsed.len() as u64;
+            }
+            DdlStatement::CreateSchema(create_schema_statement) => {
+                size += create_schema_statement.schema.len() as u64;
+                size += create_schema_statement.unparsed.len() as u64;
+                size += 1;
+            }
+            DdlStatement::DropSchema(drop_schema_statement) => {
+                size += drop_schema_statement.schema.len() as u64;
+                size += drop_schema_statement.unparsed.len() as u64;
+                size += 1;
+            }
+            DdlStatement::AlterSchema(alter_schema_statement) => {
+                size += alter_schema_statement.schema.len() as u64;
+                size += alter_schema_statement.unparsed.len() as u64;
+            }
+            DdlStatement::MysqlCreateTable(mysql_create_table_statement) => {
+                size += mysql_create_table_statement.db.len() as u64;
+                size += mysql_create_table_statement.tb.len() as u64;
+                size += mysql_create_table_statement.unparsed.len() as u64;
+                size += 1;
+            }
+            DdlStatement::MysqlAlterTable(mysql_alter_table_statement) => {
+                size += mysql_alter_table_statement.db.len() as u64;
+                size += mysql_alter_table_statement.tb.len() as u64;
+                size += mysql_alter_table_statement.unparsed.len() as u64;
+            }
+            DdlStatement::MysqlAlterTableRename(mysql_alter_table_rename_statement) => {
+                size += mysql_alter_table_rename_statement.db.len() as u64;
+                size += mysql_alter_table_rename_statement.tb.len() as u64;
+                size += mysql_alter_table_rename_statement.new_db.len() as u64;
+                size += mysql_alter_table_rename_statement.new_tb.len() as u64;
+                size += mysql_alter_table_rename_statement.unparsed.len() as u64;
+            }
+            DdlStatement::MysqlTruncateTable(mysql_truncate_table_statement) => {
+                size += mysql_truncate_table_statement.db.len() as u64;
+                size += mysql_truncate_table_statement.tb.len() as u64;
+                size += mysql_truncate_table_statement.unparsed.len() as u64;
+            }
+            DdlStatement::PgCreateTable(pg_create_table_statement) => {
+                size += pg_create_table_statement.schema.len() as u64;
+                size += pg_create_table_statement.tb.len() as u64;
+                size += pg_create_table_statement.unparsed.len() as u64;
+                size += std::mem::size_of::<Option<String>>() as u64 * 2;
+                size += pg_create_table_statement
+                    .temporary
+                    .as_ref()
+                    .map_or(0, |s| s.len() as u64);
+                size += pg_create_table_statement
+                    .unlogged
+                    .as_ref()
+                    .map_or(0, |s| s.len() as u64);
+                size += 1;
+            }
+            DdlStatement::PgAlterTable(pg_alter_table_statement) => {
+                size += pg_alter_table_statement.schema.len() as u64;
+                size += pg_alter_table_statement.tb.len() as u64;
+                size += pg_alter_table_statement.unparsed.len() as u64;
+                size += 2;
+            }
+            DdlStatement::PgAlterTableRename(pg_alter_table_rename_statement) => {
+                size += pg_alter_table_rename_statement.schema.len() as u64;
+                size += pg_alter_table_rename_statement.tb.len() as u64;
+                size += pg_alter_table_rename_statement.new_schema.len() as u64;
+                size += pg_alter_table_rename_statement.new_tb.len() as u64;
+                size += pg_alter_table_rename_statement.unparsed.len() as u64;
+                size += 2;
+            }
+            DdlStatement::PgAlterTableSetSchema(pg_alter_table_set_schema_statement) => {
+                size += pg_alter_table_set_schema_statement.schema.len() as u64;
+                size += pg_alter_table_set_schema_statement.tb.len() as u64;
+                size += pg_alter_table_set_schema_statement.new_schema.len() as u64;
+                size += pg_alter_table_set_schema_statement.new_tb.len() as u64;
+                size += pg_alter_table_set_schema_statement.unparsed.len() as u64;
+                size += 2;
+            }
+            DdlStatement::PgTruncateTable(pg_truncate_table_statement) => {
+                size += pg_truncate_table_statement.schema.len() as u64;
+                size += pg_truncate_table_statement.tb.len() as u64;
+                size += pg_truncate_table_statement.unparsed.len() as u64;
+                size += 1;
+            }
+            DdlStatement::PgCreateIndex(pg_create_index_statement) => {
+                size += pg_create_index_statement.schema.len() as u64;
+                size += pg_create_index_statement.tb.len() as u64;
+                size += pg_create_index_statement.unparsed.len() as u64;
+                size += std::mem::size_of::<Option<String>>() as u64;
+                size += pg_create_index_statement
+                    .index_name
+                    .as_ref()
+                    .map_or(0, |s| s.len() as u64);
+                size += 4;
+            }
+            DdlStatement::PgDropIndex(pg_drop_index_statement) => {
+                size += pg_drop_index_statement.index_name.len() as u64;
+                size += pg_drop_index_statement.unparsed.len() as u64;
+                size += 2;
+            }
+            DdlStatement::PgDropMultiIndex(pg_drop_multi_index_statement) => {
+                size += std::mem::size_of::<Vec<String>>() as u64;
+                size += pg_drop_multi_index_statement
+                    .index_names
+                    .iter()
+                    .map(|s| s.len() as u64)
+                    .sum::<u64>();
+                size += pg_drop_multi_index_statement.unparsed.len() as u64;
+                size += 1;
+            }
+            DdlStatement::DropMultiTable(drop_multi_table_statement) => {
+                size += std::mem::size_of::<Vec<(String, String)>>() as u64;
+                size += drop_multi_table_statement
+                    .schema_tbs
+                    .iter()
+                    .map(|(s, t)| s.len() as u64 + t.len() as u64)
+                    .sum::<u64>();
+                size += drop_multi_table_statement.unparsed.len() as u64;
+                size += 1;
+            }
+            DdlStatement::RenameMultiTable(rename_multi_table_statement) => {
+                size += std::mem::size_of::<Vec<(String, String)>>() as u64 * 2;
+                size += rename_multi_table_statement
+                    .schema_tbs
+                    .iter()
+                    .map(|(s1, s2)| s1.len() as u64 + s2.len() as u64)
+                    .sum::<u64>();
+                size += rename_multi_table_statement
+                    .new_schema_tbs
+                    .iter()
+                    .map(|(s1, s2)| s1.len() as u64 + s2.len() as u64)
+                    .sum::<u64>();
+                size += rename_multi_table_statement.unparsed.len() as u64;
+                size += 1;
+            }
+            DdlStatement::DropTable(drop_table_statement) => {
+                size += drop_table_statement.schema.len() as u64;
+                size += drop_table_statement.tb.len() as u64;
+                size += drop_table_statement.unparsed.len() as u64;
+                size += 1;
+            }
+            DdlStatement::RenameTable(rename_table_statement) => {
+                size += rename_table_statement.schema.len() as u64;
+                size += rename_table_statement.tb.len() as u64;
+                size += rename_table_statement.new_schema.len() as u64;
+                size += rename_table_statement.new_tb.len() as u64;
+                size += rename_table_statement.unparsed.len() as u64;
+            }
+            DdlStatement::MysqlCreateIndex(mysql_create_index_statement) => {
+                size += mysql_create_index_statement.db.len() as u64;
+                size += mysql_create_index_statement.tb.len() as u64;
+                size += mysql_create_index_statement.index_name.len() as u64;
+                size += mysql_create_index_statement.unparsed.len() as u64;
+                size += std::mem::size_of::<Option<String>>() as u64 * 2;
+                size += mysql_create_index_statement
+                    .index_kind
+                    .as_ref()
+                    .map_or(0, |s| s.len() as u64);
+                size += mysql_create_index_statement
+                    .index_type
+                    .as_ref()
+                    .map_or(0, |s| s.len() as u64);
+            }
+            DdlStatement::MysqlDropIndex(mysql_drop_index_statement) => {
+                size += mysql_drop_index_statement.db.len() as u64;
+                size += mysql_drop_index_statement.tb.len() as u64;
+                size += mysql_drop_index_statement.index_name.len() as u64;
+                size += mysql_drop_index_statement.unparsed.len() as u64;
+            }
+            DdlStatement::Unknown => {}
+        }
+        size
+    }
 }
 
 impl DropMultiTableStatement {

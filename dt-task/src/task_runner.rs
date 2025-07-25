@@ -15,24 +15,33 @@ use tokio::{
     time::Duration, try_join,
 };
 
+use super::{
+    extractor_util::ExtractorUtil, parallelizer_util::ParallelizerUtil, sinker_util::SinkerUtil,
+};
+use crate::task_util::TaskUtil;
 use dt_common::{
     config::{
-        config_enums::{DbType, PipelineType},
+        config_enums::{build_task_type, DbType, PipelineType},
         config_token_parser::ConfigTokenParser,
         extractor_config::ExtractorConfig,
         sinker_config::SinkerConfig,
         task_config::TaskConfig,
     },
     error::Error,
-    log_finished, log_info,
-    meta::{avro::avro_converter::AvroConverter, dt_queue::DtQueue},
-    monitor::{group_monitor::GroupMonitor, monitor::Monitor, FlushableMonitor},
+    log_error, log_finished, log_info,
+    meta::{
+        avro::avro_converter::AvroConverter, dt_queue::DtQueue, position::Position,
+        row_type::RowType, syncer::Syncer,
+    },
+    monitor::{
+        group_monitor::GroupMonitor,
+        monitor::Monitor,
+        task_metrics::TaskMetricsType,
+        task_monitor::{MonitorType, TaskMonitor},
+        FlushableMonitor,
+    },
     rdb_filter::RdbFilter,
     utils::{sql_util::SqlUtil, time_util::TimeUtil},
-};
-use dt_common::{
-    log_error,
-    meta::{position::Position, row_type::RowType, syncer::Syncer},
 };
 use dt_connector::{
     data_marker::DataMarker,
@@ -45,18 +54,18 @@ use dt_pipeline::{
     lua_processor::LuaProcessor, Pipeline,
 };
 
-use crate::task_util::TaskUtil;
-
-use super::{
-    extractor_util::ExtractorUtil, parallelizer_util::ParallelizerUtil, sinker_util::SinkerUtil,
-};
+#[cfg(feature = "metrics")]
+use dt_common::monitor::prometheus_metrics::PrometheusMetrics;
 
 #[derive(Clone)]
 pub struct TaskRunner {
     config: TaskConfig,
-    extractor_monitor: Arc<Mutex<GroupMonitor>>,
-    pipeline_monitor: Arc<Mutex<GroupMonitor>>,
-    sinker_monitor: Arc<Mutex<GroupMonitor>>,
+    extractor_monitor: Arc<GroupMonitor>,
+    pipeline_monitor: Arc<GroupMonitor>,
+    sinker_monitor: Arc<GroupMonitor>,
+    task_monitor: Arc<TaskMonitor>,
+    #[cfg(feature = "metrics")]
+    prometheus_metrics: Arc<PrometheusMetrics>,
 }
 
 const CHECK_LOG_DIR_PLACEHODLER: &str = "CHECK_LOG_DIR_PLACEHODLER";
@@ -70,11 +79,33 @@ impl TaskRunner {
     pub fn new(task_config_file: &str) -> anyhow::Result<Self> {
         let config = TaskConfig::new(task_config_file)
             .with_context(|| format!("invalid configs in [{}]", task_config_file))?;
+        let task_type = build_task_type(
+            &config.extractor_basic.extract_type,
+            &config.sinker_basic.sink_type,
+        );
+        #[cfg(not(feature = "metrics"))]
+        let task_monitor = Arc::new(TaskMonitor::new(task_type.clone()));
+
+        #[cfg(feature = "metrics")]
+        let prometheus_metrics = Arc::new(PrometheusMetrics::new(
+            task_type.clone(),
+            config.metrics.clone(),
+        ));
+
+        #[cfg(feature = "metrics")]
+        let task_monitor = Arc::new(TaskMonitor::new(
+            task_type.clone(),
+            prometheus_metrics.clone(),
+        ));
+
         Ok(Self {
             config,
-            extractor_monitor: Arc::new(Mutex::new(GroupMonitor::new("extractor", "global"))),
-            pipeline_monitor: Arc::new(Mutex::new(GroupMonitor::new("pipeline", "global"))),
-            sinker_monitor: Arc::new(Mutex::new(GroupMonitor::new("sinker", "global"))),
+            extractor_monitor: Arc::new(GroupMonitor::new("extractor", "global")),
+            pipeline_monitor: Arc::new(GroupMonitor::new("pipeline", "global")),
+            sinker_monitor: Arc::new(GroupMonitor::new("sinker", "global")),
+            task_monitor,
+            #[cfg(feature = "metrics")]
+            prometheus_metrics,
         })
     }
 
@@ -92,6 +123,12 @@ impl TaskRunner {
         let router = RdbRouter::from_config(&self.config.router, db_type)?;
         let snapshot_resumer = SnapshotResumer::from_config(&self.config)?;
         let cdc_resumer = CdcResumer::from_config(&self.config)?;
+
+        #[cfg(feature = "metrics")]
+        self.prometheus_metrics
+            .initialization()
+            .start_metrics()
+            .await;
 
         match &self.config.extractor {
             ExtractorConfig::MysqlStruct { url, .. }
@@ -111,6 +148,7 @@ impl TaskRunner {
                         &router,
                         &snapshot_resumer,
                         &cdc_resumer,
+                        false,
                     )
                     .await?
             }
@@ -128,17 +166,31 @@ impl TaskRunner {
         cdc_resumer: &CdcResumer,
     ) -> anyhow::Result<()> {
         let db_type = &self.config.extractor_basic.db_type;
-        let mut filter = RdbFilter::from_config(&self.config.filter, db_type)?;
+        let filter = RdbFilter::from_config(&self.config.filter, db_type)?;
+        let task_type_option = build_task_type(
+            &self.config.extractor_basic.extract_type,
+            &self.config.sinker_basic.sink_type,
+        );
 
         let mut pending_tbs = VecDeque::new();
-        let schemas = TaskUtil::list_schemas(url, db_type).await?;
-        let mut flag = 0;
-        for schema in schemas.iter() {
-            if filter.filter_schema(schema) {
-                log_info!("schema: {} filtered", schema);
-                continue;
-            }
+        let schemas = TaskUtil::list_schemas(url, db_type)
+            .await?
+            .iter()
+            .filter(|schema| !filter.filter_schema(schema))
+            .map(|s| s.to_owned())
+            .collect::<Vec<_>>();
+        if let Some(task_type) = task_type_option {
+            let record_count =
+                TaskUtil::estimate_record_count(&task_type, url, db_type, &schemas, &filter)
+                    .await?;
+            self.task_monitor
+                .add_no_window_metrics(TaskMetricsType::ExtractorPlanRecords, record_count);
+        }
 
+        // TODO: Need to limit resources when starting tasks concurrently at schema level.
+        //       Currently connection count, rate limit, buffer size, etc. are controlled at single task level,
+        //       which in multi-task mode will amplify these resources by at least schema count times
+        for (flag, schema) in schemas.iter().enumerate() {
             // start a task for each schema
             let schema_extractor_config = match &self.config.extractor {
                 ExtractorConfig::MysqlStruct { url, .. } => Some(ExtractorConfig::MysqlStruct {
@@ -155,11 +207,15 @@ impl TaskRunner {
                 _ => None,
             };
 
-            flag += 1;
-
             if let Some(extractor_config) = schema_extractor_config {
                 self.clone()
-                    .start_single_task(&extractor_config, router, snapshot_resumer, cdc_resumer)
+                    .start_single_task(
+                        &extractor_config,
+                        router,
+                        snapshot_resumer,
+                        cdc_resumer,
+                        true,
+                    )
                     .await?;
                 continue;
             }
@@ -186,13 +242,13 @@ impl TaskRunner {
         let extractor_monitor = self.extractor_monitor.clone();
         let pipeline_monitor = self.pipeline_monitor.clone();
         let sinker_monitor = self.sinker_monitor.clone();
+        let task_monitor = self.task_monitor.clone();
         let global_monitor_task = tokio::spawn(async move {
-            Self::flush_group_monitors(
+            Self::flush_monitors_generic::<GroupMonitor, TaskMonitor>(
                 interval_secs,
                 global_shut_down_clone,
-                extractor_monitor,
-                pipeline_monitor,
-                sinker_monitor,
+                &[extractor_monitor, pipeline_monitor, sinker_monitor],
+                &[task_monitor],
             )
             .await
         });
@@ -331,6 +387,7 @@ impl TaskRunner {
                     &router,
                     &snapshot_resumer,
                     &cdc_resumer,
+                    true,
                 )
                 .await;
             (single_task_id, res)
@@ -344,11 +401,12 @@ impl TaskRunner {
         router: &RdbRouter,
         snapshot_resumer: &SnapshotResumer,
         cdc_resumer: &CdcResumer,
+        is_multi_task: bool,
     ) -> anyhow::Result<()> {
         let max_bytes = self.config.pipeline.buffer_memory_mb * 1024 * 1024;
         let buffer = Arc::new(DtQueue::new(
             self.config.pipeline.buffer_size,
-            max_bytes as i64,
+            max_bytes as u64,
         ));
 
         let shut_down = Arc::new(AtomicBool::new(false));
@@ -380,16 +438,16 @@ impl TaskRunner {
         };
 
         // extractor
-        let monitor_time_window_secs = self.config.pipeline.counter_time_window_secs as usize;
-        let monitor_max_sub_count = self.config.pipeline.counter_max_sub_count as usize;
-        let monitor_count_window = self.config.pipeline.buffer_size;
-        let extractor_monitor = Arc::new(Mutex::new(Monitor::new(
+        let monitor_time_window_secs = self.config.pipeline.counter_time_window_secs;
+        let monitor_max_sub_count = self.config.pipeline.counter_max_sub_count;
+        let monitor_count_window = self.config.pipeline.buffer_size as u64;
+        let extractor_monitor = Arc::new(Monitor::new(
             "extractor",
             &single_task_id,
             monitor_time_window_secs,
             monitor_max_sub_count,
             monitor_count_window,
-        )));
+        ));
         let mut extractor = ExtractorUtil::create_extractor(
             &self.config,
             extractor_config,
@@ -405,13 +463,13 @@ impl TaskRunner {
         .await?;
 
         // sinkers
-        let sinker_monitor = Arc::new(Mutex::new(Monitor::new(
+        let sinker_monitor = Arc::new(Monitor::new(
             "sinker",
             &single_task_id,
             monitor_time_window_secs,
             monitor_max_sub_count,
             monitor_count_window,
-        )));
+        ));
         let sinkers = SinkerUtil::create_sinkers(
             &self.config,
             extractor_config,
@@ -421,13 +479,13 @@ impl TaskRunner {
         .await?;
 
         // pipeline
-        let pipeline_monitor = Arc::new(Mutex::new(Monitor::new(
+        let pipeline_monitor = Arc::new(Monitor::new(
             "pipeline",
             &single_task_id,
             monitor_time_window_secs,
             monitor_max_sub_count,
             monitor_count_window,
-        )));
+        ));
 
         let mut pipeline = self
             .create_pipeline(
@@ -444,21 +502,25 @@ impl TaskRunner {
         tokio::join!(
             async {
                 self.extractor_monitor
-                    .lock()
-                    .await
                     .add_monitor(&single_task_id, extractor_monitor.clone());
             },
             async {
                 self.pipeline_monitor
-                    .lock()
-                    .await
                     .add_monitor(&single_task_id, pipeline_monitor.clone());
             },
             async {
                 self.sinker_monitor
-                    .lock()
-                    .await
                     .add_monitor(&single_task_id, sinker_monitor.clone());
+            },
+            async {
+                self.task_monitor.register(
+                    &single_task_id,
+                    vec![
+                        (MonitorType::Extractor, extractor_monitor.clone()),
+                        (MonitorType::Pipeline, pipeline_monitor.clone()),
+                        (MonitorType::Sinker, sinker_monitor.clone()),
+                    ],
+                );
             }
         );
 
@@ -477,13 +539,17 @@ impl TaskRunner {
         });
 
         let interval_secs = self.config.pipeline.checkpoint_interval_secs;
+        let tasks: Vec<Arc<TaskMonitor>> = if is_multi_task {
+            vec![]
+        } else {
+            vec![self.task_monitor.clone()]
+        };
         let f3 = tokio::spawn(async move {
-            Self::flush_monitors(
+            Self::flush_monitors_generic::<Monitor, TaskMonitor>(
                 interval_secs,
                 shut_down,
-                extractor_monitor,
-                pipeline_monitor,
-                sinker_monitor,
+                &[extractor_monitor, pipeline_monitor, sinker_monitor],
+                &tasks,
             )
             .await
         });
@@ -512,16 +578,23 @@ impl TaskRunner {
         // remove monitors from global monitors
         tokio::join!(
             async {
-                let mut guard = self.extractor_monitor.lock().await;
-                guard.remove_monitor(&single_task_id).await;
+                self.extractor_monitor.remove_monitor(&single_task_id);
             },
             async {
-                let mut guard = self.pipeline_monitor.lock().await;
-                guard.remove_monitor(&single_task_id).await;
+                self.pipeline_monitor.remove_monitor(&single_task_id);
             },
             async {
-                let mut guard = self.sinker_monitor.lock().await;
-                guard.remove_monitor(&single_task_id).await;
+                self.sinker_monitor.remove_monitor(&single_task_id);
+            },
+            async {
+                self.task_monitor.unregister(
+                    &single_task_id,
+                    vec![
+                        MonitorType::Extractor,
+                        MonitorType::Pipeline,
+                        MonitorType::Sinker,
+                    ],
+                );
             }
         );
 
@@ -534,7 +607,7 @@ impl TaskRunner {
         shut_down: Arc<AtomicBool>,
         syncer: Arc<Mutex<Syncer>>,
         sinkers: Vec<Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>>,
-        monitor: Arc<Mutex<Monitor>>,
+        monitor: Arc<Monitor>,
         data_marker: Option<Arc<RwLock<DataMarker>>>,
     ) -> anyhow::Result<Box<dyn Pipeline + Send>> {
         match self.config.pipeline.pipeline_type {
@@ -644,48 +717,14 @@ impl TaskRunner {
         Ok(())
     }
 
-    async fn flush_monitors(
+    async fn flush_monitors_generic<T1, T2>(
         interval_secs: u64,
         shut_down: Arc<AtomicBool>,
-        extractor_monitor: Arc<Mutex<Monitor>>,
-        pipeline_monitor: Arc<Mutex<Monitor>>,
-        sinker_monitor: Arc<Mutex<Monitor>>,
-    ) {
-        Self::flush_monitors_generic(
-            interval_secs,
-            shut_down,
-            extractor_monitor,
-            pipeline_monitor,
-            sinker_monitor,
-        )
-        .await
-    }
-
-    async fn flush_group_monitors(
-        interval_secs: u64,
-        shut_down: Arc<AtomicBool>,
-        extractor_monitor: Arc<Mutex<GroupMonitor>>,
-        pipeline_monitor: Arc<Mutex<GroupMonitor>>,
-        sinker_monitor: Arc<Mutex<GroupMonitor>>,
-    ) {
-        Self::flush_monitors_generic(
-            interval_secs,
-            shut_down,
-            extractor_monitor,
-            pipeline_monitor,
-            sinker_monitor,
-        )
-        .await
-    }
-
-    async fn flush_monitors_generic<T>(
-        interval_secs: u64,
-        shut_down: Arc<AtomicBool>,
-        extractor_monitor: Arc<Mutex<T>>,
-        pipeline_monitor: Arc<Mutex<T>>,
-        sinker_monitor: Arc<Mutex<T>>,
+        t1_monitors: &[Arc<T1>],
+        t2_monitors: &[Arc<T2>],
     ) where
-        T: FlushableMonitor,
+        T1: FlushableMonitor + Send + Sync + 'static,
+        T2: FlushableMonitor + Send + Sync + 'static,
     {
         loop {
             // do an extra flush before exit if task finished
@@ -694,16 +733,25 @@ impl TaskRunner {
                 TimeUtil::sleep_millis(interval_secs * 1000).await;
             }
 
+            let t1_futures = t1_monitors
+                .iter()
+                .map(|monitor| {
+                    let monitor = monitor.clone();
+                    async move { monitor.flush().await }
+                })
+                .collect::<Vec<_>>();
+
+            let t2_futures = t2_monitors
+                .iter()
+                .map(|monitor| {
+                    let monitor = monitor.clone();
+                    async move { monitor.flush().await }
+                })
+                .collect::<Vec<_>>();
+
             tokio::join!(
-                async {
-                    extractor_monitor.lock().await.flush().await;
-                },
-                async {
-                    pipeline_monitor.lock().await.flush().await;
-                },
-                async {
-                    sinker_monitor.lock().await.flush().await;
-                }
+                futures::future::join_all(t1_futures),
+                futures::future::join_all(t2_futures)
             );
 
             if finished {

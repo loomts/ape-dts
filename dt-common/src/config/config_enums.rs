@@ -50,8 +50,9 @@ pub enum ExtractType {
     FoxlakeS3,
 }
 
-#[derive(Display, EnumString, IntoStaticStr)]
+#[derive(Display, EnumString, IntoStaticStr, Clone, Debug, Default)]
 pub enum SinkType {
+    #[default]
     #[strum(serialize = "dummy")]
     Dummy,
     #[strum(serialize = "write")]
@@ -115,4 +116,26 @@ pub enum MetaCenterType {
     Basic,
     #[strum(serialize = "dbengine")]
     DbEngine,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Display, EnumString, IntoStaticStr)]
+pub enum TaskType {
+    #[strum(serialize = "struct")]
+    Struct,
+    #[strum(serialize = "snapshot")]
+    Snapshot,
+    #[strum(serialize = "cdc")]
+    Cdc,
+    #[strum(serialize = "check")]
+    Check,
+}
+
+pub fn build_task_type(extract_type: &ExtractType, sink_type: &SinkType) -> Option<TaskType> {
+    match (extract_type, sink_type) {
+        (ExtractType::Struct, SinkType::Struct) => Some(TaskType::Struct),
+        (ExtractType::Snapshot, SinkType::Write) => Some(TaskType::Snapshot),
+        (ExtractType::Cdc, SinkType::Write) => Some(TaskType::Cdc),
+        (ExtractType::Snapshot, SinkType::Check) => Some(TaskType::Check),
+        _ => None,
+    }
 }

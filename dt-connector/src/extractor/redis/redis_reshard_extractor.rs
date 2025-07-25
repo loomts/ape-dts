@@ -9,7 +9,6 @@ use dt_common::{
     utils::redis_util::RedisUtil,
 };
 use redis::{Connection, ConnectionLike};
-use serde_json::json;
 use url::Url;
 
 use crate::{extractor::base_extractor::BaseExtractor, Extractor};
@@ -58,7 +57,7 @@ impl RedisReshardExtractor {
             let slots = move_out_slots[i..i + count].to_vec();
             i += count;
 
-            log_info!("will move slots to: [{}], slots: {}", node.id, json!(slots));
+            log_info!("will move slots to: [{}], slots: {:?}", node.id, slots);
             node_move_in_slots.insert(node.id.clone(), slots);
         }
 

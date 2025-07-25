@@ -104,7 +104,7 @@ impl MongoSnapshotExtractor {
             "end extracting data from {}.{}, all count: {}",
             self.db,
             self.tb,
-            self.base_extractor.monitor.counters.record_count
+            self.base_extractor.monitor.counters.pushed_record_count
         );
         Ok(())
     }

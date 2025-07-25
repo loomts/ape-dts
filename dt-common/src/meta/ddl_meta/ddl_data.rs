@@ -54,4 +54,20 @@ impl DdlData {
         }
         res
     }
+
+    pub fn get_data_size(&self) -> u64 {
+        self.to_sql().len() as u64
+    }
+
+    pub fn get_malloc_size(&self) -> u64 {
+        let mut size: u64 = 0;
+
+        size += self.default_schema.len() as u64;
+        size += self.query.len() as u64;
+        size += std::mem::size_of::<DdlType>() as u64;
+        size += std::mem::size_of::<DbType>() as u64;
+        size += self.statement.get_malloc_size();
+
+        size
+    }
 }

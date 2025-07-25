@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use tokio::sync::Mutex;
 
 use crate::{rdb_query_builder::RdbQueryBuilder, rdb_router::RdbRouter, Sinker};
 use dt_common::{
@@ -15,7 +14,7 @@ pub struct SqlSinker {
     pub meta_manager: RdbMetaManager,
     pub router: RdbRouter,
     pub reverse: bool,
-    pub monitor: Arc<Mutex<Monitor>>,
+    pub monitor: Arc<Monitor>,
 }
 
 #[async_trait]

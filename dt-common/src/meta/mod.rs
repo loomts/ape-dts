@@ -3,6 +3,7 @@
 pub mod adaptor;
 pub mod avro;
 pub mod col_value;
+pub mod dcl_meta;
 pub mod ddl_meta;
 pub mod dt_data;
 pub mod dt_queue;
@@ -21,4 +22,3 @@ pub mod row_type;
 pub mod struct_meta;
 pub mod syncer;
 pub mod time;
-pub mod dcl_meta;

@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use anyhow::bail;
 use ratelimit::Ratelimiter;
-use tokio::sync::Mutex;
 
 use dt_common::meta::dcl_meta::dcl_data::DclData;
 use dt_common::meta::ddl_meta::ddl_data::DdlData;
@@ -16,7 +15,7 @@ use dt_connector::Sinker;
 #[derive(Default)]
 pub struct BaseParallelizer {
     pub poped_data: VecDeque<DtItem>,
-    pub monitor: Arc<Mutex<Monitor>>,
+    pub monitor: Arc<Monitor>,
     pub rps_limiter: Option<Ratelimiter>,
 }
 
@@ -33,6 +32,7 @@ impl BaseParallelizer {
             if data.is_empty()
                 || (data[0].is_ddl() == item.is_ddl()
                     && data[0].data_origin_node == item.data_origin_node)
+                || data[0].is_dcl() == item.is_dcl()
             {
                 data.push(item);
             } else {
@@ -81,8 +81,10 @@ impl BaseParallelizer {
         match buffer.pop() {
             Ok(item) => {
                 // counter
-                record_size_counter
-                    .add(item.dt_data.get_data_size(), item.dt_data.get_data_count());
+                record_size_counter.add(
+                    item.dt_data.get_data_size(),
+                    item.dt_data.get_data_count() as u64,
+                );
                 Ok(item)
             }
             Err(error) => bail! {Error::PipelineError(format!("buffer pop error: {}", error))},
@@ -91,7 +93,7 @@ impl BaseParallelizer {
 
     pub async fn update_monitor(&self, record_size_counter: &Counter) {
         if record_size_counter.value > 0 {
-            self.monitor.lock().await.add_batch_counter(
+            self.monitor.add_batch_counter(
                 CounterType::RecordSize,
                 record_size_counter.value,
                 record_size_counter.count,

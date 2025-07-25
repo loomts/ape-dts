@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{cmp, sync::Arc};
 
 use async_trait::async_trait;
 use mongodb::{
@@ -6,12 +6,17 @@ use mongodb::{
     options::UpdateOptions,
     Client, Collection,
 };
-use tokio::{sync::Mutex, time::Instant};
+use tokio::time::Instant;
 
 use crate::{call_batch_fn, rdb_router::RdbRouter, sinker::base_sinker::BaseSinker, Sinker};
 use dt_common::{
-    log_error, meta::col_value::ColValue, meta::mongo::mongo_constant::MongoConstants,
-    meta::row_data::RowData, meta::row_type::RowType, monitor::monitor::Monitor,
+    log_error,
+    meta::{
+        col_value::ColValue, mongo::mongo_constant::MongoConstants, row_data::RowData,
+        row_type::RowType,
+    },
+    monitor::monitor::Monitor,
+    utils::limit_queue::LimitedQueue,
 };
 
 #[derive(Clone)]
@@ -19,7 +24,7 @@ pub struct MongoSinker {
     pub router: RdbRouter,
     pub batch_size: usize,
     pub mongo_client: Client,
-    pub monitor: Arc<Mutex<Monitor>>,
+    pub monitor: Arc<Monitor>,
 }
 
 #[async_trait]
@@ -53,7 +58,7 @@ impl Sinker for MongoSinker {
 
 impl MongoSinker {
     async fn serial_sink(&mut self, mut data: Vec<RowData>) -> anyhow::Result<()> {
-        let start_time = Instant::now();
+        let mut rts = LimitedQueue::new(cmp::min(100, data.len()));
         let mut data_size = 0;
 
         for row_data in data.iter_mut() {
@@ -64,6 +69,7 @@ impl MongoSinker {
                 .database(&row_data.schema)
                 .collection::<Document>(&row_data.tb);
 
+            let start_time = Instant::now();
             match row_data.row_type {
                 RowType::Insert => {
                     let after = row_data.after.as_mut().unwrap();
@@ -72,6 +78,7 @@ impl MongoSinker {
                             doc! {MongoConstants::ID: doc.get(MongoConstants::ID).unwrap()};
                         let update_doc = doc! {MongoConstants::SET: doc};
                         self.upsert(&collection, query_doc, update_doc).await?;
+                        rts.push((start_time.elapsed().as_millis() as u64, 1));
                     }
                 }
 
@@ -81,6 +88,7 @@ impl MongoSinker {
                         let query_doc =
                             doc! {MongoConstants::ID: doc.get(MongoConstants::ID).unwrap()};
                         collection.delete_one(query_doc, None).await?;
+                        rts.push((start_time.elapsed().as_millis() as u64, 1));
                     }
                 }
 
@@ -110,13 +118,15 @@ impl MongoSinker {
                     if query_doc.is_some() && update_doc.is_some() {
                         self.upsert(&collection, query_doc.unwrap(), update_doc.unwrap())
                             .await?;
+                        rts.push((start_time.elapsed().as_millis() as u64, 1));
                     }
                 }
             }
         }
 
-        BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), data_size, start_time)
-            .await
+        BaseSinker::update_serial_monitor(&self.monitor, data.len() as u64, data_size as u64)
+            .await?;
+        BaseSinker::update_monitor_rt(&self.monitor, &rts).await
     }
 
     async fn batch_delete(
@@ -125,7 +135,6 @@ impl MongoSinker {
         start_index: usize,
         batch_size: usize,
     ) -> anyhow::Result<()> {
-        let start_time = Instant::now();
         let mut data_size = 0;
 
         let collection = self
@@ -148,9 +157,14 @@ impl MongoSinker {
                 "$in": ids
             }
         };
+        let start_time = Instant::now();
+        let mut rts = LimitedQueue::new(1);
         collection.delete_many(query, None).await?;
+        rts.push((start_time.elapsed().as_millis() as u64, 1));
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
+        BaseSinker::update_batch_monitor(&self.monitor, batch_size as u64, data_size as u64)
+            .await?;
+        BaseSinker::update_monitor_rt(&self.monitor, &rts).await
     }
 
     async fn batch_insert(
@@ -159,7 +173,6 @@ impl MongoSinker {
         start_index: usize,
         batch_size: usize,
     ) -> anyhow::Result<()> {
-        let start_time = Instant::now();
         let mut data_size = 0;
 
         let db = &data[0].schema;
@@ -187,7 +200,7 @@ impl MongoSinker {
             self.serial_sink(sub_data.to_vec()).await?;
         }
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, data_size, start_time).await
+        BaseSinker::update_batch_monitor(&self.monitor, batch_size as u64, data_size as u64).await
     }
 
     async fn upsert(

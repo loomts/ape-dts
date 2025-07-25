@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+
+use super::{base_parallelizer::BaseParallelizer, rdb_partitioner::RdbPartitioner};
+use crate::{DataSize, Parallelizer};
 use dt_common::meta::{
     dt_data::{DtData, DtItem},
     dt_queue::DtQueue,
@@ -8,10 +11,6 @@ use dt_common::meta::{
 };
 use dt_common::monitor::counter::Counter;
 use dt_connector::Sinker;
-
-use crate::Parallelizer;
-
-use super::{base_parallelizer::BaseParallelizer, rdb_partitioner::RdbPartitioner};
 
 pub struct PartitionParallelizer {
     pub base_parallelizer: BaseParallelizer,
@@ -67,10 +66,17 @@ impl Parallelizer for PartitionParallelizer {
         &mut self,
         data: Vec<RowData>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<DataSize> {
+        let data_size = DataSize {
+            count: data.len() as u64,
+            bytes: data.iter().map(|v| v.get_data_size()).sum(),
+        };
+
         let sub_datas = self.partitioner.partition(data, self.parallel_size).await?;
         self.base_parallelizer
             .sink_dml(sub_datas, sinkers, self.parallel_size, false)
-            .await
+            .await?;
+
+        Ok(data_size)
     }
 }

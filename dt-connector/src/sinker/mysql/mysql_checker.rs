@@ -1,9 +1,9 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{cmp, collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use futures::TryStreamExt;
 use sqlx::{MySql, Pool};
-use tokio::{sync::Mutex, time::Instant};
+use tokio::time::Instant;
 
 use crate::{
     call_batch_fn, close_conn_pool,
@@ -14,9 +14,15 @@ use crate::{
     Sinker,
 };
 use dt_common::{
-    meta::mysql::mysql_meta_manager::MysqlMetaManager, meta::rdb_meta_manager::RdbMetaManager,
-    meta::row_data::RowData, meta::struct_meta::statement::struct_statement::StructStatement,
-    meta::struct_meta::struct_data::StructData, monitor::monitor::Monitor, rdb_filter::RdbFilter,
+    meta::{
+        mysql::mysql_meta_manager::MysqlMetaManager,
+        rdb_meta_manager::RdbMetaManager,
+        row_data::RowData,
+        struct_meta::{statement::struct_statement::StructStatement, struct_data::StructData},
+    },
+    monitor::monitor::Monitor,
+    rdb_filter::RdbFilter,
+    utils::limit_queue::LimitedQueue,
 };
 
 #[derive(Clone)]
@@ -26,7 +32,7 @@ pub struct MysqlChecker {
     pub extractor_meta_manager: RdbMetaManager,
     pub reverse_router: RdbRouter,
     pub batch_size: usize,
-    pub monitor: Arc<Mutex<Monitor>>,
+    pub monitor: Arc<Monitor>,
     pub filter: RdbFilter,
 }
 
@@ -63,8 +69,6 @@ impl Sinker for MysqlChecker {
 
 impl MysqlChecker {
     async fn serial_check(&mut self, data: Vec<RowData>) -> anyhow::Result<()> {
-        let start_time = Instant::now();
-
         if data.is_empty() {
             return Ok(());
         }
@@ -72,12 +76,16 @@ impl MysqlChecker {
 
         let mut miss = Vec::new();
         let mut diff = Vec::new();
+        let mut rts = LimitedQueue::new(cmp::min(100, data.len()));
         for src_row_data in data.iter() {
             let query_builder = RdbQueryBuilder::new_for_mysql(tb_meta, None);
             let query_info = query_builder.get_select_query(src_row_data)?;
             let query = query_builder.create_mysql_query(&query_info);
 
+            let start_time = Instant::now();
             let mut rows = query.fetch(&self.conn_pool);
+            rts.push((start_time.elapsed().as_millis() as u64, 1));
+
             if let Some(row) = rows.try_next().await.unwrap() {
                 let dst_row_data = RowData::from_mysql_row(&row, tb_meta, &None);
                 let diff_col_values = BaseChecker::compare_row_data(src_row_data, &dst_row_data);
@@ -103,7 +111,8 @@ impl MysqlChecker {
         }
         BaseChecker::log_dml(miss, diff);
 
-        BaseSinker::update_serial_monitor(&mut self.monitor, data.len(), 0, start_time).await
+        BaseSinker::update_serial_monitor(&self.monitor, data.len() as u64, 0).await?;
+        BaseSinker::update_monitor_rt(&self.monitor, &rts).await
     }
 
     async fn batch_check(
@@ -112,8 +121,6 @@ impl MysqlChecker {
         start_index: usize,
         batch_size: usize,
     ) -> anyhow::Result<()> {
-        let start_time = Instant::now();
-
         let tb_meta = self.meta_manager.get_tb_meta_by_row_data(&data[0]).await?;
         let query_builder = RdbQueryBuilder::new_for_mysql(tb_meta, None);
 
@@ -123,7 +130,11 @@ impl MysqlChecker {
 
         // fetch dst
         let mut dst_row_data_map = HashMap::new();
+        let start_time = Instant::now();
+        let mut rts = LimitedQueue::new(1);
         let mut rows = query.fetch(&self.conn_pool);
+        rts.push((start_time.elapsed().as_millis() as u64, 1));
+
         while let Some(row) = rows.try_next().await.unwrap() {
             let row_data = RowData::from_mysql_row(&row, tb_meta, &None);
             let hash_code = row_data.get_hash_code(&tb_meta.basic);
@@ -142,7 +153,8 @@ impl MysqlChecker {
         .await?;
         BaseChecker::log_dml(miss, diff);
 
-        BaseSinker::update_batch_monitor(&mut self.monitor, batch_size, 0, start_time).await
+        BaseSinker::update_batch_monitor(&self.monitor, batch_size as u64, 0).await?;
+        BaseSinker::update_monitor_rt(&self.monitor, &rts).await
     }
 
     async fn serial_check_struct(&mut self, mut data: Vec<StructData>) -> anyhow::Result<()> {

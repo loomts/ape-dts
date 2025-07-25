@@ -1,14 +1,13 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+
+use super::{base_parallelizer::BaseParallelizer, snapshot_parallelizer::SnapshotParallelizer};
+use crate::{DataSize, Merger, Parallelizer};
 use dt_common::meta::{
     dt_data::DtItem, dt_queue::DtQueue, row_data::RowData, struct_meta::struct_data::StructData,
 };
 use dt_connector::Sinker;
-
-use crate::{Merger, Parallelizer};
-
-use super::{base_parallelizer::BaseParallelizer, snapshot_parallelizer::SnapshotParallelizer};
 
 pub struct CheckParallelizer {
     pub base_parallelizer: BaseParallelizer,
@@ -34,30 +33,44 @@ impl Parallelizer for CheckParallelizer {
         &mut self,
         data: Vec<RowData>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<DataSize> {
+        let mut data_size = DataSize::default();
+
         let mut merged_datas = self.merger.merge(data).await?;
         for tb_merged_data in merged_datas.drain(..) {
             let batch_data = tb_merged_data.insert_rows;
+            data_size
+                .add_count(batch_data.len() as u64)
+                .add_bytes(batch_data.iter().map(|v| v.get_data_size()).sum());
             let batch_sub_datas = SnapshotParallelizer::partition(batch_data, self.parallel_size)?;
             self.base_parallelizer
                 .sink_dml(batch_sub_datas, sinkers, self.parallel_size, true)
                 .await?;
 
             let serial_data = tb_merged_data.unmerged_rows;
+            data_size
+                .add_count(serial_data.len() as u64)
+                .add_bytes(serial_data.iter().map(|v| v.get_data_size()).sum());
             let serial_sub_datas =
                 SnapshotParallelizer::partition(serial_data, self.parallel_size)?;
             self.base_parallelizer
                 .sink_dml(serial_sub_datas, sinkers, self.parallel_size, false)
                 .await?;
         }
-        Ok(())
+
+        Ok(data_size)
     }
 
     async fn sink_struct(
         &mut self,
         data: Vec<StructData>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> anyhow::Result<()> {
-        sinkers[0].lock().await.sink_struct(data).await
+    ) -> anyhow::Result<DataSize> {
+        let data_size = DataSize {
+            count: data.len() as u64,
+            bytes: 0,
+        };
+        sinkers[0].lock().await.sink_struct(data).await?;
+        Ok(data_size)
     }
 }

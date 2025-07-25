@@ -69,7 +69,7 @@ impl ExtractorUtil {
         buffer: Arc<DtQueue>,
         shut_down: Arc<AtomicBool>,
         syncer: Arc<Mutex<Syncer>>,
-        monitor: Arc<Mutex<Monitor>>,
+        monitor: Arc<Monitor>,
         data_marker: Option<DataMarker>,
         router: RdbRouter,
         snapshot_resumer: SnapshotResumer,

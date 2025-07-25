@@ -27,7 +27,6 @@ use dt_common::{
     },
     time_filter::TimeFilter,
 };
-use serde_json::json;
 
 use crate::{data_marker::DataMarker, rdb_router::RdbRouter};
 
@@ -63,8 +62,8 @@ impl BaseExtractor {
             return Ok(());
         }
 
-        self.monitor.counters.record_count += 1;
-        self.monitor.counters.data_size += dt_data.get_data_size();
+        self.monitor.counters.pushed_record_count += 1;
+        self.monitor.counters.pushed_data_size += dt_data.get_data_size();
         self.monitor.try_flush(false).await;
 
         let data_origin_node = if let Some(data_marker) = &mut self.data_marker {
@@ -78,7 +77,7 @@ impl BaseExtractor {
             position,
             data_origin_node,
         };
-        log_debug!("extracted item: {}", json!(item));
+        log_debug!("extracted item: {:?}", item);
         self.buffer.push(item).await
     }
 
@@ -140,7 +139,7 @@ impl BaseExtractor {
         db_type: &DbType,
         schema: &str,
         query: &str,
-    ) -> anyhow::Result<DdlData> {
+    ) -> anyhow::Result<Option<DdlData>> {
         let parser = DdlParser::new(db_type.to_owned());
         let parse_result = parser.parse(query);
         if let Err(err) = parse_result {
@@ -155,10 +154,13 @@ impl BaseExtractor {
         // binlog query.schema == empty, schema from DdlParser == db_1
         // case 3, execute: use db_1; create table db_2.tb_1(id int);
         // binlog query.schema == db_1, schema from DdlParser == db_2
-        let mut ddl_data = parse_result.unwrap();
-        ddl_data.default_schema = schema.to_string();
-        ddl_data.query = query.to_string();
-        Ok(ddl_data)
+        if let Some(mut ddl_data) = parse_result? {
+            ddl_data.default_schema = schema.to_string();
+            ddl_data.query = query.to_string();
+            Ok(Some(ddl_data))
+        } else {
+            Ok(None)
+        }
     }
 
     pub async fn parse_dcl(
@@ -166,7 +168,7 @@ impl BaseExtractor {
         db_type: &DbType,
         _schema: &str,
         query: &str,
-    ) -> anyhow::Result<DclData> {
+    ) -> anyhow::Result<Option<DclData>> {
         let parser = DclParser::new(db_type.to_owned());
         let parse_result = parser.parse(query);
 
@@ -177,9 +179,12 @@ impl BaseExtractor {
             );
             bail! {Error::Unexpected(error)}
         }
-        let dcl_data = parse_result.unwrap();
 
-        Ok(dcl_data)
+        if let Some(dcl_data) = parse_result? {
+            Ok(Some(dcl_data))
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn get_where_sql(filter: &RdbFilter, schema: &str, tb: &str, condition: &str) -> String {

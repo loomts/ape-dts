@@ -203,6 +203,10 @@ impl RowData {
         self.data_size = self.get_data_malloc_size();
     }
 
+    pub fn get_data_size(&self) -> u64 {
+        self.data_size as u64
+    }
+
     fn get_data_malloc_size(&self) -> usize {
         let mut size = 0;
         // do not use mem::size_of_val() since:

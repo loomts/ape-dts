@@ -434,7 +434,7 @@ impl PgCdcExtractor {
         let _tag = get_string(row_data, "tag");
         let schema = get_string(row_data, "schema");
 
-        if let Ok(ddl_data) = self
+        if let Ok(Some(ddl_data)) = self
             .base_extractor
             .parse_ddl(&DbType::Pg, &schema, &ddl_text)
             .await

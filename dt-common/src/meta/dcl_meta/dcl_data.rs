@@ -23,4 +23,19 @@ impl DclData {
     pub fn to_sql(&self) -> String {
         self.statement.to_sql(&self.db_type)
     }
+
+    pub fn get_data_size(&self) -> u64 {
+        self.to_string().len() as u64
+    }
+
+    pub fn get_malloc_size(&self) -> u64 {
+        let mut size = 0;
+
+        size += self.default_schema.len() as u64;
+        size += std::mem::size_of::<DclType>() as u64;
+        size += std::mem::size_of::<DbType>() as u64;
+        size += self.statement.get_malloc_size();
+
+        size
+    }
 }

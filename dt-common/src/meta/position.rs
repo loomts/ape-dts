@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use anyhow::Context;
-use chrono::DateTime;
+use chrono::{DateTime, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -103,6 +103,28 @@ impl Position {
 
         log_error!("invalid position log: {}", log);
         Position::None
+    }
+
+    pub fn to_timestamp(&self) -> u64 {
+        match self {
+            Position::MysqlCdc { timestamp, .. }
+            | Position::PgCdc { timestamp, .. }
+            | Position::MongoCdc { timestamp, .. }
+            | Position::Redis { timestamp, .. } => {
+                if timestamp.is_empty() {
+                    return 0;
+                }
+
+                if let Ok(ts) = NaiveDateTime::parse_from_str(timestamp, "%Y-%m-%d %H:%M:%S%.3f") {
+                    return ts.and_utc().timestamp_millis() as u64;
+                }
+                if let Ok(ts) = NaiveDateTime::parse_from_str(timestamp, "%Y-%m-%d %H:%M:%S") {
+                    return ts.and_utc().timestamp_millis() as u64;
+                }
+                0
+            }
+            _ => 0,
+        }
     }
 }
 

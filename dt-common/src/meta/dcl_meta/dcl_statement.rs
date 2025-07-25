@@ -41,6 +41,21 @@ impl DclStatement {
             DclStatement::Unknown => String::new(),
         }
     }
+
+    pub fn get_malloc_size(&self) -> u64 {
+        match self {
+            DclStatement::CreateUser(s)
+            | DclStatement::AlterUser(s)
+            | DclStatement::CreateRole(s)
+            | DclStatement::DropUser(s)
+            | DclStatement::DropRole(s)
+            | DclStatement::SetRole(s)
+            | DclStatement::Grant(s)
+            | DclStatement::Revoke(s) => s.origin.len() as u64,
+
+            DclStatement::Unknown => 0,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]

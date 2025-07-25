@@ -2,6 +2,7 @@ use super::{
     config_enums::{ConflictPolicyEnum, DbType},
     s3_config::S3Config,
 };
+use crate::config::config_enums::SinkType;
 
 #[derive(Clone, Debug)]
 pub enum SinkerConfig {
@@ -146,6 +147,7 @@ pub enum SinkerConfig {
 
 #[derive(Clone, Debug, Default)]
 pub struct BasicSinkerConfig {
+    pub sink_type: SinkType,
     pub db_type: DbType,
     pub url: String,
     pub batch_size: usize,

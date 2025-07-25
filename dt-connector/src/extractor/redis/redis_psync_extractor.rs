@@ -199,7 +199,7 @@ impl RedisPsyncExtractor {
             if parser.is_end {
                 log_info!(
                     "end extracting data from rdb, all count: {}",
-                    self.base_extractor.monitor.counters.record_count
+                    self.base_extractor.monitor.counters.pushed_record_count
                 );
                 break;
             }
@@ -446,12 +446,14 @@ impl RedisPsyncExtractor {
     ) -> anyhow::Result<()> {
         // currently only support db filter
         if filter.filter_schema(&entry.db_id.to_string()) {
-            return Ok(());
+            base_extractor
+                .push_dt_data(DtData::Heartbeat {}, position)
+                .await
+        } else {
+            entry.data_size = entry.get_data_malloc_size();
+            base_extractor
+                .push_dt_data(DtData::Redis { entry }, position)
+                .await
         }
-
-        entry.data_size = entry.get_data_malloc_size();
-        base_extractor
-            .push_dt_data(DtData::Redis { entry }, position)
-            .await
     }
 }

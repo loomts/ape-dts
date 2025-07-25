@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+
+use crate::{snapshot_parallelizer::SnapshotParallelizer, DataSize, Parallelizer};
 use dt_common::{
     config::{sinker_config::SinkerConfig, task_config::TaskConfig},
     meta::{
@@ -11,11 +13,9 @@ use dt_common::{
 };
 use dt_connector::Sinker;
 
-use crate::{snapshot_parallelizer::SnapshotParallelizer, Parallelizer};
-
 pub struct FoxlakeParallelizer {
     pub task_config: TaskConfig,
-    pub base_parallelizer: SnapshotParallelizer,
+    pub snapshot_parallelizer: SnapshotParallelizer,
 }
 
 #[async_trait]
@@ -27,7 +27,7 @@ impl Parallelizer for FoxlakeParallelizer {
     async fn drain(&mut self, buffer: &DtQueue) -> anyhow::Result<Vec<DtItem>> {
         match self.task_config.sinker {
             SinkerConfig::FoxlakeMerge { .. } => self.drain_foxlake(buffer).await,
-            _ => self.base_parallelizer.drain(buffer).await,
+            _ => self.snapshot_parallelizer.drain(buffer).await,
         }
     }
 
@@ -35,32 +35,41 @@ impl Parallelizer for FoxlakeParallelizer {
         &mut self,
         data: Vec<DtItem>,
         sinkers: &[Arc<async_mutex::Mutex<Box<dyn Sinker + Send>>>],
-    ) -> anyhow::Result<()> {
-        if let SinkerConfig::FoxlakePush {
-            batch_memory_mb, ..
-        } = self.task_config.sinker
-        {
-            sinkers[0].lock().await.refresh_meta(Vec::new()).await?;
-            // to avoid generating too many small orc files, each sub_data size
-            // should be as big as possible(smaller than sinker batch_memory_mb)
-            if batch_memory_mb > 0 {
-                let sub_datas =
-                    Self::partition(data, sinkers.len(), batch_memory_mb * 1024 * 1024)?;
-                return self
-                    .base_parallelizer
-                    .base_parallelizer
-                    .sink_raw(sub_datas, sinkers, sinkers.len(), true)
-                    .await;
+    ) -> anyhow::Result<DataSize> {
+        let data_size = DataSize {
+            count: data.len() as u64,
+            bytes: data.iter().map(|v| v.get_data_size()).sum(),
+        };
+
+        match &self.task_config.sinker {
+            SinkerConfig::FoxlakePush {
+                batch_memory_mb, ..
+            } => {
+                sinkers[0].lock().await.refresh_meta(Vec::new()).await?;
+                // to avoid generating too many small orc files, each sub_data size
+                // should be as big as possible(smaller than sinker batch_memory_mb)
+                if *batch_memory_mb > 0 {
+                    let sub_datas =
+                        Self::partition(data, sinkers.len(), batch_memory_mb * 1024 * 1024)?;
+                    self.snapshot_parallelizer
+                        .base_parallelizer
+                        .sink_raw(sub_datas, sinkers, sinkers.len(), true)
+                        .await?
+                }
+            }
+            _ => {
+                self.snapshot_parallelizer.sink_raw(data, sinkers).await?;
             }
         }
-        self.base_parallelizer.sink_raw(data, sinkers).await
+
+        Ok(data_size)
     }
 }
 
 impl FoxlakeParallelizer {
     async fn drain_foxlake(&mut self, buffer: &DtQueue) -> anyhow::Result<Vec<DtItem>> {
         let mut record_size_counter = Counter::new(0, 0);
-        let base = &mut self.base_parallelizer.base_parallelizer;
+        let base = &mut self.snapshot_parallelizer.base_parallelizer;
         let mut data = Vec::new();
 
         let mut last_push_epoch = 0;
@@ -132,7 +141,7 @@ impl FoxlakeParallelizer {
         let mut i = 0;
         let mut sub_data_size = 0;
         for item in data {
-            if sub_data_size + item.dt_data.get_data_size() > sinker_batch_memory_bytes {
+            if sub_data_size + item.dt_data.get_data_size() > sinker_batch_memory_bytes as u64 {
                 sub_datas.push(Vec::new());
                 i += 1;
                 sub_data_size = 0;
