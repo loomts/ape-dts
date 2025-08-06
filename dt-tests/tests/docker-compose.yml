@@ -1,11 +1,23 @@
 services:
-  # MySQL instances for testing
-  mysql-src:
+  # Base configuration for all MySQL instances
+  x-mysql-base: &mysql-base
     image: mysql:5.7
-    container_name: mysql-src-ci
     environment:
       MYSQL_ROOT_PASSWORD: 123456
       MYSQL_DATABASE: test_db
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p123456"]
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+      interval: 5s
+    networks:
+      - test-network
+
+  # Source MySQL instance
+  mysql-src:
+    <<: *mysql-base
+    container_name: mysql-src-ci
     ports:
       - "3307:3306"
     command:
@@ -18,29 +30,11 @@ services:
       - --log-slave-updates=ON
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "mysqladmin",
-          "ping",
-          "-h",
-          "localhost",
-          "-u",
-          "root",
-          "-p123456",
-        ]
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-      interval: 5s
 
+  # Destination MySQL instance
   mysql-dst:
-    image: mysql:5.7
+    <<: *mysql-base
     container_name: mysql-dst-ci
-    environment:
-      MYSQL_ROOT_PASSWORD: 123456
-      MYSQL_DATABASE: test_db
     ports:
       - "3308:3306"
     command:
@@ -53,29 +47,11 @@ services:
       - --log-slave-updates=ON
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "mysqladmin",
-          "ping",
-          "-h",
-          "localhost",
-          "-u",
-          "root",
-          "-p123456",
-        ]
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-      interval: 5s
 
+  # Metadata MySQL instance
   mysql-meta:
-    image: mysql:5.7
+    <<: *mysql-base
     container_name: mysql-meta-ci
-    environment:
-      MYSQL_ROOT_PASSWORD: 123456
-      MYSQL_DATABASE: test_db
     ports:
       - "3309:3306"
     command:
@@ -88,140 +64,110 @@ services:
       - --log-slave-updates=ON
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "mysqladmin",
-          "ping",
-          "-h",
-          "localhost",
-          "-u",
-          "root",
-          "-p123456",
-        ]
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-      interval: 5s
 
-  # PostgreSQL instances
-  postgres-src:
+  # Base configuration for all PostgreSQL instances
+  x-postgres-base: &postgres-base
     image: postgres:13
-    container_name: postgres-src-ci
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: postgres
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_wal_senders=10
+      - -c
+      - max_replication_slots=10
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+      interval: 5s
+    networks:
+      - test-network
+
+  # Source PostgreSQL instance
+  postgres-src:
+    <<: *postgres-base
+    container_name: postgres-src-ci
     ports:
       - "5433:5432"
-    command:
-      - postgres
-      - -c
-      - wal_level=logical
-      - -c
-      - max_wal_senders=10
-      - -c
-      - max_replication_slots=10
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-      interval: 5s
 
+  # Destination PostgreSQL instance
   postgres-dst:
-    image: postgres:13
+    <<: *postgres-base
     container_name: postgres-dst-ci
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres
     ports:
       - "5434:5432"
-    command:
-      - postgres
-      - -c
-      - wal_level=logical
-      - -c
-      - max_wal_senders=10
-      - -c
-      - max_replication_slots=10
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-      interval: 5s
 
-  # MongoDB instances
-  mongo-src:
+  # Base configuration for MongoDB instances
+  x-mongo-base: &mongo-base
     image: mongo:4.4
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+      interval: 10s
+
+  # Source MongoDB instance
+  mongo-src:
+    <<: *mongo-base
     container_name: mongo-src-ci
     ports:
       - "27017:27017"
     command: mongod --replSet rs0
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      timeout: 10s
-      retries: 10
-      start_period: 30s
-      interval: 10s
 
+  # Destination MongoDB instance with authentication
   mongo-dst:
-    image: mongo:4.4
+    <<: *mongo-base
     container_name: mongo-dst-ci
+    ports:
+      - "27018:27017"
     environment:
       MONGO_INITDB_ROOT_USERNAME: ape_dts
       MONGO_INITDB_ROOT_PASSWORD: 123456
-    ports:
-      - "27018:27017"
     command: mongod --replSet rs1 --auth
     healthcheck:
-      test:
-        [
-          "CMD",
-          "mongosh",
-          "-u",
-          "ape_dts",
-          "-p",
-          "123456",
-          "--eval",
-          "db.adminCommand('ping')",
-        ]
+      test: ["CMD", "mongo", "-u", "ape_dts", "-p", "123456", "--eval", "db.adminCommand('ping')"]
       timeout: 10s
       retries: 10
       start_period: 30s
       interval: 10s
 
-  # Redis instances
-  redis-src:
+  # Base configuration for Redis instances
+  x-redis-base: &redis-base
     image: redis:7.0
+    networks:
+      - test-network
+    command: redis-server --requirepass 123456 --save 60 1 --loglevel warning
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "123456", "ping"]
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+      interval: 3s
+
+  # Source Redis instance
+  redis-src:
+    <<: *redis-base
     container_name: redis-src-ci
     ports:
       - "6380:6379"
-    command: redis-server --requirepass 123456 --save 60 1 --loglevel warning
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "123456", "ping"]
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-      interval: 3s
 
+  # Destination Redis instance
   redis-dst:
-    image: redis:7.0
+    <<: *redis-base
     container_name: redis-dst-ci
     ports:
       - "6390:6379"
-    command: redis-server --requirepass 123456 --save 60 1 --loglevel warning
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "123456", "ping"]
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-      interval: 3s
 
-  # ClickHouse for testing
+  # ClickHouse instance
   clickhouse:
     image: yandex/clickhouse-server:21.8
     container_name: clickhouse-ci
@@ -232,21 +178,16 @@ services:
     ports:
       - "8123:8123"
       - "9000:9000"
+    networks:
+      - test-network
     healthcheck:
-      test:
-        [
-          "CMD",
-          "wget",
-          "--no-verbose",
-          "--tries=1",
-          "--spider",
-          "http://localhost:8123/ping",
-        ]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
       timeout: 5s
       retries: 5
       start_period: 20s
       interval: 5s
 
 networks:
-  default:
+  test-network:
     name: ape-dts-ci-network
+    driver: bridge

@@ -1,3 +1,5 @@
+# .github/workflows/e2e-tests.yml
+
 name: E2E Tests
 
 on:
@@ -18,14 +20,15 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # Define the path to the single, consolidated Docker Compose file.
   COMPOSE_FILE: ./dt-tests/tests/docker-compose.yml
 
 jobs:
+  # This job dynamically discovers available test suites to build the test matrix.
   list-test-suites:
     name: Discover E2E Test Suites
     runs-on: ubuntu-latest
     outputs:
-      # The output is a JSON array of suite names used by the next job.
       suites: ${{ steps.set-matrix.outputs.suites }}
     steps:
       - name: Checkout Code
@@ -39,11 +42,12 @@ jobs:
         working-directory: ./dt-tests/tests
         run: |
           # This command lists directories, excludes 'test_runner', and formats them into a JSON array.
-          SUITES=$(ls -d */ | grep -v 'test_runner/' | sed 's/\///' | jq -R . | jq -s . | jq -c .)
+          SUITES=$(ls -d */ | grep -v 'test_runner/' | sed 's/\///' | jq -R . | jq -s .)
           echo "Discovered suites: $SUITES"
           echo "suites=$SUITES" >> $GITHUB_OUTPUT
 
   # This job runs the E2E tests in parallel for each discovered suite.
+  # It uses a single docker-compose file and starts only the required services.
   run-e2e-tests:
     name: E2E - ${{ matrix.test-suite }}
     needs: list-test-suites
@@ -73,16 +77,38 @@ jobs:
         with:
           tool: cargo-nextest
 
-      - name: Start Services
+      - name: Start Required Services
         run: |
-          # Skips this suite if a different one was manually requested.
           if [[ -n "${{ github.event.inputs.test_suite }}" && "${{ github.event.inputs.test_suite }}" != "${{ matrix.test-suite }}" ]]; then
             echo "Skipping suite '${{ matrix.test-suite }}' as '${{ github.event.inputs.test_suite }}' was requested."
             exit 0
           fi
 
-          echo "🚀 Starting services for ${{ matrix.test-suite }}..."
-          docker compose -f $COMPOSE_FILE up --detach --wait --timeout 600
+          # Determine which services to start based on the test suite name.
+          SERVICES_TO_START=""
+          case "${{ matrix.test-suite }}" in
+            mysql_to_mysql)
+              SERVICES_TO_START="mysql-src mysql-dst mysql-meta"
+              ;;
+            pg_to_pg)
+              SERVICES_TO_START="postgres-src postgres-dst"
+              ;;
+            redis_to_redis)
+              SERVICES_TO_START="redis-src redis-dst"
+              ;;
+            mongo_to_mongo)
+              SERVICES_TO_START="mongo-src mongo-dst"
+              ;;
+            *)
+              echo "::error::Unknown test suite '${{ matrix.test-suite }}'. No services defined."
+              exit 1
+              ;;
+          esac
+
+          echo "🚀 Starting services for ${{ matrix.test-suite }}: $SERVICES_TO_START"
+          # Pass the determined service names to the 'docker compose up' command.
+          docker compose -f $COMPOSE_FILE up --detach --wait --timeout 600 $SERVICES_TO_START
+          
           echo "✅ Services are running."
           docker compose -f $COMPOSE_FILE ps
 
@@ -110,9 +136,9 @@ jobs:
         if: always()
         run: |
           echo "🧹 Cleaning up docker resources for ${{ matrix.test-suite }}..."
-          # On failure, dump service logs for easier debugging.
           if [[ ${{ job.status }} == 'failure' ]]; then
             echo "🚨 Job failed. Dumping service logs:"
             docker compose -f $COMPOSE_FILE logs --tail 200 || true
           fi
+          # 'down' will intelligently stop and remove only the containers started by compose.
           docker compose -f $COMPOSE_FILE down --volumes --remove-orphans || true
