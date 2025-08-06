@@ -42,7 +42,7 @@ jobs:
         working-directory: ./dt-tests/tests
         run: |
           # This command lists directories, excludes non-test directories, and formats them into a JSON array.
-          SUITES=$(ls -d */ | grep -v -E 'test_runner|log_reader' | sed 's/\///' | jq -R . | jq -s .)
+          SUITES=$(ls -d */ | grep -v -E 'test_runner' | sed 's/\///' | jq -R . | jq -s .)
           echo "Discovered suites: $SUITES"
           echo "suites=$SUITES" >> $GITHUB_OUTPUT
 
@@ -147,7 +147,7 @@ jobs:
           echo "🚀 Starting services for ${{ matrix.test-suite }}: $SERVICES_TO_START"
           # Use --wait to ensure services are healthy before proceeding. Timeout set to 10 minutes.
           docker compose -f $COMPOSE_FILE up --detach --wait --timeout 600 $SERVICES_TO_START
-          
+
           echo "✅ Services are running."
           docker compose -f $COMPOSE_FILE ps
 
@@ -173,7 +173,6 @@ jobs:
           retention-days: 7
 
       - name: Cleanup Services
-        # 'if: always()' ensures this step runs even if the 'Run E2E Tests' step fails.
         if: always()
         run: |
           # This check prevents trying to run 'docker compose down' when no services were started.
@@ -185,4 +184,6 @@ jobs:
           echo "🧹 Cleaning up docker resources for ${{ matrix.test-suite }}..."
           if [[ ${{ job.status }} == 'failure' ]]; then
             echo "🚨 Job failed. Dumping service logs:"
-            # Dump the last 200 lines of logs from all running services for this suite.
+            docker compose -f $COMPOSE_FILE logs --tail 200 || true
+          fi
+          docker compose -f $COMPOSE_FILE down --volumes --remove-orphans || true
