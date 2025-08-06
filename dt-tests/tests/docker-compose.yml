@@ -2,7 +2,7 @@
 # The e2e workflow will selectively start only the services needed for each test suite.
 
 services:
-  # --- Base Configurations (using YAML anchors for reusability) ---
+  # --- Base Configurations ---
   x-mysql-base: &mysql-base
     image: mysql:8.4
     environment:
