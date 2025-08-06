@@ -20,7 +20,9 @@ env:
   COMPOSE_FILE: ./dt-tests/tests/docker/docker-compose.yml
 
 jobs:
-  # This job dynamically discovers available test suites to build the test matrix.
+  # This job dynamically builds the test matrix.
+  # If an input suite is provided, it uses that directly.
+  # Otherwise, it discovers all available test suites.
   list-test-suites:
     name: Discover E2E Test Suites
     runs-on: ubuntu-latest
@@ -38,12 +40,22 @@ jobs:
         # This working directory should match the path where your test suites are located.
         working-directory: ./dt-tests/tests
         run: |
-          # This command lists directories, excludes non-test directories, and formats them into a JSON array.
-          SUITES=$(ls -d */ | grep -v -E 'test_runner' | sed 's/\///' | jq -R . | jq -s . | jq -c .)
-          echo "Discovered suites: $SUITES"
+          # Check if a specific test suite was provided via workflow_dispatch input.
+          if [[ -n "${{ github.event.inputs.test_suite }}" ]]; then
+            # If a suite is provided, create a JSON array containing only that suite.
+            # This overrides the dynamic discovery and ensures only the requested suite runs.
+            SUITES=$(echo "${{ github.event.inputs.test_suite }}" | jq -R . | jq -s . | jq -c .)
+            echo "✅ A specific suite was provided. Running for: $SUITES"
+          else
+            # If no suite is specified, discover all available suites by listing directories.
+            # This command lists directories, excludes non-test directories, and formats them into a JSON array.
+            echo "ℹ️ No specific suite provided. Discovering all available test suites..."
+            SUITES=$(ls -d */ | grep -v -E 'test_runner' | sed 's/\///' | jq -R . | jq -s . | jq -c .)
+            echo "Discovered suites: $SUITES"
+          fi
           echo "suites=$SUITES" >> $GITHUB_OUTPUT
 
-  # This job runs the E2E tests in parallel for each discovered suite.
+  # This job runs the E2E tests in parallel for each suite defined in the matrix.
   run-e2e-tests:
     name: E2E - ${{ matrix.test-suite }}
     needs: list-test-suites
@@ -52,7 +64,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The matrix is populated dynamically from the output of the 'list-test-suites' job.
+        # The matrix is populated from the output of the 'list-test-suites' job.
+        # This will be either a single suite or all discovered suites.
         test-suite: ${{ fromJson(needs.list-test-suites.outputs.suites) }}
 
     steps:
@@ -76,14 +89,6 @@ jobs:
 
       - name: Start Required Services
         run: |
-          # If a specific suite was requested via manual dispatch, skip all others.
-          if [[ -n "${{ github.event.inputs.test_suite }}" && "${{ github.event.inputs.test_suite }}" != "${{ matrix.test-suite }}" ]]; then
-            echo "Skipping suite '${{ matrix.test-suite }}' as '${{ github.event.inputs.test_suite }}' was requested."
-            # Exiting with success code 78 is the standard way to skip a job in GitHub Actions.
-            # However, a simple exit 0 works fine here as the job is considered skipped.
-            exit 0
-          fi
-
           # Precisely determine which services to start based on the test suite name.
           SERVICES_TO_START=""
           case "${{ matrix.test-suite }}" in
