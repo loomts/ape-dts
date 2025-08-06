@@ -8,9 +8,6 @@ on:
         required: false
         type: string
         default: ''
-  schedule:
-    # Run every day at midnight UTC.
-    - cron: '0 0 * * *'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -20,7 +17,7 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
   # Define the path to the single, consolidated Docker Compose file.
-  COMPOSE_FILE: ./dt-tests/tests/docker-compose.yml
+  COMPOSE_FILE: ./dt-tests/tests/docker/docker-compose.yml
 
 jobs:
   # This job dynamically discovers available test suites to build the test matrix.
@@ -160,8 +157,8 @@ jobs:
             --package dt-tests \
             --test integration_test \
             --no-fail-fast \
-            '${{ matrix.test-suite }}::' \
-            -- --test-threads=1
+            --test-threads 1 \
+            '${{ matrix.test-suite }}::'
 
       - name: Upload Test Artifacts
         if: always()
