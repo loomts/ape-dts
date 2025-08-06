@@ -2,6 +2,12 @@ name: E2E Tests
 
 on:
   workflow_dispatch:
+    inputs:
+      test_suite:
+        description: 'Test suite to run'
+        required: false
+        type: string
+        default: ''
   schedule:
     - cron: '0 0 * * *'
 

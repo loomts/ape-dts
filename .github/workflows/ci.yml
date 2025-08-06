@@ -20,6 +20,17 @@ on:
       - '**/*.jpg'
       - '**/*.svg'
   workflow_dispatch:
+    inputs:
+      run_lint:
+        description: 'Run lint and static checks'
+        required: false
+        type: boolean
+        default: true
+      run_tests:
+        description: 'Run unit tests'
+        required: false
+        type: boolean
+        default: true
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
