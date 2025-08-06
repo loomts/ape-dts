@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       test_suite:
-        description: "Test suite to run (optional, runs all if not specified)"
+        description: 'Test suite to run (optional, runs all if not specified)'
         required: false
         type: string
-        default: ""
+        default: ''
   schedule:
     - cron: '0 0 * * *'
 
@@ -25,19 +25,25 @@ jobs:
     name: Discover E2E Test Suites
     runs-on: ubuntu-latest
     outputs:
+      # The output is a JSON array of suite names used by the next job.
       suites: ${{ steps.set-matrix.outputs.suites }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
       - name: Generate Test Suite Matrix
         id: set-matrix
         working-directory: ./dt-tests/tests
         run: |
+          # This command lists directories, excludes 'test_runner', and formats them into a JSON array.
           SUITES=$(ls -d */ | grep -v 'test_runner/' | sed 's/\///' | jq -R . | jq -s .)
           echo "Discovered suites: $SUITES"
           echo "suites=$SUITES" >> $GITHUB_OUTPUT
 
+  # This job runs the E2E tests in parallel for each discovered suite.
   run-e2e-tests:
     name: E2E - ${{ matrix.test-suite }}
     needs: list-test-suites
@@ -67,27 +73,21 @@ jobs:
         with:
           tool: cargo-nextest
 
-      - name: Start Services & Setup Environment
+      - name: Start Services
         run: |
+          # Skips this suite if a different one was manually requested.
           if [[ -n "${{ github.event.inputs.test_suite }}" && "${{ github.event.inputs.test_suite }}" != "${{ matrix.test-suite }}" ]]; then
             echo "Skipping suite '${{ matrix.test-suite }}' as '${{ github.event.inputs.test_suite }}' was requested."
             exit 0
           fi
 
           echo "🚀 Starting services for ${{ matrix.test-suite }}..."
-          docker compose -f $COMPOSE_FILE down --volumes --remove-orphans || true
-
-          echo "🔍 Starting services with health checks..."
           docker compose -f $COMPOSE_FILE up --detach --wait --timeout 600
-
-          echo "✅ All services are healthy and running."
+          echo "✅ Services are running."
           docker compose -f $COMPOSE_FILE ps
 
-          echo "📝 Test environment is ready"
-
       - name: Run E2E Tests
-        if: |
-          (github.event.inputs.test_suite == '' || github.event.inputs.test_suite == matrix.test-suite)
+        if: github.event.inputs.test_suite == '' || github.event.inputs.test_suite == matrix.test-suite
         run: |
           echo "🧪 Running ${{ matrix.test-suite }} E2E tests..."
           cargo nextest run \
@@ -110,6 +110,7 @@ jobs:
         if: always()
         run: |
           echo "🧹 Cleaning up docker resources for ${{ matrix.test-suite }}..."
+          # On failure, dump service logs for easier debugging.
           if [[ ${{ job.status }} == 'failure' ]]; then
             echo "🚨 Job failed. Dumping service logs:"
             docker compose -f $COMPOSE_FILE logs --tail 200 || true
