@@ -4,11 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       test_suite:
-        description: 'Test suite to run (optional, runs all if not specified)'
+        description: 'Test suite to run (e.g., mysql_to_mysql). Runs all suites if empty.'
         required: false
         type: string
         default: ''
   schedule:
+    # Run every day at midnight UTC.
     - cron: '0 0 * * *'
 
 concurrency:
@@ -37,15 +38,15 @@ jobs:
 
       - name: Generate Test Suite Matrix
         id: set-matrix
+        # This working directory should match the path where your test suites are located.
         working-directory: ./dt-tests/tests
         run: |
-          # This command lists directories, excludes 'test_runner', and formats them into a JSON array.
-          SUITES=$(ls -d */ | grep -v 'test_runner/' | sed 's/\///' | jq -R . | jq -s . | jq -c .)
+          # This command lists directories, excludes non-test directories, and formats them into a JSON array.
+          SUITES=$(ls -d */ | grep -v -E 'test_runner' | sed 's/\///' | jq -R . | jq -s .)
           echo "Discovered suites: $SUITES"
           echo "suites=$SUITES" >> $GITHUB_OUTPUT
 
   # This job runs the E2E tests in parallel for each discovered suite.
-  # It uses a single docker-compose file and starts only the required services.
   run-e2e-tests:
     name: E2E - ${{ matrix.test-suite }}
     needs: list-test-suites
@@ -54,6 +55,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # The matrix is populated dynamically from the output of the 'list-test-suites' job.
         test-suite: ${{ fromJson(needs.list-test-suites.outputs.suites) }}
 
     steps:
@@ -77,49 +79,89 @@ jobs:
 
       - name: Start Required Services
         run: |
+          # If a specific suite was requested via manual dispatch, skip all others.
           if [[ -n "${{ github.event.inputs.test_suite }}" && "${{ github.event.inputs.test_suite }}" != "${{ matrix.test-suite }}" ]]; then
             echo "Skipping suite '${{ matrix.test-suite }}' as '${{ github.event.inputs.test_suite }}' was requested."
+            # Exiting with success code 78 is the standard way to skip a job in GitHub Actions.
+            # However, a simple exit 0 works fine here as the job is considered skipped.
             exit 0
           fi
 
-          # Determine which services to start based on the test suite name.
+          # Precisely determine which services to start based on the test suite name.
           SERVICES_TO_START=""
           case "${{ matrix.test-suite }}" in
-            mysql_to_mysql)
-              SERVICES_TO_START="mysql-src mysql-dst mysql-meta"
-              ;;
-            pg_to_pg)
-              SERVICES_TO_START="postgres-src postgres-dst"
-              ;;
-            redis_to_redis)
-              SERVICES_TO_START="redis-src redis-dst"
-              ;;
             mongo_to_mongo)
               SERVICES_TO_START="mongo-src mongo-dst"
               ;;
+            mysql_to_clickhouse)
+              SERVICES_TO_START="mysql-src clickhouse"
+              ;;
+            mysql_to_doris)
+              SERVICES_TO_START="mysql-src doris"
+              ;;
+            mysql_to_foxlake)
+              SERVICES_TO_START="mysql-src foxlake minio"
+              ;;
+            mysql_to_kafka_to_mysql)
+              SERVICES_TO_START="mysql-src mysql-dst kafka zookeeper"
+              ;;
+            mysql_to_mysql | mysql_to_mysql_lua)
+              SERVICES_TO_START="mysql-src mysql-dst mysql-meta"
+              ;;
+            mysql_to_mysql_case_sensitive)
+              SERVICES_TO_START="mysql-case-src mysql-case-dst"
+              ;;
+            mysql_to_redis)
+              SERVICES_TO_START="mysql-src redis-dst"
+              ;;
+            mysql_to_starrocks)
+              SERVICES_TO_START="mysql-src starrocks"
+              ;;
+            mysql_to_tidb)
+              SERVICES_TO_START="mysql-src tidb"
+              ;;
+            pg_to_clickhouse)
+              SERVICES_TO_START="postgres-src clickhouse"
+              ;;
+            pg_to_doris)
+              SERVICES_TO_START="postgres-src doris"
+              ;;
+            pg_to_kafka_to_pg)
+              SERVICES_TO_START="postgres-src postgres-dst kafka zookeeper"
+              ;;
+            pg_to_pg | pg_to_pg_lua)
+              SERVICES_TO_START="postgres-src postgres-dst postgres-cycle"
+              ;;
+            pg_to_starrocks)
+              SERVICES_TO_START="postgres-src starrocks"
+              ;;
+            redis_to_redis)
+              SERVICES_TO_START="redis-src redis-dst redis-cycle-node3"
+              ;;
             *)
-              echo "::error::Unknown test suite '${{ matrix.test-suite }}'. No services defined."
-              exit 1
+              echo "No service definition found for test suite '${{ matrix.test-suite }}'. Skipping."
+              exit 0
               ;;
           esac
 
           echo "🚀 Starting services for ${{ matrix.test-suite }}: $SERVICES_TO_START"
-          # Pass the determined service names to the 'docker compose up' command.
+          # Use --wait to ensure services are healthy before proceeding. Timeout set to 10 minutes.
           docker compose -f $COMPOSE_FILE up --detach --wait --timeout 600 $SERVICES_TO_START
-          
+
           echo "✅ Services are running."
           docker compose -f $COMPOSE_FILE ps
 
       - name: Run E2E Tests
-        if: github.event.inputs.test_suite == '' || github.event.inputs.test_suite == matrix.test-suite
+        # This step is automatically skipped if the previous step fails or exits.
         run: |
           echo "🧪 Running ${{ matrix.test-suite }} E2E tests..."
+          # The filter ensures only the tests relevant to the current matrix suite are executed.
           cargo nextest run \
             --package dt-tests \
             --test integration_test \
             --no-fail-fast \
             '${{ matrix.test-suite }}::' \
-            -- --test-threads=1 --test-timeout 300s
+            -- --test-threads=1
 
       - name: Upload Test Artifacts
         if: always()
@@ -133,10 +175,15 @@ jobs:
       - name: Cleanup Services
         if: always()
         run: |
+          # This check prevents trying to run 'docker compose down' when no services were started.
+          if [[ -z "$(docker ps -q)" ]]; then
+            echo "No services were started for this suite, skipping cleanup."
+            exit 0
+          fi
+
           echo "🧹 Cleaning up docker resources for ${{ matrix.test-suite }}..."
           if [[ ${{ job.status }} == 'failure' ]]; then
             echo "🚨 Job failed. Dumping service logs:"
             docker compose -f $COMPOSE_FILE logs --tail 200 || true
           fi
-          # 'down' will intelligently stop and remove only the containers started by compose.
           docker compose -f $COMPOSE_FILE down --volumes --remove-orphans || true

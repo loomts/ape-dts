@@ -1,150 +1,52 @@
+# This file contains all possible services for the E2E tests.
+# The e2e workflow will selectively start only the services needed for each test suite.
+
 services:
-  # Base configuration for all MySQL instances
+  # --- Base Configurations ---
   x-mysql-base: &mysql-base
-    image: mysql:5.7
+    image: mysql:8.4
     environment:
       MYSQL_ROOT_PASSWORD: 123456
       MYSQL_DATABASE: test_db
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p123456"]
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "localhost",
+          "-u",
+          "root",
+          "-p123456",
+        ]
       timeout: 5s
       retries: 5
       start_period: 20s
       interval: 5s
-    networks:
-      - test-network
+    networks: [test-network]
+    command: >
+      mysqld --server-id=${SERVER_ID:-1} --log-bin=mysql-bin --binlog-format=ROW
+      --gtid-mode=ON --enforce-gtid-consistency=ON --log-slave-updates=ON
+      --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
 
-  # Source MySQL instance
-  mysql-src:
-    <<: *mysql-base
-    container_name: mysql-src-ci
-    ports:
-      - "3307:3306"
-    command:
-      - mysqld
-      - --server-id=1
-      - --log-bin=mysql-bin
-      - --binlog-format=ROW
-      - --gtid-mode=ON
-      - --enforce-gtid-consistency=ON
-      - --log-slave-updates=ON
-      - --character-set-server=utf8mb4
-      - --collation-server=utf8mb4_unicode_ci
-
-  # Destination MySQL instance
-  mysql-dst:
-    <<: *mysql-base
-    container_name: mysql-dst-ci
-    ports:
-      - "3308:3306"
-    command:
-      - mysqld
-      - --server-id=2
-      - --log-bin=mysql-bin
-      - --binlog-format=ROW
-      - --gtid-mode=ON
-      - --enforce-gtid-consistency=ON
-      - --log-slave-updates=ON
-      - --character-set-server=utf8mb4
-      - --collation-server=utf8mb4_unicode_ci
-
-  # Metadata MySQL instance
-  mysql-meta:
-    <<: *mysql-base
-    container_name: mysql-meta-ci
-    ports:
-      - "3309:3306"
-    command:
-      - mysqld
-      - --server-id=3
-      - --log-bin=mysql-bin
-      - --binlog-format=ROW
-      - --gtid-mode=ON
-      - --enforce-gtid-consistency=ON
-      - --log-slave-updates=ON
-      - --character-set-server=utf8mb4
-      - --collation-server=utf8mb4_unicode_ci
-
-  # Base configuration for all PostgreSQL instances
   x-postgres-base: &postgres-base
-    image: postgres:13
+    image: postgres:16
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: postgres
-    command:
-      - postgres
-      - -c
-      - wal_level=logical
-      - -c
-      - max_wal_senders=10
-      - -c
-      - max_replication_slots=10
+    command: postgres -c wal_level=logical -c max_wal_senders=10 -c max_replication_slots=10
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       timeout: 5s
       retries: 5
       start_period: 20s
       interval: 5s
-    networks:
-      - test-network
+    networks: [test-network]
 
-  # Source PostgreSQL instance
-  postgres-src:
-    <<: *postgres-base
-    container_name: postgres-src-ci
-    ports:
-      - "5433:5432"
-
-  # Destination PostgreSQL instance
-  postgres-dst:
-    <<: *postgres-base
-    container_name: postgres-dst-ci
-    ports:
-      - "5434:5432"
-
-  # Base configuration for MongoDB instances
-  x-mongo-base: &mongo-base
-    image: mongo:4.4
-    networks:
-      - test-network
-    healthcheck:
-      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
-      timeout: 10s
-      retries: 10
-      start_period: 30s
-      interval: 10s
-
-  # Source MongoDB instance
-  mongo-src:
-    <<: *mongo-base
-    container_name: mongo-src-ci
-    ports:
-      - "27017:27017"
-    command: mongod --replSet rs0
-
-  # Destination MongoDB instance with authentication
-  mongo-dst:
-    <<: *mongo-base
-    container_name: mongo-dst-ci
-    ports:
-      - "27018:27017"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ape_dts
-      MONGO_INITDB_ROOT_PASSWORD: 123456
-    command: mongod --replSet rs1 --auth
-    healthcheck:
-      test: ["CMD", "mongo", "-u", "ape_dts", "-p", "123456", "--eval", "db.adminCommand('ping')"]
-      timeout: 10s
-      retries: 10
-      start_period: 30s
-      interval: 10s
-
-  # Base configuration for Redis instances
   x-redis-base: &redis-base
-    image: redis:7.0
-    networks:
-      - test-network
+    image: redis:7.2
     command: redis-server --requirepass 123456 --save 60 1 --loglevel warning
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "123456", "ping"]
@@ -152,40 +54,308 @@ services:
       retries: 5
       start_period: 10s
       interval: 3s
+    networks: [test-network]
 
-  # Source Redis instance
+  # --- MySQL Services ---
+  mysql-src:
+    <<: *mysql-base
+    container_name: mysql-src
+    ports: ["3307:3306"]
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_DATABASE: test_db
+      SERVER_ID: 1
+
+  mysql-dst:
+    <<: *mysql-base
+    container_name: mysql-dst
+    ports: ["3308:3306"]
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_DATABASE: test_db
+      SERVER_ID: 2
+
+  mysql-meta:
+    <<: *mysql-base
+    container_name: mysql-meta
+    ports: ["3309:3306"]
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_DATABASE: test_db
+      SERVER_ID: 3
+
+  mysql-case-src:
+    <<: *mysql-base
+    container_name: mysql-case-src
+    ports: ["3311:3306"]
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_DATABASE: test_db
+      SERVER_ID: 4
+
+  mysql-case-dst:
+    <<: *mysql-base
+    container_name: mysql-case-dst
+    ports: ["3312:3306"]
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_DATABASE: test_db
+      SERVER_ID: 5
+
+  # --- PostgreSQL Services ---
+  postgres-src:
+    <<: *postgres-base
+    container_name: postgres-src
+    ports: ["5433:5432"]
+
+  postgres-dst:
+    <<: *postgres-base
+    container_name: postgres-dst
+    ports: ["5434:5432"]
+
+  postgres-cycle:
+    <<: *postgres-base
+    container_name: postgres-cycle
+    ports: ["5435:5432"]
+
+  # --- Redis Services ---
   redis-src:
     <<: *redis-base
-    container_name: redis-src-ci
-    ports:
-      - "6380:6379"
+    container_name: redis-src
+    ports: ["6380:6379"]
 
-  # Destination Redis instance
   redis-dst:
     <<: *redis-base
-    container_name: redis-dst-ci
-    ports:
-      - "6390:6379"
+    container_name: redis-dst
+    ports: ["6390:6379"]
 
-  # ClickHouse instance
+  redis-cycle-node3:
+    <<: *redis-base
+    container_name: redis-cycle-node3
+    ports: ["6400:6379"]
+
+  # --- MongoDB Services ---
+  mongo-src:
+    image: mongo:7.0
+    container_name: mongo-src
+    command: mongod --replSet rs0
+    ports: ["27017:27017"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+      interval: 10s
+    networks: [test-network]
+
+  mongo-dst:
+    image: mongo:7.0
+    container_name: mongo-dst
+    command: mongod --replSet rs1 --auth
+    ports: ["27018:27017"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ape_dts
+      MONGO_INITDB_ROOT_PASSWORD: 123456
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "mongodb://ape_dts:123456@localhost:27017/?authSource=admin",
+          "--eval",
+          "db.adminCommand('ping')",
+        ]
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+      interval: 10s
+    networks: [test-network]
+
+  # --- Other Sink Services ---
   clickhouse:
-    image: yandex/clickhouse-server:21.8
-    container_name: clickhouse-ci
+    image: clickhouse/clickhouse-server:24.7
+    container_name: clickhouse
+    ports: ["8123:8123", "9000:9000"]
     environment:
       CLICKHOUSE_USER: admin
       CLICKHOUSE_PASSWORD: 123456
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
-    ports:
-      - "8123:8123"
-      - "9000:9000"
-    networks:
-      - test-network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8123/ping",
+        ]
       timeout: 5s
       retries: 5
       start_period: 20s
       interval: 5s
+    networks: [test-network]
+
+  tidb:
+    image: pingcap/tidb:v8.2.0
+    container_name: tidb
+    ports: ["4000:4000"]
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysql",
+          "-h",
+          "localhost",
+          "-P",
+          "4000",
+          "-u",
+          "root",
+          "-p123456",
+          "-e",
+          "SELECT 1",
+        ]
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+      interval: 5s
+    networks: [test-network]
+
+  starrocks:
+    image: starrocks/starrocks:3.3.0
+    container_name: starrocks
+    ports: ["9030:9030", "8030:8030"]
+    environment:
+      STARROCKS_FE_MEM_LIMIT: "8G"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysql",
+          "-h",
+          "localhost",
+          "-P",
+          "9030",
+          "-u",
+          "root",
+          "-e",
+          "SELECT 1",
+        ]
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+      interval: 10s
+    networks: [test-network]
+
+  doris:
+    image: apache/doris:2.1.5-fe-x86_64
+    container_name: doris
+    ports: ["9032:9030", "8042:8030"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysql",
+          "-h",
+          "localhost",
+          "-P",
+          "9030",
+          "-u",
+          "root",
+          "-e",
+          "SELECT 1",
+        ]
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+      interval: 10s
+    networks: [test-network]
+
+  foxlake:
+    image: mysql:8.4
+    container_name: foxlake
+    ports: ["11288:3306"]
+    environment:
+      MYSQL_ROOT_PASSWORD: foxlake2024
+      MYSQL_DATABASE: test_db
+      SERVER_ID: 6
+    command: >
+      mysqld --server-id=6 --log-bin=mysql-bin --binlog-format=ROW
+      --gtid-mode=ON --enforce-gtid-consistency=ON --log-slave-updates=ON
+      --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "localhost",
+          "-u",
+          "root",
+          "-pfoxlake2024",
+        ]
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+      interval: 5s
+    networks: [test-network]
+
+  # --- Messaging/Infra Services ---
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    healthcheck:
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181"]
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+      interval: 5s
+    networks: [test-network]
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: kafka
+    ports: ["9093:9093"]
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    healthcheck:
+      test:
+        ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9093 --list"]
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+      interval: 10s
+    networks: [test-network]
+
+  minio:
+    image: minio/minio:RELEASE.2024-08-01T16-01-39Z
+    container_name: minio
+    ports: ["9000:9000", "9001:9001"]
+    environment:
+      MINIO_ROOT_USER: root
+      MINIO_ROOT_PASSWORD: Drds123456
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+      interval: 5s
+    networks: [test-network]
 
 networks:
   test-network:
