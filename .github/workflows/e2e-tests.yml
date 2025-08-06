@@ -40,7 +40,7 @@ jobs:
         working-directory: ./dt-tests/tests
         run: |
           # This command lists directories, excludes 'test_runner', and formats them into a JSON array.
-          SUITES=$(ls -d */ | grep -v 'test_runner/' | sed 's/\///' | jq -R . | jq -s .)
+          SUITES=$(ls -d */ | grep -v 'test_runner/' | sed 's/\///' | jq -R . | jq -s . | jq -c .)
           echo "Discovered suites: $SUITES"
           echo "suites=$SUITES" >> $GITHUB_OUTPUT
 
