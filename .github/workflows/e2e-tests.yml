@@ -17,7 +17,10 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
   # Define the path to the single, consolidated Docker Compose file.
-  COMPOSE_FILE: ./dt-tests/tests/docker/docker-compose.yml
+  COMPOSE_FILE: ./dt-tests/docker/docker-compose.yml
+  # Tool versions
+  RUST_TOOLCHAIN: "1.85.0"
+  NEXTEST_VERSION: "0.9.100"
 
 jobs:
   # This job dynamically builds the test matrix.
@@ -48,9 +51,9 @@ jobs:
             echo "✅ A specific suite was provided. Running for: $SUITES"
           else
             # If no suite is specified, discover all available suites by listing directories.
-            # This command lists directories, excludes non-test directories, and formats them into a JSON array.
+            # Exclude non-test directories like test_runner and log_reader, then format into a JSON array.
             echo "ℹ️ No specific suite provided. Discovering all available test suites..."
-            SUITES=$(ls -d */ | grep -v -E 'test_runner' | sed 's/\///' | jq -R . | jq -s . | jq -c .)
+            SUITES=$(ls -d */ | grep -v -E 'test_runner|log_reader' | sed 's/\///' | jq -R . | jq -s . | jq -c .)
             echo "Discovered suites: $SUITES"
           fi
           echo "suites=$SUITES" >> $GITHUB_OUTPUT
@@ -76,6 +79,8 @@ jobs:
 
       - name: Setup Rust Toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
 
       - name: Cache Rust Dependencies
         uses: Swatinem/rust-cache@v2
@@ -85,7 +90,7 @@ jobs:
       - name: Install cargo-nextest
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-nextest
+          tool: cargo-nextest@${{ env.NEXTEST_VERSION }}
 
       - name: Start Required Services
         run: |

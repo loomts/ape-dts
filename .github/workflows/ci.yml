@@ -28,6 +28,9 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # Tool versions
+  RUST_TOOLCHAIN: '1.85.0'
+  NEXTEST_VERSION: '0.9.100'
 
 jobs:
   lint:
@@ -41,7 +44,7 @@ jobs:
           submodules: true
 
       - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@1.85.0
+        uses: dtolnay/rust-toolchain@${{ env.RUST_TOOLCHAIN }}
         with:
           components: rustfmt, clippy
 
@@ -107,7 +110,7 @@ jobs:
           submodules: true
 
       - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@1.85.0
+        uses: dtolnay/rust-toolchain@${{ env.RUST_TOOLCHAIN }}
 
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v2
@@ -121,7 +124,7 @@ jobs:
       - name: Install cargo-nextest
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-nextest
+          tool: cargo-nextest@${{ env.NEXTEST_VERSION }}
 
       - name: Run unit tests with nextest
         run: |
